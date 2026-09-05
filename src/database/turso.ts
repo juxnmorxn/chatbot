@@ -36,7 +36,16 @@ export async function initTursoDatabase(): Promise<void> {
         metadata TEXT
       );
     `);
-    logger.info('Tabla "sessions" lista en Turso.');
+
+    await client.execute(`
+      CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT,
+        updated_at TEXT
+      );
+    `);
+
+    logger.info('Tablas "sessions" y "settings" listas en Turso.');
   } catch (error: any) {
     logger.error('Error al inicializar Turso DB:', error?.message || error);
     throw error;

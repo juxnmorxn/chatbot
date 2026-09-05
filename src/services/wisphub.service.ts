@@ -1,5 +1,6 @@
 import axios, { AxiosInstance } from 'axios';
 import { config } from '../config/env';
+import { SettingsService } from './settings.service';
 import { Logger } from '../utils/logger';
 import { normalizePhone10 } from '../utils/spintax';
 
@@ -33,13 +34,20 @@ export interface WispHubTicketResult {
 
 export class WispHubService {
   private static api: AxiosInstance | null = null;
+  private static lastUrl: string = '';
+  private static lastKey: string = '';
 
   private static getApi(): AxiosInstance {
-    if (!this.api) {
+    const url = SettingsService.get('WISPHUB_API_URL', 'WISPHUB_API_URL', config.wisphub.url).replace(/\/+$/, '');
+    const apiKey = SettingsService.get('WISPHUB_API_KEY', 'WISPHUB_API_KEY', config.wisphub.apiKey);
+
+    if (!this.api || this.lastUrl !== url || this.lastKey !== apiKey) {
+      this.lastUrl = url;
+      this.lastKey = apiKey;
       this.api = axios.create({
-        baseURL: config.wisphub.url,
+        baseURL: url,
         headers: {
-          'Authorization': `Api-Key ${config.wisphub.apiKey}`,
+          'Authorization': `Api-Key ${apiKey}`,
           'Content-Type': 'application/json',
         },
         timeout: 8000,
@@ -48,14 +56,19 @@ export class WispHubService {
     return this.api;
   }
 
+  static getApiKey(): string {
+    return SettingsService.get('WISPHUB_API_KEY', 'WISPHUB_API_KEY', config.wisphub.apiKey);
+  }
+
   /**
    * Busca cliente por número telefónico (comparando últimos 10 dígitos)
    */
   static async buscarClientePorTelefono(rawPhone: string): Promise<WispHubCliente | null> {
     const phone10 = normalizePhone10(rawPhone);
     logger.info(`Buscando cliente por teléfono: ${phone10}`);
+    const apiKey = this.getApiKey();
 
-    if (!config.wisphub.apiKey || config.wisphub.apiKey.includes('tu_token')) {
+    if (!apiKey || apiKey.includes('tu_token')) {
       logger.warn('WISPHUB_API_KEY no configurada o es plantilla. Usando modo de desarrollo.');
       return null;
     }
@@ -92,8 +105,9 @@ export class WispHubService {
    */
   static async buscarClientePorNombre(nombre: string): Promise<WispHubCliente[]> {
     logger.info(`Buscando cliente por nombre: ${nombre}`);
+    const apiKey = this.getApiKey();
 
-    if (!config.wisphub.apiKey || config.wisphub.apiKey.includes('tu_token')) {
+    if (!apiKey || apiKey.includes('tu_token')) {
       return [];
     }
 
@@ -128,8 +142,9 @@ export class WispHubService {
    */
   static async obtenerFacturasPendientes(clienteId: string | number): Promise<WispHubFactura[]> {
     logger.info(`Consultando facturas pendientes para cliente: ${clienteId}`);
+    const apiKey = this.getApiKey();
 
-    if (!config.wisphub.apiKey || config.wisphub.apiKey.includes('tu_token')) {
+    if (!apiKey || apiKey.includes('tu_token')) {
       return [];
     }
 
@@ -170,8 +185,9 @@ export class WispHubService {
     prioridad: 'Baja' | 'Media' | 'Alta' = 'Alta'
   ): Promise<WispHubTicketResult> {
     logger.info(`Creando ticket en WispHub para cliente ${clienteId} - Asunto: ${asunto}`);
+    const apiKey = this.getApiKey();
 
-    if (!config.wisphub.apiKey || config.wisphub.apiKey.includes('tu_token')) {
+    if (!apiKey || apiKey.includes('tu_token')) {
       const folioMock = `TK-${Math.floor(100000 + Math.random() * 900000)}`;
       logger.info(`Modo DEV: Ticket simulado creado con folio ${folioMock}`);
       return { success: true, folio: folioMock, mensaje: 'Ticket generado (Modo simulación)' };

@@ -1,5 +1,6 @@
 import axios, { AxiosInstance } from 'axios';
 import { config } from '../config/env';
+import { SettingsService } from './settings.service';
 import { Logger } from '../utils/logger';
 import { parseSpintax, randomDelay } from '../utils/spintax';
 
@@ -12,19 +13,30 @@ export interface BotButton {
 
 export class EvolutionService {
   private static api: AxiosInstance | null = null;
+  private static lastUrl: string = '';
+  private static lastKey: string = '';
 
   private static getApi(): AxiosInstance {
-    if (!this.api) {
+    const url = SettingsService.get('EVOLUTION_URL', 'EVOLUTION_URL', config.evolution.url).replace(/\/+$/, '');
+    const apiKey = SettingsService.get('EVOLUTION_API_KEY', 'EVOLUTION_API_KEY', config.evolution.apiKey);
+
+    if (!this.api || this.lastUrl !== url || this.lastKey !== apiKey) {
+      this.lastUrl = url;
+      this.lastKey = apiKey;
       this.api = axios.create({
-        baseURL: config.evolution.url,
+        baseURL: url,
         headers: {
-          'apikey': config.evolution.apiKey,
+          'apikey': apiKey,
           'Content-Type': 'application/json',
         },
         timeout: 12000,
       });
     }
     return this.api;
+  }
+
+  static getInstanceName(): string {
+    return SettingsService.get('INSTANCE_NAME', 'INSTANCE_NAME', config.evolution.instanceName);
   }
 
   /**
@@ -63,7 +75,8 @@ export class EvolutionService {
     try {
       logger.info(`Enviando mensaje de texto a ${recipient}`);
       const api = this.getApi();
-      await api.post(`/message/sendText/${config.evolution.instanceName}`, {
+      const instance = this.getInstanceName();
+      await api.post(`/message/sendText/${instance}`, {
         number: recipient,
         text: mensaje,
         options: {
@@ -90,11 +103,13 @@ export class EvolutionService {
   ): Promise<boolean> {
     const recipient = this.formatRecipient(phone);
     const texto = parseSpintax(textoPrincipal);
+    const ispName = SettingsService.get('ISP_NAME', 'ISP_NAME', config.isp.name);
 
     await randomDelay(1200, 2400);
 
     try {
       const api = this.getApi();
+      const instance = this.getInstanceName();
       const evolutionButtons = botones.map((b) => ({
         buttonId: b.id,
         buttonText: { displayText: b.title },
@@ -103,9 +118,9 @@ export class EvolutionService {
 
       logger.info(`Enviando menú de botones a ${recipient}: ${botones.map((b) => b.title).join(' | ')}`);
 
-      const response = await api.post(`/message/sendButtons/${config.evolution.instanceName}`, {
+      const response = await api.post(`/message/sendButtons/${instance}`, {
         number: recipient,
-        title: config.isp.name,
+        title: ispName,
         description: texto,
         footer: pieDePagina,
         buttons: evolutionButtons,

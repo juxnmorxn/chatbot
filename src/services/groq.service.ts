@@ -1,5 +1,6 @@
 import Groq from 'groq-sdk';
 import { config } from '../config/env';
+import { SettingsService } from './settings.service';
 import { Logger } from '../utils/logger';
 
 const logger = new Logger('GroqService');
@@ -29,15 +30,16 @@ export interface GroqClassificationResult {
 
 export class GroqService {
   private static client: Groq | null = null;
+  private static lastApiKey: string = '';
 
   private static getClient(): Groq {
-    if (!this.client) {
-      if (!config.groq.apiKey) {
-        throw new Error('GROQ_API_KEY no configurada');
-      }
-      this.client = new Groq({
-        apiKey: config.groq.apiKey,
-      });
+    const apiKey = SettingsService.get('GROQ_API_KEY', 'GROQ_API_KEY', config.groq.apiKey);
+    if (!apiKey) {
+      throw new Error('GROQ_API_KEY no configurada');
+    }
+    if (!this.client || this.lastApiKey !== apiKey) {
+      this.lastApiKey = apiKey;
+      this.client = new Groq({ apiKey });
     }
     return this.client;
   }
@@ -84,8 +86,9 @@ Contexto actual del cliente:
 - Nombre conocido: ${contexto?.clientName || 'NO IDENTIFICADO'}
 `;
 
+      const model = SettingsService.get('GROQ_MODEL', 'GROQ_MODEL', config.groq.model);
       const response = await groq.chat.completions.create({
-        model: config.groq.model,
+        model,
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: mensajeUsuario },

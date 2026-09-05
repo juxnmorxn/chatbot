@@ -1,5 +1,6 @@
 import axios, { AxiosInstance } from 'axios';
 import { config } from '../config/env';
+import { SettingsService } from './settings.service';
 import { Logger } from '../utils/logger';
 
 const logger = new Logger('SmartOLTService');
@@ -22,13 +23,20 @@ export interface SmartOltRebootResult {
 
 export class SmartOLTService {
   private static api: AxiosInstance | null = null;
+  private static lastUrl: string = '';
+  private static lastKey: string = '';
 
   private static getApi(): AxiosInstance {
-    if (!this.api) {
+    const url = SettingsService.get('SMARTOLT_API_URL', 'SMARTOLT_API_URL', config.smartolt.url).replace(/\/+$/, '');
+    const apiKey = SettingsService.get('SMARTOLT_API_KEY', 'SMARTOLT_API_KEY', config.smartolt.apiKey);
+
+    if (!this.api || this.lastUrl !== url || this.lastKey !== apiKey) {
+      this.lastUrl = url;
+      this.lastKey = apiKey;
       this.api = axios.create({
-        baseURL: config.smartolt.url,
+        baseURL: url,
         headers: {
-          'X-Token': config.smartolt.apiKey,
+          'X-Token': apiKey,
           'Content-Type': 'application/json',
         },
         timeout: 9000,
@@ -37,13 +45,18 @@ export class SmartOLTService {
     return this.api;
   }
 
+  static getApiKey(): string {
+    return SettingsService.get('SMARTOLT_API_KEY', 'SMARTOLT_API_KEY', config.smartolt.apiKey);
+  }
+
   /**
    * Consulta el estado físico y óptico de la ONU en la OLT
    */
   static async obtenerEstadoONU(onuId: string): Promise<SmartOltStatusResult> {
     logger.info(`Consultando estado físico en SmartOLT para ONU: ${onuId}`);
+    const apiKey = this.getApiKey();
 
-    if (!config.smartolt.apiKey || config.smartolt.apiKey.includes('tu_token')) {
+    if (!apiKey || apiKey.includes('tu_token')) {
       logger.warn('SMARTOLT_API_KEY no configurada. Retornando simulación de estado.');
       return {
         status: 'ONLINE',
@@ -111,8 +124,9 @@ export class SmartOLTService {
    */
   static async rebootONU(onuId: string): Promise<SmartOltRebootResult> {
     logger.info(`Enviando orden de reinicio remoto para ONU: ${onuId}`);
+    const apiKey = this.getApiKey();
 
-    if (!config.smartolt.apiKey || config.smartolt.apiKey.includes('tu_token')) {
+    if (!apiKey || apiKey.includes('tu_token')) {
       logger.info('Modo DEV: Reinicio simulado con éxito.');
       return {
         success: true,
