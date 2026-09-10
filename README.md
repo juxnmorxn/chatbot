@@ -98,7 +98,7 @@ SOPORTE_HUMANO_PHONE=521XXXXXXXXXX
    - **Environment Variables:** Añade las variables de tu archivo `.env`.
 
 2. Configurar **cron-job.org**:
-   - URL: `https://chatbot-17n8.onrender.com/api/health`
+   - URL: `https://chatbot-rr1w.onrender.com/api/health`
    - Intervalo: Cada **10 minutos**
    - Método: `GET`
 
