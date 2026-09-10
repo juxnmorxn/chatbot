@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { getTursoClient } from '../database/turso';
 import { config } from '../config/env';
+import { SettingsService } from '../services/settings.service';
 import { Logger } from '../utils/logger';
 
 const logger = new Logger('HealthController');
@@ -25,10 +26,12 @@ export class HealthController {
 
     const responseTimeMs = Date.now() - startTime;
 
+    const ispName = SettingsService.get('ISP_NAME', 'ISP_NAME', config.isp.name);
+
     res.status(200).json({
       status: 'ok',
       service: 'isp-chatbot-backend',
-      isp: config.isp.name,
+      isp: ispName,
       uptimeSeconds: Math.floor(process.uptime()),
       database: dbStatus,
       responseTimeMs,
