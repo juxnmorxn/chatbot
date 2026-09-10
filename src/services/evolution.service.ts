@@ -113,7 +113,7 @@ export class EvolutionService {
       const evolutionButtons = botones.map((b) => ({
         buttonId: b.id,
         buttonText: { displayText: b.title },
-        type: 1,
+        type: 'reply',
       }));
 
       logger.info(`Enviando menú de botones a ${recipient}: ${botones.map((b) => b.title).join(' | ')}`);
@@ -135,12 +135,12 @@ export class EvolutionService {
       }
       throw new Error(`Status inesperado: ${response.status}`);
     } catch (error: any) {
-      logger.warn(`No se pudieron enviar botones interactivos a ${recipient}. Usando lista de texto fallback:`, error?.message || error);
+      logger.warn(`No se pudieron enviar botones interactivos a ${recipient}. Usando lista de texto fallback:`, error?.response?.data || error?.message || error);
 
       // Fallback a texto con opciones numeradas
       const opcionesTexto = botones.map((b, i) => `*${i + 1}.* ${b.title}`).join('\n');
       const mensajeFallback = `${texto}\n\n${opcionesTexto}\n\n_Escribe el número de tu opción o describe lo que necesitas._`;
-      return this.enviarTexto(recipient, mensajeFallback);
+      return this.enviarTexto(phone, mensajeFallback);
     }
   }
 }
