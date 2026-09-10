@@ -5,6 +5,23 @@ import { Logger } from '../utils/logger';
 const logger = new Logger('WebhookController');
 
 export class WebhookController {
+  private static processedMessageIds = new Map<string, number>();
+
+  private static isDuplicate(messageId: string): boolean {
+    const now = Date.now();
+    // Limpiar entradas antiguas (más de 60s)
+    for (const [id, timestamp] of this.processedMessageIds.entries()) {
+      if (now - timestamp > 60000) {
+        this.processedMessageIds.delete(id);
+      }
+    }
+    if (this.processedMessageIds.has(messageId)) {
+      return true;
+    }
+    this.processedMessageIds.set(messageId, now);
+    return false;
+  }
+
   /**
    * Recibe eventos de Evolution API (messages.upsert)
    */
@@ -34,6 +51,13 @@ export class WebhookController {
       const key = messageObj.key;
       const fromMe = key.fromMe;
       const remoteJid: string = key.remoteJid || '';
+      const messageId: string = key.id || '';
+
+      // Regla: Ignorar mensajes duplicados (mismo id procesado en los últimos 60 seg)
+      if (messageId && WebhookController.isDuplicate(messageId)) {
+        logger.debug(`Mensaje duplicado descartado: ${messageId}`);
+        return;
+      }
 
       // Regla: Ignorar mensajes enviados por el propio bot
       if (fromMe) {
