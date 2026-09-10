@@ -6,6 +6,7 @@ import { EvolutionService, BotButton } from '../services/evolution.service';
 import { config } from '../config/env';
 import { SettingsService } from '../services/settings.service';
 import { Logger } from '../utils/logger';
+import { parseSpintax } from '../utils/spintax';
 
 const logger = new Logger('BotOrchestrator');
 
@@ -38,13 +39,14 @@ export class BotOrchestrator {
     accion: string | null = null,
     botones?: BotButton[]
   ): Promise<boolean> {
+    const textoFinal = parseSpintax(mensaje);
     let ok = false;
     if (botones && botones.length > 0) {
-      ok = await EvolutionService.enviarBotones(phone, mensaje, botones);
+      ok = await EvolutionService.enviarBotones(phone, textoFinal, botones);
     } else {
-      ok = await EvolutionService.enviarTexto(phone, mensaje);
+      ok = await EvolutionService.enviarTexto(phone, textoFinal);
     }
-    await TursoService.logMessage(phone, 'OUT', mensaje, intencion, accion);
+    await TursoService.logMessage(phone, 'OUT', textoFinal, intencion, accion);
     return ok;
   }
 

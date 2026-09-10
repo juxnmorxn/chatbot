@@ -92,8 +92,8 @@ export class EvolutionService {
   }
 
   /**
-   * Envía un mensaje con botones de respuesta rápida
-   * Con fallback automático a lista numerada si la instancia no soporta botones interactivos
+   * Envía un menú interactivo formateado de forma clara y moderna
+   * Usa texto estructurado con emojis y números para garantizar 100% de entrega en WhatsApp móvil
    */
   static async enviarBotones(
     phone: string,
@@ -103,44 +103,15 @@ export class EvolutionService {
   ): Promise<boolean> {
     const recipient = this.formatRecipient(phone);
     const texto = parseSpintax(textoPrincipal);
-    const ispName = SettingsService.get('ISP_NAME', 'ISP_NAME', config.isp.name);
 
-    await randomDelay(1200, 2400);
+    const numberEmojis = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣'];
+    const opcionesTexto = botones
+      .map((b, i) => `${numberEmojis[i] || `*${i + 1}.*`} ${b.title}`)
+      .join('\n');
 
-    try {
-      const api = this.getApi();
-      const instance = this.getInstanceName();
-      const evolutionButtons = botones.map((b) => ({
-        buttonId: b.id,
-        buttonText: { displayText: b.title },
-        type: 'reply',
-      }));
+    const mensajeCompleto = `${texto}\n\n${opcionesTexto}\n\n_${pieDePagina}_\n_Por favor responde con el número de tu opción (ej. 1, 2 o 3) o describe tu duda._`;
 
-      logger.info(`Enviando menú de botones a ${recipient}: ${botones.map((b) => b.title).join(' | ')}`);
-
-      const response = await api.post(`/message/sendButtons/${instance}`, {
-        number: recipient,
-        title: ispName,
-        description: texto,
-        footer: pieDePagina,
-        buttons: evolutionButtons,
-        options: {
-          delay: 1200,
-          presence: 'composing',
-        },
-      });
-
-      if (response.status === 200 || response.status === 201) {
-        return true;
-      }
-      throw new Error(`Status inesperado: ${response.status}`);
-    } catch (error: any) {
-      logger.warn(`No se pudieron enviar botones interactivos a ${recipient}. Usando lista de texto fallback:`, error?.response?.data || error?.message || error);
-
-      // Fallback a texto con opciones numeradas
-      const opcionesTexto = botones.map((b, i) => `*${i + 1}.* ${b.title}`).join('\n');
-      const mensajeFallback = `${texto}\n\n${opcionesTexto}\n\n_Escribe el número de tu opción o describe lo que necesitas._`;
-      return this.enviarTexto(phone, mensajeFallback);
-    }
+    logger.info(`Enviando menú estructurado a ${recipient}: ${botones.map((b) => b.title).join(' | ')}`);
+    return this.enviarTexto(recipient, mensajeCompleto);
   }
 }
