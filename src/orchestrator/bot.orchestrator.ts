@@ -195,7 +195,26 @@ export class BotOrchestrator {
   ): Promise<void> {
     switch (c.intencion) {
       case 'SALUDO':
-        await this.enviarMenuPrincipal(phone, session?.client_name);
+        if (!session?.client_id && !session?.client_name) {
+          // Cliente nuevo / no registrado: solicitamos nombre o contrato para ubicarlo
+          await this.enviarYLoguear(
+            phone,
+            `¡Hola! 👋 Bienvenido al centro de atención y soporte técnico de *${this.getIspName()}*.\n\nPara poder ubicar tu cuenta en nuestro sistema y brindarte una mejor atención, ¿podrías indicarme tu *Nombre completo* o tu *Número de contrato / teléfono*?`,
+            'SALUDO',
+            'SOLICITAR_IDENTIFICACION'
+          );
+          await TursoService.updateStep(phone, 'ESPERANDO_IDENTIFICACION');
+        } else {
+          // Cliente ya registrado / conocido: saludo cordial y directo a su problema
+          const nombre = session.client_name ? ` *${session.client_name}*` : '';
+          await this.enviarYLoguear(
+            phone,
+            `¡Hola${nombre}! 👋 Bienvenido al centro de atención de *${this.getIspName()}*.\n\n¿En qué podemos apoyarte el día de hoy? Cuéntame cuál es tu duda o si presentas alguna falla con tu servicio.`,
+            'SALUDO',
+            'SALUDO_PERSONALIZADO'
+          );
+          await TursoService.updateStep(phone, 'ESPERANDO_PROBLEMA');
+        }
         break;
 
       case 'CONSULTAR_SALDO':
@@ -205,7 +224,7 @@ export class BotOrchestrator {
       case 'REPORTAR_PAGO':
         await this.enviarYLoguear(
           phone,
-          `{¡Gracias por tu pago!|Excelente noticia}. 📸 Para registrarlo de inmediato, por favor envía la *foto de tu comprobante o ficha de depósito* por este mismo chat y un agente de cobranza lo validará.`,
+          `¡Gracias por tu pago! 📸 Para registrarlo de inmediato, por favor envía la *foto de tu comprobante o ficha de depósito* por este mismo chat y nuestro equipo de cobranza lo validará en el sistema.`,
           'REPORTAR_PAGO',
           'SOLICITUD_COMPROBANTE'
         );
@@ -248,28 +267,28 @@ export class BotOrchestrator {
 
       case 'DESCONOCIDO':
       default:
-        // Si el cliente NO está identificado en absoluto (ni por CRM ni por nombre memorizado en Turso)
+        // Si el cliente NO está identificado en absoluto (ni por CRM ni por nombre en Turso)
         if (!session?.client_id && !session?.client_name) {
-          const intro = c.resumen_queja ? `Entendido. ` : '';
+          const intro = c.resumen_queja ? `Entendido sobre: _"${c.resumen_queja}"_.\n\n` : '';
           await this.enviarYLoguear(
             phone,
-            `${intro}{Hola|Buen día}. Bienvenido al centro de atención de *${this.getIspName()}*.\n\nPara poder brindarte un servicio ágil, ¿podrías indicarme tu *Nombre* o *Número de contrato*?`,
+            `${intro}¡Hola! Bienvenido al centro de atención de *${this.getIspName()}*.\n\nPara poder ubicar tu cuenta y darte una atención ágil, ¿podrías indicarme tu *Nombre completo* o *Número de contrato*?`,
             'DESCONOCIDO',
             'SOLICITAR_IDENTIFICACION'
           );
           await TursoService.updateStep(phone, 'ESPERANDO_IDENTIFICACION');
         } else {
-          // El cliente ya es conocido: respondemos reconociendo lo que dijo y ofreciendo ayuda
+          // El cliente ya es conocido: reconocemos lo que dijo y ofrecemos ayuda personalizada
+          const nombre = session.client_name ? ` *${session.client_name}*` : '';
           const contextoDicho = c.resumen_queja && c.resumen_queja.length > 3
             ? `Entiendo que nos comentas sobre: _"${c.resumen_queja}"_.\n\n`
             : '';
           await this.enviarYLoguear(
             phone,
-            `${contextoDicho}Como asistente virtual de *${this.getIspName()}*, estoy aquí para ayudarte con tu conexión a internet, saldo y soporte técnico. ¿En qué podemos apoyarte hoy?`,
+            `${contextoDicho}Hola${nombre}, como asistente de *${this.getIspName()}*, estoy aquí para ayudarte con fallas de internet, estado de cuenta o soporte técnico. ¿En qué podemos apoyarte hoy?`,
             'DESCONOCIDO',
             'ORIENTACION_CONVERSACIONAL'
           );
-          await this.enviarMenuPrincipal(phone, session?.client_name);
         }
         break;
     }
@@ -283,6 +302,41 @@ export class BotOrchestrator {
     c: GroqClassificationResult,
     session: Session | null
   ): Promise<void> {
+    // Si el cliente no está registrado aún en el sistema pero ya reportó un problema de internet
+    if (!session?.client_id && !session?.client_name) {
+      if (c.foco_rojo) {
+        await this.enviarYLoguear(
+          phone,
+          `⚠️ *Alerta de Foco Rojo (LOS / Fibra Óptica):*\n\nDetectamos que tu módem no recibe señal de luz por posible corte o daño en el cable de fibra óptica.\n\nPara poder generar tu reporte técnico y asignar a la cuadrilla de *${this.getIspName()}*, ¿podrías indicarme tu *Nombre completo* o *Número de contrato*?`,
+          'FALLA_INTERNET',
+          'SOLICITAR_NOMBRE_PARA_TICKET'
+        );
+        await TursoService.updateStep(phone, 'ESPERANDO_IDENTIFICACION');
+        return;
+      }
+
+      if (c.equipo_apagado) {
+        await this.enviarYLoguear(
+          phone,
+          `🔌 *Equipo Apagado / Falla de Energía:*\n\n1. Verifica que el eliminador esté bien conectado a la corriente y al módem.\n2. Presiona el botón de encendido en la parte trasera.\n\nSi no enciende ninguna luz, por favor indícame tu *Nombre completo* o *Número de contrato* para enviar a un técnico de *${this.getIspName()}*.`,
+          'FALLA_INTERNET',
+          'GUIA_EQUIPO_APAGADO'
+        );
+        await TursoService.updateStep(phone, 'ESPERANDO_IDENTIFICACION');
+        return;
+      }
+
+      const queja = c.resumen_queja ? ` sobre: _"${c.resumen_queja}"_` : '';
+      await this.enviarYLoguear(
+        phone,
+        `Entendido tu reporte${queja}. Veo que presentas problemas con tu conexión de internet.\n\nPara poder verificar tu línea en la central y darte solución inmediata, ¿me indicas tu *Nombre completo* o *Número de contrato*?`,
+        'FALLA_INTERNET',
+        'SOLICITAR_NOMBRE_PARA_DIAGNOSTICO'
+      );
+      await TursoService.updateStep(phone, 'ESPERANDO_IDENTIFICACION');
+      return;
+    }
+
     const clientId = session?.client_id || 'PENDIENTE';
 
     // Caso A: Foco rojo detectado por Groq
@@ -379,13 +433,9 @@ export class BotOrchestrator {
       const potenciaTexto = estadoOnu.opticalPowerDbm ? ` (${estadoOnu.opticalPowerDbm} dBm - Óptimo)` : '';
       await this.enviarYLoguear(
         phone,
-        `🟢 *Tu módem está en línea con la central${potenciaTexto}.*\n\nSi experimentas lentitud o páginas que no abren, podemos enviar un reinicio de refresco a tu equipo:`,
+        `🟢 *Tu módem está en línea con la central${potenciaTexto}.*\n\nSi experimentas lentitud o páginas que no abren, escribe *REINICIAR* para refrescar tu módem de forma remota, o escribe *ASESOR* para comunicarte con un técnico humano.`,
         'FALLA_INTERNET',
-        'SMARTOLT_ONLINE_OPCION_REBOOT',
-        [
-          { id: 'BTN_REBOOT', title: '🔄 Reiniciar Módem' },
-          { id: 'BTN_ASESOR', title: '👤 Hablar con Asesor' },
-        ]
+        'SMARTOLT_ONLINE_OPCION_TEXTO'
       );
       return;
     }
@@ -393,13 +443,9 @@ export class BotOrchestrator {
     // Fallback general
     await this.enviarYLoguear(
       phone,
-      `No pudimos obtener una lectura automática de tu equipo. ¿Deseas solicitar un reinicio o hablar con un asesor?`,
+      `No pudimos obtener una lectura automática de tu equipo en la central. Si deseas que enviemos una señal de reinicio escribe *REINICIAR*, o escribe *ASESOR* para que te atienda un técnico.`,
       'FALLA_INTERNET',
-      'SMARTOLT_FALLBACK_MENU',
-      [
-        { id: 'BTN_REBOOT', title: '🔄 Reiniciar Módem' },
-        { id: 'BTN_ASESOR', title: '👤 Hablar con Asesor' },
-      ]
+      'SMARTOLT_FALLBACK_TEXTO'
     );
   }
 
@@ -509,16 +555,15 @@ export class BotOrchestrator {
           service_id: String(c.servicio_id || c.id),
           client_name: c.nombre,
           onu_id: c.onu_id || `ONU-${c.id}`,
-          step: 'MENU_PRINCIPAL',
+          step: 'ESPERANDO_PROBLEMA',
         });
 
         await this.enviarYLoguear(
           phone,
-          `¡Perfecto, te hemos identificado! ✅\nBienvenido(a) *${c.nombre}*. Tu número ha quedado vinculado a tu contrato para futuras consultas.`,
+          `¡Perfecto, te he ubicado en el sistema! ✅\nBienvenido(a) *${c.nombre}*. Tu cuenta ha quedado vinculada a este chat.\n\nCuéntame, ¿cuál es el problema o consulta que presentas con tu servicio de internet?`,
           'IDENTIFICAR_CLIENTE',
           'VINCULADO_WISPHUB'
         );
-        await this.enviarMenuPrincipal(phone, c.nombre);
         return;
       }
 
@@ -543,7 +588,7 @@ export class BotOrchestrator {
     // Si el usuario dijo "no tengo internet", "cuanto debo", etc., NO lo forzamos a identificarse, lo atendemos
     if (clasificacion.intencion !== 'IDENTIFICAR_CLIENTE' && clasificacion.intencion !== 'DESCONOCIDO') {
       logger.info(`El usuario envió la intención "${clasificacion.intencion}" en lugar de un nombre. Ejecutando intención directamente.`);
-      await TursoService.updateStep(phone, 'MENU_PRINCIPAL');
+      await TursoService.updateStep(phone, 'ESPERANDO_PROBLEMA');
       await this.ejecutarIntencion(phone, clasificacion, session, rawInput);
       return;
     }
@@ -568,38 +613,36 @@ export class BotOrchestrator {
       await TursoService.upsertSession({
         phone,
         client_name: nombreLimpio,
-        step: 'MENU_PRINCIPAL',
+        step: 'ESPERANDO_PROBLEMA',
       });
 
       await this.enviarYLoguear(
         phone,
-        `¡Mucho gusto, *${nombreLimpio}*! 👋\nHe registrado tu nombre en nuestro sistema para atenderte siempre de manera personalizada.`,
+        `¡Mucho gusto, *${nombreLimpio}*! 👋\nHe registrado tu nombre en nuestro sistema para atenderte de manera personalizada.\n\nCuéntame, ¿cuál es el detalle o falla que presentas con tu servicio de internet?`,
         'IDENTIFICAR_CLIENTE',
         'NOMBRE_MEMORIZADO_TURSO'
       );
-      await this.enviarMenuPrincipal(phone, nombreLimpio);
       return;
     }
 
-    // 4. Si lo escrito es incomprensible, no nos quedamos en bucle: avanzamos al menú principal amablemente
+    // 4. Si lo escrito es incomprensible, no nos quedamos en bucle: avanzamos al problema amablemente
     await this.enviarYLoguear(
       phone,
-      `No te preocupes. ¿En qué podemos ayudarte el día de hoy?`,
+      `No te preocupes. ¿Cuál es el problema o consulta que tienes con tu servicio? Estoy aquí para ayudarte.`,
       'DESCONOCIDO',
       'CONTINUAR_SIN_NOMBRE'
     );
-    await TursoService.updateStep(phone, 'MENU_PRINCIPAL');
-    await this.enviarMenuPrincipal(phone, null);
+    await TursoService.updateStep(phone, 'ESPERANDO_PROBLEMA');
   }
 
   /**
-   * Envía el menú interactivo principal
+   * Saludo general del bot sin botones forzados
    */
   static async enviarMenuPrincipal(phone: string, clientName?: string | null): Promise<void> {
-    const saludo = clientName ? `{¡Hola|Buen día} *${clientName}*! 👋` : `{¡Hola|Buen día}! 👋`;
-    const texto = `${saludo}\nBienvenido al centro de atención y soporte técnico de *${this.getIspName()}*.\n\n¿En qué podemos ayudarte hoy?`;
+    const saludo = clientName ? `¡Hola, *${clientName}*! 👋` : `¡Hola! 👋`;
+    const texto = `${saludo} Bienvenido al centro de atención y soporte técnico de *${this.getIspName()}*.\n\n¿En qué podemos ayudarte el día de hoy? Cuéntame tu duda o si presentas alguna falla con tu internet.`;
 
-    await this.enviarYLoguear(phone, texto, 'MENU_PRINCIPAL', 'MENU_BOTONES_ENVIADO', this.MAIN_MENU_BUTTONS);
-    await TursoService.updateStep(phone, 'MENU_PRINCIPAL');
+    await this.enviarYLoguear(phone, texto, 'SALUDO', 'SALUDO_ENVIADO');
+    await TursoService.updateStep(phone, 'ESPERANDO_PROBLEMA');
   }
 }
