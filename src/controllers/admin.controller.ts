@@ -5,7 +5,8 @@ import { getTursoClient } from '../database/turso';
 import { GroqService } from '../services/groq.service';
 import { WispHubService } from '../services/wisphub.service';
 import { SmartOLTService } from '../services/smartolt.service';
-import { EvolutionService } from '../services/evolution.service';
+import axios from 'axios';
+import { config } from '../config/env';
 import { Logger } from '../utils/logger';
 
 const logger = new Logger('AdminController');
@@ -113,6 +114,65 @@ export class AdminController {
       res.status(400).json({ success: false, error: 'Servicio no reconocido' });
     } catch (error: any) {
       res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Obtiene el estado de conexión de WhatsApp y el QR actual
+   */
+  static async getWhatsAppStatus(req: Request, res: Response): Promise<void> {
+    try {
+      const url = SettingsService.get('EVOLUTION_URL', 'EVOLUTION_URL', config.evolution.url).replace(/\/+$/, '');
+      const apiKey = SettingsService.get('EVOLUTION_API_KEY', 'EVOLUTION_API_KEY', config.evolution.apiKey);
+      const instance = config.evolution.instanceName;
+
+      let state = 'close';
+      try {
+        const stateRes = await axios.get(`${url}/instance/connectionState/${instance}`, {
+          headers: { apikey: apiKey },
+          timeout: 4000,
+        });
+        state = stateRes.data?.instance?.state || 'close';
+      } catch (err: any) {
+        logger.warn('No se pudo obtener estado de instancia:', err?.message || err);
+      }
+
+      let qr = null;
+      if (state !== 'open') {
+        try {
+          const qrRes = await axios.get(`${url}/instance/connect/${instance}`, {
+            headers: { apikey: apiKey },
+            timeout: 5000,
+          });
+          qr = qrRes.data?.base64 || null;
+        } catch (err: any) {
+          logger.warn('No se pudo obtener QR:', err?.message || err);
+        }
+      }
+
+      res.json({ success: true, state, qr });
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Desconecta la sesión de WhatsApp para generar un QR nuevo limpio
+   */
+  static async disconnectWhatsApp(req: Request, res: Response): Promise<void> {
+    try {
+      const url = SettingsService.get('EVOLUTION_URL', 'EVOLUTION_URL', config.evolution.url).replace(/\/+$/, '');
+      const apiKey = SettingsService.get('EVOLUTION_API_KEY', 'EVOLUTION_API_KEY', config.evolution.apiKey);
+      const instance = config.evolution.instanceName;
+
+      await axios.delete(`${url}/instance/logout/${instance}`, {
+        headers: { apikey: apiKey },
+        timeout: 6000,
+      });
+
+      res.json({ success: true, message: 'Sesión desvinculada exitosamente' });
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error?.response?.data || error?.message || error });
     }
   }
 }

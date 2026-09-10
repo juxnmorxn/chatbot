@@ -392,6 +392,7 @@ export function getAdminDashboardHtml(): string {
     <!-- Navigation Tabs -->
     <div class="nav-tabs">
       <button class="nav-tab active" onclick="switchTab('apis')">🔑 Conexión de APIs</button>
+      <button class="nav-tab" onclick="switchTab('whatsapp')">📲 Vincular WhatsApp</button>
       <button class="nav-tab" onclick="switchTab('sessions')">👥 Sesiones en Turso</button>
       <button class="nav-tab" onclick="switchTab('logs')">📜 Historial y Problemas</button>
       <button class="nav-tab" onclick="switchTab('tester')">🧪 Simulador de Bot</button>
@@ -522,6 +523,45 @@ export function getAdminDashboardHtml(): string {
       </div>
     </div>
 
+    <!-- TAB: Vincular WhatsApp -->
+    <div id="tab-whatsapp" class="tab-pane">
+      <div class="card" style="max-width: 680px; margin: 0 auto; text-align: center;">
+        <div class="card-header" style="justify-content: center;">
+          <div class="card-title">📲 Vinculación de WhatsApp (Evolution API)</div>
+        </div>
+        <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px;">
+          Escanea este código QR desde tu aplicación de WhatsApp para conectar el bot a tu número.
+        </p>
+
+        <div id="whatsappStatusBox" style="margin-bottom: 20px;">
+          <div style="display: inline-block; padding: 8px 16px; border-radius: 20px; font-weight: 600; font-size: 14px; background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3);">
+            ⏳ Verificando estado...
+          </div>
+        </div>
+
+        <div id="qrContainer" style="background: white; display: inline-block; padding: 16px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); margin-bottom: 24px;">
+          <div style="width: 260px; height: 260px; display: flex; align-items: center; justify-content: center; color: #6b7280; font-size: 13px;">
+            Generando código QR...
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 12px; justify-content: center; margin-bottom: 24px;">
+          <button class="btn btn-secondary" onclick="loadWhatsAppStatus()">🔄 Actualizar QR</button>
+          <button class="btn" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.4);" onclick="disconnectWhatsApp()">⚠️ Desvincular y Regenerar</button>
+        </div>
+
+        <div style="text-align: left; background: rgba(0,0,0,0.25); border-radius: 12px; padding: 16px; border: 1px solid var(--card-border);">
+          <div style="font-weight: 600; font-size: 14px; margin-bottom: 8px; color: var(--text-main);">📋 Instrucciones para vincular:</div>
+          <ol style="margin-left: 20px; color: var(--text-muted); font-size: 13px; line-height: 1.8;">
+            <li>Abre <b>WhatsApp</b> en tu teléfono celular.</li>
+            <li>Entra a <b>Ajustes / Configuración</b> (o los 3 puntos en Android).</li>
+            <li>Toca en <b>Dispositivos vinculados</b> y luego en <b>Vincular un dispositivo</b>.</li>
+            <li>Apunta tu cámara al código QR de arriba para sincronizarlo.</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+
     <!-- TAB 2: Sesiones en Turso -->
     <div id="tab-sessions" class="tab-pane">
       <div class="card">
@@ -640,11 +680,56 @@ export function getAdminDashboardHtml(): string {
       event.target.classList.add('active');
       document.getElementById('tab-' + tabId).classList.add('active');
 
+      if (tabId === 'whatsapp') {
+        loadWhatsAppStatus();
+      }
       if (tabId === 'sessions') {
         loadSessions();
       }
       if (tabId === 'logs') {
         loadLogs();
+      }
+    }
+
+    async function loadWhatsAppStatus() {
+      const statusBox = document.getElementById('whatsappStatusBox');
+      const qrBox = document.getElementById('qrContainer');
+
+      statusBox.innerHTML = '<div style="display: inline-block; padding: 8px 16px; border-radius: 20px; font-weight: 600; font-size: 14px; background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3);">⏳ Consultando estado en Evolution API...</div>';
+
+      try {
+        const res = await fetch('/api/whatsapp/status');
+        const data = await res.json();
+
+        if (data.state === 'open') {
+          statusBox.innerHTML = '<div style="display: inline-block; padding: 8px 16px; border-radius: 20px; font-weight: 600; font-size: 14px; background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3);">🟢 WhatsApp Conectado y Operativo</div>';
+          qrBox.innerHTML = '<div style="width: 260px; height: 260px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #10b981; font-size: 14px; font-weight: 600;"><span style="font-size: 48px; margin-bottom: 12px;">✅</span>¡Instancia Vinculada!<br><span style="color: #6b7280; font-weight: normal; font-size: 12px; margin-top: 6px;">Listo para enviar y recibir mensajes</span></div>';
+        } else {
+          statusBox.innerHTML = '<div style="display: inline-block; padding: 8px 16px; border-radius: 20px; font-weight: 600; font-size: 14px; background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3);">🟡 Desconectado (Escanea el QR)</div>';
+          if (data.qr) {
+            qrBox.innerHTML = '<img src="' + data.qr + '" alt="QR WhatsApp" style="width: 260px; height: 260px; display: block; border-radius: 8px;">';
+          } else {
+            qrBox.innerHTML = '<div style="width: 260px; height: 260px; display: flex; align-items: center; justify-content: center; color: #6b7280; font-size: 13px;">No se pudo cargar el QR. Haz clic en Actualizar QR.</div>';
+          }
+        }
+      } catch (err) {
+        statusBox.innerHTML = '<div style="display: inline-block; padding: 8px 16px; border-radius: 20px; font-weight: 600; font-size: 14px; background: rgba(239, 68, 68, 0.15); color: #ef4444;">Error al conectar con Evolution API</div>';
+      }
+    }
+
+    async function disconnectWhatsApp() {
+      if (!confirm('¿Estás seguro de que deseas desvincular la sesión actual de WhatsApp? Se generará un nuevo QR para volver a vincular.')) return;
+      try {
+        const res = await fetch('/api/whatsapp/disconnect', { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+          showToast('Sesión desvinculada. Generando nuevo QR...');
+          setTimeout(loadWhatsAppStatus, 1500);
+        } else {
+          showToast('Error: ' + data.error, true);
+        }
+      } catch (err) {
+        showToast('Error al desvincular: ' + err.message, true);
       }
     }
 

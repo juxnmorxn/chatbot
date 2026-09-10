@@ -26,6 +26,8 @@ router.post('/api/settings', AdminController.updateSettings);
 router.post('/api/settings/generate-evolution-key', AdminController.generateEvolutionKey);
 router.get('/api/sessions', AdminController.getSessions);
 router.get('/api/logs', AdminController.getLogs);
+router.get('/api/whatsapp/status', AdminController.getWhatsAppStatus);
+router.post('/api/whatsapp/disconnect', AdminController.disconnectWhatsApp);
 router.post('/api/test/:service', AdminController.testService);
 
 // Healthchecks para cron-job.org / Render
