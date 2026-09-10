@@ -29,6 +29,26 @@ export class BotOrchestrator {
   }
 
   /**
+   * Envía un mensaje y lo registra automáticamente en la tabla conversation_logs de Turso
+   */
+  private static async enviarYLoguear(
+    phone: string,
+    mensaje: string,
+    intencion: string | null = null,
+    accion: string | null = null,
+    botones?: BotButton[]
+  ): Promise<boolean> {
+    let ok = false;
+    if (botones && botones.length > 0) {
+      ok = await EvolutionService.enviarBotones(phone, mensaje, botones);
+    } else {
+      ok = await EvolutionService.enviarTexto(phone, mensaje);
+    }
+    await TursoService.logMessage(phone, 'OUT', mensaje, intencion, accion);
+    return ok;
+  }
+
+  /**
    * Punto de entrada principal para todos los mensajes recibidos desde WhatsApp
    */
   static async procesarMensaje(event: IncomingMessageEvent): Promise<void> {
@@ -38,24 +58,32 @@ export class BotOrchestrator {
 
     logger.info(`Procesando mensaje de ${phone}: buttonId="${buttonId}", text="${rawText}"`);
 
+    // Registrar mensaje entrante en la auditoría de Turso
+    const inputContent = rawText || (buttonId ? `[Botón: ${buttonId}]` : (event.isMedia ? '[Foto/Comprobante]' : '[Desconocido]'));
+    await TursoService.logMessage(phone, 'IN', inputContent, null, 'MENSAJE_ENTRANTE');
+
     // 1. Obtener o inicializar sesión en Turso
     let session = await TursoService.getSession(phone);
 
     // 2. Control Anti-Spam (Opt-Out): si el usuario escribe cancelar o baja
-    if (rawText.toUpperCase() === 'CANCELAR' || rawText.toUpperCase() === 'BAJA') {
+    if (['CANCELAR', 'BAJA', 'NO ENVIAR', 'STOP'].includes(rawText.toUpperCase())) {
       await TursoService.setOptOut(phone, true);
-      await EvolutionService.enviarTexto(
+      await this.enviarYLoguear(
         phone,
-        `{Entendido|Listo}. Has cancelado la suscripción de avisos automáticos de *${config.isp.name}*. Si en el futuro deseas volver a activarlos, escribe *ACTIVAR*.`
+        `{Entendido|Listo}. Has cancelado la suscripción de avisos automáticos de *${this.getIspName()}*. Si en el futuro deseas volver a activarlos, escribe *ACTIVAR*.`,
+        'CANCELAR_SUSCRIPCION',
+        'OPTOUT_CONFIRMADO'
       );
       return;
     }
 
     if (rawText.toUpperCase() === 'ACTIVAR') {
       await TursoService.setOptOut(phone, false);
-      await EvolutionService.enviarTexto(
+      await this.enviarYLoguear(
         phone,
-        `¡Bienvenido de vuelta! 🎉 Has reactivado las notificaciones y soporte de *${this.getIspName()}*.`
+        `¡Bienvenido de vuelta! 🎉 Has reactivado las notificaciones y soporte de *${this.getIspName()}*.`,
+        'ACTIVAR',
+        'OPTIN_CONFIRMADO'
       );
       await this.enviarMenuPrincipal(phone, session?.client_name);
       return;
@@ -117,7 +145,7 @@ export class BotOrchestrator {
       currentStep: session?.step,
     });
 
-    logger.info(`Resultado Groq: intencion="${clasificacion.intencion}", foco_rojo=${clasificacion.foco_rojo}, equipo_apagado=${clasificacion.equipo_apagado}`);
+    logger.info(`Resultado Groq: intencion="${clasificacion.intencion}", foco_rojo=${clasificacion.foco_rojo}, equipo_apagado=${clasificacion.equipo_apagado}, resumen="${clasificacion.resumen_queja}"`);
 
     await this.ejecutarIntencion(phone, clasificacion, session, rawText);
   }
@@ -173,9 +201,11 @@ export class BotOrchestrator {
         break;
 
       case 'REPORTAR_PAGO':
-        await EvolutionService.enviarTexto(
+        await this.enviarYLoguear(
           phone,
-          `{¡Gracias por tu pago!|Excelente noticia}. 📸 Para registrarlo de inmediato, por favor envía la *foto de tu comprobante o ficha de depósito* por este mismo chat y un agente de cobranza lo validará.`
+          `{¡Gracias por tu pago!|Excelente noticia}. 📸 Para registrarlo de inmediato, por favor envía la *foto de tu comprobante o ficha de depósito* por este mismo chat y un agente de cobranza lo validará.`,
+          'REPORTAR_PAGO',
+          'SOLICITUD_COMPROBANTE'
         );
         break;
 
@@ -188,9 +218,11 @@ export class BotOrchestrator {
         break;
 
       case 'DATOS_WIFI':
-        await EvolutionService.enviarTexto(
+        await this.enviarYLoguear(
           phone,
-          `📶 *Cambio de contraseña Wi-Fi:*\n\nPor seguridad de tu red, el cambio de clave o nombre de red se gestiona directamente con nuestro equipo técnico. Por favor responde con el nuevo nombre y contraseña que deseas configurar para tu módem.`
+          `📶 *Cambio de contraseña Wi-Fi:*\n\nPor seguridad de tu red, el cambio de clave o nombre de red se gestiona directamente con nuestro equipo técnico. Por favor responde con el nuevo nombre y contraseña que deseas configurar para tu módem.`,
+          'DATOS_WIFI',
+          'INSTRUCCIONES_WIFI'
         );
         break;
 
@@ -200,9 +232,11 @@ export class BotOrchestrator {
 
       case 'CANCELAR_SUSCRIPCION':
         await TursoService.setOptOut(phone, true);
-        await EvolutionService.enviarTexto(
+        await this.enviarYLoguear(
           phone,
-          `Has sido dado de baja de nuestros avisos automáticos. Escribe *ACTIVAR* si deseas regresar en cualquier momento.`
+          `Has sido dado de baja de nuestros avisos automáticos de *${this.getIspName()}*. Escribe *ACTIVAR* si deseas regresar en cualquier momento.`,
+          'CANCELAR_SUSCRIPCION',
+          'BAJA_REGISTRADA'
         );
         break;
 
@@ -212,19 +246,28 @@ export class BotOrchestrator {
 
       case 'DESCONOCIDO':
       default:
-        // Si no está identificado, le sugerimos identificarse o elegir una opción
-        if (!session?.client_id) {
-          await EvolutionService.enviarTexto(
+        // Si el cliente NO está identificado en absoluto (ni por CRM ni por nombre memorizado en Turso)
+        if (!session?.client_id && !session?.client_name) {
+          const intro = c.resumen_queja ? `Entendido. ` : '';
+          await this.enviarYLoguear(
             phone,
-            `{Hola|Buen día}. Bienvenido al centro de atención de *${this.getIspName()}*.\n\nNo tengo registrado este número celular en el sistema. ¿Podrías indicarme tu *Nombre completo* o *Número de contrato*?`
+            `${intro}{Hola|Buen día}. Bienvenido al centro de atención de *${this.getIspName()}*.\n\nPara poder brindarte un servicio ágil, ¿podrías indicarme tu *Nombre* o *Número de contrato*?`,
+            'DESCONOCIDO',
+            'SOLICITAR_IDENTIFICACION'
           );
           await TursoService.updateStep(phone, 'ESPERANDO_IDENTIFICACION');
         } else {
-          await EvolutionService.enviarTexto(
+          // El cliente ya es conocido: respondemos reconociendo lo que dijo y ofreciendo ayuda
+          const contextoDicho = c.resumen_queja && c.resumen_queja.length > 3
+            ? `Entiendo que nos comentas sobre: _"${c.resumen_queja}"_.\n\n`
+            : '';
+          await this.enviarYLoguear(
             phone,
-            `No logré comprender del todo tu mensaje. Por favor selecciona una de las siguientes opciones:`
+            `${contextoDicho}Como asistente virtual de *${this.getIspName()}*, estoy aquí para ayudarte con tu conexión a internet, saldo y soporte técnico. ¿En qué podemos apoyarte hoy?`,
+            'DESCONOCIDO',
+            'ORIENTACION_CONVERSACIONAL'
           );
-          await this.enviarMenuPrincipal(phone, session.client_name);
+          await this.enviarMenuPrincipal(phone, session?.client_name);
         }
         break;
     }
@@ -239,7 +282,6 @@ export class BotOrchestrator {
     session: Session | null
   ): Promise<void> {
     const clientId = session?.client_id || 'PENDIENTE';
-    const onuId = session?.onu_id || `ONU-${clientId}`;
 
     // Caso A: Foco rojo detectado por Groq
     if (c.foco_rojo) {
@@ -251,18 +293,22 @@ export class BotOrchestrator {
         'Alta'
       );
 
-      await EvolutionService.enviarTexto(
+      await this.enviarYLoguear(
         phone,
-        `⚠️ *Alerta de Fibra Óptica Detectada:*\n\nEl foco rojo indica que no está llegando señal de luz a tu módem (posible cable desconectado o fibra dañada).\n\n🎫 *Hemos generado tu reporte técnico:*\n• Folio: *${ticket.folio}*\n• Estado: Asignado a cuadrilla técnica.\n\nTe pedimos no mover el cable delgado amarillo/blanco para evitar daños mayores.`
+        `⚠️ *Alerta de Fibra Óptica Detectada:*\n\nEl foco rojo indica que no está llegando señal de luz a tu módem (posible cable desconectado o fibra dañada).\n\n🎫 *Hemos generado tu reporte técnico:*\n• Folio: *${ticket.folio}*\n• Estado: Asignado a cuadrilla técnica de ${this.getIspName()}.\n\nTe pedimos no mover el cable delgado amarillo/blanco para evitar daños mayores.`,
+        'FALLA_INTERNET',
+        `TICKET_CREADO_FOCO_ROJO_${ticket.folio}`
       );
       return;
     }
 
     // Caso B: Equipo apagado o sin energía
     if (c.equipo_apagado) {
-      await EvolutionService.enviarTexto(
+      await this.enviarYLoguear(
         phone,
-        `🔌 *Equipo Apagado / Falla de Energía:*\n\n1. Verifica que el eliminador negro esté firmemente conectado a la corriente.\n2. Prueba conectando en otro enchufe de pared que tenga luz.\n3. Presiona el botón pequeño de encendido (ON/OFF) en la parte trasera del módem.\n\nSi después de esto no enciende ninguna luz, responde *ASESOR* para coordinar el reemplazo del equipo.`
+        `🔌 *Equipo Apagado / Falla de Energía:*\n\n1. Verifica que el eliminador negro esté firmemente conectado a la corriente.\n2. Prueba conectando en otro enchufe de pared que tenga luz.\n3. Presiona el botón pequeño de encendido (ON/OFF) en la parte trasera del módem.\n\nSi después de esto no enciende ninguna luz, responde *ASESOR* para coordinar el reemplazo del equipo.`,
+        'FALLA_INTERNET',
+        'GUIA_EQUIPO_APAGADO'
       );
       return;
     }
@@ -276,9 +322,11 @@ export class BotOrchestrator {
         'Media'
       );
 
-      await EvolutionService.enviarTexto(
+      await this.enviarYLoguear(
         phone,
-        `Agradecemos que ya hayas realizado el reinicio. Debido a que el servicio aún no responde, generamos tu reporte técnico *#${ticket.folio}* para revisión en cabina central.`
+        `Agradecemos que ya hayas realizado el reinicio. Debido a que el servicio aún no responde, generamos tu reporte técnico *#${ticket.folio}* para revisión en cabina central.`,
+        'FALLA_INTERNET',
+        `TICKET_CREADO_SIN_SERVICIO_${ticket.folio}`
       );
       return;
     }
@@ -293,7 +341,7 @@ export class BotOrchestrator {
   private static async flujoReportarFalla(phone: string, session: Session | null): Promise<void> {
     const onuId = session?.onu_id || (session?.client_id ? `ONU-${session.client_id}` : 'ONU-DEFAULT');
 
-    await EvolutionService.enviarTexto(phone, `🔍 Diagnosticando el estado de tu conexión en tiempo real...`);
+    await this.enviarYLoguear(phone, `🔍 Diagnosticando el estado de tu conexión en tiempo real...`, 'DIAGNOSTICO', 'INICIANDO_SCAN');
 
     const estadoOnu = await SmartOLTService.obtenerEstadoONU(onuId);
     logger.info(`Diagnóstico SmartOLT para ${phone}: ${estadoOnu.status}`);
@@ -306,26 +354,32 @@ export class BotOrchestrator {
         'Alta'
       );
 
-      await EvolutionService.enviarTexto(
+      await this.enviarYLoguear(
         phone,
-        `🔴 *Falla Física Detectada (Fibra Dañada):*\n\nLa central reporta corte en la señal óptica de tu domicilio.\n\n🎫 *Ticket generado:* *#${ticket.folio}*\nNuestros técnicos en campo ya han sido notificados para la reparación.`
+        `🔴 *Falla Física Detectada (Fibra Dañada):*\n\nLa central reporta corte en la señal óptica de tu domicilio.\n\n🎫 *Ticket generado:* *#${ticket.folio}*\nNuestros técnicos en campo ya han sido notificados para la reparación.`,
+        'FALLA_INTERNET',
+        `TICKET_SMARTOLT_LOS_${ticket.folio}`
       );
       return;
     }
 
     if (estadoOnu.status === 'POWER_FAIL') {
-      await EvolutionService.enviarTexto(
+      await this.enviarYLoguear(
         phone,
-        `⚡ *Falla de Alimentación:* La OLT detecta que el módem no tiene energía eléctrica. Por favor verifica que el cable de corriente esté conectado y con energía.`
+        `⚡ *Falla de Alimentación:* La OLT detecta que el módem no tiene energía eléctrica. Por favor verifica que el cable de corriente esté conectado y con energía.`,
+        'FALLA_INTERNET',
+        'SMARTOLT_POWER_FAIL'
       );
       return;
     }
 
     if (estadoOnu.status === 'ONLINE') {
       const potenciaTexto = estadoOnu.opticalPowerDbm ? ` (${estadoOnu.opticalPowerDbm} dBm - Óptimo)` : '';
-      await EvolutionService.enviarBotones(
+      await this.enviarYLoguear(
         phone,
         `🟢 *Tu módem está en línea con la central${potenciaTexto}.*\n\nSi experimentas lentitud o páginas que no abren, podemos enviar un reinicio de refresco a tu equipo:`,
+        'FALLA_INTERNET',
+        'SMARTOLT_ONLINE_OPCION_REBOOT',
         [
           { id: 'BTN_REBOOT', title: '🔄 Reiniciar Módem' },
           { id: 'BTN_ASESOR', title: '👤 Hablar con Asesor' },
@@ -335,9 +389,11 @@ export class BotOrchestrator {
     }
 
     // Fallback general
-    await EvolutionService.enviarBotones(
+    await this.enviarYLoguear(
       phone,
       `No pudimos obtener una lectura automática de tu equipo. ¿Deseas solicitar un reinicio o hablar con un asesor?`,
+      'FALLA_INTERNET',
+      'SMARTOLT_FALLBACK_MENU',
       [
         { id: 'BTN_REBOOT', title: '🔄 Reiniciar Módem' },
         { id: 'BTN_ASESOR', title: '👤 Hablar con Asesor' },
@@ -351,19 +407,23 @@ export class BotOrchestrator {
   private static async flujoReiniciarModem(phone: string, session: Session | null): Promise<void> {
     const onuId = session?.onu_id || `ONU-${session?.client_id || 'DEFAULT'}`;
 
-    await EvolutionService.enviarTexto(phone, `⏳ Enviando señal de reinicio a tu módem...`);
+    await this.enviarYLoguear(phone, `⏳ Enviando señal de reinicio a tu módem...`, 'REINICIAR_MODEM', 'ENVIANDO_COMANDO_REBOOT');
 
     const resultado = await SmartOLTService.rebootONU(onuId);
 
     if (resultado.success) {
-      await EvolutionService.enviarTexto(
+      await this.enviarYLoguear(
         phone,
-        `✅ *Comando de reinicio ejecutado con éxito.*\n\nLas luces de tu módem parpadearán y el servicio se reestablecerá por completo en aproximadamente *2 a 3 minutos*. Si tras este tiempo sigues sin internet, escribe *ASESOR*.`
+        `✅ *Comando de reinicio ejecutado con éxito.*\n\nLas luces de tu módem parpadearán y el servicio se reestablecerá por completo en aproximadamente *2 a 3 minutos*. Si tras este tiempo sigues sin internet, escribe *ASESOR*.`,
+        'REINICIAR_MODEM',
+        'REBOOT_EXITOSO'
       );
     } else {
-      await EvolutionService.enviarTexto(
+      await this.enviarYLoguear(
         phone,
-        `⚠️ No fue posible reiniciar tu módem de forma remota. Por favor desconéctalo de la corriente eléctrica por 30 segundos y vuelve a conectarlo.`
+        `⚠️ No fue posible reiniciar tu módem de forma remota. Por favor desconéctalo de la corriente eléctrica por 30 segundos y vuelve a conectarlo.`,
+        'REINICIAR_MODEM',
+        'REBOOT_FALLIDO_MANUAL'
       );
     }
   }
@@ -373,9 +433,11 @@ export class BotOrchestrator {
    */
   private static async flujoConsultarSaldo(phone: string, session: Session | null): Promise<void> {
     if (!session?.client_id) {
-      await EvolutionService.enviarTexto(
+      await this.enviarYLoguear(
         phone,
-        `Para consultar tu saldo necesitamos tu número de cliente o nombre. Por favor escribe tu *Nombre completo* o *ID de contrato*:`
+        `Para consultar tu estado de cuenta requerimos tu número de contrato o nombre. Por favor escribe tu *Nombre completo* o *ID de contrato*:`,
+        'CONSULTAR_SALDO',
+        'SOLICITAR_CONTRATO_SALDO'
       );
       await TursoService.updateStep(phone, 'ESPERANDO_IDENTIFICACION');
       return;
@@ -384,14 +446,16 @@ export class BotOrchestrator {
     const facturas = await WispHubService.obtenerFacturasPendientes(session.client_id);
 
     if (facturas.length === 0) {
-      await EvolutionService.enviarTexto(
+      await this.enviarYLoguear(
         phone,
-        `🎉 *¡Tu cuenta está al corriente!*\n\nEstimado(a) *${session.client_name || 'Cliente'}*, no tienes facturas pendientes de pago en este momento. ¡Gracias por ser cliente de *${config.isp.name}*!`
+        `🎉 *¡Tu cuenta está al corriente!*\n\nEstimado(a) *${session.client_name || 'Cliente'}*, no tienes facturas pendientes de pago en este momento. ¡Gracias por ser cliente de *${this.getIspName()}*!`,
+        'CONSULTAR_SALDO',
+        'CUENTA_AL_CORRIENTE'
       );
       return;
     }
 
-    let textoFacturas = `📋 *Estado de Cuenta - ${config.isp.name}*\nCliente: *${session.client_name}*\n\n`;
+    let textoFacturas = `📋 *Estado de Cuenta - ${this.getIspName()}*\nCliente: *${session.client_name}*\n\n`;
     let totalAdeudo = 0;
 
     facturas.forEach((f, idx) => {
@@ -405,7 +469,7 @@ export class BotOrchestrator {
 
     textoFacturas += `💰 *Total a pagar: $${totalAdeudo.toFixed(2)} MXN*\n\n_Para reportar tu pago después de realizarlo, puedes enviar la foto de tu comprobante en este chat._`;
 
-    await EvolutionService.enviarTexto(phone, textoFacturas);
+    await this.enviarYLoguear(phone, textoFacturas, 'CONSULTAR_SALDO', 'FACTURAS_PENDIENTES_ENVIADAS');
   }
 
   /**
@@ -413,54 +477,117 @@ export class BotOrchestrator {
    */
   private static async flujoHablarAsesor(phone: string, session: Session | null): Promise<void> {
     const contactoAsesor = config.isp.soporteHumanoPhone ? ` o puedes comunicarte al: *${config.isp.soporteHumanoPhone}*` : '';
-    await EvolutionService.enviarTexto(
+    await this.enviarYLoguear(
       phone,
-      `👨‍💼 *Atención Personalizada:*\n\nUn asesor humano ha sido notificado sobre tu solicitud${contactoAsesor}.\n\nEn breve uno de nuestros agentes tomará este chat para darte seguimiento directo. ¡Gracias por tu paciencia!`
+      `👨‍💼 *Atención Personalizada:*\n\nUn asesor humano de *${this.getIspName()}* ha sido notificado sobre tu solicitud${contactoAsesor}.\n\nEn breve uno de nuestros agentes tomará este chat para darte seguimiento directo. ¡Gracias por tu paciencia!`,
+      'HABLAR_HUMANO',
+      'TRANSFERENCIA_ASESOR'
     );
   }
 
   /**
-   * Procesa la identificación manual de un cliente cuando su celular no coincide con WispHub
+   * Procesa la identificación de un cliente de forma inteligente:
+   * 1. Busca en WispHub por nombre o contrato.
+   * 2. Si no coincide pero parece otra intención (ej. "no tengo internet"), la procesa sin trabarse.
+   * 3. Si es un nombre personal (ej. "Carlos", "Juan"), lo memoriza en Turso DB y NUNCA vuelve a preguntarlo.
    */
   private static async procesarIdentificacion(phone: string, input: string, session: Session | null): Promise<void> {
-    logger.info(`Buscando coincidencias para identificación de ${phone}: "${input}"`);
+    const rawInput = input.trim();
+    logger.info(`Buscando coincidencias para identificación de ${phone}: "${rawInput}"`);
 
-    const coincidencias = await WispHubService.buscarClientePorNombre(input);
+    // 1. Intentar buscar en WispHub
+    try {
+      const coincidencias = await WispHubService.buscarClientePorNombre(rawInput);
 
-    if (coincidencias.length === 1) {
-      const c = coincidencias[0];
+      if (coincidencias.length === 1) {
+        const c = coincidencias[0];
+        await TursoService.upsertSession({
+          phone,
+          client_id: String(c.id),
+          service_id: String(c.servicio_id || c.id),
+          client_name: c.nombre,
+          onu_id: c.onu_id || `ONU-${c.id}`,
+          step: 'MENU_PRINCIPAL',
+        });
+
+        await this.enviarYLoguear(
+          phone,
+          `¡Perfecto, te hemos identificado! ✅\nBienvenido(a) *${c.nombre}*. Tu número ha quedado vinculado a tu contrato para futuras consultas.`,
+          'IDENTIFICAR_CLIENTE',
+          'VINCULADO_WISPHUB'
+        );
+        await this.enviarMenuPrincipal(phone, c.nombre);
+        return;
+      }
+
+      if (coincidencias.length > 1) {
+        let opciones = `Encontramos varios registros con ese nombre. Por favor escribe tu número de servicio:\n\n`;
+        coincidencias.forEach((c) => {
+          opciones += `• *ID ${c.id}:* ${c.nombre} (${c.direccion || 'Sin dirección'})\n`;
+        });
+        await this.enviarYLoguear(phone, opciones, 'IDENTIFICAR_CLIENTE', 'MULTIPLES_COINCIDENCIAS');
+        return;
+      }
+    } catch (err: any) {
+      logger.warn(`Error al consultar WispHub durante identificación:`, err?.message || err);
+    }
+
+    // 2. Si no hubo coincidencia en WispHub, verificar con Groq si el usuario expresó una intención en lugar de su nombre
+    const clasificacion = await GroqService.clasificarMensaje(rawInput, {
+      clientName: null,
+      currentStep: 'ESPERANDO_IDENTIFICACION',
+    });
+
+    // Si el usuario dijo "no tengo internet", "cuanto debo", etc., NO lo forzamos a identificarse, lo atendemos
+    if (clasificacion.intencion !== 'IDENTIFICAR_CLIENTE' && clasificacion.intencion !== 'DESCONOCIDO') {
+      logger.info(`El usuario envió la intención "${clasificacion.intencion}" en lugar de un nombre. Ejecutando intención directamente.`);
+      await TursoService.updateStep(phone, 'MENU_PRINCIPAL');
+      await this.ejecutarIntencion(phone, clasificacion, session, rawInput);
+      return;
+    }
+
+    // 3. Extraer y limpiar el nombre (incluso si dijo "me llamo Juan", "soy Carlos", o simplemente "Maria")
+    let nombreLimpio = clasificacion.nombre_mencionado || rawInput;
+    nombreLimpio = nombreLimpio
+      .replace(/^(me llamo|soy|mi nombre es|mi nombre|nombre:?)\s+/i, '')
+      .replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]/g, '')
+      .trim();
+
+    // Capitalizar palabras
+    if (nombreLimpio.length >= 2) {
+      nombreLimpio = nombreLimpio
+        .split(/\s+/)
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+        .join(' ');
+    }
+
+    // Si tiene un formato de nombre creíble (2 a 45 caracteres)
+    if (nombreLimpio.length >= 2 && nombreLimpio.length <= 45) {
       await TursoService.upsertSession({
         phone,
-        client_id: String(c.id),
-        service_id: String(c.servicio_id || c.id),
-        client_name: c.nombre,
-        onu_id: c.onu_id || `ONU-${c.id}`,
+        client_name: nombreLimpio,
         step: 'MENU_PRINCIPAL',
       });
 
-      await EvolutionService.enviarTexto(
+      await this.enviarYLoguear(
         phone,
-        `¡Perfecto, te hemos identificado! ✅\nBienvenido(a) *${c.nombre}*. Tu número ha quedado registrado para futuras consultas.`
+        `¡Mucho gusto, *${nombreLimpio}*! 👋\nHe registrado tu nombre en nuestro sistema para atenderte siempre de manera personalizada.`,
+        'IDENTIFICAR_CLIENTE',
+        'NOMBRE_MEMORIZADO_TURSO'
       );
-      await this.enviarMenuPrincipal(phone, c.nombre);
+      await this.enviarMenuPrincipal(phone, nombreLimpio);
       return;
     }
 
-    if (coincidencias.length > 1) {
-      let opciones = `Encontramos varios registros con ese nombre. Por favor escribe tu número de servicio:\n\n`;
-      coincidencias.forEach((c) => {
-        opciones += `• *ID ${c.id}:* ${c.nombre} (${c.direccion || 'Sin dirección'})\n`;
-      });
-      await EvolutionService.enviarTexto(phone, opciones);
-      return;
-    }
-
-    // Si no encontró coincidencia
-    await EvolutionService.enviarTexto(
+    // 4. Si lo escrito es incomprensible, no nos quedamos en bucle: avanzamos al menú principal amablemente
+    await this.enviarYLoguear(
       phone,
-      `No logramos encontrar un servicio asociado a *"${input}"*. Un asesor humano se pondrá en contacto contigo para asistirte.`
+      `No te preocupes. ¿En qué podemos ayudarte el día de hoy?`,
+      'DESCONOCIDO',
+      'CONTINUAR_SIN_NOMBRE'
     );
-    await this.flujoHablarAsesor(phone, session);
+    await TursoService.updateStep(phone, 'MENU_PRINCIPAL');
+    await this.enviarMenuPrincipal(phone, null);
   }
 
   /**
@@ -470,7 +597,7 @@ export class BotOrchestrator {
     const saludo = clientName ? `{¡Hola|Buen día} *${clientName}*! 👋` : `{¡Hola|Buen día}! 👋`;
     const texto = `${saludo}\nBienvenido al centro de atención y soporte técnico de *${this.getIspName()}*.\n\n¿En qué podemos ayudarte hoy?`;
 
-    await EvolutionService.enviarBotones(phone, texto, this.MAIN_MENU_BUTTONS);
+    await this.enviarYLoguear(phone, texto, 'MENU_PRINCIPAL', 'MENU_BOTONES_ENVIADO', this.MAIN_MENU_BUTTONS);
     await TursoService.updateStep(phone, 'MENU_PRINCIPAL');
   }
 }

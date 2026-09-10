@@ -25,6 +25,7 @@ router.get('/api/settings', AdminController.getSettings);
 router.post('/api/settings', AdminController.updateSettings);
 router.post('/api/settings/generate-evolution-key', AdminController.generateEvolutionKey);
 router.get('/api/sessions', AdminController.getSessions);
+router.get('/api/logs', AdminController.getLogs);
 router.post('/api/test/:service', AdminController.testService);
 
 // Healthchecks para cron-job.org / Render

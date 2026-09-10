@@ -45,7 +45,19 @@ export async function initTursoDatabase(): Promise<void> {
       );
     `);
 
-    logger.info('Tablas "sessions" y "settings" listas en Turso.');
+    await client.execute(`
+      CREATE TABLE IF NOT EXISTS conversation_logs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        phone TEXT NOT NULL,
+        direction TEXT NOT NULL,
+        message TEXT NOT NULL,
+        intent TEXT,
+        action_taken TEXT,
+        created_at TEXT NOT NULL
+      );
+    `);
+
+    logger.info('Tablas "sessions", "settings" y "conversation_logs" listas en Turso.');
   } catch (error: any) {
     logger.error('Error al inicializar Turso DB:', error?.message || error);
     throw error;

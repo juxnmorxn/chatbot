@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { SettingsService } from '../services/settings.service';
+import { TursoService } from '../services/turso.service';
 import { getTursoClient } from '../database/turso';
 import { GroqService } from '../services/groq.service';
 import { WispHubService } from '../services/wisphub.service';
@@ -58,6 +59,21 @@ export class AdminController {
       const result = await client.execute('SELECT * FROM sessions ORDER BY last_interaction DESC LIMIT 50');
       res.json({ success: true, sessions: result.rows });
     } catch (error: any) {
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Obtiene el historial de mensajes, problemas y soluciones registrados en Turso
+   */
+  static async getLogs(req: Request, res: Response): Promise<void> {
+    try {
+      const limit = parseInt(req.query.limit as string, 10) || 60;
+      const phone = req.query.phone as string | undefined;
+      const logs = await TursoService.getLogs(limit, phone);
+      res.json({ success: true, logs });
+    } catch (error: any) {
+      logger.error('Error al obtener logs:', error?.message || error);
       res.status(500).json({ success: false, error: error?.message || error });
     }
   }

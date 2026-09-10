@@ -393,6 +393,7 @@ export function getAdminDashboardHtml(): string {
     <div class="nav-tabs">
       <button class="nav-tab active" onclick="switchTab('apis')">🔑 Conexión de APIs</button>
       <button class="nav-tab" onclick="switchTab('sessions')">👥 Sesiones en Turso</button>
+      <button class="nav-tab" onclick="switchTab('logs')">📜 Historial y Problemas</button>
       <button class="nav-tab" onclick="switchTab('tester')">🧪 Simulador de Bot</button>
     </div>
 
@@ -551,6 +552,39 @@ export function getAdminDashboardHtml(): string {
       </div>
     </div>
 
+    <!-- TAB: Historial y Problemas -->
+    <div id="tab-logs" class="tab-pane">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">📜 Registro de Conversaciones, Problemas y Soluciones</div>
+          <button class="btn btn-secondary btn-test" onclick="loadLogs()">🔄 Actualizar Historial</button>
+        </div>
+        <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 16px;">
+          Auditoría en tiempo real de cada mensaje entrante y saliente, intenciones clasificadas por IA, fallas detectadas y acciones tomadas en Turso DB.
+        </p>
+        <div style="overflow-x: auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Hora</th>
+                <th>Teléfono</th>
+                <th>Cliente</th>
+                <th>Tipo</th>
+                <th>Intención</th>
+                <th>Mensaje</th>
+                <th>Acción / Solución</th>
+              </tr>
+            </thead>
+            <tbody id="logsTableBody">
+              <tr>
+                <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 24px;">Cargando historial desde Turso...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <!-- TAB 3: Simulador -->
     <div id="tab-tester" class="tab-pane">
       <div class="card">
@@ -608,6 +642,9 @@ export function getAdminDashboardHtml(): string {
 
       if (tabId === 'sessions') {
         loadSessions();
+      }
+      if (tabId === 'logs') {
+        loadLogs();
       }
     }
 
@@ -732,6 +769,39 @@ export function getAdminDashboardHtml(): string {
         }
       } catch (err) {
         tbody.innerHTML = '<tr><td colspan="6" style="color: red; text-align:center;">Error al cargar sesiones</td></tr>';
+      }
+    }
+
+    async function loadLogs() {
+      const tbody = document.getElementById('logsTableBody');
+      try {
+        const res = await fetch('/api/logs?limit=50');
+        const data = await res.json();
+        if (data.success && data.logs) {
+          if (data.logs.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding: 24px;">No hay mensajes registrados aún en Turso DB.</td></tr>';
+            return;
+          }
+
+          tbody.innerHTML = data.logs.map(l => {
+            const isIncoming = l.direction === 'IN';
+            const badgeType = isIncoming ? '<span class="pill pill-blue">📥 Entrante</span>' : '<span class="pill pill-green">📤 Saliente</span>';
+            const intentBadge = l.intent ? '<span class="pill pill-blue">' + l.intent + '</span>' : '<span style="color:var(--text-muted); font-size:12px;">-</span>';
+            const actionBadge = l.action_taken ? '<span style="font-family:var(--font-mono); font-size:11px; color:#38bdf8;">' + l.action_taken + '</span>' : '<span style="color:var(--text-muted); font-size:12px;">-</span>';
+            const dateStr = l.created_at ? new Date(l.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '-';
+            return '<tr>' +
+              '<td style="color: var(--text-muted); font-size: 12px; white-space: nowrap;">' + dateStr + '</td>' +
+              '<td style="font-family: var(--font-mono); font-weight: 600;">' + l.phone + '</td>' +
+              '<td>' + (l.client_name || '<em style="color:var(--text-muted)">-</em>') + '</td>' +
+              '<td>' + badgeType + '</td>' +
+              '<td>' + intentBadge + '</td>' +
+              '<td style="max-width: 300px; word-break: break-word; font-size: 13px;">' + (l.message || '') + '</td>' +
+              '<td>' + actionBadge + '</td>' +
+            '</tr>';
+          }).join('');
+        }
+      } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="7" style="color: red; text-align:center;">Error al cargar historial</td></tr>';
       }
     }
 

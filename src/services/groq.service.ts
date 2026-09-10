@@ -69,17 +69,17 @@ CATEGORÍAS DE INTENCIÓN PERMITIDAS (Elige EXACTAMENTE una de esta lista):
 - "DATOS_WIFI": Consultas sobre contraseña, nombre de la red WiFi o configuración inalámbrica.
 - "HABLAR_HUMANO": Solicitudes de comunicarse con un asesor, operador, recepcionista o persona humana.
 - "CANCELAR_SUSCRIPCION": Peticiones de no recibir más mensajes automáticos, "cancelar", "baja", "ya no me envíen mensajes".
-- "IDENTIFICAR_CLIENTE": Cuando el usuario provee su nombre ("Me llamo Juan Pérez"), número de contrato o ID de servicio.
-- "DESCONOCIDO": Mensajes incoherentes o completamente ajenos al servicio.
+- "IDENTIFICAR_CLIENTE": Cuando el usuario provee su nombre (incluso si solo envía una palabra como "Juan", "Carlos", "María López", o "soy Juan"), número de contrato o ID de servicio. Si el paso actual es "ESPERANDO_IDENTIFICACION" y el usuario envía un texto, asume casi siempre "IDENTIFICAR_CLIENTE" a menos que sea un saludo o queja explícita.
+- "DESCONOCIDO": Mensajes incoherentes, bromas, temas ajenos al servicio de telecomunicaciones o dudas no contempladas.
 
 EXTRACCIÓN DE BANDERAS Y DETALLES:
 - "foco_rojo": true si menciona foco rojo, luz roja, led rojo, LOS parpadeando o luz de alarma en el módem/ONU; false si no.
 - "equipo_apagado": true si dice que el módem no prende, se fue la luz en la casa, o no encienden las luces del equipo; false si no.
 - "reporta_lentitud": true si dice que el internet está lento, intermitente, sube y baja o hay lag; false si no.
 - "ya_reinicio": true si el usuario aclara que ya lo desconectó, ya lo reinició o ya lo apagó y prendió; false si no.
-- "nombre_mencionado": string con el nombre propio si el usuario dice "me llamo Juan Pérez" o similar, o null.
+- "nombre_mencionado": string con el nombre propio limpio y capitalizado (ej. si dice "me llamo Juan Manuel" -> "Juan Manuel", si dice "carlos" -> "Carlos"), o null si no menciona nombre.
 - "telefono_mencionado": string de 10 dígitos si menciona algún número telefónico, o null.
-- "resumen_queja": síntesis concisa en máximo 12 palabras de lo que expresa el cliente.
+- "resumen_queja": síntesis concisa en máximo 10 palabras de lo que el cliente está diciendo o preguntando (ej. "duda sobre horario de atención", "pregunta sobre cambio de domicilio", "problema de lentitud en streaming").
 
 Contexto actual del cliente:
 - Paso actual del bot: ${contexto?.currentStep || 'NINGUNO'}

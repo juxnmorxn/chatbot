@@ -157,4 +157,58 @@ export class TursoService {
     const session = await this.getSession(phone);
     return session ? session.opt_out === 1 : false;
   }
+
+  /**
+   * Registra un mensaje entrante o saliente con su intención y acción tomada
+   */
+  static async logMessage(
+    phone: string,
+    direction: 'IN' | 'OUT',
+    message: string,
+    intent: string | null = null,
+    actionTaken: string | null = null
+  ): Promise<void> {
+    try {
+      const client = getTursoClient();
+      const now = new Date().toISOString();
+      await client.execute({
+        sql: `
+          INSERT INTO conversation_logs (phone, direction, message, intent, action_taken, created_at)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `,
+        args: [phone, direction, message, intent, actionTaken, now],
+      });
+    } catch (error: any) {
+      logger.error(`Error al registrar log de conversación para ${phone}:`, error?.message || error);
+    }
+  }
+
+  /**
+   * Obtiene los últimos logs de conversación para auditoría en el panel
+   */
+  static async getLogs(limit: number = 60, phone?: string): Promise<any[]> {
+    try {
+      const client = getTursoClient();
+      let query = `
+        SELECT l.*, s.client_name 
+        FROM conversation_logs l
+        LEFT JOIN sessions s ON l.phone = s.phone
+      `;
+      const args: any[] = [];
+
+      if (phone) {
+        query += ` WHERE l.phone = ?`;
+        args.push(phone);
+      }
+
+      query += ` ORDER BY l.id DESC LIMIT ?`;
+      args.push(limit);
+
+      const result = await client.execute({ sql: query, args });
+      return result.rows;
+    } catch (error: any) {
+      logger.error('Error al obtener logs de conversación:', error?.message || error);
+      return [];
+    }
+  }
 }
