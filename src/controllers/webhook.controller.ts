@@ -14,11 +14,12 @@ export class WebhookController {
 
     try {
       const payload = req.body;
-      const eventType = payload?.event || payload?.type;
+      const rawEvent = String(payload?.event || payload?.type || '');
+      const normalizedEvent = rawEvent.toLowerCase().replace(/_/g, '.');
 
       // Solo procesamos eventos de nuevos mensajes
-      if (eventType && eventType !== 'messages.upsert') {
-        logger.debug(`Evento ignorado: ${eventType}`);
+      if (normalizedEvent && normalizedEvent !== 'messages.upsert') {
+        logger.debug(`Evento ignorado: ${rawEvent}`);
         return;
       }
 
