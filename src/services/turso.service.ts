@@ -105,7 +105,7 @@ export class TursoService {
   }
 
   /**
-   * Actualiza el paso actual de la conversación y metadatos opcionales
+   * Actualiza el paso actual de la conversación y metadatos opcionales (UPSERT)
    */
   static async updateStep(phone: string, step: string, metadataObj?: Record<string, any>): Promise<void> {
     const now = new Date().toISOString();
@@ -115,13 +115,14 @@ export class TursoService {
       const client = getTursoClient();
       await client.execute({
         sql: `
-          UPDATE sessions 
-          SET step = ?, 
-              last_interaction = ?,
-              metadata = COALESCE(?, metadata)
-          WHERE phone = ?
+          INSERT INTO sessions (phone, step, last_interaction, metadata)
+          VALUES (?, ?, ?, ?)
+          ON CONFLICT(phone) DO UPDATE SET
+            step = excluded.step,
+            last_interaction = excluded.last_interaction,
+            metadata = COALESCE(excluded.metadata, sessions.metadata)
         `,
-        args: [step, now, metadataStr, phone],
+        args: [phone, step, now, metadataStr],
       });
     } catch (error: any) {
       logger.error(`Error al actualizar step de ${phone}:`, error?.message || error);

@@ -39,13 +39,12 @@ export class EvolutionService {
     return SettingsService.get('INSTANCE_NAME', 'INSTANCE_NAME', config.evolution.instanceName);
   }
 
-  /**
-   * Formatea el teléfono para Evolution API asegurando que no tenga símbolos ni espacios
-   */
   private static formatRecipient(phone: string): string {
     let clean = phone.replace(/\D/g, '');
-    // Si viene en formato internacional ej. 521... o local 55...
-    if (clean.startsWith('52') && !clean.startsWith('521') && clean.length === 12) {
+    // Número mexicano de 10 dígitos (ej. 7711711557) -> agregar prefijo internacional 521
+    if (clean.length === 10) {
+      clean = `521${clean}`;
+    } else if (clean.startsWith('52') && !clean.startsWith('521') && clean.length === 12) {
       // Formato WhatsApp México requiere 521 si es móvil
       clean = `521${clean.slice(2)}`;
     }

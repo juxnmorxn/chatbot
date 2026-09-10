@@ -66,6 +66,12 @@ export class BotOrchestrator {
 
     // 1. Obtener o inicializar sesión en Turso
     let session = await TursoService.getSession(phone);
+    if (!session) {
+      session = await TursoService.upsertSession({
+        phone,
+        step: 'INICIO',
+      });
+    }
 
     // 2. Control Anti-Spam (Opt-Out): si el usuario escribe cancelar o baja
     if (['CANCELAR', 'BAJA', 'NO ENVIAR', 'STOP'].includes(rawText.toUpperCase())) {

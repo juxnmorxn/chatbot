@@ -22,6 +22,57 @@ export class WebhookController {
     return false;
   }
 
+  private static lidToPhoneMap = new Map<string, string>();
+
+  private static extractPhone(key: any, data: any): string {
+    const remoteJid: string = key?.remoteJid || '';
+    const remoteJidAlt: string = key?.remoteJidAlt || '';
+    const participant: string = key?.participant || '';
+    const senderPnJid: string = data?.senderPnJid || '';
+
+    // Si viene remoteJidAlt con @s.whatsapp.net (modo LID activo)
+    if (remoteJidAlt && remoteJidAlt.includes('@s.whatsapp.net')) {
+      const realPhone = remoteJidAlt.split('@')[0].replace(/\D/g, '');
+      if (remoteJid.endsWith('@lid')) {
+        const lid = remoteJid.split('@')[0];
+        WebhookController.lidToPhoneMap.set(lid, realPhone);
+      }
+      return realPhone;
+    }
+
+    // Si viene participant con @s.whatsapp.net
+    if (participant && participant.includes('@s.whatsapp.net')) {
+      const realPhone = participant.split('@')[0].replace(/\D/g, '');
+      if (remoteJid.endsWith('@lid')) {
+        const lid = remoteJid.split('@')[0];
+        WebhookController.lidToPhoneMap.set(lid, realPhone);
+      }
+      return realPhone;
+    }
+
+    // Si viene senderPnJid
+    if (senderPnJid && senderPnJid.includes('@s.whatsapp.net')) {
+      const realPhone = senderPnJid.split('@')[0].replace(/\D/g, '');
+      return realPhone;
+    }
+
+    // Si el remoteJid directo es un número telefónico estándar
+    if (remoteJid.includes('@s.whatsapp.net')) {
+      return remoteJid.split('@')[0].replace(/\D/g, '');
+    }
+
+    // Si es un LID (@lid), consultar la caché de resolución previa
+    if (remoteJid.endsWith('@lid')) {
+      const lid = remoteJid.split('@')[0];
+      if (WebhookController.lidToPhoneMap.has(lid)) {
+        return WebhookController.lidToPhoneMap.get(lid)!;
+      }
+      return lid.replace(/\D/g, '');
+    }
+
+    return remoteJid.replace(/\D/g, '');
+  }
+
   /**
    * Recibe eventos de Evolution API (messages.upsert)
    */
@@ -70,7 +121,7 @@ export class WebhookController {
         return;
       }
 
-      const phone = remoteJid.replace('@s.whatsapp.net', '');
+      const phone = WebhookController.extractPhone(key, data);
       const senderName = messageObj.pushName || '';
 
       const extracted = WebhookController.extractMessageContent(messageObj);
