@@ -38,7 +38,7 @@ export const config = {
 
   // Business info
   isp: {
-    name: process.env.ISP_NAME || 'JedNet Telecom',
+    name: process.env.ISP_NAME || 'CloudWareMx',
     soporteHumanoPhone: process.env.SOPORTE_HUMANO_PHONE || '',
   },
 };

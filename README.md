@@ -1,4 +1,4 @@
-# Chatbot WhatsApp ISP 🚀 (JedNet Telecom)
+# Chatbot WhatsApp ISP 🚀 (CloudWareMx)
 
 Backend inteligente para automatización de soporte técnico y cobranza para ISP (Proveedores de Internet) desplegado en **Render**, con base de datos en la nube en **Turso (libSQL)**, traducción de lenguaje natural a JSON con **Groq**, integración con **WispHub**, **SmartOLT** y **Evolution API**.
 
@@ -84,7 +84,7 @@ SMARTOLT_API_URL=https://tu-dominio.smartolt.com/api
 SMARTOLT_API_KEY=tu_token_smartolt
 
 # Negocio
-ISP_NAME=JedNet Telecom
+ISP_NAME=CloudWareMx
 SOPORTE_HUMANO_PHONE=521XXXXXXXXXX
 ```
 

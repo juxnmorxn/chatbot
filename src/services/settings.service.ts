@@ -118,7 +118,7 @@ export class SettingsService {
       wisphubApiKey: this.get('WISPHUB_API_KEY', 'WISPHUB_API_KEY', ''),
       smartoltUrl: this.get('SMARTOLT_API_URL', 'SMARTOLT_API_URL', 'https://tu-dominio.smartolt.com/api'),
       smartoltApiKey: this.get('SMARTOLT_API_KEY', 'SMARTOLT_API_KEY', ''),
-      ispName: this.get('ISP_NAME', 'ISP_NAME', 'JedNet Telecom'),
+      ispName: this.get('ISP_NAME', 'ISP_NAME', 'CloudWareMx'),
       soporteHumanoPhone: this.get('SOPORTE_HUMANO_PHONE', 'SOPORTE_HUMANO_PHONE', ''),
     };
   }

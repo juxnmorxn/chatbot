@@ -99,7 +99,7 @@ export class EvolutionService {
     phone: string,
     textoPrincipal: string,
     botones: BotButton[],
-    pieDePagina: string = 'JedNet Soporte Automático'
+    pieDePagina: string = 'CloudWareMx Soporte Automático'
   ): Promise<boolean> {
     const recipient = this.formatRecipient(phone);
     const texto = parseSpintax(textoPrincipal);

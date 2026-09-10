@@ -4,6 +4,7 @@ import { WispHubService, WispHubCliente } from '../services/wisphub.service';
 import { SmartOLTService } from '../services/smartolt.service';
 import { EvolutionService, BotButton } from '../services/evolution.service';
 import { config } from '../config/env';
+import { SettingsService } from '../services/settings.service';
 import { Logger } from '../utils/logger';
 
 const logger = new Logger('BotOrchestrator');
@@ -22,6 +23,10 @@ export class BotOrchestrator {
     { id: 'BTN_FALLA', title: '🔧 Reportar Falla' },
     { id: 'BTN_ASESOR', title: '👤 Hablar con Asesor' },
   ];
+
+  private static getIspName(): string {
+    return SettingsService.get('ISP_NAME', 'ISP_NAME', config.isp.name);
+  }
 
   /**
    * Punto de entrada principal para todos los mensajes recibidos desde WhatsApp
@@ -50,7 +55,7 @@ export class BotOrchestrator {
       await TursoService.setOptOut(phone, false);
       await EvolutionService.enviarTexto(
         phone,
-        `¡Bienvenido de vuelta! 🎉 Has reactivado las notificaciones y soporte de *${config.isp.name}*.`
+        `¡Bienvenido de vuelta! 🎉 Has reactivado las notificaciones y soporte de *${this.getIspName()}*.`
       );
       await this.enviarMenuPrincipal(phone, session?.client_name);
       return;
@@ -211,7 +216,7 @@ export class BotOrchestrator {
         if (!session?.client_id) {
           await EvolutionService.enviarTexto(
             phone,
-            `{Hola|Buen día}. Bienvenido al centro de atención de *${config.isp.name}*.\n\nNo tengo registrado este número celular en el sistema. ¿Podrías indicarme tu *Nombre completo* o *Número de contrato*?`
+            `{Hola|Buen día}. Bienvenido al centro de atención de *${this.getIspName()}*.\n\nNo tengo registrado este número celular en el sistema. ¿Podrías indicarme tu *Nombre completo* o *Número de contrato*?`
           );
           await TursoService.updateStep(phone, 'ESPERANDO_IDENTIFICACION');
         } else {
@@ -463,7 +468,7 @@ export class BotOrchestrator {
    */
   static async enviarMenuPrincipal(phone: string, clientName?: string | null): Promise<void> {
     const saludo = clientName ? `{¡Hola|Buen día} *${clientName}*! 👋` : `{¡Hola|Buen día}! 👋`;
-    const texto = `${saludo}\nBienvenido al centro de atención y soporte técnico de *${config.isp.name}*.\n\n¿En qué podemos ayudarte hoy?`;
+    const texto = `${saludo}\nBienvenido al centro de atención y soporte técnico de *${this.getIspName()}*.\n\n¿En qué podemos ayudarte hoy?`;
 
     await EvolutionService.enviarBotones(phone, texto, this.MAIN_MENU_BUTTONS);
     await TursoService.updateStep(phone, 'MENU_PRINCIPAL');

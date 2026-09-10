@@ -4,7 +4,7 @@ export function getAdminDashboardHtml(): string {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>JedNet Telecom - Panel de Control del Chatbot</title>
+  <title>CloudWareMx - Panel de Control del Chatbot</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -379,7 +379,7 @@ export function getAdminDashboardHtml(): string {
       <div class="brand">
         <div class="logo-badge">⚡</div>
         <div>
-          <h1 id="headerIspName">JedNet Telecom</h1>
+          <h1 id="headerIspName">CloudWareMx</h1>
           <p style="color: var(--text-muted); font-size: 13px;">Panel Maestro de Configuración y Gestión de APIs</p>
         </div>
       </div>
@@ -509,7 +509,7 @@ export function getAdminDashboardHtml(): string {
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
             <div class="form-group">
               <label>Nombre Comercial del ISP</label>
-              <input type="text" id="ispName" placeholder="JedNet Telecom">
+              <input type="text" id="ispName" placeholder="CloudWareMx">
             </div>
 
             <div class="form-group">
@@ -636,7 +636,7 @@ export function getAdminDashboardHtml(): string {
           document.getElementById('smartoltApiKey').value = s.smartoltApiKey || '';
           document.getElementById('ispName').value = s.ispName || '';
           document.getElementById('soporteHumanoPhone').value = s.soporteHumanoPhone || '';
-          document.getElementById('headerIspName').innerText = s.ispName || 'JedNet Telecom';
+          document.getElementById('headerIspName').innerText = s.ispName || 'CloudWareMx';
         }
       } catch (err) {
         console.error('Error cargando settings:', err);
@@ -667,7 +667,7 @@ export function getAdminDashboardHtml(): string {
         const data = await res.json();
         if (data.success) {
           showToast('✅ ¡Configuraciones guardadas en Turso DB!');
-          document.getElementById('headerIspName').innerText = payload.ISP_NAME || 'JedNet Telecom';
+          document.getElementById('headerIspName').innerText = payload.ISP_NAME || 'CloudWareMx';
         } else {
           showToast('Error: ' + data.error, true);
         }
