@@ -12,6 +12,7 @@ const logger = new Logger('BotOrchestrator');
 
 export interface IncomingMessageEvent {
   phone: string;
+  remoteJid?: string;
   senderName?: string;
   text?: string;
   buttonId?: string;
@@ -37,14 +38,16 @@ export class BotOrchestrator {
     mensaje: string,
     intencion: string | null = null,
     accion: string | null = null,
+    targetJid?: string,
     botones?: BotButton[]
   ): Promise<boolean> {
     const textoFinal = parseSpintax(mensaje);
+    const dest = targetJid || phone;
     let ok = false;
     if (botones && botones.length > 0) {
-      ok = await EvolutionService.enviarBotones(phone, textoFinal, botones);
+      ok = await EvolutionService.enviarBotones(dest, textoFinal, botones);
     } else {
-      ok = await EvolutionService.enviarTexto(phone, textoFinal);
+      ok = await EvolutionService.enviarTexto(dest, textoFinal);
     }
     await TursoService.logMessage(phone, 'OUT', textoFinal, intencion, accion);
     return ok;
@@ -52,13 +55,15 @@ export class BotOrchestrator {
 
   /**
    * Punto de entrada principal para todos los mensajes recibidos desde WhatsApp
+   * Modo Conversacional Inteligente con Groq (Llama 3.1)
    */
   static async procesarMensaje(event: IncomingMessageEvent): Promise<void> {
     const { phone } = event;
+    const targetJid = event.remoteJid || phone;
     const rawText = (event.text || '').trim();
     const buttonId = event.buttonId;
 
-    logger.info(`Procesando mensaje de ${phone}: buttonId="${buttonId}", text="${rawText}"`);
+    logger.info(`Procesando mensaje de ${phone} (Destino WhatsApp: ${targetJid}): "${rawText}"`);
 
     // Registrar mensaje entrante en la auditoría de Turso
     const inputContent = rawText || (buttonId ? `[Botón: ${buttonId}]` : (event.isMedia ? '[Foto/Comprobante]' : '[Desconocido]'));
@@ -69,7 +74,7 @@ export class BotOrchestrator {
     if (!session) {
       session = await TursoService.upsertSession({
         phone,
-        step: 'INICIO',
+        step: 'CONVERSACIONAL',
       });
     }
 
@@ -80,7 +85,8 @@ export class BotOrchestrator {
         phone,
         `{Entendido|Listo}. Has cancelado la suscripción de avisos automáticos de *${this.getIspName()}*. Si en el futuro deseas volver a activarlos, escribe *ACTIVAR*.`,
         'CANCELAR_SUSCRIPCION',
-        'OPTOUT_CONFIRMADO'
+        'OPTOUT_CONFIRMADO',
+        targetJid
       );
       return;
     }
@@ -89,11 +95,11 @@ export class BotOrchestrator {
       await TursoService.setOptOut(phone, false);
       await this.enviarYLoguear(
         phone,
-        `¡Bienvenido de vuelta! 🎉 Has reactivado las notificaciones y soporte de *${this.getIspName()}*.`,
+        `¡Bienvenido de vuelta! 🎉 Has reactivado las notificaciones y soporte de *${this.getIspName()}*. ¿En qué podemos colaborarte el día de hoy?`,
         'ACTIVAR',
-        'OPTIN_CONFIRMADO'
+        'OPTIN_CONFIRMADO',
+        targetJid
       );
-      await this.enviarMenuPrincipal(phone, session?.client_name);
       return;
     }
 
@@ -103,59 +109,40 @@ export class BotOrchestrator {
       return;
     }
 
-    // 3. Si aún no tenemos identificado al cliente en la sesión, buscar en WispHub
-    if (!session || !session.client_id) {
-      const clienteWisp = await WispHubService.buscarClientePorTelefono(phone);
-      if (clienteWisp) {
-        session = await TursoService.upsertSession({
-          phone,
-          client_id: String(clienteWisp.id),
-          service_id: String(clienteWisp.servicio_id || clienteWisp.id),
-          client_name: clienteWisp.nombre,
-          onu_id: clienteWisp.onu_id || `ONU-${clienteWisp.id}`,
-          step: 'MENU_PRINCIPAL',
-        });
-      }
+    // Si el usuario nos indica su nombre (ej. "me llamo Ricardo", "soy Carlos"), guardarlo en la sesión
+    const matchNombre = rawText.match(/^(?:me llamo|mi nombre es|soy)\s+([a-zA-ZáéíóúÁÉÍÓÚñÑ\s]{2,35})$/i);
+    if (matchNombre && matchNombre[1]) {
+      const nombreExtraido = matchNombre[1].trim()
+        .split(/\s+/)
+        .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+        .join(' ');
+      session = await TursoService.upsertSession({
+        phone,
+        client_name: nombreExtraido,
+        step: 'CONVERSACIONAL',
+      });
     }
 
-    // 4. Procesamiento de botones interactivos directos (sin gastar tokens de Groq)
-    if (buttonId) {
-      await this.manejarBoton(phone, buttonId, session);
-      return;
-    }
+    // 3. IA Conversacional Contextual (Groq Llama 3.1)
+    // Obtenemos los últimos mensajes para darle continuidad real a la plática
+    const historial = await TursoService.getHistorialReciente(phone, 8);
 
-    // 5. Manejo de atajos numéricos directos ("1", "2", "3")
-    if (['1', '2', '3'].includes(rawText)) {
-      if (rawText === '1') {
-        await this.flujoConsultarSaldo(phone, session);
-        return;
-      }
-      if (rawText === '2') {
-        await this.flujoReportarFalla(phone, session);
-        return;
-      }
-      if (rawText === '3') {
-        await this.flujoHablarAsesor(phone, session);
-        return;
-      }
-    }
-
-    // 6. Si el bot estaba esperando que el usuario se identificara por nombre/contrato
-    if (session?.step === 'ESPERANDO_IDENTIFICACION') {
-      await this.procesarIdentificacion(phone, rawText, session);
-      return;
-    }
-
-    // 7. Procesamiento de Lenguaje Natural con Groq (Llama 3.1)
-    logger.info(`Enviando texto a Groq para traducción estructurada: "${rawText}"`);
-    const clasificacion = await GroqService.clasificarMensaje(rawText, {
+    logger.info(`Generando respuesta con Groq para ${phone} (Historial previo: ${historial.length} mensajes)...`);
+    const respuestaIA = await GroqService.generarRespuestaConversacional(rawText, historial, {
       clientName: session?.client_name,
-      currentStep: session?.step,
+      ispName: this.getIspName(),
     });
 
-    logger.info(`Resultado Groq: intencion="${clasificacion.intencion}", foco_rojo=${clasificacion.foco_rojo}, equipo_apagado=${clasificacion.equipo_apagado}, resumen="${clasificacion.resumen_queja}"`);
+    // Enviar la respuesta directa de la IA al hilo del cliente
+    await this.enviarYLoguear(
+      phone,
+      respuestaIA,
+      'IA_CONVERSACIONAL',
+      'RESPUESTA_GENERADA',
+      targetJid
+    );
 
-    await this.ejecutarIntencion(phone, clasificacion, session, rawText);
+    await TursoService.updateStep(phone, 'CONVERSACIONAL');
   }
 
   /**

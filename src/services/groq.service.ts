@@ -45,6 +45,88 @@ export class GroqService {
   }
 
   /**
+   * Genera una respuesta conversacional natural y empática para el cliente de CloudWareMx
+   * utilizando Groq (Llama 3.1) con memoria del diálogo reciente.
+   */
+  static async generarRespuestaConversacional(
+    mensajeUsuario: string,
+    historial: Array<{ role: 'user' | 'assistant'; content: string }> = [],
+    contexto?: { clientName?: string | null; ispName?: string }
+  ): Promise<string> {
+    try {
+      const groq = this.getClient();
+      const ispName = contexto?.ispName || 'CloudWareMx';
+      const clienteTexto = contexto?.clientName
+        ? `El cliente se llama: ${contexto.clientName}.`
+        : 'Aún no sabemos el nombre del cliente (si se presenta o dice su nombre, recuérdalo y salúdalo amablemente por su nombre).';
+
+      const systemPrompt = `
+Eres el asistente virtual inteligente de soporte técnico y atención a clientes de "${ispName}", una empresa proveedora de servicios de internet de fibra óptica de alta velocidad y telecomunicaciones.
+
+Tu personalidad:
+- Eres amable, empático, resolutivo, claro y profesional.
+- Hablas en español cotidiano, educado y cercano.
+- Respondes de forma concisa y natural, ideal para mensajería de WhatsApp (evita párrafos excesivamente largos o respuestas acartonadas).
+- Puedes usar emojis adecuados de forma agradable (👋, 📶, 💡, 🛠️, etc.).
+
+Objetivo y comportamiento:
+1. Responde de forma libre y conversacional directamente a lo que el usuario pregunte o diga. No dependas de números forzados ni menús estáticos.
+2. Si el usuario saluda ("Hola", "Buenas tardes"), respóndele con un saludo cálido dándole la bienvenida a ${ispName} y pregúntale en qué le puedes apoyar hoy con su servicio.
+3. Si el usuario te indica su nombre (ej. "Me llamo Ricardo", "Soy Carlos", o solo "Ricardo"), salúdalo cordialmente por su nombre y dile que con gusto le atiendes.
+4. Si el usuario reporta una falla de internet (ej. "no tengo internet", "está muy lento", "foco rojo", "parpadea LOS", "el módem no prende"):
+   - Sé empático y dale pasos sencillos y claros de revisión rápida (ej. verificar que el módem esté conectado a la luz, que el cable de fibra amarillo no esté doblado, o reiniciar desconectando de la corriente por 30 segundos).
+   - Indícale que si el problema persiste o si tiene foco rojo (corte de fibra), con gusto canalizamos el reporte técnico para que la cuadrilla lo revise.
+5. Si el usuario pregunta por pagos, saldos o contratación, oriéntalo con amabilidad.
+6. Contexto del usuario:
+${clienteTexto}
+
+¡Responde de inmediato al último mensaje del usuario!
+`.trim();
+
+      const model = SettingsService.get('GROQ_MODEL', 'GROQ_MODEL', config.groq.model);
+
+      const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+        { role: 'system', content: systemPrompt },
+      ];
+
+      // Añadir hasta los últimos 6 mensajes para contexto conversacional
+      const historialSlice = historial.slice(-6);
+      for (const h of historialSlice) {
+        if (h.content && h.content.trim()) {
+          messages.push({
+            role: h.role,
+            content: h.content.trim(),
+          });
+        }
+      }
+
+      // Añadir el mensaje actual
+      messages.push({
+        role: 'user',
+        content: mensajeUsuario,
+      });
+
+      const response = await groq.chat.completions.create({
+        model,
+        messages,
+        temperature: 0.7,
+        max_tokens: 350,
+      });
+
+      const reply = response.choices[0]?.message?.content?.trim();
+      if (!reply) {
+        throw new Error('Groq respondió con contenido vacío');
+      }
+
+      return reply;
+    } catch (error: any) {
+      logger.error('Error al generar respuesta conversacional con Groq:', error?.message || error);
+      return `¡Hola! Bienvenido al centro de atención de ${contexto?.ispName || 'CloudWareMx'}. ¿En qué podemos ayudarte hoy con tu servicio de internet?`;
+    }
+  }
+
+
+  /**
    * Traduce el mensaje de texto libre del usuario en un JSON estructurado.
    * La IA NUNCA le responde al usuario; sólo traduce la intención.
    */

@@ -133,6 +133,7 @@ export class WebhookController {
 
       const incomingEvent: IncomingMessageEvent = {
         phone,
+        remoteJid,
         senderName,
         text: extracted.text,
         buttonId: extracted.buttonId,

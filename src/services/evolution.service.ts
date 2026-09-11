@@ -40,7 +40,12 @@ export class EvolutionService {
   }
 
   private static formatRecipient(phone: string): string {
-    let clean = phone.replace(/\D/g, '');
+    const trimmed = phone.trim();
+    // Si viene con formato JID de WhatsApp (@lid o @s.whatsapp.net), mantenerlo intacto para entrega directa al hilo
+    if (trimmed.includes('@lid') || trimmed.includes('@s.whatsapp.net')) {
+      return trimmed;
+    }
+    let clean = trimmed.replace(/\D/g, '');
     // Número mexicano de 10 dígitos (ej. 7711711557) -> agregar prefijo internacional 521
     if (clean.length === 10) {
       clean = `521${clean}`;

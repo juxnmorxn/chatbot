@@ -212,4 +212,33 @@ export class TursoService {
       return [];
     }
   }
+
+  /**
+   * Obtiene los últimos mensajes en orden cronológico para alimentar el contexto de Groq
+   */
+  static async getHistorialReciente(phone: string, limit: number = 8): Promise<Array<{ role: 'user' | 'assistant'; content: string }>> {
+    try {
+      const client = getTursoClient();
+      const result = await client.execute({
+        sql: `
+          SELECT direction, message 
+          FROM conversation_logs 
+          WHERE phone = ? 
+          ORDER BY id DESC 
+          LIMIT ?
+        `,
+        args: [phone, limit],
+      });
+
+      const rows = [...result.rows].reverse();
+      return rows.map((r: any) => ({
+        role: (r.direction === 'IN' ? 'user' : 'assistant') as 'user' | 'assistant',
+        content: String(r.message || ''),
+      }));
+    } catch (error: any) {
+      logger.error(`Error al obtener historial reciente de ${phone}:`, error?.message || error);
+      return [];
+    }
+  }
 }
+
