@@ -1,6 +1,9 @@
 import { Request, Response } from 'express';
 import { BotOrchestrator, IncomingMessageEvent } from '../orchestrator/bot.orchestrator';
+import { config } from '../config/env';
+import { SettingsService } from '../services/settings.service';
 import { Logger } from '../utils/logger';
+import { LidRegistry } from '../utils/lid-registry';
 
 const logger = new Logger('WebhookController');
 
@@ -22,7 +25,43 @@ export class WebhookController {
     return false;
   }
 
-  private static lidToPhoneMap = new Map<string, string>();
+  /**
+   * Sincroniza mapeos existentes de Teléfono <-> LID desde los mensajes de Evolution API al arrancar
+   */
+  static async syncLidMappings(): Promise<void> {
+    try {
+      const evoUrl = SettingsService.get('EVOLUTION_URL', 'EVOLUTION_URL', config.evolution.url).replace(/\/+$/, '');
+      const evoKey = SettingsService.get('EVOLUTION_API_KEY', 'EVOLUTION_API_KEY', config.evolution.apiKey);
+      const instance = SettingsService.get('INSTANCE_NAME', 'INSTANCE_NAME', config.evolution.instanceName);
+
+      const url = `${evoUrl}/chat/findMessages/${instance}`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          apikey: evoKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          where: { key: { fromMe: false } },
+          orderBy: { messageTimestamp: 'desc' },
+          take: 100,
+        }),
+      });
+      if (!res.ok) return;
+      const data: any = await res.json();
+      const records = data.messages?.records || [];
+      for (const m of records) {
+        const k = m.key;
+        if (k?.remoteJid?.endsWith('@lid') && k?.remoteJidAlt?.includes('@s.whatsapp.net')) {
+          const phone = k.remoteJidAlt.split('@')[0].replace(/\D/g, '');
+          LidRegistry.register(phone, k.remoteJid.trim());
+        }
+      }
+      logger.info(`Sincronizados ${LidRegistry.count()} mapeos WhatsApp LID en memoria.`);
+    } catch (err: any) {
+      logger.warn('No se pudieron precargar mapeos LID al inicio:', err?.message || err);
+    }
+  }
 
   private static extractPhone(key: any, data: any): string {
     const remoteJid: string = key?.remoteJid || '';
@@ -34,8 +73,7 @@ export class WebhookController {
     if (remoteJidAlt && remoteJidAlt.includes('@s.whatsapp.net')) {
       const realPhone = remoteJidAlt.split('@')[0].replace(/\D/g, '');
       if (remoteJid.endsWith('@lid')) {
-        const lid = remoteJid.split('@')[0];
-        WebhookController.lidToPhoneMap.set(lid, realPhone);
+        LidRegistry.register(realPhone, remoteJid.trim());
       }
       return realPhone;
     }
@@ -44,8 +82,7 @@ export class WebhookController {
     if (participant && participant.includes('@s.whatsapp.net')) {
       const realPhone = participant.split('@')[0].replace(/\D/g, '');
       if (remoteJid.endsWith('@lid')) {
-        const lid = remoteJid.split('@')[0];
-        WebhookController.lidToPhoneMap.set(lid, realPhone);
+        LidRegistry.register(realPhone, remoteJid.trim());
       }
       return realPhone;
     }
@@ -61,13 +98,13 @@ export class WebhookController {
       return remoteJid.split('@')[0].replace(/\D/g, '');
     }
 
-    // Si es un LID (@lid), consultar la caché de resolución previa
+    // Si es un LID (@lid), consultar el registro
     if (remoteJid.endsWith('@lid')) {
-      const lid = remoteJid.split('@')[0];
-      if (WebhookController.lidToPhoneMap.has(lid)) {
-        return WebhookController.lidToPhoneMap.get(lid)!;
+      const resolved = LidRegistry.getPhone(remoteJid);
+      if (resolved) {
+        return resolved;
       }
-      return lid.replace(/\D/g, '');
+      return remoteJid.replace('@lid', '').replace(/\D/g, '');
     }
 
     return remoteJid.replace(/\D/g, '');

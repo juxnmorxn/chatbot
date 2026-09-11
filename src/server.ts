@@ -28,6 +28,10 @@ async function startServer() {
     // Inicializar caché de configuración dinámica
     await SettingsService.init();
 
+    // Sincronizar mapeos WhatsApp LID <-> Teléfono en memoria
+    const { WebhookController } = await import('./controllers/webhook.controller');
+    await WebhookController.syncLidMappings();
+
     // Levantar Express
     app.listen(config.port, () => {
       logger.info(`====================================================`);

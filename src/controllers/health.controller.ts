@@ -28,10 +28,14 @@ export class HealthController {
 
     const ispName = SettingsService.get('ISP_NAME', 'ISP_NAME', config.isp.name);
 
+    const { LidRegistry } = await import('../utils/lid-registry');
+
     res.status(200).json({
       status: 'ok',
       service: 'isp-chatbot-backend',
+      version: '1.3.0-lid-fix',
       isp: ispName,
+      lidMappingsCount: LidRegistry.count(),
       uptimeSeconds: Math.floor(process.uptime()),
       database: dbStatus,
       responseTimeMs,

@@ -3,6 +3,7 @@ import { config } from '../config/env';
 import { SettingsService } from './settings.service';
 import { Logger } from '../utils/logger';
 import { parseSpintax, randomDelay } from '../utils/spintax';
+import { LidRegistry } from '../utils/lid-registry';
 
 const logger = new Logger('EvolutionService');
 
@@ -41,18 +42,28 @@ export class EvolutionService {
 
   private static formatRecipient(phone: string): string {
     const trimmed = phone.trim();
-    // Si viene con formato JID de WhatsApp (@lid o @s.whatsapp.net), mantenerlo intacto para entrega directa al hilo
-    if (trimmed.includes('@lid') || trimmed.includes('@s.whatsapp.net')) {
+    if (trimmed.includes('@lid')) {
       return trimmed;
     }
+
     let clean = trimmed.replace(/\D/g, '');
-    // Número mexicano de 10 dígitos (ej. 7711711557) -> agregar prefijo internacional 521
     if (clean.length === 10) {
       clean = `521${clean}`;
     } else if (clean.startsWith('52') && !clean.startsWith('521') && clean.length === 12) {
-      // Formato WhatsApp México requiere 521 si es móvil
       clean = `521${clean.slice(2)}`;
     }
+
+    // Si el contacto tiene un LID registrado, redirigir al LID para garantizar entrega
+    const mappedLid = LidRegistry.getLid(clean);
+    if (mappedLid) {
+      logger.info(`[LID Router] Redirigiendo envío de ${clean} a hilo activo LID: ${mappedLid}`);
+      return mappedLid;
+    }
+
+    if (trimmed.includes('@s.whatsapp.net')) {
+      return trimmed;
+    }
+
     return clean;
   }
 
