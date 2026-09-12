@@ -137,6 +137,59 @@ export class BotOrchestrator {
       return;
     }
 
+    // Si el cliente envía despedida o agradecimiento, cerramos la consulta actual
+    const despedidas = ['gracias', 'muchas gracias', 'todo bien', 'ya quedo', 'ya quedó', 'listo gracias', 'excelente gracias', 'muchas gracias por la ayuda', 'todo bien gracias'];
+    if (despedidas.some(d => lowerMsg === d || lowerMsg.startsWith(d))) {
+      await this.marcarConsultaFinalizada(phone, session);
+      await this.enviarYLoguear(
+        phone,
+        `¡Con mucho gusto! 😊 En *${this.getIspName()}* estamos siempre para servirte. Si llegas a necesitar apoyo con cualquiera de tus servicios, solo escríbenos nuevamente. ¡Que tengas un excelente día!`,
+        'DESPEDIDA',
+        'CONSULTA_CERRADA_SATISFACTORIA',
+        targetJid
+      );
+      return;
+    }
+
+    // Evaluar metadatos y tiempo de inactividad de la sesión existente
+    let metaObj: any = {};
+    try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
+
+    const lastInteractionMs = session?.last_interaction ? new Date(session.last_interaction).getTime() : 0;
+    const minutosInactividad = lastInteractionMs > 0 ? (Date.now() - lastInteractionMs) / (1000 * 60) : 999;
+    const consultaTerminada = metaObj.consultaFinalizada === true || session?.step === 'CONSULTA_FINALIZADA';
+    const serviciosRegistrados = Array.isArray(metaObj.registeredServices) && metaObj.registeredServices.length > 1
+      ? metaObj.registeredServices
+      : [];
+
+    // Si el cliente tiene 2 o más servicios registrados y su consulta previa ya finalizó o pasaron más de 30 min sin actividad:
+    if (serviciosRegistrados.length > 1 && (minutosInactividad >= 30 || consultaTerminada)) {
+      logger.info(`Cliente multi-servicio ${phone} inicia nueva consulta tras ${Math.round(minutosInactividad)}m de inactividad o consulta previa cerrada.`);
+
+      let textoOpciones = `¡Hola de nuevo, *${session?.client_name || 'Cliente'}*! 👋 Detectamos que cuentas con *${serviciosRegistrados.length} servicios* registrados a tu nombre:\n\n`;
+      serviciosRegistrados.forEach((c: any, idx: number) => {
+        const ubicacion = c.address || c.zone_name ? `\n📍 *Ubicación / Zona:* ${c.address || c.zone_name}` : '';
+        const plan = c.speed_profile ? `\n📦 *Plan:* ${c.speed_profile}` : '';
+        const sn = c.sn ? `\n🆔 *SN:* ${c.sn}` : '';
+        textoOpciones += `*${idx + 1}️⃣ Opción ${idx + 1}:*${ubicacion}${plan}${sn}\n\n`;
+      });
+      textoOpciones += `Para tu consulta de hoy, ¿con cuál de tus servicios necesitas apoyo?\n👉 *Por favor responde con el número de la opción (ejemplo: 1 ó 2).*`;
+
+      await TursoService.upsertSession({
+        phone,
+        step: 'ESPERANDO_SELECCION_SERVICIO',
+        metadata: JSON.stringify({
+          ...metaObj,
+          pendingServices: serviciosRegistrados,
+          initialQuery: rawText,
+          consultaFinalizada: false,
+        }),
+      });
+
+      await this.enviarYLoguear(phone, textoOpciones, 'IDENTIFICAR_CLIENTE', 'NUEVA_CONSULTA_SELECCION_SERVICIO', targetJid);
+      return;
+    }
+
     // Si el cliente está en espera de identificarse
     if (session?.step === 'ESPERANDO_IDENTIFICACION') {
       await this.procesarIdentificacion(phone, rawText, session, targetJid);
@@ -164,6 +217,14 @@ export class BotOrchestrator {
           client_name: coincidentesTel[0].name,
           step: 'ESPERANDO_SELECCION_SERVICIO',
           metadata: JSON.stringify({
+            registeredServices: coincidentesTel.slice(0, 4).map(c => ({
+              unique_external_id: c.unique_external_id,
+              sn: c.sn,
+              name: c.name,
+              speed_profile: c.speed_profile,
+              zone_name: c.zone_name,
+              address: c.address,
+            })),
             pendingServices: coincidentesTel.slice(0, 4).map(c => ({
               unique_external_id: c.unique_external_id,
               sn: c.sn,
@@ -172,6 +233,9 @@ export class BotOrchestrator {
               zone_name: c.zone_name,
               address: c.address,
             })),
+            initialQuery: rawText,
+            serviceHistory: [],
+            consultaFinalizada: false,
           }),
         });
 
@@ -488,6 +552,7 @@ export class BotOrchestrator {
         `TICKET_CREADO_FOCO_ROJO_${ticket.folio}`,
         targetJid
       );
+      await this.marcarConsultaFinalizada(phone, session);
       return;
     }
 
@@ -519,6 +584,7 @@ export class BotOrchestrator {
         `TICKET_CREADO_SIN_SERVICIO_${ticket.folio}`,
         targetJid
       );
+      await this.marcarConsultaFinalizada(phone, session);
       return;
     }
 
@@ -552,6 +618,7 @@ export class BotOrchestrator {
         `TICKET_SMARTOLT_LOS_${ticket.folio}`,
         targetJid
       );
+      await this.marcarConsultaFinalizada(phone, session);
       return;
     }
 
@@ -634,6 +701,7 @@ export class BotOrchestrator {
         `TICKET_FIBRA_CORTADA_${ticket.folio}`,
         targetJid
       );
+      await this.marcarConsultaFinalizada(phone, session);
       return;
     }
 
@@ -771,6 +839,7 @@ export class BotOrchestrator {
       'TRANSFERENCIA_ASESOR',
       targetJid
     );
+    await this.marcarConsultaFinalizada(phone, session);
   }
 
   /**
@@ -821,6 +890,14 @@ export class BotOrchestrator {
             client_name: primerNombre,
             step: 'ESPERANDO_SELECCION_SERVICIO',
             metadata: JSON.stringify({
+              registeredServices: candidatosRelevantes.slice(0, 5).map(c => ({
+                unique_external_id: c.unique_external_id,
+                sn: c.sn,
+                name: c.name,
+                speed_profile: c.speed_profile,
+                zone_name: c.zone_name,
+                address: c.address,
+              })),
               pendingServices: candidatosRelevantes.slice(0, 5).map(c => ({
                 unique_external_id: c.unique_external_id,
                 sn: c.sn,
@@ -829,6 +906,9 @@ export class BotOrchestrator {
                 zone_name: c.zone_name,
                 address: c.address,
               })),
+              initialQuery: rawInput,
+              serviceHistory: [],
+              consultaFinalizada: false,
             }),
           });
 
@@ -910,6 +990,14 @@ export class BotOrchestrator {
           client_name: coincidencias[0].nombre,
           step: 'ESPERANDO_SELECCION_SERVICIO',
           metadata: JSON.stringify({
+            registeredServices: coincidencias.slice(0, 4).map(c => ({
+              unique_external_id: c.onu_id || `ONU-${c.id}`,
+              sn: String(c.servicio_id || c.id),
+              name: c.nombre,
+              speed_profile: '',
+              zone_name: '',
+              address: c.direccion || '',
+            })),
             pendingServices: coincidencias.slice(0, 4).map(c => ({
               unique_external_id: c.onu_id || `ONU-${c.id}`,
               sn: String(c.servicio_id || c.id),
@@ -918,6 +1006,9 @@ export class BotOrchestrator {
               zone_name: '',
               address: c.direccion || '',
             })),
+            initialQuery: rawInput,
+            serviceHistory: [],
+            consultaFinalizada: false,
           }),
         });
 
@@ -997,8 +1088,9 @@ export class BotOrchestrator {
   ): Promise<void> {
     const rawInput = input.trim();
     let pendingServices: any[] = [];
+    let meta: any = {};
     try {
-      const meta = JSON.parse(session?.metadata || '{}');
+      meta = JSON.parse(session?.metadata || '{}');
       if (Array.isArray(meta.pendingServices)) {
         pendingServices = meta.pendingServices;
       }
@@ -1050,20 +1142,56 @@ export class BotOrchestrator {
     }
 
     const elegido = pendingServices[indexSeleccionado];
-    const meta = JSON.stringify({
+
+    // Historial acumulativo de servicios utilizados por el cliente
+    const prevHistory = Array.isArray(meta.serviceHistory) ? meta.serviceHistory : [];
+    const updatedHistory = [
+      ...prevHistory,
+      {
+        unique_external_id: elegido.unique_external_id,
+        sn: elegido.sn,
+        name: elegido.name,
+        address: elegido.address,
+        zone_name: elegido.zone_name,
+        speed_profile: elegido.speed_profile,
+        selected_at: new Date().toISOString(),
+      },
+    ];
+    if (updatedHistory.length > 10) updatedHistory.shift();
+
+    const registered = Array.isArray(meta.registeredServices) && meta.registeredServices.length > 0
+      ? meta.registeredServices
+      : pendingServices;
+
+    const nuevoMeta = {
+      ...meta,
+      registeredServices: registered,
+      activeService: {
+        unique_external_id: elegido.unique_external_id,
+        sn: elegido.sn,
+        name: elegido.name,
+        speed_profile: elegido.speed_profile,
+        zone_name: elegido.zone_name,
+        address: elegido.address,
+        selected_at: new Date().toISOString(),
+      },
+      serviceHistory: updatedHistory,
+      pendingServices: [],
+      consultaFinalizada: false,
+      lastSelectionAt: new Date().toISOString(),
       speed_profile: elegido.speed_profile,
       zone: elegido.zone_name,
       address: elegido.address,
       sn: elegido.sn,
-    });
+    };
 
-    await TursoService.upsertSession({
+    const sessionActualizada = await TursoService.upsertSession({
       phone,
       client_id: elegido.unique_external_id,
       service_id: elegido.sn,
       client_name: elegido.name,
       onu_id: elegido.unique_external_id,
-      metadata: meta,
+      metadata: JSON.stringify(nuevoMeta),
       step: 'ESPERANDO_PROBLEMA',
     });
 
@@ -1077,6 +1205,40 @@ export class BotOrchestrator {
       'SERVICIO_SELECCIONADO',
       targetJid
     );
+
+    // Si el usuario había enviado una queja o consulta antes de seleccionar el servicio (ej. "no tengo internet")
+    if (meta.initialQuery && typeof meta.initialQuery === 'string') {
+      const q = meta.initialQuery.trim();
+      const clasif = await GroqService.clasificarMensaje(q, {
+        clientName: elegido.name,
+        currentStep: 'ESPERANDO_PROBLEMA',
+      });
+      if (clasif.intencion !== 'IDENTIFICAR_CLIENTE' && clasif.intencion !== 'SALUDO' && clasif.intencion !== 'DESCONOCIDO') {
+        logger.info(`Ejecutando queja inicial "${clasif.intencion}" tras seleccionar servicio para ${phone}`);
+        await this.ejecutarIntencion(phone, clasif, sessionActualizada, q, targetJid);
+      }
+    }
+  }
+
+  /**
+   * Marca la consulta actual como concluida para que en la próxima sesión (o tras inactividad)
+   * el bot vuelva a solicitar qué servicio desea consultar si el cliente tiene múltiples servicios.
+   */
+  private static async marcarConsultaFinalizada(phone: string, session: Session | null): Promise<void> {
+    try {
+      let metaObj: any = {};
+      try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
+      metaObj.consultaFinalizada = true;
+      metaObj.consultaFinalizadaAt = new Date().toISOString();
+      await TursoService.upsertSession({
+        phone,
+        step: 'CONSULTA_FINALIZADA',
+        metadata: JSON.stringify(metaObj),
+      });
+      logger.info(`Consulta marcada como finalizada para ${phone}`);
+    } catch (err: any) {
+      logger.warn(`Error al marcar consulta finalizada para ${phone}:`, err?.message || err);
+    }
   }
 
   /**
