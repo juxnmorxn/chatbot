@@ -175,4 +175,30 @@ export class AdminController {
       res.status(500).json({ success: false, error: error?.response?.data || error?.message || error });
     }
   }
+
+  /**
+   * Dispara la sincronización de SmartOLT hacia Turso DB
+   */
+  static async syncSmartOlt(req: Request, res: Response): Promise<void> {
+    try {
+      const force = req.body?.force === true;
+      const result = await SmartOLTService.syncAllOnusToTurso(force);
+      res.json(result);
+    } catch (error: any) {
+      logger.error('Error en syncSmartOlt controller:', error?.message || error);
+      res.status(500).json({ success: false, count: 0, message: error?.message || 'Error al sincronizar' });
+    }
+  }
+
+  /**
+   * Obtiene estadísticas de ONUs guardadas en Turso DB
+   */
+  static async getSmartOltStats(_req: Request, res: Response): Promise<void> {
+    try {
+      const stats = await TursoService.getSmartOltSyncStats();
+      res.json({ success: true, stats });
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
 }

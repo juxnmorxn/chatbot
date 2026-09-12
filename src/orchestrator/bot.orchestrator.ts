@@ -109,31 +109,106 @@ export class BotOrchestrator {
       return;
     }
 
-    // Si el usuario nos indica su nombre (ej. "me llamo Ricardo", "soy Carlos"), guardarlo en la sesión
+    // Si el usuario nos indica su nombre explícitamente (ej. "me llamo Ricardo", "soy Carlos"), guardarlo en la sesión
     const matchNombre = rawText.match(/^(?:me llamo|mi nombre es|soy)\s+([a-zA-ZáéíóúÁÉÍÓÚñÑ\s]{2,35})$/i);
     if (matchNombre && matchNombre[1]) {
-      const nombreExtraido = matchNombre[1].trim()
-        .split(/\s+/)
-        .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-        .join(' ');
-      session = await TursoService.upsertSession({
-        phone,
-        client_name: nombreExtraido,
-        step: 'CONVERSACIONAL',
-      });
+      await this.procesarIdentificacion(phone, matchNombre[1].trim(), session, targetJid);
+      return;
     }
 
-    // 3. IA Conversacional Contextual (Groq Llama 3.1)
-    // Obtenemos los últimos mensajes para darle continuidad real a la plática
+    // Si el cliente está en espera de identificarse
+    if (session?.step === 'ESPERANDO_IDENTIFICACION') {
+      await this.procesarIdentificacion(phone, rawText, session, targetJid);
+      return;
+    }
+
+    // Si el cliente NO está identificado en absoluto (ni por SmartOLT ni por nombre en Turso)
+    if (!session?.onu_id && !session?.client_name) {
+      // 1. Intentar vinculación rápida automática si el teléfono coincide con alguna ONU en Turso
+      const onusPorTel = await TursoService.searchOnusFuzzy(phone, 1);
+      if (onusPorTel.length > 0 && onusPorTel[0].matchScore >= 95) {
+        const o = onusPorTel[0];
+        session = await TursoService.upsertSession({
+          phone,
+          client_id: o.unique_external_id,
+          service_id: o.sn,
+          client_name: o.name,
+          onu_id: o.unique_external_id,
+          metadata: JSON.stringify({ speed_profile: o.speed_profile, zone: o.zone_name, address: o.address }),
+          step: 'IDENTIFICADO',
+        });
+        logger.info(`Cliente ${phone} auto-vinculado a ONU ${o.unique_external_id} por coincidencia de teléfono/registro`);
+      } else {
+        // Si no está identificado, clasificamos el mensaje con Groq para ver si trae nombre o es saludo/queja
+        const clasif = await GroqService.clasificarMensaje(rawText, {
+          clientName: null,
+          currentStep: 'INICIO',
+        });
+
+        if (clasif.nombre_mencionado) {
+          await this.procesarIdentificacion(phone, clasif.nombre_mencionado, session, targetJid);
+          return;
+        }
+
+        // Si es un saludo o no dio su nombre, le solicitamos amablemente su nombre completo
+        if (clasif.intencion === 'SALUDO' || clasif.intencion === 'DESCONOCIDO') {
+          await this.enviarYLoguear(
+            phone,
+            `¡Hola! 👋 Bienvenido al centro de atención y soporte técnico de *${this.getIspName()}*.\n\nPara poder ubicar tu módem en nuestro sistema y verificar tu señal en tiempo real, ¿podrías indicarme tu *Nombre completo* tal como aparece en tu servicio?`,
+            'SALUDO',
+            'SOLICITAR_IDENTIFICACION',
+            targetJid
+          );
+          await TursoService.updateStep(phone, 'ESPERANDO_IDENTIFICACION');
+          return;
+        }
+
+        // Si reporta falla directamente sin estar registrado, le pedimos el nombre para ubicar su línea
+        if (clasif.intencion === 'FALLA_INTERNET') {
+          const queja = clasif.resumen_queja ? ` sobre: _"${clasif.resumen_queja}"_` : '';
+          await this.enviarYLoguear(
+            phone,
+            `Entendido tu reporte${queja}. Veo que presentas problemas con tu conexión.\n\nPara poder revisar los niveles de luz y señal de tu módem en nuestra central, ¿me indicas tu *Nombre completo* o número de contrato?`,
+            'FALLA_INTERNET',
+            'SOLICITAR_NOMBRE_PARA_DIAGNOSTICO',
+            targetJid
+          );
+          await TursoService.updateStep(phone, 'ESPERANDO_IDENTIFICACION');
+          return;
+        }
+      }
+    }
+
+    // 3. Cliente ya conocido / identificado: Clasificamos con Groq para ejecutar acciones en SmartOLT / WispHub
+    const clasificacion = await GroqService.clasificarMensaje(rawText, {
+      clientName: session?.client_name,
+      currentStep: session?.step,
+    });
+
+    logger.info(`Intención detectada para ${phone}: ${clasificacion.intencion} (Resumen: "${clasificacion.resumen_queja}")`);
+
+    // Si es una acción específica de telecomunicaciones (Falla, Saldo, Reboot, Asesor)
+    if (['FALLA_INTERNET', 'REINICIAR_MODEM', 'CONSULTAR_SALDO', 'REPORTAR_PAGO', 'HABLAR_HUMANO', 'CANCELAR_SUSCRIPCION'].includes(clasificacion.intencion)) {
+      await this.ejecutarIntencion(phone, clasificacion, session, rawText);
+      return;
+    }
+
+    // 4. Si es saludo o conversación general, respondemos de forma inteligente con Groq enriquecido
     const historial = await TursoService.getHistorialReciente(phone, 8);
 
-    logger.info(`Generando respuesta con Groq para ${phone} (Historial previo: ${historial.length} mensajes)...`);
+    // Contexto enriquecido de SmartOLT si tiene ONU
+    let infoOltContext = '';
+    if (session?.onu_id) {
+      const diag = await SmartOLTService.obtenerEstadoONU(session.onu_id);
+      infoOltContext = `El cliente tiene la ONU ${session.onu_id}, estado en central: ${diag.status}, potencia: ${diag.opticalPowerDbm || 'N/A'} dBm.`;
+    }
+
+    logger.info(`Generando respuesta conversacional con Groq para ${phone}...`);
     const respuestaIA = await GroqService.generarRespuestaConversacional(rawText, historial, {
       clientName: session?.client_name,
       ispName: this.getIspName(),
     });
 
-    // Enviar la respuesta directa de la IA al hilo del cliente
     await this.enviarYLoguear(
       phone,
       respuestaIA,
@@ -527,16 +602,78 @@ export class BotOrchestrator {
   }
 
   /**
-   * Procesa la identificación de un cliente de forma inteligente:
-   * 1. Busca en WispHub por nombre o contrato.
-   * 2. Si no coincide pero parece otra intención (ej. "no tengo internet"), la procesa sin trabarse.
-   * 3. Si es un nombre personal (ej. "Carlos", "Juan"), lo memoriza en Turso DB y NUNCA vuelve a preguntarlo.
+   * Procesa la identificación de un cliente de forma inteligente y flexible:
+   * 1. Busca en SmartOLT (Caché en Turso DB) con algoritmo difuso tolerante a errores ortográficos y de digitación.
+   * 2. Si no coincide, busca en WispHub por nombre o contrato.
+   * 3. Si parece otra intención (ej. "no tengo internet"), la procesa sin trabar al usuario.
+   * 4. Si es un nombre personal (ej. "Carlos", "Juan"), lo memoriza en Turso DB.
    */
-  private static async procesarIdentificacion(phone: string, input: string, session: Session | null): Promise<void> {
+  private static async procesarIdentificacion(
+    phone: string,
+    input: string,
+    session: Session | null,
+    targetJid?: string
+  ): Promise<void> {
     const rawInput = input.trim();
     logger.info(`Buscando coincidencias para identificación de ${phone}: "${rawInput}"`);
 
-    // 1. Intentar buscar en WispHub
+    // 1. Intentar búsqueda flexible en Turso DB (Caché local de SmartOLT)
+    try {
+      const coincidenciasOlt = await TursoService.searchOnusFuzzy(rawInput, 4);
+
+      if (coincidenciasOlt.length > 0) {
+        const mejor = coincidenciasOlt[0];
+
+        // Coincidencia sólida (score >= 70 o único candidato claro)
+        if (mejor.matchScore >= 70 || (coincidenciasOlt.length === 1 && mejor.matchScore >= 55)) {
+          const meta = JSON.stringify({
+            speed_profile: mejor.speed_profile,
+            zone: mejor.zone_name,
+            address: mejor.address,
+            sn: mejor.sn,
+          });
+
+          await TursoService.upsertSession({
+            phone,
+            client_id: mejor.unique_external_id,
+            service_id: mejor.sn,
+            client_name: mejor.name,
+            onu_id: mejor.unique_external_id,
+            metadata: meta,
+            step: 'ESPERANDO_PROBLEMA',
+          });
+
+          const planTexto = mejor.speed_profile ? `\n📦 *Plan:* ${mejor.speed_profile}` : '';
+          const zonaTexto = mejor.zone_name ? `\n📍 *Zona:* ${mejor.zone_name}` : '';
+
+          await this.enviarYLoguear(
+            phone,
+            `¡Perfecto! Te he localizado en nuestro sistema de SmartOLT ✅\nBienvenido(a) *${mejor.name}*.${planTexto}${zonaTexto}\n\nCuéntame, ¿cuál es el detalle o falla que presentas con tu servicio de internet?`,
+            'IDENTIFICAR_CLIENTE',
+            'VINCULADO_SMARTOLT',
+            targetJid
+          );
+          return;
+        }
+
+        // Si hay varios registros parecidos (ambigüedad en apellidos o nombres similares)
+        if (coincidenciasOlt.length > 1 && mejor.matchScore >= 50) {
+          let opciones = `Encontré varios registros parecidos a *"${rawInput}"*. Por favor indícame a cuál corresponde tu servicio:\n\n`;
+          coincidenciasOlt.slice(0, 3).forEach((c, idx) => {
+            const detalle = [c.speed_profile, c.address || c.zone_name].filter(Boolean).join(' - ') || 'Servicio Activo';
+            opciones += `${idx + 1}️⃣ *${c.name}* (${detalle})\n`;
+          });
+          opciones += `\nResponde con tu nombre completo o dirección para confirmar.`;
+
+          await this.enviarYLoguear(phone, opciones, 'IDENTIFICAR_CLIENTE', 'MULTIPLES_COINCIDENCIAS_SMARTOLT', targetJid);
+          return;
+        }
+      }
+    } catch (err: any) {
+      logger.warn(`Error al consultar SmartOLT en Turso durante identificación:`, err?.message || err);
+    }
+
+    // 2. Intentar buscar en WispHub como alternativa de facturación
     try {
       const coincidencias = await WispHubService.buscarClientePorNombre(rawInput);
 
@@ -555,7 +692,8 @@ export class BotOrchestrator {
           phone,
           `¡Perfecto, te he ubicado en el sistema! ✅\nBienvenido(a) *${c.nombre}*. Tu cuenta ha quedado vinculada a este chat.\n\nCuéntame, ¿cuál es el problema o consulta que presentas con tu servicio de internet?`,
           'IDENTIFICAR_CLIENTE',
-          'VINCULADO_WISPHUB'
+          'VINCULADO_WISPHUB',
+          targetJid
         );
         return;
       }
@@ -565,7 +703,7 @@ export class BotOrchestrator {
         coincidencias.forEach((c) => {
           opciones += `• *ID ${c.id}:* ${c.nombre} (${c.direccion || 'Sin dirección'})\n`;
         });
-        await this.enviarYLoguear(phone, opciones, 'IDENTIFICAR_CLIENTE', 'MULTIPLES_COINCIDENCIAS');
+        await this.enviarYLoguear(phone, opciones, 'IDENTIFICAR_CLIENTE', 'MULTIPLES_COINCIDENCIAS', targetJid);
         return;
       }
     } catch (err: any) {
@@ -613,7 +751,8 @@ export class BotOrchestrator {
         phone,
         `¡Mucho gusto, *${nombreLimpio}*! 👋\nHe registrado tu nombre en nuestro sistema para atenderte de manera personalizada.\n\nCuéntame, ¿cuál es el detalle o falla que presentas con tu servicio de internet?`,
         'IDENTIFICAR_CLIENTE',
-        'NOMBRE_MEMORIZADO_TURSO'
+        'NOMBRE_MEMORIZADO_TURSO',
+        targetJid
       );
       return;
     }
@@ -623,7 +762,8 @@ export class BotOrchestrator {
       phone,
       `No te preocupes. ¿Cuál es el problema o consulta que tienes con tu servicio? Estoy aquí para ayudarte.`,
       'DESCONOCIDO',
-      'CONTINUAR_SIN_NOMBRE'
+      'CONTINUAR_SIN_NOMBRE',
+      targetJid
     );
     await TursoService.updateStep(phone, 'ESPERANDO_PROBLEMA');
   }

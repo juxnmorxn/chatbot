@@ -496,8 +496,13 @@ export function getAdminDashboardHtml(): string {
             <input type="password" id="smartoltApiKey" class="mono" placeholder="Pega tu X-Token aquí">
           </div>
 
-          <div style="margin-top: 14px;">
-            <button type="button" class="btn btn-secondary btn-test" onclick="testService('smartolt')">🩺 Probar Conexión SmartOLT</button>
+          <div style="margin-top: 14px; display: flex; gap: 10px; flex-wrap: wrap;">
+            <button type="button" class="btn btn-secondary btn-test" onclick="testService('smartolt')">🩺 Probar Conexión</button>
+            <button type="button" id="btnSyncOlt" class="btn btn-cyan" onclick="syncSmartOlt()">🔄 Sincronizar con Turso DB</button>
+          </div>
+
+          <div id="smartoltStatsBox" style="margin-top: 12px; padding: 8px 12px; background: rgba(255,255,255,0.03); border-radius: 6px; font-size: 12px; color: var(--text-muted); border: 1px solid rgba(255,255,255,0.06);">
+            📊 <strong>Inventario en Turso:</strong> <span id="oltStatsText">Consultando...</span>
           </div>
         </div>
 
@@ -925,8 +930,59 @@ export function getAdminDashboardHtml(): string {
       }
     }
 
+    async function loadSmartOltStats() {
+      const el = document.getElementById('oltStatsText');
+      if (!el) return;
+      try {
+        const res = await fetch('/api/smartolt/stats');
+        const data = await res.json();
+        if (data.success && data.stats) {
+          const count = data.stats.count || 0;
+          const last = data.stats.lastSync ? new Date(data.stats.lastSync).toLocaleString('es-MX') : 'Nunca';
+          el.innerHTML = '<strong style="color:var(--cyan);">' + count + ' ONUs registradas</strong> (Último sync: ' + last + ')';
+        } else {
+          el.innerText = 'Sin registros sincronizados aún.';
+        }
+      } catch (e) {
+        el.innerText = 'No se pudo obtener el estado.';
+      }
+    }
+
+    async function syncSmartOlt() {
+      const btn = document.getElementById('btnSyncOlt');
+      const el = document.getElementById('oltStatsText');
+      if (btn) {
+        btn.disabled = true;
+        btn.innerText = '⏳ Sincronizando...';
+      }
+      if (el) el.innerText = 'Descargando ONUs desde SmartOLT...';
+
+      try {
+        const res = await fetch('/api/smartolt/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ force: false })
+        });
+        const data = await res.json();
+        if (data.success) {
+          alert('✅ ' + data.message);
+        } else {
+          alert('⚠️ ' + data.message);
+        }
+        await loadSmartOltStats();
+      } catch (err) {
+        alert('❌ Error al conectar con el servidor: ' + err.message);
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerText = '🔄 Sincronizar con Turso DB';
+        }
+      }
+    }
+
     // Inicializar
     loadSettings();
+    loadSmartOltStats();
   </script>
 </body>
 </html>`;

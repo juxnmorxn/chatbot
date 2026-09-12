@@ -1,7 +1,22 @@
 import { getTursoClient } from '../database/turso';
 import { Logger } from '../utils/logger';
+import { normalizeText, computeNameMatchScore } from '../utils/fuzzy-matcher';
 
 const logger = new Logger('TursoService');
+
+export interface SmartOltOnuRecord {
+  unique_external_id: string;
+  sn: string;
+  name: string;
+  name_normalized?: string;
+  phone?: string;
+  address?: string;
+  zone_name?: string;
+  speed_profile?: string;
+  olt_name?: string;
+  raw_data?: string;
+  updated_at?: string;
+}
 
 export interface Session {
   phone: string;
@@ -238,6 +253,218 @@ export class TursoService {
     } catch (error: any) {
       logger.error(`Error al obtener historial reciente de ${phone}:`, error?.message || error);
       return [];
+    }
+  }
+
+  /**
+   * Guarda o actualiza un lote de registros de ONUs provenientes de SmartOLT en Turso DB
+   */
+  static async saveSmartOltOnus(onus: SmartOltOnuRecord[]): Promise<number> {
+    if (!onus || onus.length === 0) return 0;
+    try {
+      const client = getTursoClient();
+      const now = new Date().toISOString();
+
+      // Procesar en batches para no exceder límites de argumentos de libSQL
+      const batchSize = 40;
+      let totalInserted = 0;
+
+      for (let i = 0; i < onus.length; i += batchSize) {
+        const batch = onus.slice(i, i + batchSize);
+        const statements = batch.map(item => {
+          const normName = normalizeText(item.name || '');
+          return {
+            sql: `
+              INSERT INTO smartolt_onus (
+                unique_external_id, sn, name, name_normalized, phone, address,
+                zone_name, speed_profile, olt_name, raw_data, updated_at
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              ON CONFLICT(unique_external_id) DO UPDATE SET
+                sn = excluded.sn,
+                name = excluded.name,
+                name_normalized = excluded.name_normalized,
+                phone = excluded.phone,
+                address = excluded.address,
+                zone_name = excluded.zone_name,
+                speed_profile = excluded.speed_profile,
+                olt_name = excluded.olt_name,
+                raw_data = excluded.raw_data,
+                updated_at = excluded.updated_at
+            `,
+            args: [
+              item.unique_external_id,
+              item.sn || '',
+              item.name || '',
+              normName,
+              item.phone || '',
+              item.address || '',
+              item.zone_name || '',
+              item.speed_profile || '',
+              item.olt_name || '',
+              item.raw_data || '',
+              now,
+            ],
+          };
+        });
+
+        await client.batch(statements, 'write');
+        totalInserted += batch.length;
+      }
+
+      logger.info(`Sincronización exitosa: ${totalInserted} ONUs guardadas en Turso DB`);
+      return totalInserted;
+    } catch (error: any) {
+      logger.error('Error al guardar lote de ONUs en Turso DB:', error?.message || error);
+      throw error;
+    }
+  }
+
+  /**
+   * Búsqueda flexible (Fuzzy Matching) de clientes / ONUs por nombre
+   * Tolerante a errores ortográficos, mayúsculas/minúsculas y acentos.
+   */
+  static async searchOnusFuzzy(
+    query: string,
+    limit: number = 5
+  ): Promise<Array<SmartOltOnuRecord & { matchScore: number }>> {
+    const rawQuery = (query || '').trim();
+    if (!rawQuery) return [];
+
+    const normQuery = normalizeText(rawQuery);
+    if (!normQuery) return [];
+
+    try {
+      const client = getTursoClient();
+
+      // 1. Búsqueda directa por número de serie o teléfono si aplica
+      const directMatch = await client.execute({
+        sql: `
+          SELECT * FROM smartolt_onus 
+          WHERE sn LIKE ? OR phone LIKE ? OR unique_external_id = ?
+          LIMIT 3
+        `,
+        args: [`%${normQuery}%`, `%${normQuery}%`, rawQuery],
+      });
+
+      if (directMatch.rows.length > 0) {
+        return directMatch.rows.map((row: any) => ({
+          unique_external_id: String(row.unique_external_id),
+          sn: String(row.sn || ''),
+          name: String(row.name || ''),
+          name_normalized: String(row.name_normalized || ''),
+          phone: String(row.phone || ''),
+          address: String(row.address || ''),
+          zone_name: String(row.zone_name || ''),
+          speed_profile: String(row.speed_profile || ''),
+          olt_name: String(row.olt_name || ''),
+          matchScore: 100,
+        }));
+      }
+
+      // 2. Extraer palabras clave de la consulta para filtrar candidatos en SQL
+      const queryWords = normQuery.split(' ').filter(w => w.length > 2);
+      let candidatesQuery = 'SELECT * FROM smartolt_onus';
+      const args: any[] = [];
+
+      if (queryWords.length > 0) {
+        const likeClauses = queryWords.map(() => 'name_normalized LIKE ?');
+        candidatesQuery += ` WHERE ${likeClauses.join(' OR ')} LIMIT 100`;
+        queryWords.forEach(w => args.push(`%${w}%`));
+      } else {
+        candidatesQuery += ' LIMIT 100';
+      }
+
+      const candidatesResult = await client.execute({ sql: candidatesQuery, args });
+      
+      // Si la búsqueda con LIKE no encontró suficientes candidatos (ej. por error ortográfico en cada palabra),
+      // tomamos una muestra más amplia para analizar con algoritmo fonético/Levenshtein
+      let rowsToEvaluate = candidatesResult.rows;
+      if (rowsToEvaluate.length === 0) {
+        const sampleResult = await client.execute('SELECT * FROM smartolt_onus ORDER BY updated_at DESC LIMIT 200');
+        rowsToEvaluate = sampleResult.rows;
+      }
+
+      // 3. Evaluar cada candidato con el algoritmo de scoring difuso
+      const scored: Array<SmartOltOnuRecord & { matchScore: number }> = [];
+
+      for (const row of rowsToEvaluate) {
+        const candidateName = String(row.name || '');
+        const score = computeNameMatchScore(rawQuery, candidateName);
+
+        // Umbral mínimo de similitud: 50%
+        if (score >= 50) {
+          scored.push({
+            unique_external_id: String(row.unique_external_id),
+            sn: String(row.sn || ''),
+            name: candidateName,
+            name_normalized: String(row.name_normalized || ''),
+            phone: String(row.phone || ''),
+            address: String(row.address || ''),
+            zone_name: String(row.zone_name || ''),
+            speed_profile: String(row.speed_profile || ''),
+            olt_name: String(row.olt_name || ''),
+            matchScore: score,
+          });
+        }
+      }
+
+      // Ordenar por mayor puntuación de coincidencia
+      scored.sort((a, b) => b.matchScore - a.matchScore);
+      return scored.slice(0, limit);
+    } catch (error: any) {
+      logger.error(`Error en búsqueda difusa de ONUs para "${query}":`, error?.message || error);
+      return [];
+    }
+  }
+
+  /**
+   * Obtiene una ONU específica por su unique_external_id o SN
+   */
+  static async getOnuById(idOrSn: string): Promise<SmartOltOnuRecord | null> {
+    try {
+      const client = getTursoClient();
+      const res = await client.execute({
+        sql: `SELECT * FROM smartolt_onus WHERE unique_external_id = ? OR sn = ? LIMIT 1`,
+        args: [idOrSn, idOrSn],
+      });
+      if (res.rows.length === 0) return null;
+      const row = res.rows[0];
+      return {
+        unique_external_id: String(row.unique_external_id),
+        sn: String(row.sn || ''),
+        name: String(row.name || ''),
+        name_normalized: String(row.name_normalized || ''),
+        phone: String(row.phone || ''),
+        address: String(row.address || ''),
+        zone_name: String(row.zone_name || ''),
+        speed_profile: String(row.speed_profile || ''),
+        olt_name: String(row.olt_name || ''),
+        updated_at: String(row.updated_at || ''),
+      };
+    } catch (error: any) {
+      logger.error(`Error al obtener ONU por ID ${idOrSn}:`, error?.message || error);
+      return null;
+    }
+  }
+
+  /**
+   * Obtiene estadísticas de sincronización de SmartOLT
+   */
+  static async getSmartOltSyncStats(): Promise<{ count: number; lastSync: string | null }> {
+    try {
+      const client = getTursoClient();
+      const res = await client.execute(`
+        SELECT COUNT(*) as total, MAX(updated_at) as last_sync 
+        FROM smartolt_onus
+      `);
+      const row = res.rows[0];
+      return {
+        count: Number(row?.total || 0),
+        lastSync: row?.last_sync ? String(row.last_sync) : null,
+      };
+    } catch (error: any) {
+      logger.error('Error al obtener estadísticas de SmartOLT en Turso:', error?.message || error);
+      return { count: 0, lastSync: null };
     }
   }
 }

@@ -57,7 +57,28 @@ export async function initTursoDatabase(): Promise<void> {
       );
     `);
 
-    logger.info('Tablas "sessions", "settings" y "conversation_logs" listas en Turso.');
+    await client.execute(`
+      CREATE TABLE IF NOT EXISTS smartolt_onus (
+        unique_external_id TEXT PRIMARY KEY,
+        sn TEXT,
+        name TEXT,
+        name_normalized TEXT,
+        phone TEXT,
+        address TEXT,
+        zone_name TEXT,
+        speed_profile TEXT,
+        olt_name TEXT,
+        raw_data TEXT,
+        updated_at TEXT
+      );
+    `);
+
+    // Índices para búsquedas rápidas
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_onus_name_norm ON smartolt_onus(name_normalized);`);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_onus_sn ON smartolt_onus(sn);`);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_onus_phone ON smartolt_onus(phone);`);
+
+    logger.info('Tablas "sessions", "settings", "conversation_logs" y "smartolt_onus" listas en Turso.');
   } catch (error: any) {
     logger.error('Error al inicializar Turso DB:', error?.message || error);
     throw error;

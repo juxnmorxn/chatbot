@@ -42,6 +42,35 @@ async function startServer() {
       logger.info(`☁️ Entorno: ${config.nodeEnv}`);
       logger.info(`====================================================`);
     });
+
+    // Sincronización en segundo plano de SmartOLT hacia Turso DB (Cada 60 minutos = 1 llamada/hora de las 15 permitidas)
+    const { SmartOLTService } = await import('./services/smartolt.service');
+    const { TursoService } = await import('./services/turso.service');
+    
+    // Verificación inicial 10 segundos después del arranque
+    setTimeout(async () => {
+      try {
+        const stats = await TursoService.getSmartOltSyncStats();
+        if (stats.count === 0) {
+          logger.info('Inventario de SmartOLT vacío en Turso. Intentando sincronización inicial...');
+          await SmartOLTService.syncAllOnusToTurso(false);
+        } else {
+          logger.info(`Inventario SmartOLT listo en Turso: ${stats.count} ONUs (Última sync: ${stats.lastSync || 'Previa'})`);
+        }
+      } catch (err: any) {
+        logger.warn('No se pudo ejecutar sincronización inicial de SmartOLT:', err?.message || err);
+      }
+    }, 10000);
+
+    // Ciclo recurrente cada 60 minutos
+    setInterval(async () => {
+      try {
+        logger.info('Ejecutando sincronización horaria de inventario SmartOLT...');
+        await SmartOLTService.syncAllOnusToTurso(false);
+      } catch (err: any) {
+        logger.warn('Error en sincronización horaria de SmartOLT:', err?.message || err);
+      }
+    }, 60 * 60 * 1000);
   } catch (error: any) {
     logger.error('Error crítico al iniciar el servidor:', error?.message || error);
     process.exit(1);
