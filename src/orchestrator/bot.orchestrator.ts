@@ -109,10 +109,31 @@ export class BotOrchestrator {
       return;
     }
 
+    // Si el cliente está en espera de seleccionar uno de sus múltiples servicios
+    if (session?.step === 'ESPERANDO_SELECCION_SERVICIO') {
+      await this.procesarSeleccionServicio(phone, rawText, session, targetJid);
+      return;
+    }
+
     // Si el usuario nos indica su nombre explícitamente (ej. "me llamo Ricardo", "soy Carlos"), guardarlo en la sesión
     const matchNombre = rawText.match(/^(?:me llamo|mi nombre es|soy)\s+([a-zA-ZáéíóúÁÉÍÓÚñÑ\s]{2,35})$/i);
     if (matchNombre && matchNombre[1]) {
       await this.procesarIdentificacion(phone, matchNombre[1].trim(), session, targetJid);
+      return;
+    }
+
+    // Permitir cambiar o consultar otro servicio si el usuario lo solicita
+    const lowerMsg = rawText.toLowerCase().trim();
+    if (
+      lowerMsg === 'cambiar servicio' ||
+      lowerMsg === 'otro servicio' ||
+      lowerMsg === 'cambiar de servicio' ||
+      lowerMsg.includes('tengo otro servicio') ||
+      lowerMsg.includes('tengo dos servicios') ||
+      lowerMsg.includes('mis servicios')
+    ) {
+      const nombreABuscar = session?.client_name || phone;
+      await this.procesarIdentificacion(phone, nombreABuscar, session, targetJid);
       return;
     }
 
@@ -125,19 +146,49 @@ export class BotOrchestrator {
     // Si el cliente NO está identificado en absoluto (ni por SmartOLT ni por nombre en Turso)
     if (!session?.onu_id && !session?.client_name) {
       // 1. Intentar vinculación rápida automática si el teléfono coincide con alguna ONU en Turso
-      const onusPorTel = await TursoService.searchOnusFuzzy(phone, 1);
-      if (onusPorTel.length > 0 && onusPorTel[0].matchScore >= 95) {
-        const o = onusPorTel[0];
+      const onusPorTel = await TursoService.searchOnusFuzzy(phone, 5);
+      const coincidentesTel = onusPorTel.filter(o => o.matchScore >= 90);
+
+      if (coincidentesTel.length > 1) {
+        // El cliente tiene 2 o más servicios registrados con este mismo número
+        let textoOpciones = `¡Hola, *${coincidentesTel[0].name}*! 👋 Detectamos que tu número tiene *${coincidentesTel.length} servicios* registrados:\n\n`;
+        coincidentesTel.slice(0, 4).forEach((c, idx) => {
+          const ubicacion = c.address || c.zone_name ? `\n📍 *Ubicación:* ${c.address || c.zone_name}` : '';
+          const plan = c.speed_profile ? `\n📦 *Plan:* ${c.speed_profile}` : '';
+          textoOpciones += `*${idx + 1}️⃣ Opción ${idx + 1}:*${ubicacion}${plan}\n\n`;
+        });
+        textoOpciones += `¿Con cuál de tus servicios necesitas apoyo el día de hoy?\n👉 *Por favor responde con el número de tu opción (ejemplo: 1 ó 2).*`;
+
+        await TursoService.upsertSession({
+          phone,
+          client_name: coincidentesTel[0].name,
+          step: 'ESPERANDO_SELECCION_SERVICIO',
+          metadata: JSON.stringify({
+            pendingServices: coincidentesTel.slice(0, 4).map(c => ({
+              unique_external_id: c.unique_external_id,
+              sn: c.sn,
+              name: c.name,
+              speed_profile: c.speed_profile,
+              zone_name: c.zone_name,
+              address: c.address,
+            })),
+          }),
+        });
+
+        await this.enviarYLoguear(phone, textoOpciones, 'IDENTIFICAR_CLIENTE', 'AUTO_SELECCION_MULTISERVICIO', targetJid);
+        return;
+      } else if (coincidentesTel.length === 1) {
+        const o = coincidentesTel[0];
         session = await TursoService.upsertSession({
           phone,
           client_id: o.unique_external_id,
           service_id: o.sn,
           client_name: o.name,
           onu_id: o.unique_external_id,
-          metadata: JSON.stringify({ speed_profile: o.speed_profile, zone: o.zone_name, address: o.address }),
+          metadata: JSON.stringify({ speed_profile: o.speed_profile, zone: o.zone_name, address: o.address, sn: o.sn }),
           step: 'IDENTIFICADO',
         });
-        logger.info(`Cliente ${phone} auto-vinculado a ONU ${o.unique_external_id} por coincidencia de teléfono/registro`);
+        logger.info(`Cliente ${phone} auto-vinculado a ONU única ${o.unique_external_id}`);
       } else {
         // Si no está identificado, clasificamos el mensaje con Groq para ver si trae nombre o es saludo/queja
         const clasif = await GroqService.clasificarMensaje(rawText, {
@@ -264,7 +315,7 @@ export class BotOrchestrator {
   ): Promise<void> {
     switch (c.intencion) {
       case 'CONSULTAR_NIVELES':
-        await this.flujoReportarFalla(phone, session, targetJid);
+        await this.flujoConsultarNiveles(phone, session, targetJid);
         break;
 
       case 'SALUDO':
@@ -519,13 +570,11 @@ export class BotOrchestrator {
       let metaObj: any = {};
       try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
       const planTexto = metaObj.speed_profile ? `\n📦 *Plan contratado:* ${metaObj.speed_profile}` : '';
-      const potenciaTexto = estadoOnu.opticalPowerDbm !== null && estadoOnu.opticalPowerDbm !== undefined
-        ? `\n📶 *Potencia óptica:* ${estadoOnu.opticalPowerDbm} dBm (Nivel óptimo)`
-        : '\n📶 *Potencia óptica:* Normal';
+      const estadoLinea = '\n📶 *Estado de la línea:* Óptimo y estable (señal normal)';
 
       await this.enviarYLoguear(
         phone,
-        `🟢 *Tu módem se encuentra en línea y sincronizado con la central.*${planTexto}${potenciaTexto}\n\nSi experimentas lentitud o páginas que no abren:\n• Escribe *REINICIAR* para refrescar tu módem remotamente.\n• O escribe *ASESOR* para comunicarte con un técnico humano.`,
+        `🟢 *Tu módem se encuentra en línea y sincronizado con la central.*${planTexto}${estadoLinea}\n\nSi experimentas lentitud o páginas que no abren:\n• Escribe *REINICIAR* para refrescar tu módem remotamente.\n• O escribe *ASESOR* para comunicarte con un técnico humano.`,
         'FALLA_INTERNET',
         'SMARTOLT_ONLINE',
         targetJid
@@ -539,6 +588,98 @@ export class BotOrchestrator {
       `⚠️ La central reporta que tu equipo se encuentra desconectado (Offline).\n\nPor favor verifica que el módem esté encendido. Si deseas que enviemos un comando de reinicio escribe *REINICIAR*, o escribe *ASESOR* para que te atienda un técnico de *${this.getIspName()}*.`,
       'FALLA_INTERNET',
       'SMARTOLT_FALLBACK_TEXTO',
+      targetJid
+    );
+  }
+
+  /**
+   * Flujo de Consulta de Niveles / Estado de Conexión:
+   * BLOQUEA la entrega de valores técnicos numéricos en dBm al cliente final
+   * (reservado para diagnóstico interno del NOC e ingeniería).
+   * Traduce la telemetría a lenguaje comprensible y comercial para el usuario.
+   */
+  private static async flujoConsultarNiveles(phone: string, session: Session | null, targetJid?: string): Promise<void> {
+    const onuId = session?.onu_id || (session?.client_id ? `ONU-${session.client_id}` : null);
+
+    if (!onuId) {
+      await this.enviarYLoguear(
+        phone,
+        `Para verificar el estado de tu señal en la central, por favor indícame tu *Nombre completo* o número de contrato:`,
+        'CONSULTAR_NIVELES',
+        'SOLICITAR_IDENTIFICACION_NIVELES',
+        targetJid
+      );
+      await TursoService.updateStep(phone, 'ESPERANDO_IDENTIFICACION');
+      return;
+    }
+
+    await this.enviarYLoguear(phone, `🔍 Verificando la estabilidad de tu línea con la central...`, 'DIAGNOSTICO', 'INICIANDO_SCAN_NIVELES', targetJid);
+
+    const estadoOnu = await SmartOLTService.obtenerEstadoONU(onuId);
+
+    // Registro interno técnico con métricas reales completas para diagnóstico del ISP
+    logger.info(`[NOC-DIAGNOSTICO-INTERNO] Niveles para ${phone} (ONU: ${onuId}): Status=${estadoOnu.status}, RX=${estadoOnu.opticalPowerDbm} dBm`);
+
+    if (estadoOnu.status === 'LOS') {
+      const ticket = await WispHubService.crearTicketSoporte(
+        session?.client_id || 'PENDIENTE',
+        'Corte de Fibra Óptica (SmartOLT LOS)',
+        `SmartOLT reporta LOS (Loss of Signal). Potencia: ${estadoOnu.opticalPowerDbm || 'Sin luz'}. Falla física en acometida.`,
+        'Alta'
+      );
+      await this.enviarYLoguear(
+        phone,
+        `🔴 *Alerta en tu Línea de Fibra:*\n\nDetectamos una interrupción en la señal óptica de tu domicilio (corte de cable o conector flojo).\n\n🎫 *Reporte técnico generado:* *#${ticket.folio}*\nNuestra cuadrilla técnica ha sido notificada para la reparación física.\n\n⚠️ Por favor verifica que el cable delgado de fibra óptica que entra a tu módem no esté desconectado ni doblado.`,
+        'CONSULTAR_NIVELES',
+        `TICKET_FIBRA_CORTADA_${ticket.folio}`,
+        targetJid
+      );
+      return;
+    }
+
+    if (estadoOnu.status === 'POWER_FAIL') {
+      await this.enviarYLoguear(
+        phone,
+        `⚡ *Falla de Alimentación Eléctrica:*\n\nLa central detecta que tu módem no está recibiendo energía eléctrica.\n\n🔌 Por favor verifica:\n1. Que el eliminador negro esté firmemente conectado a la toma de corriente.\n2. Que el botón trasero de encendido (ON/OFF) esté presionado.\n\nSi la energía ya regresó y tu equipo no enciende, escribe *ASESOR*.`,
+        'CONSULTAR_NIVELES',
+        'SMARTOLT_POWER_FAIL',
+        targetJid
+      );
+      return;
+    }
+
+    if (estadoOnu.status === 'ONLINE') {
+      let metaObj: any = {};
+      try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
+      const planTexto = metaObj.speed_profile ? `\n📦 *Plan:* ${metaObj.speed_profile}` : '';
+      const ubicacionTexto = metaObj.address || metaObj.zone ? `\n📍 *Ubicación:* ${metaObj.address || metaObj.zone}` : '';
+
+      // Evaluamos internamente la potencia SIN exponer el número dBm al cliente
+      const dbm = estadoOnu.opticalPowerDbm;
+      let estadoSenal = 'Óptima y estable ✅';
+      let detalleSenal = 'Tu línea de fibra óptica se encuentra sincronizada con la central en un rango óptimo de calidad, sin pérdidas de señal en tu domicilio.';
+
+      if (dbm !== null && dbm !== undefined && dbm < -27) {
+        estadoSenal = 'En observación preventiva ⚠️';
+        detalleSenal = 'Tu equipo está conectado, aunque registramos una ligera variación en la señal de tu sector. Ya ha sido canalizado a nuestra área de ingeniería para su ajuste preventivo.';
+      }
+
+      await this.enviarYLoguear(
+        phone,
+        `📶 *Estado de tu Conexión en Central:*\n• Estado: *${estadoSenal}*${planTexto}${ubicacionTexto}\n\n${detalleSenal}\n\n💡 _(Nota: Las métricas numéricas detalladas en dBm son de uso reservado para diagnóstico técnico de la central de ${this.getIspName()})._\n\nSi experimentas lentitud o deseas refrescar tu módem:\n• Escribe *REINICIAR* para enviar un reinicio remoto.\n• O escribe *ASESOR* para hablar con un técnico humano.`,
+        'CONSULTAR_NIVELES',
+        'NIVELES_INFORMADOS_COMERCIAL',
+        targetJid
+      );
+      return;
+    }
+
+    // Si está Offline
+    await this.enviarYLoguear(
+      phone,
+      `⚠️ *Módem Desconectado (Offline):*\n\nLa central no recibe señal de tu equipo en este momento. Por favor verifica que el módem esté encendido con sus luces frontales activas.\n\nSi el equipo está encendido pero sigues sin señal, escribe *ASESOR* para coordinar asistencia técnica de *${this.getIspName()}*.`,
+      'CONSULTAR_NIVELES',
+      'SMARTOLT_OFFLINE',
       targetJid
     );
   }
@@ -650,13 +791,54 @@ export class BotOrchestrator {
 
     // 1. Intentar búsqueda flexible en Turso DB (Caché local de SmartOLT)
     try {
-      const coincidenciasOlt = await TursoService.searchOnusFuzzy(rawInput, 4);
+      const coincidenciasOlt = await TursoService.searchOnusFuzzy(rawInput, 6);
 
       if (coincidenciasOlt.length > 0) {
-        const mejor = coincidenciasOlt[0];
+        const mejorScore = coincidenciasOlt[0].matchScore;
+        // Candidatos con score alto (>= 58) y cercanos al mejor score (dentro de 20 puntos de margen)
+        const candidatosRelevantes = coincidenciasOlt.filter(
+          c => c.matchScore >= 58 && c.matchScore >= (mejorScore - 20)
+        );
 
-        // Coincidencia sólida (score >= 70 o único candidato claro)
-        if (mejor.matchScore >= 70 || (coincidenciasOlt.length === 1 && mejor.matchScore >= 55)) {
+        // CASO A: El cliente tiene 2 o más servicios registrados (o homónimos)
+        if (candidatosRelevantes.length > 1) {
+          const primerNombre = candidatosRelevantes[0].name;
+          logger.info(`Se detectaron ${candidatosRelevantes.length} servicios para "${rawInput}". Solicitando selección al cliente.`);
+
+          let mensajeOpciones = `¡Hola, *${primerNombre}*! 👋 Detectamos que tienes *${candidatosRelevantes.length} servicios* registrados en nuestro sistema:\n\n`;
+
+          candidatosRelevantes.slice(0, 5).forEach((c, idx) => {
+            const ubicacion = c.address || c.zone_name ? `\n📍 *Ubicación / Zona:* ${c.address || c.zone_name}` : '';
+            const plan = c.speed_profile ? `\n📦 *Plan:* ${c.speed_profile}` : '';
+            const sn = c.sn ? `\n🆔 *SN:* ${c.sn}` : '';
+            mensajeOpciones += `*${idx + 1}️⃣ Opción ${idx + 1}:*${ubicacion}${plan}${sn}\n\n`;
+          });
+
+          mensajeOpciones += `¿Con cuál de tus servicios necesitas apoyo el día de hoy?\n👉 *Por favor responde con el número de la opción (ejemplo: 1 ó 2).*`;
+
+          await TursoService.upsertSession({
+            phone,
+            client_name: primerNombre,
+            step: 'ESPERANDO_SELECCION_SERVICIO',
+            metadata: JSON.stringify({
+              pendingServices: candidatosRelevantes.slice(0, 5).map(c => ({
+                unique_external_id: c.unique_external_id,
+                sn: c.sn,
+                name: c.name,
+                speed_profile: c.speed_profile,
+                zone_name: c.zone_name,
+                address: c.address,
+              })),
+            }),
+          });
+
+          await this.enviarYLoguear(phone, mensajeOpciones, 'IDENTIFICAR_CLIENTE', 'SOLICITUD_SELECCION_MULTISERVICIO', targetJid);
+          return;
+        }
+
+        // CASO B: Coincidencia única sólida
+        const mejor = candidatosRelevantes[0] || coincidenciasOlt[0];
+        if (mejor.matchScore >= 65 || (coincidenciasOlt.length === 1 && mejor.matchScore >= 50)) {
           const meta = JSON.stringify({
             speed_profile: mejor.speed_profile,
             zone: mejor.zone_name,
@@ -675,7 +857,7 @@ export class BotOrchestrator {
           });
 
           const planTexto = mejor.speed_profile ? `\n📦 *Plan:* ${mejor.speed_profile}` : '';
-          const zonaTexto = mejor.zone_name ? `\n📍 *Zona:* ${mejor.zone_name}` : '';
+          const zonaTexto = mejor.address || mejor.zone_name ? `\n📍 *Ubicación:* ${mejor.address || mejor.zone_name}` : '';
 
           await this.enviarYLoguear(
             phone,
@@ -684,19 +866,6 @@ export class BotOrchestrator {
             'VINCULADO_SMARTOLT',
             targetJid
           );
-          return;
-        }
-
-        // Si hay varios registros parecidos (ambigüedad en apellidos o nombres similares)
-        if (coincidenciasOlt.length > 1 && mejor.matchScore >= 50) {
-          let opciones = `Encontré varios registros parecidos a *"${rawInput}"*. Por favor indícame a cuál corresponde tu servicio:\n\n`;
-          coincidenciasOlt.slice(0, 3).forEach((c, idx) => {
-            const detalle = [c.speed_profile, c.address || c.zone_name].filter(Boolean).join(' - ') || 'Servicio Activo';
-            opciones += `${idx + 1}️⃣ *${c.name}* (${detalle})\n`;
-          });
-          opciones += `\nResponde con tu nombre completo o dirección para confirmar.`;
-
-          await this.enviarYLoguear(phone, opciones, 'IDENTIFICAR_CLIENTE', 'MULTIPLES_COINCIDENCIAS_SMARTOLT', targetJid);
           return;
         }
       }
@@ -730,11 +899,29 @@ export class BotOrchestrator {
       }
 
       if (coincidencias.length > 1) {
-        let opciones = `Encontramos varios registros con ese nombre. Por favor escribe tu número de servicio:\n\n`;
-        coincidencias.forEach((c) => {
-          opciones += `• *ID ${c.id}:* ${c.nombre} (${c.direccion || 'Sin dirección'})\n`;
+        let opciones = `Encontré varios contratos registrados a ese nombre en facturación:\n\n`;
+        coincidencias.slice(0, 4).forEach((c, idx) => {
+          opciones += `*${idx + 1}️⃣ Opción ${idx + 1}:* ${c.nombre} (ID: ${c.id}, ${c.direccion || 'Sin dirección'})\n\n`;
         });
-        await this.enviarYLoguear(phone, opciones, 'IDENTIFICAR_CLIENTE', 'MULTIPLES_COINCIDENCIAS', targetJid);
+        opciones += `¿Cuál de ellos deseas consultar?\n👉 *Responde con el número de la opción (ejemplo: 1 ó 2).*`;
+
+        await TursoService.upsertSession({
+          phone,
+          client_name: coincidencias[0].nombre,
+          step: 'ESPERANDO_SELECCION_SERVICIO',
+          metadata: JSON.stringify({
+            pendingServices: coincidencias.slice(0, 4).map(c => ({
+              unique_external_id: c.onu_id || `ONU-${c.id}`,
+              sn: String(c.servicio_id || c.id),
+              name: c.nombre,
+              speed_profile: '',
+              zone_name: '',
+              address: c.direccion || '',
+            })),
+          }),
+        });
+
+        await this.enviarYLoguear(phone, opciones, 'IDENTIFICAR_CLIENTE', 'MULTIPLES_COINCIDENCIAS_WISPHUB', targetJid);
         return;
       }
     } catch (err: any) {
@@ -797,6 +984,99 @@ export class BotOrchestrator {
       targetJid
     );
     await TursoService.updateStep(phone, 'ESPERANDO_PROBLEMA');
+  }
+
+  /**
+   * Maneja la selección del cliente cuando tiene 2 o más servicios registrados
+   */
+  private static async procesarSeleccionServicio(
+    phone: string,
+    input: string,
+    session: Session | null,
+    targetJid?: string
+  ): Promise<void> {
+    const rawInput = input.trim();
+    let pendingServices: any[] = [];
+    try {
+      const meta = JSON.parse(session?.metadata || '{}');
+      if (Array.isArray(meta.pendingServices)) {
+        pendingServices = meta.pendingServices;
+      }
+    } catch {}
+
+    if (pendingServices.length === 0) {
+      // Si no hay lista guardada, pedimos que se identifique de nuevo
+      await TursoService.updateStep(phone, 'ESPERANDO_IDENTIFICACION');
+      await this.procesarIdentificacion(phone, input, session, targetJid);
+      return;
+    }
+
+    // 1. Extraer el número de opción: "1", "2", "el 1", "opcion 2", "primero", etc.
+    let indexSeleccionado = -1;
+    const matchNum = rawInput.match(/\b([1-9])\b/);
+    if (matchNum) {
+      indexSeleccionado = parseInt(matchNum[1], 10) - 1;
+    } else {
+      const lower = rawInput.toLowerCase();
+      if (lower.includes('primer') || lower.includes('uno')) {
+        indexSeleccionado = 0;
+      } else if (lower.includes('segund') || lower.includes('dos')) {
+        indexSeleccionado = 1;
+      } else if (lower.includes('tercer') || lower.includes('tres')) {
+        indexSeleccionado = 2;
+      } else {
+        // Buscar coincidencia por dirección o zona si el cliente escribió parte del domicilio
+        const matchIdx = pendingServices.findIndex(s => {
+          const zona = (s.zone_name || '').toLowerCase();
+          const addr = (s.address || '').toLowerCase();
+          return (zona && lower.includes(zona)) || (addr && lower.includes(addr));
+        });
+        if (matchIdx !== -1) {
+          indexSeleccionado = matchIdx;
+        }
+      }
+    }
+
+    // Si no es un índice válido
+    if (indexSeleccionado < 0 || indexSeleccionado >= pendingServices.length) {
+      await this.enviarYLoguear(
+        phone,
+        `Por favor responde únicamente con el *número* del servicio que deseas consultar (ejemplo: *1* o *2*).`,
+        'SELECCION_SERVICIO',
+        'OPCION_INVALIDA',
+        targetJid
+      );
+      return;
+    }
+
+    const elegido = pendingServices[indexSeleccionado];
+    const meta = JSON.stringify({
+      speed_profile: elegido.speed_profile,
+      zone: elegido.zone_name,
+      address: elegido.address,
+      sn: elegido.sn,
+    });
+
+    await TursoService.upsertSession({
+      phone,
+      client_id: elegido.unique_external_id,
+      service_id: elegido.sn,
+      client_name: elegido.name,
+      onu_id: elegido.unique_external_id,
+      metadata: meta,
+      step: 'ESPERANDO_PROBLEMA',
+    });
+
+    const ubicacion = elegido.address || elegido.zone_name ? ` en *${elegido.address || elegido.zone_name}*` : '';
+    const plan = elegido.speed_profile ? `\n📦 *Plan:* ${elegido.speed_profile}` : '';
+
+    await this.enviarYLoguear(
+      phone,
+      `¡Entendido! He seleccionado tu servicio${ubicacion} ✅${plan}\n\n¿Cuál es la falla o consulta que tienes con este servicio?`,
+      'SELECCION_SERVICIO',
+      'SERVICIO_SELECCIONADO',
+      targetJid
+    );
   }
 
   /**
