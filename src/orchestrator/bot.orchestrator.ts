@@ -187,9 +187,9 @@ export class BotOrchestrator {
 
     logger.info(`Intención detectada para ${phone}: ${clasificacion.intencion} (Resumen: "${clasificacion.resumen_queja}")`);
 
-    // Si es una acción específica de telecomunicaciones (Falla, Saldo, Reboot, Asesor)
-    if (['FALLA_INTERNET', 'REINICIAR_MODEM', 'CONSULTAR_SALDO', 'REPORTAR_PAGO', 'HABLAR_HUMANO', 'CANCELAR_SUSCRIPCION'].includes(clasificacion.intencion)) {
-      await this.ejecutarIntencion(phone, clasificacion, session, rawText);
+    // Si es una acción específica de telecomunicaciones (Niveles, Falla, Saldo, Reboot, Asesor)
+    if (['CONSULTAR_NIVELES', 'FALLA_INTERNET', 'REINICIAR_MODEM', 'CONSULTAR_SALDO', 'REPORTAR_PAGO', 'HABLAR_HUMANO', 'CANCELAR_SUSCRIPCION'].includes(clasificacion.intencion)) {
+      await this.ejecutarIntencion(phone, clasificacion, session, rawText, targetJid);
       return;
     }
 
@@ -259,9 +259,14 @@ export class BotOrchestrator {
     phone: string,
     c: GroqClassificationResult,
     session: Session | null,
-    mensajeOriginal: string
+    mensajeOriginal: string,
+    targetJid?: string
   ): Promise<void> {
     switch (c.intencion) {
+      case 'CONSULTAR_NIVELES':
+        await this.flujoReportarFalla(phone, session, targetJid);
+        break;
+
       case 'SALUDO':
         if (!session?.client_id && !session?.client_name) {
           // Cliente nuevo / no registrado: solicitamos nombre o contrato para ubicarlo
@@ -269,7 +274,8 @@ export class BotOrchestrator {
             phone,
             `¡Hola! 👋 Bienvenido al centro de atención y soporte técnico de *${this.getIspName()}*.\n\nPara poder ubicar tu cuenta en nuestro sistema y brindarte una mejor atención, ¿podrías indicarme tu *Nombre completo* o tu *Número de contrato / teléfono*?`,
             'SALUDO',
-            'SOLICITAR_IDENTIFICACION'
+            'SOLICITAR_IDENTIFICACION',
+            targetJid
           );
           await TursoService.updateStep(phone, 'ESPERANDO_IDENTIFICACION');
         } else {
@@ -279,14 +285,15 @@ export class BotOrchestrator {
             phone,
             `¡Hola${nombre}! 👋 Bienvenido al centro de atención de *${this.getIspName()}*.\n\n¿En qué podemos apoyarte el día de hoy? Cuéntame cuál es tu duda o si presentas alguna falla con tu servicio.`,
             'SALUDO',
-            'SALUDO_PERSONALIZADO'
+            'SALUDO_PERSONALIZADO',
+            targetJid
           );
           await TursoService.updateStep(phone, 'ESPERANDO_PROBLEMA');
         }
         break;
 
       case 'CONSULTAR_SALDO':
-        await this.flujoConsultarSaldo(phone, session);
+        await this.flujoConsultarSaldo(phone, session, targetJid);
         break;
 
       case 'REPORTAR_PAGO':
@@ -294,16 +301,17 @@ export class BotOrchestrator {
           phone,
           `¡Gracias por tu pago! 📸 Para registrarlo de inmediato, por favor envía la *foto de tu comprobante o ficha de depósito* por este mismo chat y nuestro equipo de cobranza lo validará en el sistema.`,
           'REPORTAR_PAGO',
-          'SOLICITUD_COMPROBANTE'
+          'SOLICITUD_COMPROBANTE',
+          targetJid
         );
         break;
 
       case 'FALLA_INTERNET':
-        await this.flujoFallaInteligente(phone, c, session);
+        await this.flujoFallaInteligente(phone, c, session, targetJid);
         break;
 
       case 'REINICIAR_MODEM':
-        await this.flujoReiniciarModem(phone, session);
+        await this.flujoReiniciarModem(phone, session, targetJid);
         break;
 
       case 'DATOS_WIFI':
@@ -311,12 +319,13 @@ export class BotOrchestrator {
           phone,
           `📶 *Cambio de contraseña Wi-Fi:*\n\nPor seguridad de tu red, el cambio de clave o nombre de red se gestiona directamente con nuestro equipo técnico. Por favor responde con el nuevo nombre y contraseña que deseas configurar para tu módem.`,
           'DATOS_WIFI',
-          'INSTRUCCIONES_WIFI'
+          'INSTRUCCIONES_WIFI',
+          targetJid
         );
         break;
 
       case 'HABLAR_HUMANO':
-        await this.flujoHablarAsesor(phone, session);
+        await this.flujoHablarAsesor(phone, session, targetJid);
         break;
 
       case 'CANCELAR_SUSCRIPCION':
@@ -368,7 +377,8 @@ export class BotOrchestrator {
   private static async flujoFallaInteligente(
     phone: string,
     c: GroqClassificationResult,
-    session: Session | null
+    session: Session | null,
+    targetJid?: string
   ): Promise<void> {
     // Si el cliente no está registrado aún en el sistema pero ya reportó un problema de internet
     if (!session?.client_id && !session?.client_name) {
@@ -377,7 +387,8 @@ export class BotOrchestrator {
           phone,
           `⚠️ *Alerta de Foco Rojo (LOS / Fibra Óptica):*\n\nDetectamos que tu módem no recibe señal de luz por posible corte o daño en el cable de fibra óptica.\n\nPara poder generar tu reporte técnico y asignar a la cuadrilla de *${this.getIspName()}*, ¿podrías indicarme tu *Nombre completo* o *Número de contrato*?`,
           'FALLA_INTERNET',
-          'SOLICITAR_NOMBRE_PARA_TICKET'
+          'SOLICITAR_NOMBRE_PARA_TICKET',
+          targetJid
         );
         await TursoService.updateStep(phone, 'ESPERANDO_IDENTIFICACION');
         return;
@@ -388,7 +399,8 @@ export class BotOrchestrator {
           phone,
           `🔌 *Equipo Apagado / Falla de Energía:*\n\n1. Verifica que el eliminador esté bien conectado a la corriente y al módem.\n2. Presiona el botón de encendido en la parte trasera.\n\nSi no enciende ninguna luz, por favor indícame tu *Nombre completo* o *Número de contrato* para enviar a un técnico de *${this.getIspName()}*.`,
           'FALLA_INTERNET',
-          'GUIA_EQUIPO_APAGADO'
+          'GUIA_EQUIPO_APAGADO',
+          targetJid
         );
         await TursoService.updateStep(phone, 'ESPERANDO_IDENTIFICACION');
         return;
@@ -399,7 +411,8 @@ export class BotOrchestrator {
         phone,
         `Entendido tu reporte${queja}. Veo que presentas problemas con tu conexión de internet.\n\nPara poder verificar tu línea en la central y darte solución inmediata, ¿me indicas tu *Nombre completo* o *Número de contrato*?`,
         'FALLA_INTERNET',
-        'SOLICITAR_NOMBRE_PARA_DIAGNOSTICO'
+        'SOLICITAR_NOMBRE_PARA_DIAGNOSTICO',
+        targetJid
       );
       await TursoService.updateStep(phone, 'ESPERANDO_IDENTIFICACION');
       return;
@@ -421,7 +434,8 @@ export class BotOrchestrator {
         phone,
         `⚠️ *Alerta de Fibra Óptica Detectada:*\n\nEl foco rojo indica que no está llegando señal de luz a tu módem (posible cable desconectado o fibra dañada).\n\n🎫 *Hemos generado tu reporte técnico:*\n• Folio: *${ticket.folio}*\n• Estado: Asignado a cuadrilla técnica de ${this.getIspName()}.\n\nTe pedimos no mover el cable delgado amarillo/blanco para evitar daños mayores.`,
         'FALLA_INTERNET',
-        `TICKET_CREADO_FOCO_ROJO_${ticket.folio}`
+        `TICKET_CREADO_FOCO_ROJO_${ticket.folio}`,
+        targetJid
       );
       return;
     }
@@ -432,7 +446,8 @@ export class BotOrchestrator {
         phone,
         `🔌 *Equipo Apagado / Falla de Energía:*\n\n1. Verifica que el eliminador negro esté firmemente conectado a la corriente.\n2. Prueba conectando en otro enchufe de pared que tenga luz.\n3. Presiona el botón pequeño de encendido (ON/OFF) en la parte trasera del módem.\n\nSi después de esto no enciende ninguna luz, responde *ASESOR* para coordinar el reemplazo del equipo.`,
         'FALLA_INTERNET',
-        'GUIA_EQUIPO_APAGADO'
+        'GUIA_EQUIPO_APAGADO',
+        targetJid
       );
       return;
     }
@@ -450,25 +465,26 @@ export class BotOrchestrator {
         phone,
         `Agradecemos que ya hayas realizado el reinicio. Debido a que el servicio aún no responde, generamos tu reporte técnico *#${ticket.folio}* para revisión en cabina central.`,
         'FALLA_INTERNET',
-        `TICKET_CREADO_SIN_SERVICIO_${ticket.folio}`
+        `TICKET_CREADO_SIN_SERVICIO_${ticket.folio}`,
+        targetJid
       );
       return;
     }
 
     // Caso D: Diagnóstico en SmartOLT
-    await this.flujoReportarFalla(phone, session);
+    await this.flujoReportarFalla(phone, session, targetJid);
   }
 
   /**
-   * Diagnóstico general de falla técnica con SmartOLT
+   * Diagnóstico general de niveles y estado físico de la conexión con SmartOLT
    */
-  private static async flujoReportarFalla(phone: string, session: Session | null): Promise<void> {
+  private static async flujoReportarFalla(phone: string, session: Session | null, targetJid?: string): Promise<void> {
     const onuId = session?.onu_id || (session?.client_id ? `ONU-${session.client_id}` : 'ONU-DEFAULT');
 
-    await this.enviarYLoguear(phone, `🔍 Diagnosticando el estado de tu conexión en tiempo real...`, 'DIAGNOSTICO', 'INICIANDO_SCAN');
+    await this.enviarYLoguear(phone, `🔍 Diagnosticando el estado de tu conexión en tiempo real...`, 'DIAGNOSTICO', 'INICIANDO_SCAN', targetJid);
 
     const estadoOnu = await SmartOLTService.obtenerEstadoONU(onuId);
-    logger.info(`Diagnóstico SmartOLT para ${phone}: ${estadoOnu.status}`);
+    logger.info(`Diagnóstico SmartOLT para ${phone} (ONU: ${onuId}): ${estadoOnu.status}`);
 
     if (estadoOnu.status === 'LOS') {
       const ticket = await WispHubService.crearTicketSoporte(
@@ -480,9 +496,10 @@ export class BotOrchestrator {
 
       await this.enviarYLoguear(
         phone,
-        `🔴 *Falla Física Detectada (Fibra Dañada):*\n\nLa central reporta corte en la señal óptica de tu domicilio.\n\n🎫 *Ticket generado:* *#${ticket.folio}*\nNuestros técnicos en campo ya han sido notificados para la reparación.`,
+        `🔴 *Falla Física Detectada (Fibra Dañada / Foco Rojo):*\n\nLa central detecta corte total de señal óptica en tu domicilio (LOS).\n\n🎫 *Ticket generado:* *#${ticket.folio}*\nNuestros técnicos en campo ya han sido notificados para la reparación.\n\n⚠️ Por favor verifica que el cable delgado de fibra no esté doblado ni desconectado.`,
         'FALLA_INTERNET',
-        `TICKET_SMARTOLT_LOS_${ticket.folio}`
+        `TICKET_SMARTOLT_LOS_${ticket.folio}`,
+        targetJid
       );
       return;
     }
@@ -490,40 +507,49 @@ export class BotOrchestrator {
     if (estadoOnu.status === 'POWER_FAIL') {
       await this.enviarYLoguear(
         phone,
-        `⚡ *Falla de Alimentación:* La OLT detecta que el módem no tiene energía eléctrica. Por favor verifica que el cable de corriente esté conectado y con energía.`,
+        `⚡ *Falla de Alimentación (Módem Sin Luz / Apagado):*\n\nLa central SmartOLT detecta que tu módem no recibe energía eléctrica (Dying Gasp).\n\n🔌 Por favor verifica:\n1. Que el eliminador negro esté bien conectado a la toma de corriente.\n2. Que el botón de encendido trasero esté presionado.\n\nSi la luz ya volvió pero tu módem sigue sin encender, escribe *ASESOR*.`,
         'FALLA_INTERNET',
-        'SMARTOLT_POWER_FAIL'
+        'SMARTOLT_POWER_FAIL',
+        targetJid
       );
       return;
     }
 
     if (estadoOnu.status === 'ONLINE') {
-      const potenciaTexto = estadoOnu.opticalPowerDbm ? ` (${estadoOnu.opticalPowerDbm} dBm - Óptimo)` : '';
+      let metaObj: any = {};
+      try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
+      const planTexto = metaObj.speed_profile ? `\n📦 *Plan contratado:* ${metaObj.speed_profile}` : '';
+      const potenciaTexto = estadoOnu.opticalPowerDbm !== null && estadoOnu.opticalPowerDbm !== undefined
+        ? `\n📶 *Potencia óptica:* ${estadoOnu.opticalPowerDbm} dBm (Nivel óptimo)`
+        : '\n📶 *Potencia óptica:* Normal';
+
       await this.enviarYLoguear(
         phone,
-        `🟢 *Tu módem está en línea con la central${potenciaTexto}.*\n\nSi experimentas lentitud o páginas que no abren, escribe *REINICIAR* para refrescar tu módem de forma remota, o escribe *ASESOR* para comunicarte con un técnico humano.`,
+        `🟢 *Tu módem se encuentra en línea y sincronizado con la central.*${planTexto}${potenciaTexto}\n\nSi experimentas lentitud o páginas que no abren:\n• Escribe *REINICIAR* para refrescar tu módem remotamente.\n• O escribe *ASESOR* para comunicarte con un técnico humano.`,
         'FALLA_INTERNET',
-        'SMARTOLT_ONLINE_OPCION_TEXTO'
+        'SMARTOLT_ONLINE',
+        targetJid
       );
       return;
     }
 
-    // Fallback general
+    // Fallback general (Offline / Desconectado)
     await this.enviarYLoguear(
       phone,
-      `No pudimos obtener una lectura automática de tu equipo en la central. Si deseas que enviemos una señal de reinicio escribe *REINICIAR*, o escribe *ASESOR* para que te atienda un técnico.`,
+      `⚠️ La central reporta que tu equipo se encuentra desconectado (Offline).\n\nPor favor verifica que el módem esté encendido. Si deseas que enviemos un comando de reinicio escribe *REINICIAR*, o escribe *ASESOR* para que te atienda un técnico de *${this.getIspName()}*.`,
       'FALLA_INTERNET',
-      'SMARTOLT_FALLBACK_TEXTO'
+      'SMARTOLT_FALLBACK_TEXTO',
+      targetJid
     );
   }
 
   /**
    * Envía la orden de reinicio remoto a la ONU en SmartOLT
    */
-  private static async flujoReiniciarModem(phone: string, session: Session | null): Promise<void> {
+  private static async flujoReiniciarModem(phone: string, session: Session | null, targetJid?: string): Promise<void> {
     const onuId = session?.onu_id || `ONU-${session?.client_id || 'DEFAULT'}`;
 
-    await this.enviarYLoguear(phone, `⏳ Enviando señal de reinicio a tu módem...`, 'REINICIAR_MODEM', 'ENVIANDO_COMANDO_REBOOT');
+    await this.enviarYLoguear(phone, `⏳ Enviando señal de reinicio a tu módem...`, 'REINICIAR_MODEM', 'ENVIANDO_COMANDO_REBOOT', targetJid);
 
     const resultado = await SmartOLTService.rebootONU(onuId);
 
@@ -532,14 +558,16 @@ export class BotOrchestrator {
         phone,
         `✅ *Comando de reinicio ejecutado con éxito.*\n\nLas luces de tu módem parpadearán y el servicio se reestablecerá por completo en aproximadamente *2 a 3 minutos*. Si tras este tiempo sigues sin internet, escribe *ASESOR*.`,
         'REINICIAR_MODEM',
-        'REBOOT_EXITOSO'
+        'REBOOT_EXITOSO',
+        targetJid
       );
     } else {
       await this.enviarYLoguear(
         phone,
         `⚠️ No fue posible reiniciar tu módem de forma remota. Por favor desconéctalo de la corriente eléctrica por 30 segundos y vuelve a conectarlo.`,
         'REINICIAR_MODEM',
-        'REBOOT_FALLIDO_MANUAL'
+        'REBOOT_FALLIDO_MANUAL',
+        targetJid
       );
     }
   }
@@ -547,13 +575,14 @@ export class BotOrchestrator {
   /**
    * Consulta de facturas y saldos pendientes en WispHub
    */
-  private static async flujoConsultarSaldo(phone: string, session: Session | null): Promise<void> {
+  private static async flujoConsultarSaldo(phone: string, session: Session | null, targetJid?: string): Promise<void> {
     if (!session?.client_id) {
       await this.enviarYLoguear(
         phone,
         `Para consultar tu estado de cuenta requerimos tu número de contrato o nombre. Por favor escribe tu *Nombre completo* o *ID de contrato*:`,
         'CONSULTAR_SALDO',
-        'SOLICITAR_CONTRATO_SALDO'
+        'SOLICITAR_CONTRATO_SALDO',
+        targetJid
       );
       await TursoService.updateStep(phone, 'ESPERANDO_IDENTIFICACION');
       return;
@@ -566,7 +595,8 @@ export class BotOrchestrator {
         phone,
         `🎉 *¡Tu cuenta está al corriente!*\n\nEstimado(a) *${session.client_name || 'Cliente'}*, no tienes facturas pendientes de pago en este momento. ¡Gracias por ser cliente de *${this.getIspName()}*!`,
         'CONSULTAR_SALDO',
-        'CUENTA_AL_CORRIENTE'
+        'CUENTA_AL_CORRIENTE',
+        targetJid
       );
       return;
     }
@@ -585,19 +615,20 @@ export class BotOrchestrator {
 
     textoFacturas += `💰 *Total a pagar: $${totalAdeudo.toFixed(2)} MXN*\n\n_Para reportar tu pago después de realizarlo, puedes enviar la foto de tu comprobante en este chat._`;
 
-    await this.enviarYLoguear(phone, textoFacturas, 'CONSULTAR_SALDO', 'FACTURAS_PENDIENTES_ENVIADAS');
+    await this.enviarYLoguear(phone, textoFacturas, 'CONSULTAR_SALDO', 'FACTURAS_PENDIENTES_ENVIADAS', targetJid);
   }
 
   /**
    * Transferencia a atención con asesor humano
    */
-  private static async flujoHablarAsesor(phone: string, session: Session | null): Promise<void> {
+  private static async flujoHablarAsesor(phone: string, session: Session | null, targetJid?: string): Promise<void> {
     const contactoAsesor = config.isp.soporteHumanoPhone ? ` o puedes comunicarte al: *${config.isp.soporteHumanoPhone}*` : '';
     await this.enviarYLoguear(
       phone,
       `👨‍💼 *Atención Personalizada:*\n\nUn asesor humano de *${this.getIspName()}* ha sido notificado sobre tu solicitud${contactoAsesor}.\n\nEn breve uno de nuestros agentes tomará este chat para darte seguimiento directo. ¡Gracias por tu paciencia!`,
       'HABLAR_HUMANO',
-      'TRANSFERENCIA_ASESOR'
+      'TRANSFERENCIA_ASESOR',
+      targetJid
     );
   }
 

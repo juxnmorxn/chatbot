@@ -200,38 +200,58 @@ export class SmartOLTService {
       const api = this.getApi();
       const response = await api.get(`/onu/get_onu_status/${onuId}`);
       const data = response.data;
+      logger.info(`Respuesta SmartOLT get_onu_status para ${onuId}:`, JSON.stringify(data));
 
-      const raw = String(data?.status || data?.onu_status || '').toLowerCase();
-      const rxPower = data?.rx_power ? parseFloat(data.rx_power) : null;
+      // Importante: data.status es booleano (true/false) de éxito HTTP en SmartOLT.
+      // El estado del módem está en data.onu_status (ej. "Online", "LOS", "Power fail", "Offline").
+      const onuStatus = String(data?.onu_status || (typeof data?.status === 'string' ? data.status : '')).toLowerCase();
 
       let result: SmartOltStatusResult;
 
-      if (raw.includes('los') || raw.includes('loss of signal') || raw.includes('fiber broken')) {
+      if (onuStatus.includes('los') || onuStatus.includes('loss of signal') || onuStatus.includes('fiber broken')) {
         result = {
           status: 'LOS',
-          rawStatus: data?.status || 'LOS',
+          rawStatus: data?.onu_status || 'LOS',
           opticalPowerDbm: null,
           descripcion: 'Corte de señal óptica (Fibra rota o desconectada de la caja)',
         };
-      } else if (raw.includes('power fail') || raw.includes('dying gasp') || raw.includes('power down')) {
+      } else if (onuStatus.includes('power fail') || onuStatus.includes('dying gasp') || onuStatus.includes('power down')) {
         result = {
           status: 'POWER_FAIL',
-          rawStatus: data?.status || 'Power fail',
+          rawStatus: data?.onu_status || 'Power fail',
           opticalPowerDbm: null,
           descripcion: 'Pérdida de energía eléctrica en el domicilio (Equipo apagado)',
         };
-      } else if (raw.includes('online') || raw.includes('up') || raw.includes('working')) {
+      } else if (onuStatus.includes('online') || onuStatus.includes('up') || onuStatus.includes('working')) {
+        // Consultar niveles de señal óptica reales en SmartOLT
+        let opticalPower: number | null = null;
+        let signalQuality = '';
+        try {
+          const sigRes = await api.get(`/onu/get_onu_signal/${onuId}`);
+          logger.info(`Respuesta SmartOLT get_onu_signal para ${onuId}:`, JSON.stringify(sigRes.data));
+          const sigData = sigRes.data;
+          signalQuality = sigData?.onu_signal || '';
+          const rawSignal = sigData?.onu_signal_1490 || sigData?.onu_signal_value || '';
+          const matchDbm = String(rawSignal).match(/([-+]?[0-9]+(?:\.[0-9]+)?)/);
+          if (matchDbm && matchDbm[1]) {
+            opticalPower = parseFloat(matchDbm[1]);
+          }
+        } catch (sigErr: any) {
+          logger.warn(`No se pudo obtener señal óptica detallada para ${onuId}:`, sigErr?.message || sigErr);
+        }
+
+        const signalText = opticalPower !== null ? `${opticalPower} dBm (${signalQuality || 'Óptimo'})` : 'Óptimo';
         result = {
           status: 'ONLINE',
-          rawStatus: data?.status || 'Online',
-          opticalPowerDbm: rxPower,
-          uptime: data?.uptime || '',
-          descripcion: `Equipo en línea. Nivel de señal óptica: ${rxPower !== null ? `${rxPower} dBm` : 'Normal'}`,
+          rawStatus: data?.onu_status || 'Online',
+          opticalPowerDbm: opticalPower,
+          uptime: data?.last_status_change ? `Desde ${data.last_status_change}` : (data?.uptime || ''),
+          descripcion: `Equipo en línea. Nivel de señal óptica: ${signalText}`,
         };
       } else {
         result = {
           status: 'OFFLINE',
-          rawStatus: data?.status || 'Offline',
+          rawStatus: data?.onu_status || 'Offline',
           opticalPowerDbm: null,
           descripcion: 'Equipo desconectado o fuera de línea.',
         };

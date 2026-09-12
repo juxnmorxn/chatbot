@@ -7,6 +7,7 @@ const logger = new Logger('GroqService');
 
 export type BotIntent =
   | 'SALUDO'
+  | 'CONSULTAR_NIVELES'
   | 'CONSULTAR_SALDO'
   | 'REPORTAR_PAGO'
   | 'FALLA_INTERNET'
@@ -144,6 +145,7 @@ NUNCA respondas con texto conversacional. NUNCA respondas al usuario directament
 
 CATEGORÍAS DE INTENCIÓN PERMITIDAS (Elige EXACTAMENTE una de esta lista):
 - "SALUDO": Cualquier saludo ("hola", "buenas tardes", "buen dia", "hola qué tal", "hola me pueden ayudar", "saludos", "hola disculpe").
+- "CONSULTAR_NIVELES": Preguntas sobre niveles de señal, potencia óptica, dBm, potencia de luz, estado del módem, cómo está mi señal, cómo está mi línea, revisar conexión, checar línea ("cuáles son mis niveles", "cómo está mi señal", "revisa mi conexión", "mis niveles").
 - "CONSULTAR_SALDO": Preguntas sobre saldo pendiente, recibo, factura, cuánto debo, fecha límite de pago o dónde pagar.
 - "REPORTAR_PAGO": Mensajes donde el cliente indica que ya realizó su pago, transfirió dinero o envía comprobante.
 - "FALLA_INTERNET": Cualquier reporte de falla de internet, lentitud, intermitencia, desconexión, "no tengo internet", "no da internet", "sigue sin internet", "se cayó el servicio", páginas que no cargan o luces rojas.
