@@ -22,6 +22,14 @@ export interface AppSettings {
   // ISP
   ispName?: string;
   soporteHumanoPhone?: string;
+  // Pagos y Cobranza
+  paymentBank?: string;
+  paymentAccount?: string;
+  paymentBeneficiary?: string;
+  paymentNotes?: string;
+  // Horario Laboral de Oficina
+  workHoursStart?: string;
+  workHoursEnd?: string;
 }
 
 export class SettingsService {
@@ -120,6 +128,12 @@ export class SettingsService {
       smartoltApiKey: this.get('SMARTOLT_API_KEY', 'SMARTOLT_API_KEY', ''),
       ispName: this.get('ISP_NAME', 'ISP_NAME', 'CloudWareMx'),
       soporteHumanoPhone: this.get('SOPORTE_HUMANO_PHONE', 'SOPORTE_HUMANO_PHONE', ''),
+      paymentBank: this.get('PAYMENT_BANK', 'PAYMENT_BANK', ''),
+      paymentAccount: this.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', ''),
+      paymentBeneficiary: this.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', ''),
+      paymentNotes: this.get('PAYMENT_NOTES', 'PAYMENT_NOTES', ''),
+      workHoursStart: this.get('WORK_HOURS_START', 'WORK_HOURS_START', '09:00'),
+      workHoursEnd: this.get('WORK_HOURS_END', 'WORK_HOURS_END', '18:00'),
     };
   }
 

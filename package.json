@@ -8,7 +8,8 @@
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
     "test:turso": "tsx src/scripts/test-turso.ts",
-    "test:groq": "tsx src/scripts/test-groq.ts"
+    "test:groq": "tsx src/scripts/test-groq.ts",
+    "test:tickets": "tsx src/scripts/test-tickets.ts"
   },
   "keywords": [
     "whatsapp",

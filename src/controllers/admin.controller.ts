@@ -201,4 +201,57 @@ export class AdminController {
       res.status(500).json({ success: false, error: error?.message || error });
     }
   }
+
+  /**
+   * Obtiene la lista de tickets de soporte
+   */
+  static async getTickets(req: Request, res: Response): Promise<void> {
+    try {
+      const status = req.query.status as string | undefined;
+      const limit = parseInt(req.query.limit as string, 10) || 60;
+      const tickets = await TursoService.getTickets(status, limit);
+      res.json({ success: true, tickets });
+    } catch (error: any) {
+      logger.error('Error al obtener tickets:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Actualiza el estatus y notas de un ticket
+   */
+  static async updateTicketStatus(req: Request, res: Response): Promise<void> {
+    try {
+      const folio = String(req.params.folio || '');
+      const { status, notes } = req.body;
+
+      if (!status || !['ABIERTO', 'EN_PROCESO', 'RESUELTO'].includes(status)) {
+        res.status(400).json({ success: false, error: 'Estatus inválido. Valores permitidos: ABIERTO, EN_PROCESO, RESUELTO' });
+        return;
+      }
+
+      const ok = await TursoService.updateTicketStatus(folio, status, notes);
+      if (ok) {
+        res.json({ success: true, message: `Ticket ${folio} actualizado a ${status}` });
+      } else {
+        res.status(404).json({ success: false, error: 'Ticket no encontrado o no modificado' });
+      }
+    } catch (error: any) {
+      logger.error('Error al actualizar ticket:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Obtiene métricas resumidas de tickets
+   */
+  static async getTicketStats(_req: Request, res: Response): Promise<void> {
+    try {
+      const stats = await TursoService.getTicketStats();
+      res.json({ success: true, stats });
+    } catch (error: any) {
+      logger.error('Error al obtener stats de tickets:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
 }

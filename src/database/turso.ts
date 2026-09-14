@@ -78,7 +78,32 @@ export async function initTursoDatabase(): Promise<void> {
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_onus_sn ON smartolt_onus(sn);`);
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_onus_phone ON smartolt_onus(phone);`);
 
-    logger.info('Tablas "sessions", "settings", "conversation_logs" y "smartolt_onus" listas en Turso.');
+    // Tabla de Tickets para modificaciones manuales en SmartOLT y seguimiento
+    await client.execute(`
+      CREATE TABLE IF NOT EXISTS tickets (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        folio TEXT UNIQUE NOT NULL,
+        phone TEXT NOT NULL,
+        client_name TEXT,
+        onu_id TEXT,
+        issue_summary TEXT NOT NULL,
+        checks_performed TEXT,
+        has_photo INTEGER DEFAULT 0,
+        has_speedtest INTEGER DEFAULT 0,
+        all_devices INTEGER DEFAULT 0,
+        status TEXT DEFAULT 'ABIERTO',
+        is_out_of_hours INTEGER DEFAULT 0,
+        notes TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        resolved_at TEXT
+      );
+    `);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_tickets_phone ON tickets(phone);`);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status);`);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_tickets_created_at ON tickets(created_at);`);
+
+    logger.info('Tablas "sessions", "settings", "conversation_logs", "smartolt_onus" y "tickets" listas en Turso.');
   } catch (error: any) {
     logger.error('Error al inicializar Turso DB:', error?.message || error);
     throw error;

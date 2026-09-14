@@ -348,6 +348,8 @@ export function getAdminDashboardHtml(): string {
     .pill-green { background: rgba(16, 185, 129, 0.2); color: #34d399; }
     .pill-red { background: rgba(239, 68, 68, 0.2); color: #f87171; }
     .pill-blue { background: rgba(99, 102, 241, 0.2); color: #818cf8; }
+    .pill-amber { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+    .pill-purple { background: rgba(168, 85, 247, 0.2); color: #c084fc; }
 
     /* Toast */
     #toast {
@@ -391,8 +393,9 @@ export function getAdminDashboardHtml(): string {
 
     <!-- Navigation Tabs -->
     <div class="nav-tabs">
-      <button class="nav-tab active" onclick="switchTab('apis')">🔑 Conexión de APIs</button>
+      <button class="nav-tab active" onclick="switchTab('apis')">🔑 Conexión y Pagos</button>
       <button class="nav-tab" onclick="switchTab('whatsapp')">📲 Vincular WhatsApp</button>
+      <button class="nav-tab" onclick="switchTab('tickets')">🎫 Mesa de Tickets</button>
       <button class="nav-tab" onclick="switchTab('sessions')">👥 Sesiones en Turso</button>
       <button class="nav-tab" onclick="switchTab('logs')">📜 Historial y Problemas</button>
       <button class="nav-tab" onclick="switchTab('tester')">🧪 Simulador de Bot</button>
@@ -525,6 +528,54 @@ export function getAdminDashboardHtml(): string {
             </div>
           </div>
         </div>
+
+        <!-- Payment & Schedule Card -->
+        <div class="card" style="grid-column: 1 / -1;">
+          <div class="card-header">
+            <div class="card-title">💳 Datos Bancarios y Horarios de Atención</div>
+            <span class="card-badge">Cobranza y Turnos</span>
+          </div>
+
+          <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 16px;">
+            Estos datos bancarios se enviarán automáticamente a los clientes que soliciten pagar o consulten saldo. El bot les indicará colocar su nombre como concepto y mandar captura de pantalla de su comprobante.
+          </p>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 16px;">
+            <div class="form-group">
+              <label>Banco Receptor</label>
+              <input type="text" id="paymentBank" placeholder="Ej: BBVA México / Banco Azteca / Santander">
+            </div>
+
+            <div class="form-group">
+              <label>Número de Cuenta / CLABE Interbancaria</label>
+              <input type="text" id="paymentAccount" class="mono" placeholder="Ej: 012 180 0000000000 00">
+            </div>
+
+            <div class="form-group">
+              <label>Nombre del Titular / Beneficiario</label>
+              <input type="text" id="paymentBeneficiary" placeholder="Ej: CloudWare Telecomunicaciones S.A.">
+            </div>
+
+            <div class="form-group">
+              <label>Instrucciones Adicionales de Pago</label>
+              <input type="text" id="paymentNotes" placeholder="Ej: Transferencia SPEI o depósito en tiendas OXXO">
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding-top: 14px; border-top: 1px solid var(--card-border);">
+            <div class="form-group">
+              <label>⏰ Inicio de Horario Laboral de Oficina (Turno)</label>
+              <input type="time" id="workHoursStart" value="09:00">
+              <small style="color: var(--text-muted); font-size: 11px;">Los reportes nocturnos o antes de esta hora se agendan para atenderse a las 9:00 AM.</small>
+            </div>
+
+            <div class="form-group">
+              <label>⏰ Fin de Horario Laboral de Oficina</label>
+              <input type="time" id="workHoursEnd" value="18:00">
+              <small style="color: var(--text-muted); font-size: 11px;">Hora en que concluye el turno regular de atención en oficina.</small>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -563,6 +614,68 @@ export function getAdminDashboardHtml(): string {
             <li>Toca en <b>Dispositivos vinculados</b> y luego en <b>Vincular un dispositivo</b>.</li>
             <li>Apunta tu cámara al código QR de arriba para sincronizarlo.</li>
           </ol>
+        </div>
+    <!-- TAB: Mesa de Tickets -->
+    <div id="tab-tickets" class="tab-pane">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">🎫 Mesa de Tickets y Reportes Técnicos</div>
+            <p style="color: var(--text-muted); font-size: 13px; margin-top: 4px;">
+              Reportes generados por el bot tras realizar las comprobaciones automáticas con el cliente. Permite al personal aplicar ajustes manuales en SmartOLT y dar seguimiento.
+            </p>
+          </div>
+          <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+            <select id="ticketFilterStatus" onchange="loadTickets()" style="background: rgba(255,255,255,0.06); color: var(--text-main); border: 1px solid var(--card-border); border-radius: 8px; padding: 6px 12px; font-size: 13px;">
+              <option value="TODOS">Todos los Estados</option>
+              <option value="ABIERTO" selected>Solo Abiertos / Pendientes</option>
+              <option value="EN_PROCESO">En Proceso</option>
+              <option value="RESUELTO">Resueltos</option>
+            </select>
+            <button class="btn btn-secondary btn-test" onclick="loadTickets()">🔄 Recargar</button>
+          </div>
+        </div>
+
+        <!-- Metric Stat Cards -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 20px;">
+          <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--card-border); border-radius: 12px; padding: 14px;">
+            <div style="color: var(--text-muted); font-size: 12px; font-weight: 500;">Total Histórico</div>
+            <div id="statTotalTickets" style="font-size: 24px; font-weight: 700; color: #fff; margin-top: 4px;">0</div>
+          </div>
+          <div style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 12px; padding: 14px;">
+            <div style="color: #f87171; font-size: 12px; font-weight: 500;">Abiertos / Por Atender</div>
+            <div id="statAbiertosTickets" style="font-size: 24px; font-weight: 700; color: #ef4444; margin-top: 4px;">0</div>
+          </div>
+          <div style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.2); border-radius: 12px; padding: 14px;">
+            <div style="color: #fbbf24; font-size: 12px; font-weight: 500;">⏰ Fuera de Horario (Noche/Madrugada)</div>
+            <div id="statFueraHorarioTickets" style="font-size: 24px; font-weight: 700; color: #f59e0b; margin-top: 4px;">0</div>
+          </div>
+          <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 12px; padding: 14px;">
+            <div style="color: #34d399; font-size: 12px; font-weight: 500;">Resueltos</div>
+            <div id="statResueltosTickets" style="font-size: 24px; font-weight: 700; color: #10b981; margin-top: 4px;">0</div>
+          </div>
+        </div>
+
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Folio</th>
+                <th>Fecha / Hora</th>
+                <th>Teléfono</th>
+                <th>Cliente / ONU</th>
+                <th>Problema Reportado</th>
+                <th>Comprobaciones</th>
+                <th>Estado</th>
+                <th>Acción / Notas</th>
+              </tr>
+            </thead>
+            <tbody id="ticketsTableBody">
+              <tr>
+                <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 24px;">Cargando tickets desde Turso DB...</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -688,6 +801,9 @@ export function getAdminDashboardHtml(): string {
       if (tabId === 'whatsapp') {
         loadWhatsAppStatus();
       }
+      if (tabId === 'tickets') {
+        loadTickets();
+      }
       if (tabId === 'sessions') {
         loadSessions();
       }
@@ -696,54 +812,91 @@ export function getAdminDashboardHtml(): string {
       }
     }
 
-    async function loadWhatsAppStatus() {
-      const statusBox = document.getElementById('whatsappStatusBox');
-      const qrBox = document.getElementById('qrContainer');
-
-      statusBox.innerHTML = '<div style="display: inline-block; padding: 8px 16px; border-radius: 20px; font-weight: 600; font-size: 14px; background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3);">⏳ Consultando estado en Evolution API...</div>';
-
+    async function loadTickets() {
+      const tbody = document.getElementById('ticketsTableBody');
+      const filter = document.getElementById('ticketFilterStatus')?.value || 'TODOS';
       try {
-        const res = await fetch('/api/whatsapp/status');
-        const data = await res.json();
+        const [resTickets, resStats] = await Promise.all([
+          fetch('/api/tickets?status=' + encodeURIComponent(filter)),
+          fetch('/api/tickets/stats')
+        ]);
+        const dataTickets = await resTickets.json();
+        const dataStats = await resStats.json();
 
-        if (data.state === 'open') {
-          statusBox.innerHTML = '<div style="display: inline-block; padding: 8px 16px; border-radius: 20px; font-weight: 600; font-size: 14px; background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3);">🟢 WhatsApp Conectado y Operativo</div>';
-          qrBox.innerHTML = '<div style="width: 260px; height: 260px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #10b981; font-size: 14px; font-weight: 600;"><span style="font-size: 48px; margin-bottom: 12px;">✅</span>¡Instancia Vinculada!<br><span style="color: #6b7280; font-weight: normal; font-size: 12px; margin-top: 6px;">Listo para enviar y recibir mensajes</span></div>';
-        } else {
-          statusBox.innerHTML = '<div style="display: inline-block; padding: 8px 16px; border-radius: 20px; font-weight: 600; font-size: 14px; background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3);">🟡 Desconectado (Escanea el QR)</div>';
-          if (data.qr) {
-            qrBox.innerHTML = '<img src="' + data.qr + '" alt="QR WhatsApp" style="width: 260px; height: 260px; display: block; border-radius: 8px;">';
-          } else {
-            qrBox.innerHTML = '<div style="width: 260px; height: 260px; display: flex; align-items: center; justify-content: center; color: #6b7280; font-size: 13px;">No se pudo cargar el QR. Haz clic en Actualizar QR.</div>';
+        if (dataStats.success && dataStats.stats) {
+          const st = dataStats.stats;
+          document.getElementById('statTotalTickets').innerText = st.total || 0;
+          document.getElementById('statAbiertosTickets').innerText = st.abiertos || 0;
+          document.getElementById('statFueraHorarioTickets').innerText = st.fueraHorario || 0;
+          document.getElementById('statResueltosTickets').innerText = st.resueltos || 0;
+        }
+
+        if (dataTickets.success && dataTickets.tickets) {
+          if (dataTickets.tickets.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding: 24px; color: var(--text-muted);">No hay tickets registrados con el filtro actual.</td></tr>';
+            return;
           }
+
+          tbody.innerHTML = dataTickets.tickets.map(t => {
+            const dateStr = t.created_at ? new Date(t.created_at).toLocaleString('es-MX', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-';
+            
+            let statusBadge = '<span class="pill pill-red">🔴 Abierto</span>';
+            if (t.status === 'EN_PROCESO') statusBadge = '<span class="pill pill-amber">🟡 En Proceso</span>';
+            if (t.status === 'RESUELTO') statusBadge = '<span class="pill pill-green">🟢 Resuelto</span>';
+
+            const outBadge = t.is_out_of_hours === 1 ? ' <span class="pill pill-amber" title="Reportado fuera de horario">⏰ 9:00 AM</span>' : '';
+
+            let checksBadges = '';
+            if (t.has_photo === 1) checksBadges += '<span class="pill pill-blue" style="margin-right:4px;">📸 Foto Módem</span>';
+            if (t.has_speedtest === 1) checksBadges += '<span class="pill pill-purple" style="margin-right:4px;">🚀 Speedtest</span>';
+            if (t.all_devices === 1) checksBadges += '<span class="pill pill-amber">📶 Multidispositivo</span>';
+            if (!checksBadges) checksBadges = '<span style="color:var(--text-muted); font-size:11px;">Módem/Luces revisados</span>';
+
+            const clientText = t.client_name ? '<b>' + t.client_name + '</b>' : '<em style="color:var(--text-muted);">No identificado</em>';
+            const onuText = t.onu_id ? '<br><small style="font-family:var(--font-mono); color:var(--text-muted);">' + t.onu_id + '</small>' : '';
+
+            return '<tr>' +
+              '<td style="font-family: var(--font-mono); font-weight: 700; color: #38bdf8;">' + t.folio + '</td>' +
+              '<td style="color: var(--text-muted); font-size: 12px; white-space: nowrap;">' + dateStr + outBadge + '</td>' +
+              '<td style="font-family: var(--font-mono); font-weight: 600;">' + t.phone + '</td>' +
+              '<td>' + clientText + onuText + '</td>' +
+              '<td style="max-width: 250px; font-size: 13px; word-break: break-word;">' + (t.issue_summary || '') + '</td>' +
+              '<td style="font-size: 11px;">' + checksBadges + '</td>' +
+              '<td>' + statusBadge + '</td>' +
+              '<td style="white-space: nowrap;">' +
+                '<select onchange="updateTicketStatusAction(\'' + t.folio + '\', this.value)" style="background: rgba(255,255,255,0.06); color: var(--text-main); border: 1px solid var(--card-border); border-radius: 6px; padding: 4px 8px; font-size: 12px;">' +
+                  '<option value="" disabled selected>Cambiar Estado...</option>' +
+                  '<option value="ABIERTO">🔴 Marcar Abierto</option>' +
+                  '<option value="EN_PROCESO">🟡 En Atención / Ajuste OLT</option>' +
+                  '<option value="RESUELTO">🟢 Marcar Resuelto</option>' +
+                '</select>' +
+              '</td>' +
+            '</tr>';
+          }).join('');
         }
       } catch (err) {
-        statusBox.innerHTML = '<div style="display: inline-block; padding: 8px 16px; border-radius: 20px; font-weight: 600; font-size: 14px; background: rgba(239, 68, 68, 0.15); color: #ef4444;">Error al conectar con Evolution API</div>';
+        tbody.innerHTML = '<tr><td colspan="8" style="color: red; text-align:center;">Error al cargar tickets desde Turso</td></tr>';
       }
     }
 
-    async function disconnectWhatsApp() {
-      if (!confirm('¿Estás seguro de que deseas desvincular la sesión actual de WhatsApp? Se generará un nuevo QR para volver a vincular.')) return;
+    async function updateTicketStatusAction(folio, status) {
+      if (!status) return;
       try {
-        const res = await fetch('/api/whatsapp/disconnect', { method: 'POST' });
+        const res = await fetch('/api/tickets/' + folio + '/status', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status })
+        });
         const data = await res.json();
         if (data.success) {
-          showToast('Sesión desvinculada. Generando nuevo QR...');
-          setTimeout(loadWhatsAppStatus, 1500);
+          showToast('✅ Ticket ' + folio + ' actualizado');
+          loadTickets();
         } else {
           showToast('Error: ' + data.error, true);
         }
       } catch (err) {
-        showToast('Error al desvincular: ' + err.message, true);
+        showToast('Error al actualizar ticket', true);
       }
-    }
-
-    function showToast(msg, isError = false) {
-      const t = document.getElementById('toast');
-      t.innerText = msg;
-      t.style.background = isError ? '#ef4444' : '#10b981';
-      t.style.display = 'block';
-      setTimeout(() => { t.style.display = 'none'; }, 3500);
     }
 
     async function loadSettings() {
@@ -763,6 +916,12 @@ export function getAdminDashboardHtml(): string {
           document.getElementById('smartoltApiKey').value = s.smartoltApiKey || '';
           document.getElementById('ispName').value = s.ispName || '';
           document.getElementById('soporteHumanoPhone').value = s.soporteHumanoPhone || '';
+          document.getElementById('paymentBank').value = s.paymentBank || '';
+          document.getElementById('paymentAccount').value = s.paymentAccount || '';
+          document.getElementById('paymentBeneficiary').value = s.paymentBeneficiary || '';
+          document.getElementById('paymentNotes').value = s.paymentNotes || '';
+          document.getElementById('workHoursStart').value = s.workHoursStart || '09:00';
+          document.getElementById('workHoursEnd').value = s.workHoursEnd || '18:00';
           document.getElementById('headerIspName').innerText = s.ispName || 'CloudWareMx';
         }
       } catch (err) {
@@ -783,6 +942,12 @@ export function getAdminDashboardHtml(): string {
         SMARTOLT_API_KEY: document.getElementById('smartoltApiKey').value,
         ISP_NAME: document.getElementById('ispName').value,
         SOPORTE_HUMANO_PHONE: document.getElementById('soporteHumanoPhone').value,
+        PAYMENT_BANK: document.getElementById('paymentBank').value,
+        PAYMENT_ACCOUNT: document.getElementById('paymentAccount').value,
+        PAYMENT_BENEFICIARY: document.getElementById('paymentBeneficiary').value,
+        PAYMENT_NOTES: document.getElementById('paymentNotes').value,
+        WORK_HOURS_START: document.getElementById('workHoursStart').value,
+        WORK_HOURS_END: document.getElementById('workHoursEnd').value,
       };
 
       try {

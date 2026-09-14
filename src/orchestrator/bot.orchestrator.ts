@@ -31,6 +31,58 @@ export class BotOrchestrator {
   }
 
   /**
+   * Determina si la hora actual está fuera del horario laboral de oficina (por defecto 9:00 AM a 6:00 PM)
+   */
+  private static isFueraDeHorario(): boolean {
+    try {
+      const startStr = SettingsService.get('WORK_HOURS_START', 'WORK_HOURS_START', '09:00');
+      const endStr = SettingsService.get('WORK_HOURS_END', 'WORK_HOURS_END', '18:00');
+      const [startH, startM] = startStr.split(':').map(n => parseInt(n, 10));
+      const [endH, endM] = endStr.split(':').map(n => parseInt(n, 10));
+
+      const now = new Date();
+      const currentH = now.getHours();
+      const currentM = now.getMinutes();
+
+      const cur = currentH * 60 + currentM;
+      const start = (isNaN(startH) ? 9 : startH) * 60 + (isNaN(startM) ? 0 : startM);
+      const end = (isNaN(endH) ? 18 : endH) * 60 + (isNaN(endM) ? 0 : endM);
+
+      return cur < start || cur >= end;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Genera el texto con los datos bancarios oficiales configurados en el panel
+   */
+  private static getFichaBancaria(session: Session | null): string {
+    const bank = SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK', '');
+    const account = SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', '');
+    const beneficiary = SettingsService.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', '');
+    const notes = SettingsService.get('PAYMENT_NOTES', 'PAYMENT_NOTES', '');
+    const clientName = session?.client_name || 'tu nombre completo';
+
+    let txt = `\n💳 *Datos de Pago y Transferencia Bancaria - ${this.getIspName()}*\n\n`;
+    if (bank) txt += `• *Banco:* ${bank}\n`;
+    if (account) txt += `• *Número de Cuenta / CLABE:* ${account}\n`;
+    if (beneficiary) txt += `• *Titular / Beneficiario:* ${beneficiary}\n`;
+    if (notes) txt += `• *Información adicional:* ${notes}\n`;
+
+    if (!bank && !account) {
+      txt += `• *Nota:* Puedes solicitar los datos bancarios vigentes con nuestro personal de cobranza.\n`;
+    }
+
+    txt += `\n📌 *CONCEPTO O MOTIVO DE PAGO:*`;
+    txt += `\n👉 Por favor coloca tu nombre: *${clientName}*\n`;
+    txt += `\n📸 *Sugerencia importante:*`;
+    txt += `\nUna vez realizada tu transferencia o pago, por favor envía la *captura de pantalla o foto de tu comprobante* con tu nombre visible en este mismo chat para validarlo de inmediato en el sistema. ¡Muchas gracias!`;
+
+    return txt;
+  }
+
+  /**
    * Envía un mensaje y lo registra automáticamente en la tabla conversation_logs de Turso
    */
   private static async enviarYLoguear(
@@ -109,6 +161,12 @@ export class BotOrchestrator {
       return;
     }
 
+    // Si el cliente está en espera de responder a las comprobaciones guiadas de soporte técnico
+    if (session?.step === 'COMPROBACION_SOPORTE') {
+      await this.procesarRespuestaComprobacion(phone, rawText, event, session, targetJid);
+      return;
+    }
+
     // Si el cliente está en espera de seleccionar uno de sus múltiples servicios
     if (session?.step === 'ESPERANDO_SELECCION_SERVICIO') {
       await this.procesarSeleccionServicio(phone, rawText, session, targetJid);
@@ -156,7 +214,25 @@ export class BotOrchestrator {
     try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
 
     const lastInteractionMs = session?.last_interaction ? new Date(session.last_interaction).getTime() : 0;
-    const minutosInactividad = lastInteractionMs > 0 ? (Date.now() - lastInteractionMs) / (1000 * 60) : 999;
+    const minutosInactividad = lastInteractionMs > 0 ? (Date.now() - lastInteractionMs) / (1000 * 60) : 9999;
+
+    // REGLA DE REINICIO CADA 24 HORAS (1440 minutos):
+    // Si han transcurrido 24 horas o más desde la última interacción, se reinicia el flujo limpiamente
+    // pero preservando la identidad del cliente (nombre, onu_id, client_id).
+    if (minutosInactividad >= 1440) {
+      logger.info(`Sesión de ${phone} superó las 24 horas de inactividad (${Math.round(minutosInactividad / 60)}h). Reiniciando contexto conversacional limpiamente.`);
+      session = await TursoService.upsertSession({
+        phone,
+        step: session?.client_name ? 'ESPERANDO_PROBLEMA' : 'INICIO',
+        metadata: JSON.stringify({
+          ...metaObj,
+          comprobacionIniciada: null,
+          resumenFalla: null,
+          consultaFinalizada: false,
+        }),
+      });
+      metaObj = JSON.parse(session?.metadata || '{}');
+    }
     const consultaTerminada = metaObj.consultaFinalizada === true || session?.step === 'CONSULTA_FINALIZADA';
     const serviciosRegistrados = Array.isArray(metaObj.registeredServices) && metaObj.registeredServices.length > 1
       ? metaObj.registeredServices
@@ -304,7 +380,7 @@ export class BotOrchestrator {
 
     // Si es una acción específica de telecomunicaciones (Niveles, Falla, Saldo, Reboot, Asesor)
     if (['CONSULTAR_NIVELES', 'FALLA_INTERNET', 'REINICIAR_MODEM', 'CONSULTAR_SALDO', 'REPORTAR_PAGO', 'HABLAR_HUMANO', 'CANCELAR_SUSCRIPCION'].includes(clasificacion.intencion)) {
-      await this.ejecutarIntencion(phone, clasificacion, session, rawText, targetJid);
+      await this.ejecutarIntencion(phone, clasificacion, session, rawText, targetJid, event);
       return;
     }
 
@@ -375,7 +451,8 @@ export class BotOrchestrator {
     c: GroqClassificationResult,
     session: Session | null,
     mensajeOriginal: string,
-    targetJid?: string
+    targetJid?: string,
+    event?: IncomingMessageEvent
   ): Promise<void> {
     switch (c.intencion) {
       case 'CONSULTAR_NIVELES':
@@ -412,13 +489,7 @@ export class BotOrchestrator {
         break;
 
       case 'REPORTAR_PAGO':
-        await this.enviarYLoguear(
-          phone,
-          `¡Gracias por tu pago! 📸 Para registrarlo de inmediato, por favor envía la *foto de tu comprobante o ficha de depósito* por este mismo chat y nuestro equipo de cobranza lo validará en el sistema.`,
-          'REPORTAR_PAGO',
-          'SOLICITUD_COMPROBANTE',
-          targetJid
-        );
+        await this.flujoReportarPago(phone, mensajeOriginal, event, session, targetJid);
         break;
 
       case 'FALLA_INTERNET':
@@ -487,7 +558,43 @@ export class BotOrchestrator {
   }
 
   /**
-   * Flujo de Falla Técnica Inteligente combinando Groq + SmartOLT + WispHub
+   * Flujo de Reportar Pago: Entrega la ficha bancaria configurada o confirma recepción de comprobante
+   */
+  private static async flujoReportarPago(
+    phone: string,
+    rawText: string,
+    event: IncomingMessageEvent | undefined,
+    session: Session | null,
+    targetJid?: string
+  ): Promise<void> {
+    if (event?.isMedia) {
+      const nombre = session?.client_name ? ` a nombre de *${session.client_name}*` : '';
+      await this.enviarYLoguear(
+        phone,
+        `¡Muchas gracias por tu comprobante! 📸 Hemos recibido la captura de tu pago${nombre}.\n\nNuestro equipo administrativo validará la transferencia en el sistema para aplicar tu abono a la brevedad. ¡Que tengas un excelente día!`,
+        'REPORTAR_PAGO',
+        'COMPROBANTE_RECIBIDO',
+        targetJid
+      );
+      await this.marcarConsultaFinalizada(phone, session);
+      return;
+    }
+
+    // Si envió texto solicitando datos o información de pago
+    const ficha = this.getFichaBancaria(session);
+    await this.enviarYLoguear(
+      phone,
+      ficha,
+      'REPORTAR_PAGO',
+      'FICHA_PAGO_ENVIADA',
+      targetJid
+    );
+  }
+
+  /**
+   * Flujo de Asistencia y Comprobaciones Técnicas Amigables
+   * Recopila información del cliente (módem encendido, luces, prueba multidispositivo, fotos y speedtest)
+   * sin permitir manipulaciones complejas de red ni solicitar datos técnicos confusos.
    */
   private static async flujoFallaInteligente(
     phone: string,
@@ -497,34 +604,10 @@ export class BotOrchestrator {
   ): Promise<void> {
     // Si el cliente no está registrado aún en el sistema pero ya reportó un problema de internet
     if (!session?.client_id && !session?.client_name) {
-      if (c.foco_rojo) {
-        await this.enviarYLoguear(
-          phone,
-          `⚠️ *Alerta de Foco Rojo (LOS / Fibra Óptica):*\n\nDetectamos que tu módem no recibe señal de luz por posible corte o daño en el cable de fibra óptica.\n\nPara poder generar tu reporte técnico y asignar a la cuadrilla de *${this.getIspName()}*, ¿podrías indicarme tu *Nombre completo* o *Número de contrato*?`,
-          'FALLA_INTERNET',
-          'SOLICITAR_NOMBRE_PARA_TICKET',
-          targetJid
-        );
-        await TursoService.updateStep(phone, 'ESPERANDO_IDENTIFICACION');
-        return;
-      }
-
-      if (c.equipo_apagado) {
-        await this.enviarYLoguear(
-          phone,
-          `🔌 *Equipo Apagado / Falla de Energía:*\n\n1. Verifica que el eliminador esté bien conectado a la corriente y al módem.\n2. Presiona el botón de encendido en la parte trasera.\n\nSi no enciende ninguna luz, por favor indícame tu *Nombre completo* o *Número de contrato* para enviar a un técnico de *${this.getIspName()}*.`,
-          'FALLA_INTERNET',
-          'GUIA_EQUIPO_APAGADO',
-          targetJid
-        );
-        await TursoService.updateStep(phone, 'ESPERANDO_IDENTIFICACION');
-        return;
-      }
-
       const queja = c.resumen_queja ? ` sobre: _"${c.resumen_queja}"_` : '';
       await this.enviarYLoguear(
         phone,
-        `Entendido tu reporte${queja}. Veo que presentas problemas con tu conexión de internet.\n\nPara poder verificar tu línea en la central y darte solución inmediata, ¿me indicas tu *Nombre completo* o *Número de contrato*?`,
+        `Entendido tu reporte${queja}. Veo que presentas inconvenientes con tu conexión de internet.\n\nPara poder verificar tu línea y asignarte asistencia técnica personalizada, ¿podrías indicarme tu *Nombre completo* o número de contrato?`,
         'FALLA_INTERNET',
         'SOLICITAR_NOMBRE_PARA_DIAGNOSTICO',
         targetJid
@@ -533,63 +616,117 @@ export class BotOrchestrator {
       return;
     }
 
-    const clientId = session?.client_id || 'PENDIENTE';
+    // Cliente identificado: Enviamos el mensaje amigable de comprobación guiada
+    const nombre = session.client_name ? ` *${session.client_name}*` : '';
+    const detalleQueja = c.resumen_queja ? ` sobre: _"${c.resumen_queja}"_` : '';
 
-    // Caso A: Foco rojo detectado por Groq
-    if (c.foco_rojo) {
-      logger.info(`Foco rojo reportado por ${phone}. Creando ticket de fibra cortada.`);
-      const ticket = await WispHubService.crearTicketSoporte(
-        clientId,
-        'Alarma de Foco Rojo en Módem (LOS / Fibra Óptica)',
-        `El cliente reporta foco rojo encendido. Resumen: ${c.resumen_queja}. Requiere revisión de cableado o empalme.`,
-        'Alta'
-      );
+    const mensajeComprobacion = 
+      `🛠️ *Asistencia Técnica de ${this.getIspName()}*\n\n` +
+      `Hola${nombre}, lamentamos el inconveniente con tu servicio${detalleQueja}. Para que nuestro personal técnico pueda revisar tu línea en la central y realizar los ajustes correspondientes, por favor apóyanos con estas comprobaciones:\n\n` +
+      `1️⃣ *Alimentación y Luces del Módem:*\n` +
+      `• Verifica que el módem esté encendido y bien conectado a la toma de corriente eléctrica.\n` +
+      `• Observa que las luces (LEDs) frontales estén encendidas y no parpadeen de forma anormal ni esté encendido un foco rojo de alarma.\n` +
+      `⚠️ *ADVERTENCIA MUY IMPORTANTE:* Por favor *NO muevas, jales ni desconectes el cable delgado de internet / fibra óptica*, ya que es sumamente delicado y puede romperse o descomponerse.\n\n` +
+      `2️⃣ *Prueba de Red y Dispositivos:*\n` +
+      `• ¿El problema ocurre en *todos los dispositivos* de tu casa o solo en *uno en específico* (ej. solo en tu celular o televisión)?\n` +
+      `• Si puedes, por favor envíanos por este chat:\n` +
+      `  📸 Una *foto de las luces de tu módem*.\n` +
+      `  🚀 Una *captura de pantalla de tu prueba en speedtest.net* (de preferencia conectado cerca del módem).\n\n` +
+      `_Por favor responde a estas preguntas por aquí para que el personal revise tu caso y realice los ajustes necesarios en el sistema._`;
 
-      await this.enviarYLoguear(
-        phone,
-        `⚠️ *Alerta de Fibra Óptica Detectada:*\n\nEl foco rojo indica que no está llegando señal de luz a tu módem (posible cable desconectado o fibra dañada).\n\n🎫 *Hemos generado tu reporte técnico:*\n• Folio: *${ticket.folio}*\n• Estado: Asignado a cuadrilla técnica de ${this.getIspName()}.\n\nTe pedimos no mover el cable delgado amarillo/blanco para evitar daños mayores.`,
-        'FALLA_INTERNET',
-        `TICKET_CREADO_FOCO_ROJO_${ticket.folio}`,
-        targetJid
-      );
-      await this.marcarConsultaFinalizada(phone, session);
-      return;
-    }
+    let meta: any = {};
+    try { meta = JSON.parse(session.metadata || '{}'); } catch {}
 
-    // Caso B: Equipo apagado o sin energía
-    if (c.equipo_apagado) {
-      await this.enviarYLoguear(
-        phone,
-        `🔌 *Equipo Apagado / Falla de Energía:*\n\n1. Verifica que el eliminador negro esté firmemente conectado a la corriente.\n2. Prueba conectando en otro enchufe de pared que tenga luz.\n3. Presiona el botón pequeño de encendido (ON/OFF) en la parte trasera del módem.\n\nSi después de esto no enciende ninguna luz, responde *ASESOR* para coordinar el reemplazo del equipo.`,
-        'FALLA_INTERNET',
-        'GUIA_EQUIPO_APAGADO',
-        targetJid
-      );
-      return;
-    }
+    await TursoService.upsertSession({
+      phone,
+      step: 'COMPROBACION_SOPORTE',
+      metadata: JSON.stringify({
+        ...meta,
+        resumenFalla: c.resumen_queja || 'Falla o lentitud de internet',
+        comprobacionIniciada: new Date().toISOString(),
+      }),
+    });
 
-    // Caso C: Si el usuario ya lo reinició físicamente
-    if (c.ya_reinicio) {
-      const ticket = await WispHubService.crearTicketSoporte(
-        clientId,
-        'Sin servicio tras reinicio local',
-        `El cliente ya reinició su equipo y continúa sin navegación. Resumen: ${c.resumen_queja}`,
+    await this.enviarYLoguear(
+      phone,
+      mensajeComprobacion,
+      'FALLA_INTERNET',
+      'COMPROBACION_GUIADA_ENVIADA',
+      targetJid
+    );
+  }
+
+  /**
+   * Procesa la respuesta o evidencia enviada por el cliente durante las comprobaciones guiadas
+   * y genera el Ticket en Turso DB para que el personal realice ajustes manuales en SmartOLT.
+   */
+  private static async procesarRespuestaComprobacion(
+    phone: string,
+    rawText: string,
+    event: IncomingMessageEvent,
+    session: Session | null,
+    targetJid?: string
+  ): Promise<void> {
+    let meta: any = {};
+    try { meta = JSON.parse(session?.metadata || '{}'); } catch {}
+
+    const isMedia = event.isMedia === true;
+    const lower = rawText.toLowerCase();
+    const hasSpeedtest = isMedia || lower.includes('speed') || lower.includes('test') || lower.includes('mbps');
+    const allDevices = lower.includes('todo') || lower.includes('todos') || lower.includes('todas');
+    const outOfHours = this.isFueraDeHorario();
+
+    // Crear el ticket en Turso DB
+    const ticket = await TursoService.createTicket({
+      phone,
+      client_name: session?.client_name,
+      onu_id: session?.onu_id,
+      issue_summary: meta.resumenFalla || rawText || 'Reporte de lentitud / falla de internet',
+      checks_performed: `Módem y LEDs revisados. Advertencia de fibra emitida. Cliente respondió: "${rawText || (isMedia ? '[Foto/Comprobante enviado]' : 'N/A')}"`,
+      has_photo: isMedia ? 1 : 0,
+      has_speedtest: hasSpeedtest ? 1 : 0,
+      all_devices: allDevices ? 1 : 0,
+      status: 'ABIERTO',
+      is_out_of_hours: outOfHours ? 1 : 0,
+    });
+
+    // Crear ticket en WispHub como respaldo adicional si hay cliente vinculado
+    if (session?.client_id) {
+      await WispHubService.crearTicketSoporte(
+        session.client_id,
+        `Soporte Técnico - ${ticket.folio}`,
+        `Ticket generado: ${ticket.issue_summary}. Comprobaciones: ${ticket.checks_performed}`,
         'Media'
-      );
-
-      await this.enviarYLoguear(
-        phone,
-        `Agradecemos que ya hayas realizado el reinicio. Debido a que el servicio aún no responde, generamos tu reporte técnico *#${ticket.folio}* para revisión en cabina central.`,
-        'FALLA_INTERNET',
-        `TICKET_CREADO_SIN_SERVICIO_${ticket.folio}`,
-        targetJid
-      );
-      await this.marcarConsultaFinalizada(phone, session);
-      return;
+      ).catch(() => {});
     }
 
-    // Caso D: Diagnóstico en SmartOLT
-    await this.flujoReportarFalla(phone, session, targetJid);
+    if (outOfHours) {
+      await this.enviarYLoguear(
+        phone,
+        `🎫 *Reporte Técnico Agendado (#${ticket.folio})*\n\n` +
+        `¡Muchas gracias por tus comprobaciones y datos! Hemos registrado tu reporte técnico en nuestro sistema.\n\n` +
+        `⏰ *Horario de Atención de Oficina y Central:*\n` +
+        `Nuestro personal inicia turno a partir de las *9:00 AM*. Tu caso ha quedado agendado en nuestro panel con máxima prioridad para que a primera hora el personal revise tu línea y realice los ajustes manuales necesarios en la central / SmartOLT.\n\n` +
+        `En cuanto concluyan las configuraciones, te notificaremos por este mismo chat para que hagas tus comprobaciones de navegación.\n\n` +
+        `💡 _Nota: Si gustas probar mientras tanto, puedes escribir *REINICIAR* para mandar un comando de reinicio remoto a tu módem._`,
+        'FALLA_INTERNET',
+        `TICKET_FUERA_HORARIO_${ticket.folio}`,
+        targetJid
+      );
+    } else {
+      await this.enviarYLoguear(
+        phone,
+        `🎫 *Reporte Técnico Generado (#${ticket.folio})*\n\n` +
+        `¡Muchas gracias por las comprobaciones! Hemos generado tu reporte técnico con el folio *#${ticket.folio}*.\n\n` +
+        `🛠️ Nuestro personal técnico revisará tu línea directamente en la central para realizar las modificaciones necesarias en el sistema. Te informaremos en cuanto concluyan para que compruebes tu navegación.\n\n` +
+        `💡 _Nota: Si deseas refrescar tu módem mientras el personal revisa tu caso, puedes escribir *REINICIAR* para enviar un comando de reinicio remoto._`,
+        'FALLA_INTERNET',
+        `TICKET_CREADO_${ticket.folio}`,
+        targetJid
+      );
+    }
+
+    await this.marcarConsultaFinalizada(phone, session);
   }
 
   /**
@@ -800,9 +937,10 @@ export class BotOrchestrator {
     const facturas = await WispHubService.obtenerFacturasPendientes(session.client_id);
 
     if (facturas.length === 0) {
+      const ficha = this.getFichaBancaria(session);
       await this.enviarYLoguear(
         phone,
-        `🎉 *¡Tu cuenta está al corriente!*\n\nEstimado(a) *${session.client_name || 'Cliente'}*, no tienes facturas pendientes de pago en este momento. ¡Gracias por ser cliente de *${this.getIspName()}*!`,
+        `🎉 *¡Tu cuenta está al corriente!*\n\nEstimado(a) *${session.client_name || 'Cliente'}*, no tienes facturas pendientes de pago en este momento. ¡Gracias por ser cliente de *${this.getIspName()}*!${ficha}`,
         'CONSULTAR_SALDO',
         'CUENTA_AL_CORRIENTE',
         targetJid
@@ -822,7 +960,8 @@ export class BotOrchestrator {
       textoFacturas += `\n`;
     });
 
-    textoFacturas += `💰 *Total a pagar: $${totalAdeudo.toFixed(2)} MXN*\n\n_Para reportar tu pago después de realizarlo, puedes enviar la foto de tu comprobante en este chat._`;
+    textoFacturas += `💰 *Total a pagar: $${totalAdeudo.toFixed(2)} MXN*\n`;
+    textoFacturas += this.getFichaBancaria(session);
 
     await this.enviarYLoguear(phone, textoFacturas, 'CONSULTAR_SALDO', 'FACTURAS_PENDIENTES_ENVIADAS', targetJid);
   }

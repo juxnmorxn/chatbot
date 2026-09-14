@@ -32,6 +32,12 @@ router.post('/api/test/:service', AdminController.testService);
 router.post('/api/smartolt/sync', AdminController.syncSmartOlt);
 router.get('/api/smartolt/stats', AdminController.getSmartOltStats);
 
+// Mesa de Tickets de Soporte
+router.get('/api/tickets', AdminController.getTickets);
+router.patch('/api/tickets/:folio/status', AdminController.updateTicketStatus);
+router.post('/api/tickets/:folio/status', AdminController.updateTicketStatus);
+router.get('/api/tickets/stats', AdminController.getTicketStats);
+
 // Healthchecks para cron-job.org / Render
 router.get('/api/health', HealthController.check);
 router.get('/health', HealthController.check);

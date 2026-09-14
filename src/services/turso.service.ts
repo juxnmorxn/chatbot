@@ -30,6 +30,25 @@ export interface Session {
   metadata: string | null;
 }
 
+export interface TicketRecord {
+  id?: number;
+  folio: string;
+  phone: string;
+  client_name?: string | null;
+  onu_id?: string | null;
+  issue_summary: string;
+  checks_performed?: string | null;
+  has_photo?: number;
+  has_speedtest?: number;
+  all_devices?: number;
+  status: 'ABIERTO' | 'EN_PROCESO' | 'RESUELTO';
+  is_out_of_hours?: number;
+  notes?: string | null;
+  created_at?: string;
+  updated_at?: string;
+  resolved_at?: string | null;
+}
+
 export class TursoService {
   /**
    * Obtiene la sesión activa de un número de teléfono
@@ -465,6 +484,178 @@ export class TursoService {
     } catch (error: any) {
       logger.error('Error al obtener estadísticas de SmartOLT en Turso:', error?.message || error);
       return { count: 0, lastSync: null };
+    }
+  }
+
+  /**
+   * Crea un nuevo ticket de soporte en Turso DB para ajustes manuales en SmartOLT
+   */
+  static async createTicket(ticket: {
+    folio?: string;
+    phone: string;
+    client_name?: string | null;
+    onu_id?: string | null;
+    issue_summary: string;
+    checks_performed?: string | null;
+    has_photo?: number;
+    has_speedtest?: number;
+    all_devices?: number;
+    status?: 'ABIERTO' | 'EN_PROCESO' | 'RESUELTO';
+    is_out_of_hours?: number;
+    notes?: string | null;
+  }): Promise<TicketRecord> {
+    const now = new Date().toISOString();
+    const folio = ticket.folio || `TK-${Date.now().toString().slice(-6)}`;
+    const status = ticket.status || 'ABIERTO';
+    const isOutOfHours = ticket.is_out_of_hours ?? 0;
+
+    try {
+      const client = getTursoClient();
+      await client.execute({
+        sql: `
+          INSERT INTO tickets (
+            folio, phone, client_name, onu_id, issue_summary, checks_performed,
+            has_photo, has_speedtest, all_devices, status, is_out_of_hours, notes,
+            created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `,
+        args: [
+          folio,
+          ticket.phone,
+          ticket.client_name || null,
+          ticket.onu_id || null,
+          ticket.issue_summary,
+          ticket.checks_performed || null,
+          ticket.has_photo ? 1 : 0,
+          ticket.has_speedtest ? 1 : 0,
+          ticket.all_devices ? 1 : 0,
+          status,
+          isOutOfHours,
+          ticket.notes || null,
+          now,
+          now,
+        ],
+      });
+
+      logger.info(`Ticket ${folio} creado exitosamente en Turso para ${ticket.phone}`);
+      return {
+        folio,
+        phone: ticket.phone,
+        client_name: ticket.client_name,
+        onu_id: ticket.onu_id,
+        issue_summary: ticket.issue_summary,
+        checks_performed: ticket.checks_performed,
+        has_photo: ticket.has_photo ? 1 : 0,
+        has_speedtest: ticket.has_speedtest ? 1 : 0,
+        all_devices: ticket.all_devices ? 1 : 0,
+        status,
+        is_out_of_hours: isOutOfHours,
+        notes: ticket.notes,
+        created_at: now,
+        updated_at: now,
+      };
+    } catch (error: any) {
+      logger.error('Error al crear ticket en Turso:', error?.message || error);
+      throw error;
+    }
+  }
+
+  /**
+   * Obtiene la lista de tickets para el panel administrativo
+   */
+  static async getTickets(status?: string, limit: number = 60): Promise<TicketRecord[]> {
+    try {
+      const client = getTursoClient();
+      let sql = `SELECT * FROM tickets`;
+      const args: any[] = [];
+
+      if (status && status !== 'TODOS') {
+        sql += ` WHERE status = ?`;
+        args.push(status.toUpperCase());
+      }
+
+      sql += ` ORDER BY id DESC LIMIT ?`;
+      args.push(limit);
+
+      const res = await client.execute({ sql, args });
+      return res.rows.map((r: any) => ({
+        id: Number(r.id),
+        folio: String(r.folio),
+        phone: String(r.phone),
+        client_name: r.client_name ? String(r.client_name) : null,
+        onu_id: r.onu_id ? String(r.onu_id) : null,
+        issue_summary: String(r.issue_summary || ''),
+        checks_performed: r.checks_performed ? String(r.checks_performed) : null,
+        has_photo: Number(r.has_photo || 0),
+        has_speedtest: Number(r.has_speedtest || 0),
+        all_devices: Number(r.all_devices || 0),
+        status: (r.status || 'ABIERTO') as any,
+        is_out_of_hours: Number(r.is_out_of_hours || 0),
+        notes: r.notes ? String(r.notes) : null,
+        created_at: String(r.created_at || ''),
+        updated_at: String(r.updated_at || ''),
+        resolved_at: r.resolved_at ? String(r.resolved_at) : null,
+      }));
+    } catch (error: any) {
+      logger.error('Error al obtener tickets en Turso:', error?.message || error);
+      return [];
+    }
+  }
+
+  /**
+   * Actualiza el estatus y notas de un ticket
+   */
+  static async updateTicketStatus(folio: string, status: 'ABIERTO' | 'EN_PROCESO' | 'RESUELTO', notes?: string): Promise<boolean> {
+    const now = new Date().toISOString();
+    const resolvedAt = status === 'RESUELTO' ? now : null;
+
+    try {
+      const client = getTursoClient();
+      const res = await client.execute({
+        sql: `
+          UPDATE tickets SET
+            status = ?,
+            notes = COALESCE(?, notes),
+            updated_at = ?,
+            resolved_at = CASE WHEN ? = 'RESUELTO' THEN ? ELSE resolved_at END
+          WHERE folio = ?
+        `,
+        args: [status, notes || null, now, status, resolvedAt, folio],
+      });
+
+      return res.rowsAffected > 0;
+    } catch (error: any) {
+      logger.error(`Error al actualizar ticket ${folio}:`, error?.message || error);
+      return false;
+    }
+  }
+
+  /**
+   * Obtiene métricas resumidas de tickets para el dashboard
+   */
+  static async getTicketStats(): Promise<{ total: number; abiertos: number; enProceso: number; resueltos: number; fueraHorario: number }> {
+    try {
+      const client = getTursoClient();
+      const res = await client.execute(`
+        SELECT 
+          COUNT(*) as total,
+          SUM(CASE WHEN status = 'ABIERTO' THEN 1 ELSE 0 END) as abiertos,
+          SUM(CASE WHEN status = 'EN_PROCESO' THEN 1 ELSE 0 END) as en_proceso,
+          SUM(CASE WHEN status = 'RESUELTO' THEN 1 ELSE 0 END) as resueltos,
+          SUM(CASE WHEN is_out_of_hours = 1 AND status != 'RESUELTO' THEN 1 ELSE 0 END) as fuera_horario
+        FROM tickets
+      `);
+      const row = res.rows[0];
+      return {
+        total: Number(row?.total || 0),
+        abiertos: Number(row?.abiertos || 0),
+        enProceso: Number(row?.en_proceso || 0),
+        resueltos: Number(row?.resueltos || 0),
+        fueraHorario: Number(row?.fuera_horario || 0),
+      };
+    } catch (error: any) {
+      logger.error('Error al obtener estadísticas de tickets:', error?.message || error);
+      return { total: 0, abiertos: 0, enProceso: 0, resueltos: 0, fueraHorario: 0 };
     }
   }
 }
