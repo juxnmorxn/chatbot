@@ -5,6 +5,7 @@ import { getTursoClient } from '../database/turso';
 import { GroqService } from '../services/groq.service';
 import { WispHubService } from '../services/wisphub.service';
 import { SmartOLTService } from '../services/smartolt.service';
+import { BotOrchestrator } from '../orchestrator/bot.orchestrator';
 import axios from 'axios';
 import { config } from '../config/env';
 import { Logger } from '../utils/logger';
@@ -209,7 +210,11 @@ export class AdminController {
     try {
       const status = req.query.status as string | undefined;
       const limit = parseInt(req.query.limit as string, 10) || 60;
-      const tickets = await TursoService.getTickets(status, limit);
+      const rawTickets = await TursoService.getTickets(status, limit);
+      const tickets = rawTickets.map((t) => ({
+        ...t,
+        bot_paused: BotOrchestrator.estaBotPausado(t.phone),
+      }));
       res.json({ success: true, tickets });
     } catch (error: any) {
       logger.error('Error al obtener tickets:', error?.message || error);
@@ -251,6 +256,27 @@ export class AdminController {
       res.json({ success: true, stats });
     } catch (error: any) {
       logger.error('Error al obtener stats de tickets:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Pausa o reactiva el bot para un teléfono específico (Human Takeover)
+   */
+  static async toggleBotPause(req: Request, res: Response): Promise<void> {
+    try {
+      const phone = String(req.params.phone || '');
+      const { pause, minutes } = req.body;
+
+      if (pause === false) {
+        BotOrchestrator.reanudarBot(phone);
+        res.json({ success: true, message: `Bot reactivado para ${phone}`, paused: false });
+      } else {
+        const mins = parseInt(minutes, 10) || 60;
+        BotOrchestrator.activarPausaOperador(phone, mins, 'Pausado manualmente desde panel web');
+        res.json({ success: true, message: `Bot silenciado para ${phone} por ${mins} minutos`, paused: true, minutes: mins });
+      }
+    } catch (error: any) {
       res.status(500).json({ success: false, error: error?.message || error });
     }
   }

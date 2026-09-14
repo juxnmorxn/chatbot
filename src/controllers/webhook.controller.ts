@@ -2,6 +2,8 @@ import { Request, Response } from 'express';
 import { BotOrchestrator, IncomingMessageEvent } from '../orchestrator/bot.orchestrator';
 import { config } from '../config/env';
 import { SettingsService } from '../services/settings.service';
+import { EvolutionService } from '../services/evolution.service';
+import { TursoService } from '../services/turso.service';
 import { Logger } from '../utils/logger';
 import { LidRegistry } from '../utils/lid-registry';
 
@@ -9,6 +11,24 @@ const logger = new Logger('WebhookController');
 
 export class WebhookController {
   private static processedMessageIds = new Map<string, number>();
+  private static messageBuffers = new Map<string, {
+    texts: string[];
+    timeout: NodeJS.Timeout;
+    event: IncomingMessageEvent;
+  }>();
+
+  /**
+   * Cancela cualquier búfer o respuesta automática pendiente para un teléfono
+   */
+  static cancelPendingDebounce(phone: string): void {
+    const cleanPhone = phone.replace(/\D/g, '');
+    const entry = this.messageBuffers.get(cleanPhone);
+    if (entry) {
+      clearTimeout(entry.timeout);
+      this.messageBuffers.delete(cleanPhone);
+      logger.info(`[Debounce] Búfer y respuesta cancelados para ${cleanPhone} por intervención humana.`);
+    }
+  }
 
   private static isDuplicate(messageId: string): boolean {
     const now = Date.now();
@@ -147,8 +167,28 @@ export class WebhookController {
         return;
       }
 
-      // Regla: Ignorar mensajes enviados por el propio bot
+      // Regla: Detección de mensajes salientes (fromMe)
       if (fromMe) {
+        // 1. Si fue enviado por nuestro bot a través de la API, lo ignoramos normalmente
+        if (messageId && EvolutionService.esMensajeEnviadoPorBot(messageId)) {
+          return;
+        }
+
+        // 2. Si NO fue enviado por el bot -> ¡Un operador humano respondió manualmente desde WhatsApp Web o su celular!
+        const phone = WebhookController.extractPhone(key, data);
+        const extracted = WebhookController.extractMessageContent(messageObj);
+        logger.info(`[Human Takeover] Mensaje de operador detectado para ${phone}: "${extracted.text || ''}"`);
+
+        // Cancelamos cualquier respuesta automática pendiente en la cola de espera
+        WebhookController.cancelPendingDebounce(phone);
+
+        // Pausamos el bot para este cliente durante 60 minutos
+        BotOrchestrator.activarPausaOperador(phone, 60, 'Operador respondió desde WhatsApp');
+
+        // Auditoría en Turso
+        if (extracted.text) {
+          TursoService.logMessage(phone, 'OUT', extracted.text, null, 'INTERVENCION_HUMANA').catch(() => {});
+        }
         return;
       }
 
@@ -168,6 +208,14 @@ export class WebhookController {
         return;
       }
 
+      // Si el bot está en pausa por intervención humana activa:
+      const estadoPausa = BotOrchestrator.estaBotPausado(phone);
+      if (estadoPausa.pausado) {
+        logger.info(`[Human Takeover] Mensaje de ${phone} no respondido por bot (humano al mando, ${estadoPausa.minutosRestantes}m restantes).`);
+        TursoService.logMessage(phone, 'IN', extracted.text || '[Multimedia/Botón]', null, 'BOT_PAUSADO_OPERADOR').catch(() => {});
+        return;
+      }
+
       const incomingEvent: IncomingMessageEvent = {
         phone,
         remoteJid,
@@ -177,15 +225,70 @@ export class WebhookController {
         isMedia: extracted.isMedia,
       };
 
-      // Ejecución asíncrona en el orquestador
-      setImmediate(() => {
-        BotOrchestrator.procesarMensaje(incomingEvent).catch((err) => {
-          logger.error(`Error en BotOrchestrator para ${phone}:`, err?.message || err);
+      // Si es un clic de botón o archivo multimedia, procesamos de inmediato
+      if (extracted.buttonId || extracted.isMedia) {
+        setImmediate(() => {
+          BotOrchestrator.procesarMensaje(incomingEvent).catch((err) => {
+            logger.error(`Error en BotOrchestrator para ${phone}:`, err?.message || err);
+          });
         });
-      });
+        return;
+      }
+
+      // Si es mensaje de texto normal:
+      // 1. Activar estado "Escribiendo..." (composing) en WhatsApp para simulación humana inmediata
+      EvolutionService.enviarPresencia(phone, 'composing', 5000).catch(() => {});
+
+      // 2. Programar en el búfer de debounce (5 segundos para agrupar ráfagas y dar ventana al operador)
+      WebhookController.scheduleDebouncedMessage(incomingEvent);
     } catch (error: any) {
       logger.error('Error al procesar webhook de Evolution API:', error?.message || error);
     }
+  }
+
+  /**
+   * Programa la ejecución de un mensaje agrupando ráfagas de texto en una sola idea
+   * y brindando una ventana de espera humana para que el operador pueda intervenir si lo desea
+   */
+  private static scheduleDebouncedMessage(event: IncomingMessageEvent): void {
+    const cleanPhone = event.phone.replace(/\D/g, '');
+    const text = event.text || '';
+
+    let entry = this.messageBuffers.get(cleanPhone);
+    if (entry) {
+      clearTimeout(entry.timeout);
+      if (text) entry.texts.push(text);
+      entry.event = event;
+    } else {
+      entry = {
+        texts: text ? [text] : [],
+        event,
+        timeout: null as any,
+      };
+    }
+
+    // Ventana humana de 5 segundos
+    entry.timeout = setTimeout(() => {
+      this.messageBuffers.delete(cleanPhone);
+
+      // Si el operador intervino manualmente durante los 5 segundos, abortar respuesta automática
+      if (BotOrchestrator.estaBotPausado(cleanPhone).pausado) {
+        logger.info(`[Debounce] Búfer descartado para ${cleanPhone} porque el operador tomó el control.`);
+        return;
+      }
+
+      const combinedText = entry!.texts.join(' \n');
+      const finalEvent: IncomingMessageEvent = {
+        ...entry!.event,
+        text: combinedText,
+      };
+
+      BotOrchestrator.procesarMensaje(finalEvent).catch((err) => {
+        logger.error(`Error en BotOrchestrator para ${cleanPhone}:`, err?.message || err);
+      });
+    }, 5000);
+
+    this.messageBuffers.set(cleanPhone, entry);
   }
 
   /**

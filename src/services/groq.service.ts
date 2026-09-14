@@ -23,6 +23,7 @@ export interface GroqClassificationResult {
   foco_rojo: boolean;
   equipo_apagado: boolean;
   reporta_lentitud: boolean;
+  red_wifi_no_visible: boolean;
   ya_reinicio: boolean;
   nombre_mencionado: string | null;
   telefono_mencionado: string | null;
@@ -163,6 +164,7 @@ EXTRACCIÓN DE BANDERAS Y DETALLES:
 - "foco_rojo": true si menciona foco rojo, luz roja, led rojo, LOS parpadeando o luz de alarma en el módem/ONU; false si no.
 - "equipo_apagado": true si dice que el módem no prende, se fue la luz en la casa, o no encienden las luces del equipo; false si no.
 - "reporta_lentitud": true si dice que el internet está lento, intermitente, sube y baja o hay lag; false si no.
+- "red_wifi_no_visible": true si indica que no le aparece el nombre de su red Wi-Fi, no sale su red en el celular, no encuentra la red, se le borró el internet o no prende el foco de WLAN/Wi-Fi; false si no.
 - "ya_reinicio": true si el usuario aclara que ya lo desconectó, ya lo reinició o ya lo apagó y prendió; false si no.
 - "nombre_mencionado": string con el nombre propio limpio y capitalizado (ej. si dice "me llamo Juan Manuel" -> "Juan Manuel", si dice "carlos" -> "Carlos"), o null si no menciona nombre.
 - "telefono_mencionado": string de 10 dígitos si menciona algún número telefónico, o null.
@@ -197,6 +199,7 @@ Contexto actual del cliente:
         foco_rojo: Boolean(parsed.foco_rojo),
         equipo_apagado: Boolean(parsed.equipo_apagado),
         reporta_lentitud: Boolean(parsed.reporta_lentitud),
+        red_wifi_no_visible: Boolean(parsed.red_wifi_no_visible),
         ya_reinicio: Boolean(parsed.ya_reinicio),
         nombre_mencionado: parsed.nombre_mencionado || null,
         telefono_mencionado: parsed.telefono_mencionado || null,
@@ -238,6 +241,7 @@ Contexto actual del cliente:
       foco_rojo: lower.includes('foco rojo') || lower.includes('luz roja') || lower.includes('los'),
       equipo_apagado: lower.includes('apagado') || lower.includes('no prende') || lower.includes('sin luz'),
       reporta_lentitud: lower.includes('lento') || lower.includes('lentitud') || lower.includes('intermitente'),
+      red_wifi_no_visible: lower.includes('no aparece') || lower.includes('no sale mi') || lower.includes('no veo mi red') || lower.includes('se borro') || lower.includes('wlan'),
       ya_reinicio: lower.includes('ya reinicie') || lower.includes('ya lo apague'),
       nombre_mencionado: null,
       telefono_mencionado: null,

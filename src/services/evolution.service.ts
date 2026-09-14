@@ -91,7 +91,7 @@ export class EvolutionService {
       logger.info(`Enviando mensaje de texto a ${recipient}`);
       const api = this.getApi();
       const instance = this.getInstanceName();
-      await api.post(`/message/sendText/${instance}`, {
+      const response = await api.post(`/message/sendText/${instance}`, {
         number: recipient,
         text: mensaje,
         options: {
@@ -99,9 +99,55 @@ export class EvolutionService {
           presence: 'composing',
         },
       });
+
+      const sentId = response.data?.key?.id;
+      if (sentId) {
+        this.registrarMensajeEnviadoPorBot(sentId);
+      }
+
       return true;
     } catch (error: any) {
       logger.error(`Error al enviar mensaje a ${recipient}:`, error?.response?.data || error?.message || error);
+      return false;
+    }
+  }
+
+  private static botSentMessageIds = new Set<string>();
+
+  /**
+   * Registra el ID de un mensaje enviado por el bot para no confundirlo con intervención humana
+   */
+  static registrarMensajeEnviadoPorBot(id: string): void {
+    if (!id) return;
+    this.botSentMessageIds.add(id);
+    // Limpiar después de 3 minutos
+    setTimeout(() => {
+      this.botSentMessageIds.delete(id);
+    }, 180000);
+  }
+
+  /**
+   * Verifica si un mensaje saliente (fromMe) fue emitido por el bot o por un operador humano
+   */
+  static esMensajeEnviadoPorBot(id: string): boolean {
+    return this.botSentMessageIds.has(id);
+  }
+
+  /**
+   * Envía presencia a WhatsApp ('composing' = escribiendo..., 'paused' = pausa)
+   */
+  static async enviarPresencia(phone: string, presence: 'composing' | 'paused' = 'composing', delayMs: number = 3000): Promise<boolean> {
+    const recipient = this.formatRecipient(phone);
+    try {
+      const api = this.getApi();
+      const instance = this.getInstanceName();
+      await api.post(`/chat/sendPresence/${instance}`, {
+        number: recipient,
+        presence,
+        delay: delayMs,
+      });
+      return true;
+    } catch {
       return false;
     }
   }

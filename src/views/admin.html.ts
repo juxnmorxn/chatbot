@@ -615,6 +615,9 @@ export function getAdminDashboardHtml(): string {
             <li>Apunta tu cámara al código QR de arriba para sincronizarlo.</li>
           </ol>
         </div>
+      </div>
+    </div>
+
     <!-- TAB: Mesa de Tickets -->
     <div id="tab-tickets" class="tab-pane">
       <div class="card">
@@ -854,22 +857,29 @@ export function getAdminDashboardHtml(): string {
 
             const clientText = t.client_name ? '<b>' + t.client_name + '</b>' : '<em style="color:var(--text-muted);">No identificado</em>';
             const onuText = t.onu_id ? '<br><small style="font-family:var(--font-mono); color:var(--text-muted);">' + t.onu_id + '</small>' : '';
+            const notesHtml = t.notes ? '<div style="margin-top: 6px; font-size: 11px; background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 6px; padding: 5px 8px; color: #7dd3fc; max-width: 260px; word-break: break-word; white-space: normal;">' + t.notes + '</div>' : '';
+
+            const isPaused = t.bot_paused && t.bot_paused.pausado;
+            const pauseBadge = isPaused
+              ? '<br><span class="pill pill-purple" style="font-size:10px; margin-top:4px; display:inline-block;">⏸️ Humano (' + t.bot_paused.minutosRestantes + 'm)</span> <a href="javascript:void(0)" onclick="toggleBotPauseAction(\'' + t.phone + '\', false)" style="color:#34d399; font-size:11px; margin-left:2px;">▶️ Reactivar</a>'
+              : '<br><a href="javascript:void(0)" onclick="toggleBotPauseAction(\'' + t.phone + '\', true)" style="color:var(--text-muted); font-size:11px; display:inline-block; margin-top:3px;">⏸️ Pausar Bot</a>';
 
             return '<tr>' +
               '<td style="font-family: var(--font-mono); font-weight: 700; color: #38bdf8;">' + t.folio + '</td>' +
               '<td style="color: var(--text-muted); font-size: 12px; white-space: nowrap;">' + dateStr + outBadge + '</td>' +
-              '<td style="font-family: var(--font-mono); font-weight: 600;">' + t.phone + '</td>' +
+              '<td style="font-family: var(--font-mono); font-weight: 600;">' + t.phone + pauseBadge + '</td>' +
               '<td>' + clientText + onuText + '</td>' +
               '<td style="max-width: 250px; font-size: 13px; word-break: break-word;">' + (t.issue_summary || '') + '</td>' +
               '<td style="font-size: 11px;">' + checksBadges + '</td>' +
               '<td>' + statusBadge + '</td>' +
-              '<td style="white-space: nowrap;">' +
+              '<td>' +
                 '<select onchange="updateTicketStatusAction(\'' + t.folio + '\', this.value)" style="background: rgba(255,255,255,0.06); color: var(--text-main); border: 1px solid var(--card-border); border-radius: 6px; padding: 4px 8px; font-size: 12px;">' +
                   '<option value="" disabled selected>Cambiar Estado...</option>' +
                   '<option value="ABIERTO">🔴 Marcar Abierto</option>' +
                   '<option value="EN_PROCESO">🟡 En Atención / Ajuste OLT</option>' +
                   '<option value="RESUELTO">🟢 Marcar Resuelto</option>' +
                 '</select>' +
+                notesHtml +
               '</td>' +
             '</tr>';
           }).join('');
@@ -896,6 +906,25 @@ export function getAdminDashboardHtml(): string {
         }
       } catch (err) {
         showToast('Error al actualizar ticket', true);
+      }
+    }
+
+    async function toggleBotPauseAction(phone, pause) {
+      try {
+        const res = await fetch('/api/sessions/' + phone + '/toggle-pause', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pause: pause, minutes: 60 })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(data.message);
+          loadTickets();
+        } else {
+          showToast('Error: ' + data.error, true);
+        }
+      } catch (err) {
+        showToast('Error al modificar estado del bot', true);
       }
     }
 

@@ -1,7 +1,7 @@
 import { TursoService, Session } from '../services/turso.service';
 import { GroqService, GroqClassificationResult } from '../services/groq.service';
 import { WispHubService, WispHubCliente } from '../services/wisphub.service';
-import { SmartOLTService } from '../services/smartolt.service';
+import { SmartOLTService, SmartOltStatusResult } from '../services/smartolt.service';
 import { EvolutionService, BotButton } from '../services/evolution.service';
 import { config } from '../config/env';
 import { SettingsService } from '../services/settings.service';
@@ -25,6 +25,42 @@ export class BotOrchestrator {
     { id: 'BTN_FALLA', title: '🔧 Reportar Falla' },
     { id: 'BTN_ASESOR', title: '👤 Hablar con Asesor' },
   ];
+
+  private static humanTakeoverMap = new Map<string, number>();
+
+  /**
+   * Pausa las respuestas automáticas del bot para un número específico
+   */
+  static activarPausaOperador(phone: string, minutos: number = 60, razon?: string): void {
+    const cleanPhone = phone.replace(/\D/g, '');
+    const until = Date.now() + minutos * 60 * 1000;
+    this.humanTakeoverMap.set(cleanPhone, until);
+    logger.info(`[Human Takeover] Bot silenciado para ${cleanPhone} por ${minutos}m (${razon || 'Operador en WhatsApp'}).`);
+  }
+
+  /**
+   * Reactiva el bot para un número específico
+   */
+  static reanudarBot(phone: string): void {
+    const cleanPhone = phone.replace(/\D/g, '');
+    this.humanTakeoverMap.delete(cleanPhone);
+    logger.info(`[Human Takeover] Bot reactivado para ${cleanPhone}.`);
+  }
+
+  /**
+   * Consulta si el bot está pausado para un número y cuántos minutos le restan
+   */
+  static estaBotPausado(phone: string): { pausado: boolean; minutosRestantes: number } {
+    const cleanPhone = phone.replace(/\D/g, '');
+    const until = this.humanTakeoverMap.get(cleanPhone);
+    if (!until) return { pausado: false, minutosRestantes: 0 };
+    const remainingMs = until - Date.now();
+    if (remainingMs <= 0) {
+      this.humanTakeoverMap.delete(cleanPhone);
+      return { pausado: false, minutosRestantes: 0 };
+    }
+    return { pausado: true, minutosRestantes: Math.ceil(remainingMs / 60000) };
+  }
 
   private static getIspName(): string {
     return SettingsService.get('ISP_NAME', 'ISP_NAME', config.isp.name);
@@ -117,6 +153,13 @@ export class BotOrchestrator {
 
     logger.info(`Procesando mensaje de ${phone} (Destino WhatsApp: ${targetJid}): "${rawText}"`);
 
+    // 0. Si el bot está en pausa por intervención de un operador humano:
+    const estadoPausa = this.estaBotPausado(phone);
+    if (estadoPausa.pausado) {
+      logger.info(`[Human Takeover] Bot en pausa para ${phone} (${estadoPausa.minutosRestantes}m restantes). Intervención humana activa.`);
+      return;
+    }
+
     // Registrar mensaje entrante en la auditoría de Turso
     const inputContent = rawText || (buttonId ? `[Botón: ${buttonId}]` : (event.isMedia ? '[Foto/Comprobante]' : '[Desconocido]'));
     await TursoService.logMessage(phone, 'IN', inputContent, null, 'MENSAJE_ENTRANTE');
@@ -128,6 +171,25 @@ export class BotOrchestrator {
         phone,
         step: 'CONVERSACIONAL',
       });
+    }
+
+    const lowerMsg = rawText.toLowerCase().trim();
+
+    // Silencio de Cortesía ante respuestas breves de acuse si la consulta ya concluyó o hay reporte activo:
+    const confirmacionesCortas = [
+      'ok', 'okey', 'oki', 'okis', 'esta bien', 'está bien', 'enterado', 'enterada',
+      'de acuerdo', 'quedo al pendiente', 'al pendiente', 'gracias', 'muchas gracias',
+      'muchas gracias por la ayuda', 'va', 'sale', 'le aviso', 'te aviso', 'perfecto', 'listo',
+      'buen dia', 'buen día', 'saludos', 'buenas tardes', 'buenas noches'
+    ];
+
+    let metaObjPre: any = {};
+    try { metaObjPre = JSON.parse(session?.metadata || '{}'); } catch {}
+    const consultaCerradaPre = metaObjPre.consultaFinalizada === true || session?.step === 'CONSULTA_FINALIZADA';
+
+    if (confirmacionesCortas.includes(lowerMsg) && (consultaCerradaPre || metaObjPre.ticketFolio)) {
+      logger.info(`[Silencio de Cortesía] Cliente ${phone} envió confirmación "${lowerMsg}". El bot guarda silencio.`);
+      return;
     }
 
     // 2. Control Anti-Spam (Opt-Out): si el usuario escribe cancelar o baja
@@ -161,9 +223,27 @@ export class BotOrchestrator {
       return;
     }
 
-    // Si el cliente está en espera de responder a las comprobaciones guiadas de soporte técnico
+    // Si el cliente está enviando su ubicación o domicilio para visita técnica
+    if (session?.step === 'ESPERANDO_UBICACION_TECNICO') {
+      await this.procesarUbicacionTecnico(phone, rawText, event, session, targetJid);
+      return;
+    }
+
+    // Si el cliente está respondiendo al Turno 1 de comprobaciones sencillas
+    if (session?.step === 'COMPROBACION_TURNO_1') {
+      await this.procesarTurno1Comprobacion(phone, rawText, event, session, targetJid);
+      return;
+    }
+
+    // Si el cliente está enviando evidencia (foto o speedtest) tras Turno 2
+    if (session?.step === 'COMPROBACION_EVIDENCIA') {
+      await this.procesarEvidenciaTicket(phone, rawText, event, session, targetJid);
+      return;
+    }
+
+    // Si el cliente está en espera de responder a comprobaciones guiadas previas (retrocompatibilidad)
     if (session?.step === 'COMPROBACION_SOPORTE') {
-      await this.procesarRespuestaComprobacion(phone, rawText, event, session, targetJid);
+      await this.procesarTurno1Comprobacion(phone, rawText, event, session, targetJid);
       return;
     }
 
@@ -181,7 +261,6 @@ export class BotOrchestrator {
     }
 
     // Permitir cambiar o consultar otro servicio si el usuario lo solicita
-    const lowerMsg = rawText.toLowerCase().trim();
     if (
       lowerMsg === 'cambiar servicio' ||
       lowerMsg === 'otro servicio' ||
@@ -376,10 +455,13 @@ export class BotOrchestrator {
       currentStep: session?.step,
     });
 
-    logger.info(`Intención detectada para ${phone}: ${clasificacion.intencion} (Resumen: "${clasificacion.resumen_queja}")`);
+    // Si el cliente reporta que no ve su red Wi-Fi o foco WLAN apagado, canalizar directo a flujo de falla técnica
+    if (clasificacion.red_wifi_no_visible) {
+      clasificacion.intencion = 'FALLA_INTERNET';
+    }
 
-    // Si es una acción específica de telecomunicaciones (Niveles, Falla, Saldo, Reboot, Asesor)
-    if (['CONSULTAR_NIVELES', 'FALLA_INTERNET', 'REINICIAR_MODEM', 'CONSULTAR_SALDO', 'REPORTAR_PAGO', 'HABLAR_HUMANO', 'CANCELAR_SUSCRIPCION'].includes(clasificacion.intencion)) {
+    // Si es una acción específica de telecomunicaciones (Niveles, Falla, Saldo, Reboot, Asesor, Wi-Fi)
+    if (['CONSULTAR_NIVELES', 'FALLA_INTERNET', 'REINICIAR_MODEM', 'CONSULTAR_SALDO', 'REPORTAR_PAGO', 'HABLAR_HUMANO', 'CANCELAR_SUSCRIPCION', 'DATOS_WIFI'].includes(clasificacion.intencion)) {
       await this.ejecutarIntencion(phone, clasificacion, session, rawText, targetJid, event);
       return;
     }
@@ -592,9 +674,13 @@ export class BotOrchestrator {
   }
 
   /**
-   * Flujo de Asistencia y Comprobaciones Técnicas Amigables
-   * Recopila información del cliente (módem encendido, luces, prueba multidispositivo, fotos y speedtest)
-   * sin permitir manipulaciones complejas de red ni solicitar datos técnicos confusos.
+   * Flujo de Asistencia y Comprobaciones Técnicas Amigables con Diagnóstico Silencioso:
+   * 1. Revisa internamente morosidad en WispHub (si adeuda, envía ficha de pago sin tickets falsos).
+   * 2. Revisa internamente estado físico en SmartOLT:
+   *    - Si hay corte en cableado (LOS): genera reporte #TK-XXXX y pide ubicación/dirección para técnico.
+   *    - Si módem apagado (Power fail): avisa que revise la corriente sin tocar la fibra.
+   *    - Si está en línea (Online): reinicia el módem automáticamente por detrás (sin preguntar al cliente)
+   *      y realiza comprobación amigable en 2 turnos cortos (encendido + cuidado con fibra + 1 o todos).
    */
   private static async flujoFallaInteligente(
     phone: string,
@@ -607,7 +693,7 @@ export class BotOrchestrator {
       const queja = c.resumen_queja ? ` sobre: _"${c.resumen_queja}"_` : '';
       await this.enviarYLoguear(
         phone,
-        `Entendido tu reporte${queja}. Veo que presentas inconvenientes con tu conexión de internet.\n\nPara poder verificar tu línea y asignarte asistencia técnica personalizada, ¿podrías indicarme tu *Nombre completo* o número de contrato?`,
+        `Entendido tu reporte${queja}. Veo que presentas inconvenientes con tu conexión de internet.\n\nPara poder verificar tu línea y ayudarte de inmediato, ¿podrías indicarme tu *Nombre completo* o número de contrato?`,
         'FALLA_INTERNET',
         'SOLICITAR_NOMBRE_PARA_DIAGNOSTICO',
         targetJid
@@ -616,51 +702,184 @@ export class BotOrchestrator {
       return;
     }
 
-    // Cliente identificado: Enviamos el mensaje amigable de comprobación guiada
     const nombre = session.client_name ? ` *${session.client_name}*` : '';
-    const detalleQueja = c.resumen_queja ? ` sobre: _"${c.resumen_queja}"_` : '';
-
-    const mensajeComprobacion = 
-      `🛠️ *Asistencia Técnica de ${this.getIspName()}*\n\n` +
-      `Hola${nombre}, lamentamos el inconveniente con tu servicio${detalleQueja}. Para que nuestro personal técnico pueda revisar tu línea en la central y realizar los ajustes correspondientes, por favor apóyanos con estas comprobaciones:\n\n` +
-      `1️⃣ *Alimentación y Luces del Módem:*\n` +
-      `• Verifica que el módem esté encendido y bien conectado a la toma de corriente eléctrica.\n` +
-      `• Observa que las luces (LEDs) frontales estén encendidas y no parpadeen de forma anormal ni esté encendido un foco rojo de alarma.\n` +
-      `⚠️ *ADVERTENCIA MUY IMPORTANTE:* Por favor *NO muevas, jales ni desconectes el cable delgado de internet / fibra óptica*, ya que es sumamente delicado y puede romperse o descomponerse.\n\n` +
-      `2️⃣ *Prueba de Red y Dispositivos:*\n` +
-      `• ¿El problema ocurre en *todos los dispositivos* de tu casa o solo en *uno en específico* (ej. solo en tu celular o televisión)?\n` +
-      `• Si puedes, por favor envíanos por este chat:\n` +
-      `  📸 Una *foto de las luces de tu módem*.\n` +
-      `  🚀 Una *captura de pantalla de tu prueba en speedtest.net* (de preferencia conectado cerca del módem).\n\n` +
-      `_Por favor responde a estas preguntas por aquí para que el personal revise tu caso y realice los ajustes necesarios en el sistema._`;
-
+    const detalleQueja = c.resumen_queja || 'Falla o lentitud de internet';
     let meta: any = {};
     try { meta = JSON.parse(session.metadata || '{}'); } catch {}
 
+    logger.info(`Iniciando diagnóstico interno silencioso para cliente ${phone} (${session.client_name || 'N/A'})...`);
+
+    // --- 1. VERIFICACIÓN SILENCIOSA DE MOROSIDAD EN WISPHUB ---
+    if (session.client_id) {
+      try {
+        const facturas = await WispHubService.obtenerFacturasPendientes(session.client_id);
+        if (facturas.length > 0) {
+          const totalDeuda = facturas.reduce((acc, f) => acc + (f.monto || 0), 0);
+          logger.info(`Cliente ${phone} presenta morosidad en WispHub: $${totalDeuda} MXN (${facturas.length} facturas)`);
+
+          const bank = SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK', 'BBVA');
+          const account = SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', '012 180 0000000000 00');
+          const beneficiary = SettingsService.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', this.getIspName());
+
+          const mensajeMoroso =
+            `Hola${nombre}, revisé tu servicio en el sistema y registras un recibo pendiente por *$${totalDeuda.toFixed(2)} MXN*.\n\n` +
+            `💳 *${bank}* | CLABE: *${account}*\n` +
+            `Beneficiario: *${beneficiary}*\n` +
+            `Concepto: *${session.client_name}*\n\n` +
+            `En cuanto realices tu pago, mándanos por aquí la foto de tu comprobante para reactivarte de inmediato.`;
+
+          await this.enviarYLoguear(phone, mensajeMoroso, 'CONSULTAR_SALDO', 'AVISO_MOROSIDAD_SILENCIOSA', targetJid);
+          await TursoService.updateStep(phone, 'ESPERANDO_COMPROBANTE');
+          return;
+        }
+      } catch (err: any) {
+        logger.warn(`Error al consultar morosidad silenciosa en WispHub para ${phone}:`, err?.message || err);
+      }
+    }
+
+    // --- 2. VERIFICACIÓN SILENCIOSA DE CONECTIVIDAD EN SMARTOLT ---
+    const onuId = session.onu_id || (session.client_id ? `ONU-${session.client_id}` : null);
+    let diag: SmartOltStatusResult | null = null;
+    if (onuId) {
+      try {
+        diag = await SmartOLTService.obtenerEstadoONU(onuId);
+        logger.info(`Diagnóstico silencioso SmartOLT para ${phone} (ONU: ${onuId}): status=${diag.status}`);
+      } catch (err: any) {
+        logger.warn(`Error en diagnóstico silencioso SmartOLT para ${phone}:`, err?.message || err);
+      }
+    }
+
+    // CASO ESPECIAL: WI-FI / SSIDs NO VISIBLES EN DOMICILIO (WLAN APAGADO)
+    if (c.red_wifi_no_visible) {
+      const ticket = await TursoService.createTicket({
+        phone,
+        client_name: session.client_name,
+        onu_id: session.onu_id,
+        issue_summary: 'Wi-Fi / SSIDs no visibles en domicilio (WLAN deshabilitado en ONT)',
+        checks_performed: `Cliente reportó que no aparece la red Wi-Fi: "${c.resumen_queja || 'Red no visible'}". Requiere entrar a la ONT / SmartOLT para habilitar SSIDs.`,
+        status: 'ABIERTO',
+        is_out_of_hours: this.isFueraDeHorario() ? 1 : 0,
+      });
+
+      if (session.client_id) {
+        await WispHubService.crearTicketSoporte(
+          session.client_id,
+          `Wi-Fi No Visible - ${ticket.folio}`,
+          `Ticket técnico: ${ticket.issue_summary}. ${ticket.checks_performed}`,
+          'Media'
+        ).catch(() => {});
+      }
+
+      const mensajeWifi =
+        `Hola${nombre}, revisé tu equipo en el sistema y detecté que el servicio de Wi-Fi de tu módem requiere una configuración interna.\n\n` +
+        `🛠️ Ya te generé tu reporte *#${ticket.folio}*. Nuestro equipo técnico accederá a tu módem para activarlo a la brevedad y te avisamos por aquí en cuanto quede listo para que te conectes.`;
+
+      await TursoService.upsertSession({
+        phone,
+        step: 'CONSULTA_FINALIZADA',
+        metadata: JSON.stringify({
+          ...meta,
+          resumenFalla: 'Wi-Fi no visible / SSIDs deshabilitados',
+          ticketFolio: ticket.folio,
+          consultaFinalizada: true,
+        }),
+      });
+
+      await this.enviarYLoguear(phone, mensajeWifi, 'FALLA_INTERNET', `WIFI_DESHABILITADO_${ticket.folio}`, targetJid);
+      return;
+    }
+
+    // CASO A: CORTE FÍSICO DE CABLE / FIBRA (SmartOLT LOS)
+    if (diag && diag.status === 'LOS') {
+      const ticket = await TursoService.createTicket({
+        phone,
+        client_name: session.client_name,
+        onu_id: session.onu_id,
+        issue_summary: 'Problema en cableado exterior hacia domicilio (SmartOLT LOS detectado en central)',
+        checks_performed: 'Verificación en central: SmartOLT reporta LOS (Loss of Signal). Cable cortado o sin señal.',
+        status: 'ABIERTO',
+        is_out_of_hours: this.isFueraDeHorario() ? 1 : 0,
+      });
+
+      if (session.client_id) {
+        await WispHubService.crearTicketSoporte(
+          session.client_id,
+          `Corte de Cableado - ${ticket.folio}`,
+          `SmartOLT detectó corte físico (LOS). Se solicita cuadrilla a domicilio. Folio local: ${ticket.folio}`,
+          'Alta'
+        ).catch(() => {});
+      }
+
+      const mensajeCorte =
+        `Hola${nombre}, revisé tu línea aquí en el sistema y detectamos un problema en el cableado que llega a tu casa.\n\n` +
+        `🛠️ Ya te generé tu reporte *#${ticket.folio}* para mandarte a un técnico.\n\n` +
+        `📍 Por favor compártenos tu *ubicación actual por WhatsApp* o tu *dirección completa con referencias* para que pase la cuadrilla a tu domicilio.`;
+
+      await TursoService.upsertSession({
+        phone,
+        step: 'ESPERANDO_UBICACION_TECNICO',
+        metadata: JSON.stringify({
+          ...meta,
+          resumenFalla: detalleQueja,
+          ticketFolio: ticket.folio,
+        }),
+      });
+
+      await this.enviarYLoguear(phone, mensajeCorte, 'FALLA_INTERNET', `CORTE_FIBRA_LOS_${ticket.folio}`, targetJid);
+      return;
+    }
+
+    // CASO B: MÓDEM APAGADO / POWER FAIL
+    if (diag && diag.status === 'POWER_FAIL') {
+      const mensajePower =
+        `Hola${nombre}, revisé tu línea y tu módem aparece apagado o sin corriente eléctrica.\n\n` +
+        `Por favor revisa que esté bien conectado a la toma de corriente y encendido. (Por favor *no muevas el cable delgado de internet*).\n\n` +
+        `¿Las luces de tu módem logran encender?`;
+
+      await TursoService.upsertSession({
+        phone,
+        step: 'COMPROBACION_TURNO_1',
+        metadata: JSON.stringify({
+          ...meta,
+          resumenFalla: 'Módem sin energía eléctrica detectado en central',
+        }),
+      });
+
+      await this.enviarYLoguear(phone, mensajePower, 'FALLA_INTERNET', 'MODEM_POWER_FAIL', targetJid);
+      return;
+    }
+
+    // CASO C: LÍNEA EN LÍNEA (ONLINE) - REINICIO AUTOMÁTICO EN SEGUNDO PLANO Y TURNO 1
+    // Si tenemos la ONU, disparamos el reinicio remoto de inmediato para refrescar sesión
+    if (onuId) {
+      SmartOLTService.rebootONU(onuId).then(res => {
+        logger.info(`Reinicio automático silencioso de ONU ${onuId} para ${phone}: ${res.message}`);
+      }).catch(err => {
+        logger.warn(`No se pudo enviar reinicio automático para ${onuId}:`, err?.message || err);
+      });
+    }
+
+    const mensajeTurno1 =
+      `Hola${nombre}, revisé tu línea aquí en el sistema y mandé una señal para reiniciar tu módem y refrescar tu conexión. En un par de minutos terminará de reiniciar.\n\n` +
+      `Por favor no muevas el cable delgado de internet (es muy delicado).\n\n` +
+      `¿La lentitud te pasa en *todos tus aparatos* o solo en uno?`;
+
     await TursoService.upsertSession({
       phone,
-      step: 'COMPROBACION_SOPORTE',
+      step: 'COMPROBACION_TURNO_1',
       metadata: JSON.stringify({
         ...meta,
-        resumenFalla: c.resumen_queja || 'Falla o lentitud de internet',
-        comprobacionIniciada: new Date().toISOString(),
+        resumenFalla: detalleQueja,
       }),
     });
 
-    await this.enviarYLoguear(
-      phone,
-      mensajeComprobacion,
-      'FALLA_INTERNET',
-      'COMPROBACION_GUIADA_ENVIADA',
-      targetJid
-    );
+    await this.enviarYLoguear(phone, mensajeTurno1, 'FALLA_INTERNET', 'COMPROBACION_TURNO_1', targetJid);
   }
 
   /**
-   * Procesa la respuesta o evidencia enviada por el cliente durante las comprobaciones guiadas
-   * y genera el Ticket en Turso DB para que el personal realice ajustes manuales en SmartOLT.
+   * Recibe la dirección física o ubicación por WhatsApp para la visita técnica por corte de cable
    */
-  private static async procesarRespuestaComprobacion(
+  private static async procesarUbicacionTecnico(
     phone: string,
     rawText: string,
     event: IncomingMessageEvent,
@@ -670,8 +889,46 @@ export class BotOrchestrator {
     let meta: any = {};
     try { meta = JSON.parse(session?.metadata || '{}'); } catch {}
 
-    const isMedia = event.isMedia === true;
+    const folio = meta.ticketFolio;
+    const nombre = session?.client_name ? ` ${session.client_name}` : '';
+    const ubicacionTexto = rawText || (event.isMedia ? '[Foto o archivo de ubicación]' : 'Ubicación enviada');
+
+    if (folio) {
+      await TursoService.updateTicketStatus(
+        folio,
+        'ABIERTO',
+        `📍 Domicilio / Ubicación indicada por cliente: "${ubicacionTexto}"`
+      );
+    }
+
+    await this.enviarYLoguear(
+      phone,
+      `¡Listo${nombre}! Ya anoté tu dirección en tu reporte *#${folio || 'PENDIENTE'}*.\n\n` +
+      `El técnico pasará a tu domicilio a revisar el cableado a la brevedad. ¡Muchas gracias!`,
+      'FALLA_INTERNET',
+      `UBICACION_CONFIRMADA_${folio}`,
+      targetJid
+    );
+
+    await this.marcarConsultaFinalizada(phone, session);
+  }
+
+  /**
+   * Procesa la respuesta del Turno 1 (si falla en 1 o todos los aparatos),
+   * genera el ticket en Turso y solicita foto/speedtest de forma natural (Turno 2).
+   */
+  private static async procesarTurno1Comprobacion(
+    phone: string,
+    rawText: string,
+    event: IncomingMessageEvent,
+    session: Session | null,
+    targetJid?: string
+  ): Promise<void> {
+    let meta: any = {};
+    try { meta = JSON.parse(session?.metadata || '{}'); } catch {}
+
     const lower = rawText.toLowerCase();
+    const isMedia = event.isMedia === true;
     const hasSpeedtest = isMedia || lower.includes('speed') || lower.includes('test') || lower.includes('mbps');
     const allDevices = lower.includes('todo') || lower.includes('todos') || lower.includes('todas');
     const outOfHours = this.isFueraDeHorario();
@@ -682,7 +939,7 @@ export class BotOrchestrator {
       client_name: session?.client_name,
       onu_id: session?.onu_id,
       issue_summary: meta.resumenFalla || rawText || 'Reporte de lentitud / falla de internet',
-      checks_performed: `Módem y LEDs revisados. Advertencia de fibra emitida. Cliente respondió: "${rawText || (isMedia ? '[Foto/Comprobante enviado]' : 'N/A')}"`,
+      checks_performed: `Módem reiniciado en central. Cable de fibra protegido. Cliente indicó: "${rawText || (isMedia ? '[Foto/Captura]' : 'N/A')}"`,
       has_photo: isMedia ? 1 : 0,
       has_speedtest: hasSpeedtest ? 1 : 0,
       all_devices: allDevices ? 1 : 0,
@@ -690,108 +947,77 @@ export class BotOrchestrator {
       is_out_of_hours: outOfHours ? 1 : 0,
     });
 
-    // Crear ticket en WispHub como respaldo adicional si hay cliente vinculado
     if (session?.client_id) {
       await WispHubService.crearTicketSoporte(
         session.client_id,
         `Soporte Técnico - ${ticket.folio}`,
-        `Ticket generado: ${ticket.issue_summary}. Comprobaciones: ${ticket.checks_performed}`,
+        `Reporte: ${ticket.issue_summary}. Comprobaciones: ${ticket.checks_performed}`,
         'Media'
       ).catch(() => {});
     }
 
-    if (outOfHours) {
-      await this.enviarYLoguear(
-        phone,
-        `🎫 *Reporte Técnico Agendado (#${ticket.folio})*\n\n` +
-        `¡Muchas gracias por tus comprobaciones y datos! Hemos registrado tu reporte técnico en nuestro sistema.\n\n` +
-        `⏰ *Horario de Atención de Oficina y Central:*\n` +
-        `Nuestro personal inicia turno a partir de las *9:00 AM*. Tu caso ha quedado agendado en nuestro panel con máxima prioridad para que a primera hora el personal revise tu línea y realice los ajustes manuales necesarios en la central / SmartOLT.\n\n` +
-        `En cuanto concluyan las configuraciones, te notificaremos por este mismo chat para que hagas tus comprobaciones de navegación.\n\n` +
-        `💡 _Nota: Si gustas probar mientras tanto, puedes escribir *REINICIAR* para mandar un comando de reinicio remoto a tu módem._`,
-        'FALLA_INTERNET',
-        `TICKET_FUERA_HORARIO_${ticket.folio}`,
-        targetJid
-      );
-    } else {
-      await this.enviarYLoguear(
-        phone,
-        `🎫 *Reporte Técnico Generado (#${ticket.folio})*\n\n` +
-        `¡Muchas gracias por las comprobaciones! Hemos generado tu reporte técnico con el folio *#${ticket.folio}*.\n\n` +
-        `🛠️ Nuestro personal técnico revisará tu línea directamente en la central para realizar las modificaciones necesarias en el sistema. Te informaremos en cuanto concluyan para que compruebes tu navegación.\n\n` +
-        `💡 _Nota: Si deseas refrescar tu módem mientras el personal revisa tu caso, puedes escribir *REINICIAR* para enviar un comando de reinicio remoto._`,
-        'FALLA_INTERNET',
-        `TICKET_CREADO_${ticket.folio}`,
-        targetJid
+    const notaHorario = outOfHours ? '\n\n⏰ *Nota:* Tu reporte se atenderá con prioridad a primera hora a partir de las 9:00 AM.' : '';
+
+    const mensajeTurno2 =
+      `Enterado. Si después del reinicio sigue igual, por favor mándanos una foto de las luces de tu módem o captura de Speedtest.${notaHorario}\n\n` +
+      `Ya te generé tu reporte *#${ticket.folio}* para que el personal técnico haga los ajustes necesarios en el sistema.`;
+
+    await TursoService.upsertSession({
+      phone,
+      step: 'COMPROBACION_EVIDENCIA',
+      metadata: JSON.stringify({
+        ...meta,
+        ticketFolio: ticket.folio,
+      }),
+    });
+
+    await this.enviarYLoguear(phone, mensajeTurno2, 'FALLA_INTERNET', `TICKET_CREADO_${ticket.folio}`, targetJid);
+  }
+
+  /**
+   * Recibe la foto del módem o captura de Speedtest y la vincula al ticket
+   */
+  private static async procesarEvidenciaTicket(
+    phone: string,
+    rawText: string,
+    event: IncomingMessageEvent,
+    session: Session | null,
+    targetJid?: string
+  ): Promise<void> {
+    let meta: any = {};
+    try { meta = JSON.parse(session?.metadata || '{}'); } catch {}
+
+    const folio = meta.ticketFolio;
+    const isMedia = event.isMedia === true;
+    const evidencia = isMedia ? 'Foto o captura de pantalla enviada por el cliente' : rawText;
+
+    if (folio) {
+      await TursoService.updateTicketStatus(
+        folio,
+        'ABIERTO',
+        `Evidencia recibida: "${evidencia}"`
       );
     }
+
+    await this.enviarYLoguear(
+      phone,
+      `¡Recibido! Ya adjunté la evidencia a tu reporte *#${folio || ''}*. El equipo técnico ya cuenta con todos los datos para realizar los ajustes. ¡Muchas gracias!`,
+      'FALLA_INTERNET',
+      `EVIDENCIA_ADJUNTADA_${folio}`,
+      targetJid
+    );
 
     await this.marcarConsultaFinalizada(phone, session);
   }
 
   /**
-   * Diagnóstico general de niveles y estado físico de la conexión con SmartOLT
+   * Diagnóstico general o reporte de falla iniciado desde botón de menú
    */
   private static async flujoReportarFalla(phone: string, session: Session | null, targetJid?: string): Promise<void> {
-    const onuId = session?.onu_id || (session?.client_id ? `ONU-${session.client_id}` : 'ONU-DEFAULT');
-
-    await this.enviarYLoguear(phone, `🔍 Diagnosticando el estado de tu conexión en tiempo real...`, 'DIAGNOSTICO', 'INICIANDO_SCAN', targetJid);
-
-    const estadoOnu = await SmartOLTService.obtenerEstadoONU(onuId);
-    logger.info(`Diagnóstico SmartOLT para ${phone} (ONU: ${onuId}): ${estadoOnu.status}`);
-
-    if (estadoOnu.status === 'LOS') {
-      const ticket = await WispHubService.crearTicketSoporte(
-        session?.client_id || 'PENDIENTE',
-        'Corte de Fibra Óptica (SmartOLT LOS)',
-        'SmartOLT reporta Loss of Signal (LOS). Fibra rota o desconectada.',
-        'Alta'
-      );
-
-      await this.enviarYLoguear(
-        phone,
-        `🔴 *Falla Física Detectada (Fibra Dañada / Foco Rojo):*\n\nLa central detecta corte total de señal óptica en tu domicilio (LOS).\n\n🎫 *Ticket generado:* *#${ticket.folio}*\nNuestros técnicos en campo ya han sido notificados para la reparación.\n\n⚠️ Por favor verifica que el cable delgado de fibra no esté doblado ni desconectado.`,
-        'FALLA_INTERNET',
-        `TICKET_SMARTOLT_LOS_${ticket.folio}`,
-        targetJid
-      );
-      await this.marcarConsultaFinalizada(phone, session);
-      return;
-    }
-
-    if (estadoOnu.status === 'POWER_FAIL') {
-      await this.enviarYLoguear(
-        phone,
-        `⚡ *Falla de Alimentación (Módem Sin Luz / Apagado):*\n\nLa central SmartOLT detecta que tu módem no recibe energía eléctrica (Dying Gasp).\n\n🔌 Por favor verifica:\n1. Que el eliminador negro esté bien conectado a la toma de corriente.\n2. Que el botón de encendido trasero esté presionado.\n\nSi la luz ya volvió pero tu módem sigue sin encender, escribe *ASESOR*.`,
-        'FALLA_INTERNET',
-        'SMARTOLT_POWER_FAIL',
-        targetJid
-      );
-      return;
-    }
-
-    if (estadoOnu.status === 'ONLINE') {
-      let metaObj: any = {};
-      try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
-      const planTexto = metaObj.speed_profile ? `\n📦 *Plan contratado:* ${metaObj.speed_profile}` : '';
-      const estadoLinea = '\n📶 *Estado de la línea:* Óptimo y estable (señal normal)';
-
-      await this.enviarYLoguear(
-        phone,
-        `🟢 *Tu módem se encuentra en línea y sincronizado con la central.*${planTexto}${estadoLinea}\n\nSi experimentas lentitud o páginas que no abren:\n• Escribe *REINICIAR* para refrescar tu módem remotamente.\n• O escribe *ASESOR* para comunicarte con un técnico humano.`,
-        'FALLA_INTERNET',
-        'SMARTOLT_ONLINE',
-        targetJid
-      );
-      return;
-    }
-
-    // Fallback general (Offline / Desconectado)
-    await this.enviarYLoguear(
+    await this.flujoFallaInteligente(
       phone,
-      `⚠️ La central reporta que tu equipo se encuentra desconectado (Offline).\n\nPor favor verifica que el módem esté encendido. Si deseas que enviemos un comando de reinicio escribe *REINICIAR*, o escribe *ASESOR* para que te atienda un técnico de *${this.getIspName()}*.`,
-      'FALLA_INTERNET',
-      'SMARTOLT_FALLBACK_TEXTO',
+      { intencion: 'FALLA_INTERNET', resumen_queja: 'Reporte de falla técnica desde menú' } as any,
+      session,
       targetJid
     );
   }
@@ -804,11 +1030,12 @@ export class BotOrchestrator {
    */
   private static async flujoConsultarNiveles(phone: string, session: Session | null, targetJid?: string): Promise<void> {
     const onuId = session?.onu_id || (session?.client_id ? `ONU-${session.client_id}` : null);
+    const nombre = session?.client_name ? ` ${session.client_name}` : '';
 
     if (!onuId) {
       await this.enviarYLoguear(
         phone,
-        `Para verificar el estado de tu señal en la central, por favor indícame tu *Nombre completo* o número de contrato:`,
+        `Para verificar tu línea en el sistema, por favor indícame tu *Nombre completo* o número de contrato:`,
         'CONSULTAR_NIVELES',
         'SOLICITAR_IDENTIFICACION_NIVELES',
         targetJid
@@ -817,35 +1044,46 @@ export class BotOrchestrator {
       return;
     }
 
-    await this.enviarYLoguear(phone, `🔍 Verificando la estabilidad de tu línea con la central...`, 'DIAGNOSTICO', 'INICIANDO_SCAN_NIVELES', targetJid);
-
     const estadoOnu = await SmartOLTService.obtenerEstadoONU(onuId);
-
-    // Registro interno técnico con métricas reales completas para diagnóstico del ISP
-    logger.info(`[NOC-DIAGNOSTICO-INTERNO] Niveles para ${phone} (ONU: ${onuId}): Status=${estadoOnu.status}, RX=${estadoOnu.opticalPowerDbm} dBm`);
+    logger.info(`[NOC-DIAGNOSTICO-INTERNO] Línea para ${phone} (ONU: ${onuId}): Status=${estadoOnu.status}`);
 
     if (estadoOnu.status === 'LOS') {
-      const ticket = await WispHubService.crearTicketSoporte(
-        session?.client_id || 'PENDIENTE',
-        'Corte de Fibra Óptica (SmartOLT LOS)',
-        `SmartOLT reporta LOS (Loss of Signal). Potencia: ${estadoOnu.opticalPowerDbm || 'Sin luz'}. Falla física en acometida.`,
-        'Alta'
-      );
+      const ticket = await TursoService.createTicket({
+        phone,
+        client_name: session?.client_name,
+        onu_id: session?.onu_id,
+        issue_summary: 'Corte de cableado exterior hacia domicilio (LOS detectado en central)',
+        checks_performed: 'Verificación en central: SmartOLT reporta LOS (Loss of Signal).',
+        status: 'ABIERTO',
+        is_out_of_hours: this.isFueraDeHorario() ? 1 : 0,
+      });
+
+      let meta: any = {};
+      try { meta = JSON.parse(session?.metadata || '{}'); } catch {}
+
+      await TursoService.upsertSession({
+        phone,
+        step: 'ESPERANDO_UBICACION_TECNICO',
+        metadata: JSON.stringify({
+          ...meta,
+          ticketFolio: ticket.folio,
+        }),
+      });
+
       await this.enviarYLoguear(
         phone,
-        `🔴 *Alerta en tu Línea de Fibra:*\n\nDetectamos una interrupción en la señal óptica de tu domicilio (corte de cable o conector flojo).\n\n🎫 *Reporte técnico generado:* *#${ticket.folio}*\nNuestra cuadrilla técnica ha sido notificada para la reparación física.\n\n⚠️ Por favor verifica que el cable delgado de fibra óptica que entra a tu módem no esté desconectado ni doblado.`,
+        `Hola${nombre}, revisé tu línea aquí en el sistema y detectamos un problema en el cableado que llega a tu casa.\n\n🛠️ Ya te generé tu reporte *#${ticket.folio}* para mandarte a un técnico.\n\n📍 Por favor compártenos tu ubicación por aquí o tu dirección completa con referencias para que pase la cuadrilla a tu domicilio.`,
         'CONSULTAR_NIVELES',
         `TICKET_FIBRA_CORTADA_${ticket.folio}`,
         targetJid
       );
-      await this.marcarConsultaFinalizada(phone, session);
       return;
     }
 
     if (estadoOnu.status === 'POWER_FAIL') {
       await this.enviarYLoguear(
         phone,
-        `⚡ *Falla de Alimentación Eléctrica:*\n\nLa central detecta que tu módem no está recibiendo energía eléctrica.\n\n🔌 Por favor verifica:\n1. Que el eliminador negro esté firmemente conectado a la toma de corriente.\n2. Que el botón trasero de encendido (ON/OFF) esté presionado.\n\nSi la energía ya regresó y tu equipo no enciende, escribe *ASESOR*.`,
+        `Hola${nombre}, revisé tu línea y tu módem aparece apagado o sin corriente eléctrica.\n\nPor favor verifica que esté bien conectado a la toma de corriente y encendido. (Por favor no muevas el cable delgado de internet).`,
         'CONSULTAR_NIVELES',
         'SMARTOLT_POWER_FAIL',
         targetJid
@@ -854,35 +1092,21 @@ export class BotOrchestrator {
     }
 
     if (estadoOnu.status === 'ONLINE') {
-      let metaObj: any = {};
-      try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
-      const planTexto = metaObj.speed_profile ? `\n📦 *Plan:* ${metaObj.speed_profile}` : '';
-      const ubicacionTexto = metaObj.address || metaObj.zone ? `\n📍 *Ubicación:* ${metaObj.address || metaObj.zone}` : '';
-
-      // Evaluamos internamente la potencia SIN exponer el número dBm al cliente
-      const dbm = estadoOnu.opticalPowerDbm;
-      let estadoSenal = 'Óptima y estable ✅';
-      let detalleSenal = 'Tu línea de fibra óptica se encuentra sincronizada con la central en un rango óptimo de calidad, sin pérdidas de señal en tu domicilio.';
-
-      if (dbm !== null && dbm !== undefined && dbm < -27) {
-        estadoSenal = 'En observación preventiva ⚠️';
-        detalleSenal = 'Tu equipo está conectado, aunque registramos una ligera variación en la señal de tu sector. Ya ha sido canalizado a nuestra área de ingeniería para su ajuste preventivo.';
-      }
-
       await this.enviarYLoguear(
         phone,
-        `📶 *Estado de tu Conexión en Central:*\n• Estado: *${estadoSenal}*${planTexto}${ubicacionTexto}\n\n${detalleSenal}\n\n💡 _(Nota: Las métricas numéricas detalladas en dBm son de uso reservado para diagnóstico técnico de la central de ${this.getIspName()})._\n\nSi experimentas lentitud o deseas refrescar tu módem:\n• Escribe *REINICIAR* para enviar un reinicio remoto.\n• O escribe *ASESOR* para hablar con un técnico humano.`,
+        `Hola${nombre}, revisé tu línea aquí en el sistema y tu conexión se encuentra en línea y estable. 👍\n\nSi llegas a notar lentitud o alguna falla con tu internet, avísame por aquí para revisarlo contigo.`,
         'CONSULTAR_NIVELES',
         'NIVELES_INFORMADOS_COMERCIAL',
         targetJid
       );
+      await this.marcarConsultaFinalizada(phone, session);
       return;
     }
 
     // Si está Offline
     await this.enviarYLoguear(
       phone,
-      `⚠️ *Módem Desconectado (Offline):*\n\nLa central no recibe señal de tu equipo en este momento. Por favor verifica que el módem esté encendido con sus luces frontales activas.\n\nSi el equipo está encendido pero sigues sin señal, escribe *ASESOR* para coordinar asistencia técnica de *${this.getIspName()}*.`,
+      `Hola${nombre}, revisé tu línea y tu equipo aparece desconectado en el sistema.\n\nPor favor verifica que el módem esté encendido con sus luces frontales activas.`,
       'CONSULTAR_NIVELES',
       'SMARTOLT_OFFLINE',
       targetJid
@@ -895,14 +1119,14 @@ export class BotOrchestrator {
   private static async flujoReiniciarModem(phone: string, session: Session | null, targetJid?: string): Promise<void> {
     const onuId = session?.onu_id || `ONU-${session?.client_id || 'DEFAULT'}`;
 
-    await this.enviarYLoguear(phone, `⏳ Enviando señal de reinicio a tu módem...`, 'REINICIAR_MODEM', 'ENVIANDO_COMANDO_REBOOT', targetJid);
+    const nombre = session?.client_name ? ` ${session.client_name}` : '';
 
     const resultado = await SmartOLTService.rebootONU(onuId);
 
     if (resultado.success) {
       await this.enviarYLoguear(
         phone,
-        `✅ *Comando de reinicio ejecutado con éxito.*\n\nLas luces de tu módem parpadearán y el servicio se reestablecerá por completo en aproximadamente *2 a 3 minutos*. Si tras este tiempo sigues sin internet, escribe *ASESOR*.`,
+        `Listo${nombre}, mandé la orden de reinicio a tu módem. Tardará entre 2 y 3 minutos en restablecerse. En cuanto terminen de encender las luces, pruébalo y me avisas cómo te funcionó. 👍`,
         'REINICIAR_MODEM',
         'REBOOT_EXITOSO',
         targetJid
@@ -910,7 +1134,7 @@ export class BotOrchestrator {
     } else {
       await this.enviarYLoguear(
         phone,
-        `⚠️ No fue posible reiniciar tu módem de forma remota. Por favor desconéctalo de la corriente eléctrica por 30 segundos y vuelve a conectarlo.`,
+        `No fue posible reiniciar el módem automáticamente desde la central. Por favor desconéctalo de la toma de corriente por 30 segundos y vuelve a conectarlo.`,
         'REINICIAR_MODEM',
         'REBOOT_FALLIDO_MANUAL',
         targetJid

@@ -37,6 +37,7 @@ router.get('/api/tickets', AdminController.getTickets);
 router.patch('/api/tickets/:folio/status', AdminController.updateTicketStatus);
 router.post('/api/tickets/:folio/status', AdminController.updateTicketStatus);
 router.get('/api/tickets/stats', AdminController.getTicketStats);
+router.post('/api/sessions/:phone/toggle-pause', AdminController.toggleBotPause);
 
 // Healthchecks para cron-job.org / Render
 router.get('/api/health', HealthController.check);
