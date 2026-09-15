@@ -94,29 +94,73 @@ export function diceCoefficient(str1: string, str2: string): number {
 const STOP_WORDS = new Set(['de', 'del', 'la', 'las', 'el', 'los', 'y', 'en', 'onu', 'cliente', 'casa']);
 
 /**
- * Calcula un puntaje de coincidencia global (0 a 100) entre la consulta del usuario y un registro
- * Tolera intercambio de nombres y apellidos, nombres parciales y faltas ortográficas.
+ * Elimina prefijos numéricos de contrato comunes en SmartOLT (ej: "2095-Magdalena", "696-Maria")
+ */
+export function cleanPersonName(name: string): string {
+  if (!name) return '';
+  return name
+    .replace(/^[0-9]+[-\s_]+/g, '') // Elimina prefijos como "2095-", "696 "
+    .replace(/^(cli|onu|srv|cto)[-_0-9]+\s*/i, '')
+    .trim();
+}
+
+/**
+ * Calcula un puntaje de coincidencia global (0 a 100) entre la consulta del usuario y un registro.
+ * Valida estrictamente el nombre de pila (primer nombre) para evitar que personas con los mismos
+ * apellidos (ej. hermanos o parientes) se confundan entre sí.
  */
 export function computeNameMatchScore(query: string, targetName: string): number {
-  const qNorm = normalizeText(query);
-  const tNorm = normalizeText(targetName);
+  const qClean = cleanPersonName(query);
+  const tClean = cleanPersonName(targetName);
+
+  const qNorm = normalizeText(qClean);
+  const tNorm = normalizeText(tClean);
 
   if (!qNorm || !tNorm) return 0;
   if (qNorm === tNorm) return 100;
 
-  // Si una cadena contiene exactamente a la otra
-  if (tNorm.includes(qNorm) || qNorm.includes(tNorm)) {
-    const lengthRatio = Math.min(qNorm.length, tNorm.length) / Math.max(qNorm.length, tNorm.length);
-    return Math.round(75 + (25 * lengthRatio));
-  }
-
-  // Tokenización
+  // Tokenización excluyendo palabras vacías
   const qTokens = qNorm.split(' ').filter(w => w.length > 1 && !STOP_WORDS.has(w));
   const tTokens = tNorm.split(' ').filter(w => w.length > 1 && !STOP_WORDS.has(w));
 
   if (qTokens.length === 0 || tTokens.length === 0) return 0;
 
-  // Comparación token por token para tolerar errores como "gonzales" vs "gonzalez"
+  // 1. VALIDACIÓN DEL NOMBRE DE PILA (Primer nombre propio):
+  // En español el primer token (ej. "Virginia" vs "Magdalena") es el nombre de pila.
+  // Si los primeros nombres son completamente distintos, NO deben coincidir aunque compartan ambos apellidos.
+  const qFirstName = qTokens[0];
+  let firstNameMatched = false;
+  let bestFirstNameSim = 0;
+
+  for (const tWord of tTokens) {
+    if (qFirstName === tWord) {
+      firstNameMatched = true;
+      bestFirstNameSim = 1.0;
+      break;
+    }
+    const maxLen = Math.max(qFirstName.length, tWord.length);
+    const dist = levenshteinDistance(qFirstName, tWord);
+    const maxAllowedDist = maxLen >= 6 ? 2 : (maxLen >= 4 ? 1 : 0);
+    if (dist <= maxAllowedDist) {
+      const sim = 1.0 - (dist / maxLen);
+      if (sim > bestFirstNameSim) bestFirstNameSim = sim;
+      if (sim >= 0.7) firstNameMatched = true;
+    }
+  }
+
+  // Si el usuario ingresó nombre y apellido(s), pero el primer nombre no coincide en absoluto
+  if (qTokens.length >= 2 && !firstNameMatched && bestFirstNameSim < 0.6) {
+    // Penalización estricta: son personas distintas con mismos apellidos
+    return Math.round(bestFirstNameSim * 30);
+  }
+
+  // Si una cadena contiene exactamente a la otra y el primer nombre coincide
+  if (tNorm.includes(qNorm) || qNorm.includes(tNorm)) {
+    const lengthRatio = Math.min(qNorm.length, tNorm.length) / Math.max(qNorm.length, tNorm.length);
+    return Math.round(80 + (20 * lengthRatio));
+  }
+
+  // 2. Comparación token por token para tolerar errores como "gonzales" vs "gonzalez"
   let matchedTokensScore = 0;
   for (const qWord of qTokens) {
     let bestWordMatch = 0;
@@ -125,10 +169,8 @@ export function computeNameMatchScore(query: string, targetName: string): number
         bestWordMatch = 1.0;
         break;
       }
-      // Si la palabra está contenida o distancia es baja
       const maxLen = Math.max(qWord.length, tWord.length);
       const dist = levenshteinDistance(qWord, tWord);
-      // Para palabras de 4+ letras, permitir 1 o 2 errores
       const maxAllowedDist = maxLen >= 6 ? 2 : (maxLen >= 4 ? 1 : 0);
       if (dist <= maxAllowedDist) {
         const sim = 1.0 - (dist / maxLen);
@@ -144,6 +186,6 @@ export function computeNameMatchScore(query: string, targetName: string): number
   const tokenCoverage = matchedTokensScore / qTokens.length;
   const diceOverall = diceCoefficient(qNorm, tNorm);
 
-  const finalScore = (tokenCoverage * 0.7 + diceOverall * 0.3) * 100;
+  const finalScore = (tokenCoverage * 0.75 + diceOverall * 0.25) * 100;
   return Math.round(Math.min(100, Math.max(0, finalScore)));
 }

@@ -1307,9 +1307,9 @@ export class BotOrchestrator {
 
       if (coincidenciasOlt.length > 0) {
         const mejorScore = coincidenciasOlt[0].matchScore;
-        // Candidatos con score alto (>= 58) y cercanos al mejor score (dentro de 20 puntos de margen)
+        // Candidatos con score alto (>= 75) y cercanos al mejor score (dentro de 10 puntos de margen)
         const candidatosRelevantes = coincidenciasOlt.filter(
-          c => c.matchScore >= 58 && c.matchScore >= (mejorScore - 20)
+          c => c.matchScore >= 75 && c.matchScore >= (mejorScore - 10)
         );
 
         // CASO A: El cliente tiene 2 o más servicios registrados (o homónimos)
@@ -1361,7 +1361,7 @@ export class BotOrchestrator {
 
         // CASO B: Coincidencia única sólida
         const mejor = candidatosRelevantes[0] || coincidenciasOlt[0];
-        if (mejor.matchScore >= 65 || (coincidenciasOlt.length === 1 && mejor.matchScore >= 50)) {
+        if (mejor.matchScore >= 75 || (coincidenciasOlt.length === 1 && mejor.matchScore >= 70)) {
           const meta = JSON.stringify({
             speed_profile: mejor.speed_profile,
             zone: mejor.zone_name,
@@ -1546,13 +1546,44 @@ export class BotOrchestrator {
       return;
     }
 
+    // 0. DETECTAR SI EL CLIENTE ESTÁ CORRIGIENDO SU NOMBRE O ACLARANDO SU IDENTIDAD
+    const lower = rawInput.toLowerCase();
+    const esCorreccion = /^(soy|no soy|no es|me llamo|mi nombre|yo soy|disculpa|en realidad|te equivocaste|ninguno)/i.test(lower) ||
+      lower.includes('no soy') || lower.includes('no es mi') || lower.includes('te equivocaste') || lower.includes('ninguno');
+    const tieneNumeros = /\b[1-9]\b/.test(rawInput);
+
+    if ((esCorreccion || !tieneNumeros) && rawInput.length >= 3) {
+      // Extraer el nombre correcto (ej. de "soy virginia no magdalena" -> "virginia")
+      let nombreCorregido = rawInput
+        .replace(/^(no soy|yo no soy|no es|no)\s+[a-zA-ZáéíóúÁÉÍÓÚñÑ]+\s*(,|;)?\s*(soy|me llamo|mi nombre es)?/i, '')
+        .replace(/^(soy|me llamo|mi nombre es|yo soy)\s+/i, '')
+        .replace(/\b(no\s+[a-zA-ZáéíóúÁÉÍÓÚñÑ]+)\b/gi, '')
+        .replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]/g, '')
+        .trim();
+
+      if (!nombreCorregido || nombreCorregido.length < 2) {
+        nombreCorregido = rawInput.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]/g, '').trim();
+      }
+
+      logger.info(`[SeleccionServicio] Cliente ${phone} corrigió su identidad: "${rawInput}" -> "${nombreCorregido}". Re-procesando identificación.`);
+      
+      // Limpiar pendingServices de la sesión anterior
+      const sesionReset = await TursoService.upsertSession({
+        phone,
+        step: 'ESPERANDO_IDENTIFICACION',
+        metadata: JSON.stringify({ ...meta, pendingServices: [], registeredServices: [] }),
+      });
+
+      await this.procesarIdentificacion(phone, nombreCorregido, sesionReset, targetJid);
+      return;
+    }
+
     // 1. Extraer el número de opción: "1", "2", "el 1", "opcion 2", "primero", etc.
     let indexSeleccionado = -1;
     const matchNum = rawInput.match(/\b([1-9])\b/);
     if (matchNum) {
       indexSeleccionado = parseInt(matchNum[1], 10) - 1;
     } else {
-      const lower = rawInput.toLowerCase();
       if (lower.includes('primer') || lower.includes('uno')) {
         indexSeleccionado = 0;
       } else if (lower.includes('segund') || lower.includes('dos')) {
@@ -1576,7 +1607,7 @@ export class BotOrchestrator {
     if (indexSeleccionado < 0 || indexSeleccionado >= pendingServices.length) {
       await this.enviarYLoguear(
         phone,
-        `Por favor responde únicamente con el *número* del servicio que deseas consultar (ejemplo: *1* o *2*).`,
+        `Por favor responde con el número de tu opción (1 al ${pendingServices.length}) o escribe tu *Nombre completo* para buscar tu servicio.`,
         'SELECCION_SERVICIO',
         'OPCION_INVALIDA',
         targetJid
