@@ -690,20 +690,30 @@ export class TursoService {
       const oltRows = resOlt.rows;
       const whRows = resWh.rows;
 
-      // Indexar WispHub por Folio numérico y por Nombre Normalizado
-      const whByFolio = new Map<string, any>();
-      const whByName = new Map<string, any>();
+      // Indexar WispHub por Folio numérico (lista de clientes por folio), Número de Serie y Nombre Normalizado
+      const whByFolio = new Map<string, any[]>();
+      const whByName = new Map<string, any[]>();
+      const whBySn = new Map<string, any>();
       const whUsedIds = new Set<string | number>();
 
       for (const row of whRows) {
         const servicioStr = String(row.servicio || row.nombre || '');
-        const folioMatch = servicioStr.match(/^([0-9]{1,6})[-\s_]/);
+        const folioMatch = servicioStr.match(/^([0-9]{1,6})[-\s_]/) || servicioStr.match(/([0-9]{1,6})[-\s_]/);
         if (folioMatch && folioMatch[1]) {
-          whByFolio.set(folioMatch[1], row);
+          const numFolio = String(parseInt(folioMatch[1], 10));
+          const list = whByFolio.get(numFolio) || [];
+          list.push(row);
+          whByFolio.set(numFolio, list);
         }
         const normName = String(row.nombre_normalized || normalizeText(cleanPersonName(String(row.nombre || ''))));
-        if (normName) {
-          whByName.set(normName, row);
+        if (normName && normName.length >= 4) {
+          const list = whByName.get(normName) || [];
+          list.push(row);
+          whByName.set(normName, list);
+        }
+        const sn = String(row.sn_onu || '').trim().toUpperCase();
+        if (sn && sn.length >= 8) {
+          whBySn.set(sn, row);
         }
       }
 
@@ -712,15 +722,55 @@ export class TursoService {
       // 3. Procesar registros de SmartOLT y buscar su par en WispHub
       for (const olt of oltRows) {
         const oltName = String(olt.name || '');
-        const oltFolioMatch = oltName.match(/^([0-9]{1,6})[-\s_]/);
-        const oltFolio = oltFolioMatch ? oltFolioMatch[1] : '';
+        const oltFolioMatch = oltName.match(/([0-9]{1,6})[-\s_]/);
+        const oltNumFolio = oltFolioMatch ? String(parseInt(oltFolioMatch[1], 10)) : '';
         const oltNormName = String(olt.name_normalized || normalizeText(cleanPersonName(oltName)));
+        const oltSn = String(olt.sn || '').trim().toUpperCase();
         const oltIp = olt.ip_address ? String(olt.ip_address).trim() : null;
 
-        // Buscar coincidencia en WispHub: primero por folio, luego por nombre normalizado
-        let whMatch = oltFolio ? whByFolio.get(oltFolio) : null;
-        if (!whMatch && oltNormName) {
-          whMatch = whByName.get(oltNormName);
+        let whMatch: any = null;
+
+        // 1. Prioridad: Coincidencia por Número de Serie de ONU (SN)
+        if (oltSn && whBySn.has(oltSn)) {
+          const cand = whBySn.get(oltSn);
+          if (!whUsedIds.has(cand.id_servicio)) {
+            whMatch = cand;
+          }
+        }
+
+        // 2. Coincidencia por Folio numérico CON VALIDACIÓN DE NOMBRE
+        // Previene falsos positivos con folios duplicados de antenas u otras OLTs
+        if (!whMatch && oltNumFolio && whByFolio.has(oltNumFolio)) {
+          const candidates = whByFolio.get(oltNumFolio) || [];
+          let bestCandidate: any = null;
+          let bestScore = -1;
+
+          for (const cand of candidates) {
+            if (whUsedIds.has(cand.id_servicio)) continue;
+            const candName = String(cand.nombre || cand.servicio || '');
+            const score = computeNameMatchScore(cleanPersonName(oltName), candName);
+            if (score > bestScore) {
+              bestScore = score;
+              bestCandidate = cand;
+            }
+          }
+
+          if (bestCandidate && bestScore >= 35) {
+            whMatch = bestCandidate;
+          } else if (bestCandidate && candidates.length === 1 && bestScore >= 20) {
+            whMatch = bestCandidate;
+          }
+        }
+
+        // 3. Coincidencia por Nombre Normalizado
+        if (!whMatch && oltNormName && oltNormName.length >= 5) {
+          const nameCandidates = whByName.get(oltNormName) || [];
+          for (const cand of nameCandidates) {
+            if (!whUsedIds.has(cand.id_servicio)) {
+              whMatch = cand;
+              break;
+            }
+          }
         }
 
         if (whMatch) {
@@ -738,7 +788,7 @@ export class TursoService {
 
           matchedItems.push({
             id: `MATCH-${olt.unique_external_id}-${whMatch.id_servicio}`,
-            folio: oltFolio || String(whMatch.id_servicio),
+            folio: oltNumFolio || String(whMatch.id_servicio),
             cliente: String(whMatch.nombre || cleanPersonName(oltName)),
             servicio: String(whMatch.servicio || oltName),
             smartolt_ip: oltIp,
@@ -757,7 +807,7 @@ export class TursoService {
           // Solo en SmartOLT
           matchedItems.push({
             id: `OLT-${olt.unique_external_id}`,
-            folio: oltFolio || 'N/A',
+            folio: oltNumFolio || 'N/A',
             cliente: cleanPersonName(oltName) || oltName,
             servicio: oltName,
             smartolt_ip: oltIp,
