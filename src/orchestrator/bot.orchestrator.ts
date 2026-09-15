@@ -223,6 +223,58 @@ export class BotOrchestrator {
       return;
     }
 
+    // 2.1 CADUCIDAD POR INACTIVIDAD DE PASOS TÉCNICOS TEMPORALES (15 minutos):
+    // Si pasaron más de 15 minutos sin responder una comprobación técnica, el paso caduca
+    // para evitar que un "Hola" o "Quiero pagar" posterior genere reportes técnicos indebidos.
+    const lastInteractionMs = session?.last_interaction ? new Date(session.last_interaction).getTime() : 0;
+    const minutosInactividad = lastInteractionMs > 0 ? (Date.now() - lastInteractionMs) / (1000 * 60) : 9999;
+    const pasosTemporales = [
+      'COMPROBACION_TURNO_1',
+      'COMPROBACION_EVIDENCIA',
+      'ESPERANDO_UBICACION_TECNICO',
+      'COMPROBACION_SOPORTE',
+      'ESPERANDO_COMPROBANTE',
+    ];
+
+    if (pasosTemporales.includes(session?.step || '') && minutosInactividad >= 15) {
+      logger.info(`[Timeout] Paso temporal "${session?.step}" de ${phone} caducó (${Math.round(minutosInactividad)}m sin respuesta). Reiniciando a CONVERSACIONAL.`);
+      session = await TursoService.upsertSession({
+        phone,
+        step: 'CONVERSACIONAL',
+      });
+    }
+
+    // 2.2 DETECCIÓN DE CAMBIO DE INTENCIÓN (SALUDOS Y CONSULTAS DE PAGO PRIORITARIAS):
+    // Si el usuario escribe un saludo o pregunta por pagos/facturas/contraseña, NUNCA debe
+    // tratarse como respuesta técnica a un reporte previo ni generar tickets de falla.
+    const esSaludo = /^(hola|buen\s*(dia|día)|buenas\s*(tardes|noches)?|saludos|que\s*tal|hey|hi)\b/i.test(lowerMsg);
+    const esConsultaPago = /\b(pagar|pago|saldo|debo|cuanto\s*debo|cuando\s*me\s*toca|factura|recibo|cuenta|tarjeta|transferencia|clabe|banco|mensualidad|costo)\b/i.test(lowerMsg);
+    const esConsultaWifi = /\b(contrase[ñn]a|clave|wifi|wi-fi|ssid)\b/i.test(lowerMsg);
+
+    if ((esSaludo || esConsultaPago || esConsultaWifi) && pasosTemporales.includes(session?.step || '')) {
+      logger.info(`[Intent Override] Cliente ${phone} envió "${rawText}" mientras estaba en paso "${session?.step}". Cancelando espera técnica.`);
+      session = await TursoService.upsertSession({
+        phone,
+        step: 'CONVERSACIONAL',
+      });
+
+      if (esConsultaPago) {
+        await this.flujoConsultarSaldo(phone, session, targetJid);
+        return;
+      }
+      if (esConsultaWifi) {
+        await this.enviarYLoguear(
+          phone,
+          `📶 *Cambio de contraseña Wi-Fi:*\n\nPor seguridad de tu red, el cambio de clave o nombre de red se gestiona directamente con nuestro equipo técnico. Por favor responde con el nuevo nombre y contraseña que deseas configurar para tu módem.`,
+          'DATOS_WIFI',
+          'INSTRUCCIONES_WIFI',
+          targetJid
+        );
+        return;
+      }
+      // Si es saludo puro, dejamos que continúe el flujo normal conversacional/identificación
+    }
+
     // Si el cliente está enviando su ubicación o domicilio para visita técnica
     if (session?.step === 'ESPERANDO_UBICACION_TECNICO') {
       await this.procesarUbicacionTecnico(phone, rawText, event, session, targetJid);
@@ -291,9 +343,6 @@ export class BotOrchestrator {
     // Evaluar metadatos y tiempo de inactividad de la sesión existente
     let metaObj: any = {};
     try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
-
-    const lastInteractionMs = session?.last_interaction ? new Date(session.last_interaction).getTime() : 0;
-    const minutosInactividad = lastInteractionMs > 0 ? (Date.now() - lastInteractionMs) / (1000 * 60) : 9999;
 
     // REGLA DE REINICIO CADA 24 HORAS (1440 minutos):
     // Si han transcurrido 24 horas o más desde la última interacción, se reinicia el flujo limpiamente
@@ -924,10 +973,25 @@ export class BotOrchestrator {
     session: Session | null,
     targetJid?: string
   ): Promise<void> {
+    const lower = rawText.toLowerCase().trim();
+    const esSaludo = /^(hola|buen\s*(dia|día)|buenas\s*(tardes|noches)?|saludos|que\s*tal|hey|hi)\b/i.test(lower);
+    const esConsultaPago = /\b(pagar|pago|saldo|debo|cuanto\s*debo|cuando\s*me\s*toca|factura|recibo|cuenta|tarjeta|transferencia|clabe|banco|mensualidad|costo)\b/i.test(lower);
+
+    // Si el cliente no está respondiendo a la falla y saluda o pregunta por pagos:
+    if (esSaludo || esConsultaPago) {
+      const sesionReset = await TursoService.upsertSession({ phone, step: 'CONVERSACIONAL' });
+      if (esConsultaPago) {
+        await this.flujoConsultarSaldo(phone, sesionReset, targetJid);
+      } else {
+        const nombre = session?.client_name ? ` *${session.client_name}*` : '';
+        await this.enviarYLoguear(phone, `¡Hola${nombre}! 👋 ¿En qué podemos apoyarte el día de hoy?`, 'SALUDO', 'SALUDO_CORDIAL', targetJid);
+      }
+      return;
+    }
+
     let meta: any = {};
     try { meta = JSON.parse(session?.metadata || '{}'); } catch {}
 
-    const lower = rawText.toLowerCase();
     const isMedia = event.isMedia === true;
     const hasSpeedtest = isMedia || lower.includes('speed') || lower.includes('test') || lower.includes('mbps');
     const allDevices = lower.includes('todo') || lower.includes('todos') || lower.includes('todas');
@@ -984,6 +1048,22 @@ export class BotOrchestrator {
     session: Session | null,
     targetJid?: string
   ): Promise<void> {
+    const lower = rawText.toLowerCase().trim();
+    const esConsultaPago = /\b(pagar|pago|saldo|debo|cuanto\s*debo|cuando\s*me\s*toca|factura|recibo|cuenta|tarjeta|transferencia|clabe|banco|mensualidad|costo)\b/i.test(lower);
+    const esSaludo = /^(hola|buen\s*(dia|día)|buenas\s*(tardes|noches)?|saludos|que\s*tal|hey|hi)\b/i.test(lower);
+
+    // Si NO es imagen ni archivo y el usuario pregunta otra cosa distinta a la evidencia:
+    if (!event.isMedia && (esConsultaPago || esSaludo)) {
+      const sesionReset = await TursoService.upsertSession({ phone, step: 'CONVERSACIONAL' });
+      if (esConsultaPago) {
+        await this.flujoConsultarSaldo(phone, sesionReset, targetJid);
+      } else {
+        const nombre = session?.client_name ? ` *${session.client_name}*` : '';
+        await this.enviarYLoguear(phone, `¡Hola${nombre}! 👋 ¿En qué te podemos ayudar?`, 'SALUDO', 'SALUDO_CORDIAL', targetJid);
+      }
+      return;
+    }
+
     let meta: any = {};
     try { meta = JSON.parse(session?.metadata || '{}'); } catch {}
 

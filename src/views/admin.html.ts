@@ -636,6 +636,7 @@ export function getAdminDashboardHtml(): string {
               <option value="RESUELTO">Resueltos</option>
             </select>
             <button class="btn btn-secondary btn-test" onclick="loadTickets()">🔄 Recargar</button>
+            <button class="btn btn-test" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3);" onclick="clearAllTicketsAction()" title="Vaciar todos los tickets generados en pruebas">🗑️ Vaciar Tickets</button>
           </div>
         </div>
 
@@ -688,7 +689,10 @@ export function getAdminDashboardHtml(): string {
       <div class="card">
         <div class="card-header">
           <div class="card-title">💾 Clientes y Sesiones Persistidas en Turso DB</div>
-          <button class="btn btn-secondary btn-test" onclick="loadSessions()">🔄 Recargar</button>
+          <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <button class="btn btn-secondary btn-test" onclick="loadSessions()">🔄 Recargar</button>
+            <button class="btn btn-test" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3);" onclick="clearAllSessionsAction()" title="Borrar todas las sesiones de clientes para iniciar limpio">🗑️ Vaciar Todas las Sesiones</button>
+          </div>
         </div>
 
         <div class="table-container">
@@ -701,11 +705,12 @@ export function getAdminDashboardHtml(): string {
                 <th>ID ONU</th>
                 <th>Anti-Spam</th>
                 <th>Última Interacción</th>
+                <th>Acción</th>
               </tr>
             </thead>
             <tbody id="sessionsTableBody">
               <tr>
-                <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 24px;">Cargando sesiones desde Turso...</td>
+                <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 24px;">Cargando sesiones desde Turso...</td>
               </tr>
             </tbody>
           </table>
@@ -718,7 +723,10 @@ export function getAdminDashboardHtml(): string {
       <div class="card">
         <div class="card-header">
           <div class="card-title">📜 Registro de Conversaciones, Problemas y Soluciones</div>
-          <button class="btn btn-secondary btn-test" onclick="loadLogs()">🔄 Actualizar Historial</button>
+          <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <button class="btn btn-secondary btn-test" onclick="loadLogs()">🔄 Actualizar Historial</button>
+            <button class="btn btn-test" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3);" onclick="clearAllLogsAction()" title="Vaciar todo el registro de mensajes de prueba">🗑️ Vaciar Historial</button>
+          </div>
         </div>
         <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 16px;">
           Auditoría en tiempo real de cada mensaje entrante y saliente, intenciones clasificadas por IA, fallas detectadas y acciones tomadas en Turso DB.
@@ -1092,7 +1100,7 @@ export function getAdminDashboardHtml(): string {
         const data = await res.json();
         if (data.success && data.sessions) {
           if (data.sessions.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding: 24px;">No hay sesiones aún.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding: 24px; color: var(--text-muted);">No hay sesiones activas. La base de datos está limpia.</td></tr>';
             return;
           }
 
@@ -1100,6 +1108,7 @@ export function getAdminDashboardHtml(): string {
             const clientText = s.client_name ? s.client_name : '<em style="color:var(--text-muted)">Sin identificar</em>';
             const optOutBadge = s.opt_out === 1 ? '<span class="pill pill-red">Dado de Baja</span>' : '<span class="pill pill-green">Activo</span>';
             const dateStr = s.last_interaction ? new Date(s.last_interaction).toLocaleString('es-MX') : '-';
+            const deleteBtn = '<button class="btn btn-test" style="background: rgba(239, 68, 68, 0.12); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.25); padding: 3px 8px; font-size: 11px;" onclick="deleteSessionAction(&quot;' + s.phone + '&quot;)">🗑️ Borrar</button>';
             return '<tr>' +
               '<td style="font-family: var(--font-mono); font-weight: 600;">' + s.phone + '</td>' +
               '<td>' + clientText + '</td>' +
@@ -1107,11 +1116,76 @@ export function getAdminDashboardHtml(): string {
               '<td>' + (s.onu_id || '-') + '</td>' +
               '<td>' + optOutBadge + '</td>' +
               '<td style="color: var(--text-muted); font-size: 12px;">' + dateStr + '</td>' +
+              '<td>' + deleteBtn + '</td>' +
             '</tr>';
           }).join('');
         }
       } catch (err) {
-        tbody.innerHTML = '<tr><td colspan="6" style="color: red; text-align:center;">Error al cargar sesiones</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" style="color: red; text-align:center;">Error al cargar sesiones</td></tr>';
+      }
+    }
+
+    async function clearAllSessionsAction() {
+      if (!confirm('¿Estás seguro de que deseas vaciar todas las sesiones de clientes en Turso? Los usuarios empezarán desde cero en su próximo mensaje.')) return;
+      try {
+        const res = await fetch('/api/sessions/clear-all', { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+          showToast('✅ ' + data.message);
+          loadSessions();
+        } else {
+          showToast('Error: ' + data.error, true);
+        }
+      } catch (err) {
+        showToast('Error al vaciar sesiones', true);
+      }
+    }
+
+    async function deleteSessionAction(phone) {
+      if (!confirm('¿Eliminar la sesión del número ' + phone + '?')) return;
+      try {
+        const res = await fetch('/api/sessions/' + encodeURIComponent(phone), { method: 'DELETE' });
+        const data = await res.json();
+        if (data.success) {
+          showToast('✅ ' + data.message);
+          loadSessions();
+        } else {
+          showToast('Error: ' + data.error, true);
+        }
+      } catch (err) {
+        showToast('Error al eliminar sesión', true);
+      }
+    }
+
+    async function clearAllLogsAction() {
+      if (!confirm('¿Estás seguro de que deseas vaciar todo el historial de mensajes de prueba de Turso DB?')) return;
+      try {
+        const res = await fetch('/api/logs/clear-all', { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+          showToast('✅ ' + data.message);
+          loadLogs();
+        } else {
+          showToast('Error: ' + data.error, true);
+        }
+      } catch (err) {
+        showToast('Error al vaciar historial', true);
+      }
+    }
+
+    async function clearAllTicketsAction() {
+      if (!confirm('¿Estás seguro de que deseas vaciar todos los tickets de prueba registrados?')) return;
+      try {
+        const res = await fetch('/api/tickets/clear-all', { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+          showToast('✅ ' + data.message);
+          loadTickets();
+        } else {
+          showToast('Error: ' + data.error, true);
+        }
+      } catch (err) {
+        showToast('Error al vaciar tickets', true);
       }
     }
 

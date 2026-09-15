@@ -658,5 +658,46 @@ export class TursoService {
       return { total: 0, abiertos: 0, enProceso: 0, resueltos: 0, fueraHorario: 0 };
     }
   }
+
+  /**
+   * Elimina todas las sesiones activas en Turso (Modo Pruebas)
+   */
+  static async clearAllSessions(): Promise<number> {
+    const client = getTursoClient();
+    const res = await client.execute('DELETE FROM sessions');
+    logger.info('Todas las sesiones han sido eliminadas de Turso DB.');
+    return res.rowsAffected || 0;
+  }
+
+  /**
+   * Elimina la sesión de un teléfono específico
+   */
+  static async deleteSession(phone: string): Promise<boolean> {
+    const client = getTursoClient();
+    await client.execute({ sql: 'DELETE FROM sessions WHERE phone = ?', args: [phone] });
+    logger.info(`Sesión del teléfono ${phone} eliminada.`);
+    return true;
+  }
+
+  /**
+   * Elimina todo el historial de conversaciones de Turso (Modo Pruebas)
+   */
+  static async clearAllLogs(): Promise<number> {
+    const client = getTursoClient();
+    const res = await client.execute('DELETE FROM conversation_logs');
+    logger.info('Todo el historial de conversaciones ha sido eliminado de Turso DB.');
+    return res.rowsAffected || 0;
+  }
+
+  /**
+   * Elimina todos los tickets registrados en Turso (Modo Pruebas)
+   */
+  static async clearAllTickets(): Promise<number> {
+    const client = getTursoClient();
+    const res = await client.execute('DELETE FROM tickets');
+    logger.info('Todos los tickets han sido eliminados de Turso DB.');
+    return res.rowsAffected || 0;
+  }
 }
+
 

@@ -39,6 +39,15 @@ router.post('/api/tickets/:folio/status', AdminController.updateTicketStatus);
 router.get('/api/tickets/stats', AdminController.getTicketStats);
 router.post('/api/sessions/:phone/toggle-pause', AdminController.toggleBotPause);
 
+// Rutas de limpieza y reinicio de pruebas
+router.delete('/api/sessions/clear-all', AdminController.clearAllSessions);
+router.post('/api/sessions/clear-all', AdminController.clearAllSessions);
+router.delete('/api/sessions/:phone', AdminController.deleteSession);
+router.delete('/api/logs/clear-all', AdminController.clearAllLogs);
+router.post('/api/logs/clear-all', AdminController.clearAllLogs);
+router.delete('/api/tickets/clear-all', AdminController.clearAllTickets);
+router.post('/api/tickets/clear-all', AdminController.clearAllTickets);
+
 // Healthchecks para cron-job.org / Render
 router.get('/api/health', HealthController.check);
 router.get('/health', HealthController.check);

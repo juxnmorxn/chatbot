@@ -81,6 +81,55 @@ export class AdminController {
   }
 
   /**
+   * Vacía todas las sesiones registradas en Turso (Modo Pruebas)
+   */
+  static async clearAllSessions(req: Request, res: Response): Promise<void> {
+    try {
+      const count = await TursoService.clearAllSessions();
+      res.json({ success: true, message: `Se eliminaron ${count} sesiones de la base de datos.` });
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Elimina una sesión individual por teléfono
+   */
+  static async deleteSession(req: Request, res: Response): Promise<void> {
+    try {
+      const phone = String(req.params.phone || '');
+      await TursoService.deleteSession(phone);
+      res.json({ success: true, message: `Sesión de ${phone} eliminada exitosamente.` });
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Vacía todo el historial de conversaciones (Modo Pruebas)
+   */
+  static async clearAllLogs(req: Request, res: Response): Promise<void> {
+    try {
+      const count = await TursoService.clearAllLogs();
+      res.json({ success: true, message: `Se vaciaron ${count} registros de historial.` });
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Vacía todos los tickets registrados en Turso (Modo Pruebas)
+   */
+  static async clearAllTickets(req: Request, res: Response): Promise<void> {
+    try {
+      const count = await TursoService.clearAllTickets();
+      res.json({ success: true, message: `Se eliminaron ${count} tickets de prueba.` });
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
    * Prueba de conectividad con los servicios externos
    */
   static async testService(req: Request, res: Response): Promise<void> {
