@@ -203,12 +203,15 @@ export class WispHubService {
 
   /**
    * Diagnóstico financiero integral:
-   * Verifica si el cliente está Suspendido/Cancelado en WispHub o tiene facturas pendientes
+   * Verifica si el cliente está Suspendido/Cancelado/Desactivado en WispHub o tiene facturas pendientes/saldo adeudado.
+   * Consulta tanto la API en vivo de WispHub como la base de datos local sincronizada en Turso.
    */
   static async verificarEstadoFinanciero(params: {
     clienteId?: string | number | null;
     nombre?: string | null;
     phone?: string | null;
+    sn?: string | null;
+    ip?: string | null;
   }): Promise<{
     suspendido: boolean;
     totalDeuda: number;
@@ -216,16 +219,16 @@ export class WispHubService {
     cliente: WispHubCliente | null;
     motivo?: string;
   }> {
-    const { clienteId, nombre, phone } = params;
+    const { clienteId, nombre, phone, sn, ip } = params;
     let clienteEncontrado: WispHubCliente | null = null;
     let facturas: WispHubFactura[] = [];
 
-    // 1. Buscar cliente por ID numérico si aplica
+    // 1. Buscar cliente por ID numérico en API WispHub
     if (clienteId && !String(clienteId).startsWith('HWTC') && !String(clienteId).startsWith('ONU-')) {
       facturas = await this.obtenerFacturasPendientes(clienteId);
     }
 
-    // 2. Buscar por nombre si no tenemos facturas o cliente
+    // 2. Buscar por nombre en API WispHub si no tenemos facturas o cliente
     if (nombre) {
       const nombreLimpio = cleanPersonName(nombre) || nombre;
       const clientesPorNombre = await this.buscarClientePorNombre(nombreLimpio);
@@ -237,7 +240,7 @@ export class WispHubService {
       }
     }
 
-    // 3. Buscar por teléfono si no se ha encontrado
+    // 3. Buscar por teléfono en API WispHub si no se ha encontrado
     if (!clienteEncontrado && phone) {
       const clientePorTel = await this.buscarClientePorTelefono(phone);
       if (clientePorTel) {
@@ -248,24 +251,89 @@ export class WispHubService {
       }
     }
 
-    let totalDeuda = facturas.reduce((acc, f) => acc + (f.monto || 0), 0);
-    const estado = (clienteEncontrado?.estado || '').toLowerCase();
-    const estadoFacturas = (clienteEncontrado?.estado_facturas || '').toLowerCase();
-    const esSuspendido = estado === 'suspendido' || estado === 'cortado' || estado === 'cancelado' || estado === 'inactivo';
-    const tieneFacturaPendiente = estadoFacturas.includes('pendiente') || totalDeuda > 0;
+    // 4. Búsqueda y validación con la base de datos sincronizada de Turso (wisphub_clients)
+    try {
+      const dbClient = await TursoService.getWisphubClientByAny({
+        id: clienteId,
+        phone,
+        sn,
+        name: nombre,
+        ip,
+      });
 
-    // Si está suspendido o tiene factura pendiente pero el desglose de facturas vino vacío, asignamos el precio del plan
+      if (dbClient) {
+        logger.info(`Cliente localizado en base de datos local de WispHub: ID=${dbClient.id_servicio}, Nombre="${dbClient.nombre}", Estado="${dbClient.estado}", Facturas="${dbClient.estado_facturas}", Saldo=$${dbClient.saldo}`);
+        
+        if (!clienteEncontrado) {
+          clienteEncontrado = {
+            id: dbClient.id_servicio,
+            nombre: dbClient.nombre,
+            telefono: dbClient.telefono || phone || '',
+            direccion: dbClient.direccion,
+            ip: dbClient.ip,
+            servicio_id: String(dbClient.id_servicio),
+            onu_id: dbClient.sn_onu,
+            estado: dbClient.estado,
+            estado_facturas: dbClient.estado_facturas,
+            precio_plan: dbClient.precio_plan,
+            saldo: dbClient.saldo,
+          };
+        } else {
+          // Completar datos si faltaban
+          clienteEncontrado.estado = clienteEncontrado.estado || dbClient.estado;
+          clienteEncontrado.estado_facturas = clienteEncontrado.estado_facturas || dbClient.estado_facturas;
+          clienteEncontrado.saldo = clienteEncontrado.saldo || dbClient.saldo;
+          clienteEncontrado.precio_plan = clienteEncontrado.precio_plan || dbClient.precio_plan;
+        }
+      }
+    } catch (err: any) {
+      logger.warn('Error al consultar estado financiero en Turso:', err?.message || err);
+    }
+
+    let totalDeuda = facturas.reduce((acc, f) => acc + (f.monto || 0), 0);
+    const saldoNum = Number(clienteEncontrado?.saldo || 0);
+    if (totalDeuda === 0 && saldoNum > 0) {
+      totalDeuda = saldoNum;
+    }
+
+    const estado = (clienteEncontrado?.estado || '').toLowerCase().trim();
+    const estadoFacturas = (clienteEncontrado?.estado_facturas || '').toLowerCase().trim();
+    
+    // Estados de suspensión o corte en WispHub:
+    const esSuspendido = estado === 'suspendido' ||
+      estado === 'cortado' ||
+      estado === 'cancelado' ||
+      estado === 'inactivo' ||
+      estado === 'desactivado' ||
+      estado === 'baja' ||
+      estado === 'retirado' ||
+      estado === 'desconectado' ||
+      estado.includes('susp');
+
+    // Facturas impagas o morosidad:
+    const tieneFacturaPendiente = estadoFacturas.includes('pendiente') ||
+      estadoFacturas.includes('moros') ||
+      estadoFacturas.includes('vencid') ||
+      estadoFacturas.includes('debe') ||
+      estadoFacturas.includes('impag') ||
+      totalDeuda > 0;
+
+    // Si está suspendido o tiene factura pendiente pero el desglose de facturas vino vacío, asignamos el precio del plan o monto estándar
     if ((esSuspendido || tieneFacturaPendiente) && totalDeuda === 0) {
       const precioPlan = Number(clienteEncontrado?.precio_plan || 0);
       totalDeuda = precioPlan > 0 ? precioPlan : 250;
     }
+
+    const motivo = esSuspendido
+      ? `Servicio suspendido en WispHub (Estado: ${clienteEncontrado?.estado || 'Suspendido'}${totalDeuda > 0 ? `, Saldo: $${totalDeuda.toFixed(2)} MXN` : ''})`
+      : (tieneFacturaPendiente ? `Factura pendiente de pago ($${totalDeuda.toFixed(2)} MXN)` : undefined);
 
     return {
       suspendido: esSuspendido || tieneFacturaPendiente,
       totalDeuda,
       facturas,
       cliente: clienteEncontrado,
-      motivo: esSuspendido ? `Cliente con estado "${clienteEncontrado?.estado}" en WispHub` : (tieneFacturaPendiente ? `Factura pendiente de pago ($${totalDeuda} MXN)` : undefined),
+      motivo,
     };
   }
 

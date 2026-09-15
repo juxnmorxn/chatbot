@@ -607,6 +607,199 @@ export class TursoService {
   }
 
   /**
+   * Búsqueda flexible de clientes en WispHub (wisphub_clients) con algoritmo difuso tolerante
+   */
+  static async searchWisphubClientsFuzzy(
+    query: string,
+    limit: number = 5
+  ): Promise<Array<WisphubClientRecord & { matchScore: number }>> {
+    const rawQuery = (query || '').trim();
+    if (!rawQuery) return [];
+
+    const cleanedQuery = cleanPersonName(rawQuery);
+    const normQuery = normalizeText(cleanedQuery || rawQuery);
+    if (!normQuery) return [];
+
+    try {
+      const client = getTursoClient();
+
+      // 1. Búsqueda directa por ID de servicio, teléfono, SN o IP
+      const directMatch = await client.execute({
+        sql: `
+          SELECT * FROM wisphub_clients 
+          WHERE id_servicio = ? OR telefono LIKE ? OR sn_onu LIKE ? OR ip = ?
+          LIMIT 3
+        `,
+        args: [rawQuery, `%${normQuery}%`, `%${normQuery}%`, rawQuery],
+      });
+
+      if (directMatch.rows.length > 0) {
+        return directMatch.rows.map((row: any) => ({
+          id_servicio: Number(row.id_servicio),
+          nombre: String(row.nombre || ''),
+          nombre_normalized: String(row.nombre_normalized || ''),
+          servicio: String(row.servicio || ''),
+          ip: String(row.ip || ''),
+          estado: String(row.estado || 'Activo'),
+          estado_facturas: String(row.estado_facturas || 'Pagadas'),
+          precio_plan: String(row.precio_plan || '0'),
+          saldo: String(row.saldo || '0'),
+          plan_internet: String(row.plan_internet || ''),
+          router: String(row.router || ''),
+          sn_onu: String(row.sn_onu || ''),
+          telefono: String(row.telefono || ''),
+          direccion: String(row.direccion || ''),
+          updated_at: String(row.updated_at || ''),
+          matchScore: 100,
+        }));
+      }
+
+      // 2. Extraer palabras clave de búsqueda
+      const STOP_QUERY = new Set(['de', 'del', 'la', 'las', 'el', 'los', 'y', 'en', 'casa', 'soy', 'yo', 'me', 'llamo', 'mi', 'nombre', 'es', 'hola']);
+      const queryWords = normQuery.split(' ').filter(w => w.length > 1 && !STOP_QUERY.has(w));
+      const candidateRowsMap = new Map<string, any>();
+
+      if (queryWords.length > 0) {
+        if (queryWords.length >= 2) {
+          const andClauses = queryWords.map(() => 'nombre_normalized LIKE ?').join(' AND ');
+          const andRes = await client.execute({
+            sql: `SELECT * FROM wisphub_clients WHERE ${andClauses} LIMIT 50`,
+            args: queryWords.map(w => `%${w}%`),
+          });
+          for (const r of andRes.rows) {
+            candidateRowsMap.set(String(r.id_servicio), r);
+          }
+        }
+
+        const firstName = queryWords[0];
+        if (firstName && firstName.length >= 3) {
+          const fnRes = await client.execute({
+            sql: `SELECT * FROM wisphub_clients WHERE nombre_normalized LIKE ? LIMIT 150`,
+            args: [`%${firstName}%`],
+          });
+          for (const r of fnRes.rows) {
+            candidateRowsMap.set(String(r.id_servicio), r);
+          }
+        }
+
+        if (candidateRowsMap.size < 50) {
+          const orClauses = queryWords.map(() => 'nombre_normalized LIKE ?').join(' OR ');
+          const orRes = await client.execute({
+            sql: `SELECT * FROM wisphub_clients WHERE ${orClauses} LIMIT 300`,
+            args: queryWords.map(w => `%${w}%`),
+          });
+          for (const r of orRes.rows) {
+            candidateRowsMap.set(String(r.id_servicio), r);
+          }
+        }
+      }
+
+      let rowsToEvaluate = Array.from(candidateRowsMap.values());
+      if (rowsToEvaluate.length === 0) {
+        const sampleResult = await client.execute('SELECT * FROM wisphub_clients ORDER BY updated_at DESC LIMIT 200');
+        rowsToEvaluate = sampleResult.rows;
+      }
+
+      const scored: Array<WisphubClientRecord & { matchScore: number }> = [];
+
+      for (const row of rowsToEvaluate) {
+        const candidateName = String(row.nombre || '');
+        const score = computeNameMatchScore(cleanedQuery || rawQuery, candidateName);
+
+        if (score >= 40) {
+          scored.push({
+            id_servicio: Number(row.id_servicio),
+            nombre: String(row.nombre || ''),
+            nombre_normalized: String(row.nombre_normalized || ''),
+            servicio: String(row.servicio || ''),
+            ip: String(row.ip || ''),
+            estado: String(row.estado || 'Activo'),
+            estado_facturas: String(row.estado_facturas || 'Pagadas'),
+            precio_plan: String(row.precio_plan || '0'),
+            saldo: String(row.saldo || '0'),
+            plan_internet: String(row.plan_internet || ''),
+            router: String(row.router || ''),
+            sn_onu: String(row.sn_onu || ''),
+            telefono: String(row.telefono || ''),
+            direccion: String(row.direccion || ''),
+            updated_at: String(row.updated_at || ''),
+            matchScore: score,
+          });
+        }
+      }
+
+      scored.sort((a, b) => b.matchScore - a.matchScore);
+      return scored.slice(0, limit);
+    } catch (error: any) {
+      logger.error('Error en búsqueda difusa de WispHub en Turso:', error?.message || error);
+      return [];
+    }
+  }
+
+  /**
+   * Busca un cliente en WispHub por cualquier identificador disponible
+   */
+  static async getWisphubClientByAny(params: {
+    id?: string | number | null;
+    phone?: string | null;
+    sn?: string | null;
+    name?: string | null;
+    ip?: string | null;
+  }): Promise<WisphubClientRecord | null> {
+    try {
+      const client = getTursoClient();
+      const { id, phone, sn, name, ip } = params;
+
+      if (id && !String(id).startsWith('HWTC') && !String(id).startsWith('ONU-')) {
+        const res = await client.execute({
+          sql: `SELECT * FROM wisphub_clients WHERE id_servicio = ? LIMIT 1`,
+          args: [Number(id)],
+        });
+        if (res.rows.length > 0) return res.rows[0] as any;
+      }
+
+      if (sn) {
+        const res = await client.execute({
+          sql: `SELECT * FROM wisphub_clients WHERE sn_onu LIKE ? LIMIT 1`,
+          args: [`%${sn}%`],
+        });
+        if (res.rows.length > 0) return res.rows[0] as any;
+      }
+
+      if (ip) {
+        const res = await client.execute({
+          sql: `SELECT * FROM wisphub_clients WHERE ip = ? LIMIT 1`,
+          args: [ip],
+        });
+        if (res.rows.length > 0) return res.rows[0] as any;
+      }
+
+      if (phone) {
+        const phoneClean = phone.replace(/\D/g, '').slice(-10);
+        if (phoneClean.length >= 7) {
+          const res = await client.execute({
+            sql: `SELECT * FROM wisphub_clients WHERE telefono LIKE ? LIMIT 1`,
+            args: [`%${phoneClean}%`],
+          });
+          if (res.rows.length > 0) return res.rows[0] as any;
+        }
+      }
+
+      if (name) {
+        const fuzzy = await this.searchWisphubClientsFuzzy(name, 1);
+        if (fuzzy.length > 0 && fuzzy[0].matchScore >= 70) {
+          return fuzzy[0];
+        }
+      }
+
+      return null;
+    } catch (error: any) {
+      logger.error('Error al buscar cliente WispHub por datos generales en Turso:', error?.message || error);
+      return null;
+    }
+  }
+
+  /**
    * Obtiene estadísticas de sincronización de SmartOLT
    */
   static async getSmartOltSyncStats(): Promise<{ count: number; lastSync: string | null }> {

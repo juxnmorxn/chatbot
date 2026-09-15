@@ -230,6 +230,9 @@ export class BotOrchestrator {
     const lastInteractionMs = session?.last_interaction ? new Date(session.last_interaction).getTime() : 0;
     const minutosInactividad = lastInteractionMs > 0 ? (Date.now() - lastInteractionMs) / (1000 * 60) : 9999;
     const pasosTemporales = [
+      'DIAGNOSTICO_TRIAGE_DISPOSITIVOS',
+      'DIAGNOSTICO_COMPROBAR_UN_DISPOSITIVO',
+      'DIAGNOSTICO_POST_REINICIO',
       'COMPROBACION_TURNO_1',
       'COMPROBACION_EVIDENCIA',
       'ESPERANDO_UBICACION_TECNICO',
@@ -245,7 +248,20 @@ export class BotOrchestrator {
       });
     }
 
-    // 2.2 DETECCIÓN DE CAMBIO DE INTENCIÓN (SALUDOS Y CONSULTAS DE PAGO PRIORITARIAS):
+    // 2.2 DETECCIÓN UNIVERSAL DE CAMBIO DE SERVICIO O CONSULTA DE OTRO CLIENTE
+    const esCambioServicio = /^(cambiar\s*(de\s*)?servicio|otro\s*servicio|mis\s*servicios|tengo\s*otro\s*servicio|tengo\s*dos\s*servicios|el\s*otro\s*contrato|cambiar\s*de\s*paquete|cambiar\s*cuenta|cambiar\s*cliente|otro\s*cliente|otra\s*cuenta)\b/i.test(lowerMsg) ||
+      lowerMsg === 'cambiar servicio' ||
+      lowerMsg === 'otro servicio' ||
+      lowerMsg === 'cambiar de servicio' ||
+      lowerMsg === 'mis servicios';
+
+    if (esCambioServicio) {
+      logger.info(`[Cambio de Servicio] Solicitud de cambio de servicio/cliente de ${phone}`);
+      await this.solicitarSeleccionServicio(phone, session, targetJid, rawText);
+      return;
+    }
+
+    // 2.3 DETECCIÓN DE CAMBIO DE INTENCIÓN (SALUDOS Y CONSULTAS DE PAGO PRIORITARIAS):
     // Si el usuario escribe un saludo o pregunta por pagos/facturas/contraseña, NUNCA debe
     // tratarse como respuesta técnica a un reporte previo ni generar tickets de falla.
     const esSaludo = /^(hola|buen\s*(dia|día)|buenas\s*(tardes|noches)?|saludos|que\s*tal|hey|hi)\b/i.test(lowerMsg);
@@ -273,7 +289,25 @@ export class BotOrchestrator {
         );
         return;
       }
-      // Si es saludo puro, dejamos que continúe el flujo normal conversacional/identificación
+    }
+
+    // Pasos técnicos del diagnóstico escalonado:
+    // Si el cliente está en el triage de dispositivos (¿1 aparato o todos?)
+    if (session?.step === 'DIAGNOSTICO_TRIAGE_DISPOSITIVOS') {
+      await this.procesarTriageDispositivos(phone, rawText, event, session, targetJid);
+      return;
+    }
+
+    // Si el cliente está comprobando tras reconectar un solo dispositivo
+    if (session?.step === 'DIAGNOSTICO_COMPROBAR_UN_DISPOSITIVO') {
+      await this.procesarComprobarUnDispositivo(phone, rawText, event, session, targetJid);
+      return;
+    }
+
+    // Si el cliente está respondiendo tras el reinicio remoto del módem
+    if (session?.step === 'DIAGNOSTICO_POST_REINICIO') {
+      await this.procesarPostReinicio(phone, rawText, event, session, targetJid);
+      return;
     }
 
     // Si el cliente está enviando su ubicación o domicilio para visita técnica
@@ -282,20 +316,14 @@ export class BotOrchestrator {
       return;
     }
 
-    // Si el cliente está respondiendo al Turno 1 de comprobaciones sencillas
-    if (session?.step === 'COMPROBACION_TURNO_1') {
-      await this.procesarTurno1Comprobacion(phone, rawText, event, session, targetJid);
-      return;
-    }
-
-    // Si el cliente está enviando evidencia (foto o speedtest) tras Turno 2
+    // Si el cliente está enviando evidencia (foto o speedtest) tras ticket
     if (session?.step === 'COMPROBACION_EVIDENCIA') {
       await this.procesarEvidenciaTicket(phone, rawText, event, session, targetJid);
       return;
     }
 
-    // Si el cliente está en espera de responder a comprobaciones guiadas previas (retrocompatibilidad)
-    if (session?.step === 'COMPROBACION_SOPORTE') {
+    // Si el cliente está respondiendo al Turno 1 de comprobaciones sencillas (retrocompatibilidad)
+    if (session?.step === 'COMPROBACION_TURNO_1' || session?.step === 'COMPROBACION_SOPORTE') {
       await this.procesarTurno1Comprobacion(phone, rawText, event, session, targetJid);
       return;
     }
@@ -765,6 +793,8 @@ export class BotOrchestrator {
         clienteId: session.client_id,
         nombre: session.client_name,
         phone,
+        sn: meta.sn,
+        ip: meta.ip,
       });
 
       if (estadoFinanciero.suspendido || estadoFinanciero.totalDeuda > 0) {
@@ -775,14 +805,15 @@ export class BotOrchestrator {
         const beneficiary = SettingsService.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', this.getIspName());
         const montoTexto = estadoFinanciero.totalDeuda > 0
           ? `registras un recibo pendiente por *$${estadoFinanciero.totalDeuda.toFixed(2)} MXN*`
-          : `tu servicio se encuentra suspendido por corte de pago pendiente`;
+          : `tu servicio se encuentra suspendido por corte o inactividad`;
 
         const mensajeMoroso =
-          `Hola${nombre}, revisé tu servicio en el sistema y ${montoTexto}.\n\n` +
+          `Hola${nombre}, revisé tu servicio en el sistema y detectamos que ${montoTexto}.\n\n` +
+          `Para reactivar tu navegación de inmediato, por favor realiza tu pago a:\n` +
           `💳 *${bank}* | CLABE: *${account}*\n` +
           `Beneficiario: *${beneficiary}*\n` +
-          `Concepto: *${session.client_name || phone}*\n\n` +
-          `En cuanto realices tu pago, envíanos por aquí la foto de tu comprobante para reactivarte de inmediato.`;
+          `Concepto / Referencia: *${session.client_name || phone}*\n\n` +
+          `En cuanto realices tu abono, envíanos por aquí la foto o captura de tu comprobante para reactivarte de inmediato.`;
 
         await this.enviarYLoguear(phone, mensajeMoroso, 'CONSULTAR_SALDO', 'AVISO_MOROSIDAD_SILENCIOSA', targetJid);
         await TursoService.updateStep(phone, 'ESPERANDO_COMPROBANTE');
@@ -904,31 +935,315 @@ export class BotOrchestrator {
       return;
     }
 
-    // CASO C: LÍNEA EN LÍNEA (ONLINE) - REINICIO AUTOMÁTICO EN SEGUNDO PLANO Y TURNO 1
-    // Si tenemos la ONU, disparamos el reinicio remoto de inmediato para refrescar sesión
-    if (onuId) {
-      SmartOLTService.rebootONU(onuId).then(res => {
-        logger.info(`Reinicio automático silencioso de ONU ${onuId} para ${phone}: ${res.message}`);
-      }).catch(err => {
-        logger.warn(`No se pudo enviar reinicio automático para ${onuId}:`, err?.message || err);
-      });
-    }
-
-    const mensajeTurno1 =
-      `Hola${nombre}, revisé tu línea aquí en el sistema y mandé una señal para reiniciar tu módem y refrescar tu conexión. En un par de minutos terminará de reiniciar.\n\n` +
-      `Por favor no muevas el cable delgado de internet (es muy delicado).\n\n` +
-      `¿La lentitud te pasa en *todos tus aparatos* o solo en uno?`;
+    // CASO C: LÍNEA EN LÍNEA (ONLINE) O ESTADO NORMAL - DIAGNÓSTICO ESCALONADO CON TRIAGE
+    const mensajeTriage =
+      `Hola${nombre}, revisé tu línea aquí en el sistema y tu módem aparece conectado y con señal en nuestra central.\n\n` +
+      `Para ayudarte a resolverlo de la forma más rápida y precisa:\n` +
+      `¿La lentitud o problema te pasa en *todos tus aparatos (celulares, pantallas, computadoras)* o *solo en uno en específico*?`;
 
     await TursoService.upsertSession({
       phone,
-      step: 'COMPROBACION_TURNO_1',
+      step: 'DIAGNOSTICO_TRIAGE_DISPOSITIVOS',
       metadata: JSON.stringify({
         ...meta,
         resumenFalla: detalleQueja,
+        onuIdParaReinicio: onuId,
       }),
     });
 
-    await this.enviarYLoguear(phone, mensajeTurno1, 'FALLA_INTERNET', 'COMPROBACION_TURNO_1', targetJid);
+    await this.enviarYLoguear(phone, mensajeTriage, 'FALLA_INTERNET', 'DIAGNOSTICO_TRIAGE_DISPOSITIVOS', targetJid);
+  }
+
+  /**
+   * Triage de falla técnica: Determina si el problema es en un solo equipo o generalizado.
+   * Evita reinicios innecesarios si solo es un celular o pantalla individual.
+   */
+  private static async procesarTriageDispositivos(
+    phone: string,
+    rawText: string,
+    event: IncomingMessageEvent,
+    session: Session | null,
+    targetJid?: string
+  ): Promise<void> {
+    const lower = rawText.toLowerCase().trim();
+    const esSaludo = /^(hola|buen\s*(dia|día)|buenas\s*(tardes|noches)?|saludos|que\s*tal|hey|hi)\b/i.test(lower);
+    const esConsultaPago = /\b(pagar|pago|saldo|debo|cuanto\s*debo|cuando\s*me\s*toca|factura|recibo|cuenta|tarjeta|transferencia|clabe|banco|mensualidad|costo)\b/i.test(lower);
+
+    if (esSaludo || esConsultaPago) {
+      const sesionReset = await TursoService.upsertSession({ phone, step: 'CONVERSACIONAL' });
+      if (esConsultaPago) {
+        await this.flujoConsultarSaldo(phone, sesionReset, targetJid);
+      } else {
+        const nombre = session?.client_name ? ` *${session.client_name}*` : '';
+        await this.enviarYLoguear(phone, `¡Hola${nombre}! 👋 ¿En qué te podemos ayudar?`, 'SALUDO', 'SALUDO_CORDIAL', targetJid);
+      }
+      return;
+    }
+
+    let meta: any = {};
+    try { meta = JSON.parse(session?.metadata || '{}'); } catch {}
+    const nombre = session?.client_name ? ` *${session.client_name}*` : '';
+    const onuId = session?.onu_id || meta.onuIdParaReinicio;
+
+    const esUnSoloAparato = /\b(uno|solo\s*uno|un\s*solo|en\s*uno|un\s*celular|mi\s*cel|mi\s*tel[eé]fono|la\s*tele|la\s*pantalla|mi\s*lap|mi\s*compu|un\s*dispositivo|mi\s*pantalla|mi\s*computadora)\b/i.test(lower);
+    const sonTodosLosAparatos = /\b(todo|todos|todas|en\s*todos|la\s*casa|ninguno|no\s*agarra\s*nada|ningun|en\s*ninguno|general|ambos|los\s*dos|los\s*3|los\s*tres)\b/i.test(lower);
+
+    if (esUnSoloAparato && !sonTodosLosAparatos) {
+      // Rama 1: Solo un aparato individual
+      const mensajeUnDispositivo =
+        `Entendido${nombre}. Como el detalle se presenta en un solo dispositivo, tu módem y la fibra óptica están funcionando bien hacia tu domicilio.\n\n` +
+        `Por favor realiza estos 2 pasos rápidos:\n` +
+        `1️⃣ *Apaga el Wi-Fi* en ese aparato durante 10 segundos y vuelve a encenderlo.\n` +
+        `2️⃣ Acércate a unos pasos del módem para comprobar si la señal mejora.\n\n` +
+        `¿Notaste mejoría tras hacer la prueba? *(Responde Sí o No)*`;
+
+      await TursoService.upsertSession({
+        phone,
+        step: 'DIAGNOSTICO_COMPROBAR_UN_DISPOSITIVO',
+        metadata: JSON.stringify({
+          ...meta,
+          triageAlcance: 'UN_DISPOSITIVO',
+        }),
+      });
+
+      await this.enviarYLoguear(phone, mensajeUnDispositivo, 'FALLA_INTERNET', 'TRIAGE_UN_DISPOSITIVO', targetJid);
+      return;
+    }
+
+    // Rama 2: Todos los aparatos (o respuesta genérica de fallo total)
+    // Disparamos el reinicio remoto en SmartOLT
+    if (onuId) {
+      SmartOLTService.rebootONU(onuId).then(res => {
+        logger.info(`Reinicio de ONU ${onuId} ordenado tras triage general para ${phone}: ${res.message}`);
+      }).catch(err => {
+        logger.warn(`Error al reiniciar ONU ${onuId} en triage:`, err?.message || err);
+      });
+    }
+
+    const mensajeReinicio =
+      `Entendido${nombre}. Dado que el detalle ocurre de manera general, acabo de enviar una señal para *reiniciar tu módem remotamente* y refrescar los canales de navegación.\n\n` +
+      `⏳ En un par de minutos tu módem terminará de reiniciar.\n\n` +
+      `Por favor prueba navegar nuevamente. ¿Cómo sientes la conexión? *(Responde "Ya quedó" o "Sigue igual")*`;
+
+    await TursoService.upsertSession({
+      phone,
+      step: 'DIAGNOSTICO_POST_REINICIO',
+      metadata: JSON.stringify({
+        ...meta,
+        triageAlcance: 'TODOS_DISPOSITIVOS',
+        rebootTriggeredAt: new Date().toISOString(),
+      }),
+    });
+
+    await this.enviarYLoguear(phone, mensajeReinicio, 'FALLA_INTERNET', 'REINICIO_DISPARADO_POST_TRIAGE', targetJid);
+  }
+
+  /**
+   * Comprueba si la reconexión de Wi-Fi en el dispositivo individual resolvió el problema.
+   */
+  private static async procesarComprobarUnDispositivo(
+    phone: string,
+    rawText: string,
+    event: IncomingMessageEvent,
+    session: Session | null,
+    targetJid?: string
+  ): Promise<void> {
+    const lower = rawText.toLowerCase().trim();
+    const esPositivo = /\b(si|sí|ya|quedo|quedó|listo|ya\s*quedo|ya\s*quedó|excelente|funciona|bien|muchas\s*gracias|gracias|perfecto|ya\s*sirve)\b/i.test(lower) &&
+      !/\b(no|no\s*quedo|no\s*quedó|sigue\s*igual|sigue\s*mal|nada|no\s*funciona|no\s*sirve)\b/i.test(lower);
+
+    let meta: any = {};
+    try { meta = JSON.parse(session?.metadata || '{}'); } catch {}
+    const nombre = session?.client_name ? ` *${session.client_name}*` : '';
+    const onuId = session?.onu_id || meta.onuIdParaReinicio;
+
+    if (esPositivo) {
+      await this.enviarYLoguear(
+        phone,
+        `¡Excelente,${nombre}! Me da gusto que tu servicio haya quedado al 100%. 😊 En *${this.getIspName()}* estamos a tus órdenes si requieres algo más. ¡Excelente día!`,
+        'FALLA_INTERNET',
+        'SOLUCION_UN_DISPOSITIVO_EXITOSA',
+        targetJid
+      );
+      await this.marcarConsultaFinalizada(phone, session);
+      return;
+    }
+
+    // Si aún no funciona en el dispositivo individual, procedemos a reiniciar el módem
+    if (onuId) {
+      SmartOLTService.rebootONU(onuId).then(res => {
+        logger.info(`Reinicio de ONU ${onuId} tras fallo en prueba individual para ${phone}: ${res.message}`);
+      }).catch(err => {
+        logger.warn(`Error al reiniciar ONU ${onuId}:`, err?.message || err);
+      });
+    }
+
+    const mensajeReinicioEscalonado =
+      `Enterado${nombre}. Enviaremos un reinicio completo a tu módem para renovar su enlace.\n\n` +
+      `⏳ Tomará un par de minutos. Por favor pruébalo en cuanto vuelvan a fijarse las luces verdes.\n\n` +
+      `¿Lograste navegar correctamente? *(Responde "Ya quedó" o "Sigue igual")*`;
+
+    await TursoService.upsertSession({
+      phone,
+      step: 'DIAGNOSTICO_POST_REINICIO',
+      metadata: JSON.stringify({
+        ...meta,
+        rebootTriggeredAt: new Date().toISOString(),
+      }),
+    });
+
+    await this.enviarYLoguear(phone, mensajeReinicioEscalonado, 'FALLA_INTERNET', 'REINICIO_ESCALONADO_INDIVIDUAL', targetJid);
+  }
+
+  /**
+   * Comprueba el estado de navegación tras el reinicio remoto del módem.
+   * Si ya quedó -> Cierre satisfactorio.
+   * Si sigue fallando -> Genera ticket formal #TK-XXXX y pide evidencia (foto/speedtest).
+   */
+  private static async procesarPostReinicio(
+    phone: string,
+    rawText: string,
+    event: IncomingMessageEvent,
+    session: Session | null,
+    targetJid?: string
+  ): Promise<void> {
+    const lower = rawText.toLowerCase().trim();
+    const esPositivo = /\b(si|sí|ya|quedo|quedó|listo|ya\s*quedo|ya\s*quedó|excelente|funciona|bien|muchas\s*gracias|gracias|perfecto|ya\s*sirve|ya\s*funciona|ya\s*agarro|ya\s*agarró)\b/i.test(lower) &&
+      !/\b(no|no\s*quedo|no\s*quedó|sigue\s*igual|sigue\s*mal|nada|no\s*funciona|no\s*sirve)\b/i.test(lower);
+
+    let meta: any = {};
+    try { meta = JSON.parse(session?.metadata || '{}'); } catch {}
+    const nombre = session?.client_name ? ` *${session.client_name}*` : '';
+
+    if (esPositivo) {
+      await this.enviarYLoguear(
+        phone,
+        `¡Excelente noticia${nombre}! 🎉 Tu conexión ha sido restablecida con éxito.\n\nGracias por realizar las comprobaciones. En *${this.getIspName()}* estamos para servirte. ¡Que tengas un excelente día!`,
+        'FALLA_INTERNET',
+        'POST_REINICIO_EXITOSO',
+        targetJid
+      );
+      await this.marcarConsultaFinalizada(phone, session);
+      return;
+    }
+
+    // Si sigue igual o con falla persistente -> Generar Ticket formal
+    const outOfHours = this.isFueraDeHorario();
+    const isMedia = event.isMedia === true;
+    const hasSpeedtest = isMedia || lower.includes('speed') || lower.includes('test') || lower.includes('mbps');
+
+    const ticket = await TursoService.createTicket({
+      phone,
+      client_name: session?.client_name,
+      onu_id: session?.onu_id,
+      issue_summary: meta.resumenFalla || rawText || 'Falla persistente tras reinicio de módem',
+      checks_performed: `Triage completado. Módem reiniciado en central. Cliente reporta persistencia: "${rawText || (isMedia ? '[Foto/Captura]' : 'N/A')}"`,
+      has_photo: isMedia ? 1 : 0,
+      has_speedtest: hasSpeedtest ? 1 : 0,
+      all_devices: meta.triageAlcance === 'TODOS_DISPOSITIVOS' ? 1 : 0,
+      status: 'ABIERTO',
+      is_out_of_hours: outOfHours ? 1 : 0,
+    });
+
+    if (session?.client_id) {
+      await WispHubService.crearTicketSoporte(
+        session.client_id,
+        `Soporte Falla - ${ticket.folio}`,
+        `Reporte persistente tras reinicio remoto. Folio local: ${ticket.folio}. Diagnóstico: ${ticket.checks_performed}`,
+        'Media'
+      ).catch(() => {});
+    }
+
+    const notaHorario = outOfHours ? '\n\n⏰ *Nota:* Tu reporte se atenderá con prioridad a primera hora a partir de las 9:00 AM.' : '';
+
+    const mensajeTicket =
+      `Enterado${nombre}. Como la falla continúa tras el reinicio, ya te generé tu reporte formal *#${ticket.folio}* para que el equipo de soporte técnico revise tu configuración en cabecera.${notaHorario}\n\n` +
+      `📸 Por favor mándanos una *foto de las luces de tu módem* o una captura de tu prueba de velocidad (*Speedtest*) para adjuntarla de inmediato a tu folio técnico.`;
+
+    await TursoService.upsertSession({
+      phone,
+      step: 'COMPROBACION_EVIDENCIA',
+      metadata: JSON.stringify({
+        ...meta,
+        ticketFolio: ticket.folio,
+      }),
+    });
+
+    await this.enviarYLoguear(phone, mensajeTicket, 'FALLA_INTERNET', `TICKET_GENERADO_POST_REINICIO_${ticket.folio}`, targetJid);
+  }
+
+  /**
+   * Presenta las opciones de servicios registrados para permitir al usuario cambiar de contrato en cualquier momento,
+   * o solicita el nombre/datos si desea consultar una cuenta diferente.
+   */
+  private static async solicitarSeleccionServicio(
+    phone: string,
+    session: Session | null,
+    targetJid?: string,
+    rawText?: string
+  ): Promise<void> {
+    let meta: any = {};
+    try { meta = JSON.parse(session?.metadata || '{}'); } catch {}
+
+    let listaServicios = Array.isArray(meta.registeredServices) && meta.registeredServices.length > 0
+      ? meta.registeredServices
+      : [];
+
+    // Si no estaban en metadata pero tenemos el nombre del cliente, buscar en Turso
+    if (listaServicios.length <= 1 && session?.client_name) {
+      const onus = await TursoService.searchOnusFuzzy(session.client_name, 5);
+      const coincidentes = onus.filter(o => o.matchScore >= 75);
+      if (coincidentes.length > 1) {
+        listaServicios = coincidentes.map(c => ({
+          unique_external_id: c.unique_external_id,
+          sn: c.sn,
+          name: c.name,
+          speed_profile: c.speed_profile,
+          zone_name: c.zone_name,
+          address: c.address,
+        }));
+      }
+    }
+
+    // Si tiene 2 o más servicios en su cuenta
+    if (listaServicios.length > 1) {
+      let texto = `¡Hola, *${session?.client_name || 'Cliente'}*! 👋 Aquí tienes tus *${listaServicios.length} servicios* registrados:\n\n`;
+      listaServicios.forEach((c: any, idx: number) => {
+        const ubicacion = c.address || c.zone_name ? `\n📍 *Ubicación / Zona:* ${c.address || c.zone_name}` : '';
+        const plan = c.speed_profile ? `\n📦 *Plan:* ${c.speed_profile}` : '';
+        const sn = c.sn ? `\n🆔 *SN:* ${c.sn}` : '';
+        texto += `*${idx + 1}️⃣ Opción ${idx + 1}:*${ubicacion}${plan}${sn}\n\n`;
+      });
+      texto += `¿A cuál de tus servicios deseas cambiarte o consultar?\n👉 *Por favor responde con el número de tu opción (ejemplo: 1 ó 2)*, o escribe el nombre completo de otro titular si deseas consultar una cuenta diferente.`;
+
+      await TursoService.upsertSession({
+        phone,
+        step: 'ESPERANDO_SELECCION_SERVICIO',
+        metadata: JSON.stringify({
+          ...meta,
+          pendingServices: listaServicios,
+          registeredServices: listaServicios,
+          consultaFinalizada: false,
+        }),
+      });
+
+      await this.enviarYLoguear(phone, texto, 'IDENTIFICAR_CLIENTE', 'CAMBIO_SERVICIO_LISTADO_OPCIONES', targetJid);
+      return;
+    }
+
+    // Si solo tiene 1 servicio o no está registrado, le permitimos ingresar el nombre de la otra cuenta
+    await TursoService.upsertSession({
+      phone,
+      step: 'ESPERANDO_IDENTIFICACION',
+      metadata: JSON.stringify({
+        ...meta,
+        pendingServices: [],
+        consultaFinalizada: false,
+      }),
+    });
+
+    const msj = `¡Claro! Con gusto podemos consultar otro servicio.\n\nPor favor indícame el *Nombre completo del titular* o número de contrato del servicio que deseas consultar.`;
+    await this.enviarYLoguear(phone, msj, 'IDENTIFICAR_CLIENTE', 'SOLICITUD_OTRO_CLIENTE', targetJid);
   }
 
   /**
@@ -1200,12 +1515,47 @@ export class BotOrchestrator {
   }
 
   /**
-   * Envía la orden de reinicio remoto a la ONU en SmartOLT
+   * Envía la orden de reinicio remoto a la ONU en SmartOLT, previa validación financiera en WispHub
    */
   private static async flujoReiniciarModem(phone: string, session: Session | null, targetJid?: string): Promise<void> {
     const onuId = session?.onu_id || `ONU-${session?.client_id || 'DEFAULT'}`;
-
     const nombre = session?.client_name ? ` ${session.client_name}` : '';
+    let meta: any = {};
+    try { meta = JSON.parse(session?.metadata || '{}'); } catch {}
+
+    // 1. Verificación previa en WispHub (¿está activo o suspendido/moroso?)
+    try {
+      const estadoFinanciero = await WispHubService.verificarEstadoFinanciero({
+        clienteId: session?.client_id,
+        nombre: session?.client_name,
+        phone,
+        sn: meta.sn,
+        ip: meta.ip,
+      });
+
+      if (estadoFinanciero.suspendido || estadoFinanciero.totalDeuda > 0) {
+        logger.info(`Intento de reinicio bloqueado: Cliente ${phone} (${session?.client_name}) suspendido/adeudo en WispHub.`);
+        const bank = SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK', 'BBVA');
+        const account = SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', '012 180 0000000000 00');
+        const beneficiary = SettingsService.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', this.getIspName());
+        const montoTexto = estadoFinanciero.totalDeuda > 0
+          ? `registras un saldo pendiente por *$${estadoFinanciero.totalDeuda.toFixed(2)} MXN*`
+          : `tu servicio se encuentra suspendido en el sistema`;
+
+        const msj = `Hola${nombre}, revisé tu línea antes de proceder con el reinicio y detectamos que ${montoTexto}.\n\n` +
+          `Para reactivar tu señal y navegar con normalidad, por favor realiza tu pago a:\n` +
+          `💳 *${bank}* | CLABE: *${account}*\n` +
+          `Beneficiario: *${beneficiary}*\n` +
+          `Concepto: *${session?.client_name || phone}*\n\n` +
+          `En cuanto tengas tu comprobante, compártelo por aquí con nosotros para reactivar tu servicio.`;
+
+        await this.enviarYLoguear(phone, msj, 'CONSULTAR_SALDO', 'REINICIO_BLOQUEADO_POR_SUSPENSION', targetJid);
+        await TursoService.updateStep(phone, 'ESPERANDO_COMPROBANTE');
+        return;
+      }
+    } catch (err: any) {
+      logger.warn(`Error al verificar estado de pago en WispHub antes de reiniciar:`, err?.message || err);
+    }
 
     const resultado = await SmartOLTService.rebootONU(onuId);
 
