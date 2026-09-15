@@ -393,12 +393,12 @@ export function getAdminDashboardHtml(): string {
 
     <!-- Navigation Tabs -->
     <div class="nav-tabs">
-      <button class="nav-tab active" onclick="switchTab('apis')">🔑 Conexión y Pagos</button>
-      <button class="nav-tab" onclick="switchTab('whatsapp')">📲 Vincular WhatsApp</button>
-      <button class="nav-tab" onclick="switchTab('tickets')">🎫 Mesa de Tickets</button>
-      <button class="nav-tab" onclick="switchTab('sessions')">👥 Sesiones en Turso</button>
-      <button class="nav-tab" onclick="switchTab('logs')">📜 Historial y Problemas</button>
-      <button class="nav-tab" onclick="switchTab('tester')">🧪 Simulador de Bot</button>
+      <button class="nav-tab active" onclick="switchTab('apis', this)">🔑 Conexión y Pagos</button>
+      <button class="nav-tab" onclick="switchTab('whatsapp', this)">📲 Vincular WhatsApp</button>
+      <button class="nav-tab" onclick="switchTab('tickets', this)">🎫 Mesa de Tickets</button>
+      <button class="nav-tab" onclick="switchTab('sessions', this)">👥 Sesiones en Turso</button>
+      <button class="nav-tab" onclick="switchTab('logs', this)">📜 Historial y Problemas</button>
+      <button class="nav-tab" onclick="switchTab('tester', this)">🧪 Simulador de Bot</button>
     </div>
 
     <!-- TAB 1: Configuración de APIs -->
@@ -794,24 +794,84 @@ export function getAdminDashboardHtml(): string {
   <div id="toast">Guardado correctamente</div>
 
   <script>
-    function switchTab(tabId) {
+    function switchTab(tabId, el) {
       document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
       document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
 
-      event.target.classList.add('active');
-      document.getElementById('tab-' + tabId).classList.add('active');
+      const pane = document.getElementById('tab-' + tabId);
+      if (pane) pane.classList.add('active');
 
-      if (tabId === 'whatsapp') {
-        loadWhatsAppStatus();
+      if (el) {
+        el.classList.add('active');
+      } else if (window.event && window.event.currentTarget) {
+        window.event.currentTarget.classList.add('active');
+      } else {
+        document.querySelectorAll('.nav-tab').forEach(btn => {
+          if (btn.getAttribute('onclick') && btn.getAttribute('onclick').includes("switchTab('" + tabId + "'")) {
+            btn.classList.add('active');
+          }
+        });
       }
-      if (tabId === 'tickets') {
-        loadTickets();
+
+      try {
+        if (tabId === 'whatsapp') loadWhatsAppStatus();
+        if (tabId === 'tickets') loadTickets();
+        if (tabId === 'sessions') loadSessions();
+        if (tabId === 'logs') loadLogs();
+      } catch (e) {
+        console.error('Error al cambiar pestaña:', e);
       }
-      if (tabId === 'sessions') {
-        loadSessions();
+    }
+
+    function showToast(msg, isError = false) {
+      const t = document.getElementById('toast');
+      if (!t) return;
+      t.innerText = msg;
+      t.style.background = isError ? '#ef4444' : '#10b981';
+      t.style.display = 'block';
+      setTimeout(() => { t.style.display = 'none'; }, 3500);
+    }
+
+    async function loadWhatsAppStatus() {
+      const statusBox = document.getElementById('whatsappStatusBox');
+      const qrBox = document.getElementById('qrContainer');
+      if (!statusBox || !qrBox) return;
+
+      statusBox.innerHTML = '<div style="display: inline-block; padding: 8px 16px; border-radius: 20px; font-weight: 600; font-size: 14px; background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3);">⏳ Consultando estado en Evolution API...</div>';
+
+      try {
+        const res = await fetch('/api/whatsapp/status');
+        const data = await res.json();
+
+        if (data.state === 'open') {
+          statusBox.innerHTML = '<div style="display: inline-block; padding: 8px 16px; border-radius: 20px; font-weight: 600; font-size: 14px; background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3);">🟢 WhatsApp Conectado y Operativo</div>';
+          qrBox.innerHTML = '<div style="width: 260px; height: 260px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #10b981; font-size: 14px; font-weight: 600;"><span style="font-size: 48px; margin-bottom: 12px;">✅</span>¡Instancia Vinculada!<br><span style="color: #6b7280; font-weight: normal; font-size: 12px; margin-top: 6px;">Listo para enviar y recibir mensajes</span></div>';
+        } else {
+          statusBox.innerHTML = '<div style="display: inline-block; padding: 8px 16px; border-radius: 20px; font-weight: 600; font-size: 14px; background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3);">🔴 Desconectado (Escanea el QR)</div>';
+          if (data.qr) {
+            qrBox.innerHTML = '<img src="' + data.qr + '" style="width: 260px; height: 260px; border-radius: 8px;" alt="QR Code">';
+          } else {
+            qrBox.innerHTML = '<div style="width: 260px; height: 260px; display: flex; align-items: center; justify-content: center; color: #6b7280; font-size: 13px;">No se pudo cargar el QR. Haz clic en Actualizar QR.</div>';
+          }
+        }
+      } catch (err) {
+        statusBox.innerHTML = '<div style="display: inline-block; padding: 8px 16px; border-radius: 20px; font-weight: 600; font-size: 14px; background: rgba(239, 68, 68, 0.15); color: #ef4444;">Error al conectar con Evolution API</div>';
       }
-      if (tabId === 'logs') {
-        loadLogs();
+    }
+
+    async function disconnectWhatsApp() {
+      if (!confirm("¿Estás seguro de que deseas desvincular la sesión actual de WhatsApp? Se generará un nuevo QR para volver a vincular.")) return;
+      try {
+        const res = await fetch('/api/whatsapp/disconnect', { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+          showToast('Sesión desvinculada. Generando nuevo QR...');
+          setTimeout(loadWhatsAppStatus, 1500);
+        } else {
+          showToast('Error: ' + data.error, true);
+        }
+      } catch (err) {
+        showToast('Error al desvincular: ' + err.message, true);
       }
     }
 
@@ -861,8 +921,8 @@ export function getAdminDashboardHtml(): string {
 
             const isPaused = t.bot_paused && t.bot_paused.pausado;
             const pauseBadge = isPaused
-              ? '<br><span class="pill pill-purple" style="font-size:10px; margin-top:4px; display:inline-block;">⏸️ Humano (' + t.bot_paused.minutosRestantes + 'm)</span> <a href="javascript:void(0)" onclick="toggleBotPauseAction(\'' + t.phone + '\', false)" style="color:#34d399; font-size:11px; margin-left:2px;">▶️ Reactivar</a>'
-              : '<br><a href="javascript:void(0)" onclick="toggleBotPauseAction(\'' + t.phone + '\', true)" style="color:var(--text-muted); font-size:11px; display:inline-block; margin-top:3px;">⏸️ Pausar Bot</a>';
+              ? '<br><span class="pill pill-purple" style="font-size:10px; margin-top:4px; display:inline-block;">⏸️ Humano (' + t.bot_paused.minutosRestantes + 'm)</span> <a href="javascript:void(0)" onclick="toggleBotPauseAction(&quot;' + t.phone + '&quot;, false)" style="color:#34d399; font-size:11px; margin-left:2px;">▶️ Reactivar</a>'
+              : '<br><a href="javascript:void(0)" onclick="toggleBotPauseAction(&quot;' + t.phone + '&quot;, true)" style="color:var(--text-muted); font-size:11px; display:inline-block; margin-top:3px;">⏸️ Pausar Bot</a>';
 
             return '<tr>' +
               '<td style="font-family: var(--font-mono); font-weight: 700; color: #38bdf8;">' + t.folio + '</td>' +
@@ -873,7 +933,7 @@ export function getAdminDashboardHtml(): string {
               '<td style="font-size: 11px;">' + checksBadges + '</td>' +
               '<td>' + statusBadge + '</td>' +
               '<td>' +
-                '<select onchange="updateTicketStatusAction(\'' + t.folio + '\', this.value)" style="background: rgba(255,255,255,0.06); color: var(--text-main); border: 1px solid var(--card-border); border-radius: 6px; padding: 4px 8px; font-size: 12px;">' +
+                '<select onchange="updateTicketStatusAction(&quot;' + t.folio + '&quot;, this.value)" style="background: rgba(255,255,255,0.06); color: var(--text-main); border: 1px solid var(--card-border); border-radius: 6px; padding: 4px 8px; font-size: 12px;">' +
                   '<option value="" disabled selected>Cambiar Estado...</option>' +
                   '<option value="ABIERTO">🔴 Marcar Abierto</option>' +
                   '<option value="EN_PROCESO">🟡 En Atención / Ajuste OLT</option>' +
@@ -1036,20 +1096,19 @@ export function getAdminDashboardHtml(): string {
             return;
           }
 
-          tbody.innerHTML = data.sessions.map(s => \`
-            <tr>
-              <td style="font-family: var(--font-mono); font-weight: 600;">\${s.phone}</td>
-              <td>\${s.client_name || '<em style="color:var(--text-muted)">Sin identificar</em>'}</td>
-              <td><span class="pill pill-blue">\${s.step}</span></td>
-              <td>\${s.onu_id || '-'}</td>
-              <td>
-                <span class="pill \${s.opt_out === 1 ? 'pill-red' : 'pill-green'}">
-                  \${s.opt_out === 1 ? 'Dado de Baja' : 'Activo'}
-                </span>
-              </td>
-              <td style="color: var(--text-muted); font-size: 12px;">\${s.last_interaction ? new Date(s.last_interaction).toLocaleString() : '-'}</td>
-            </tr>
-          \`).join('');
+          tbody.innerHTML = data.sessions.map(s => {
+            const clientText = s.client_name ? s.client_name : '<em style="color:var(--text-muted)">Sin identificar</em>';
+            const optOutBadge = s.opt_out === 1 ? '<span class="pill pill-red">Dado de Baja</span>' : '<span class="pill pill-green">Activo</span>';
+            const dateStr = s.last_interaction ? new Date(s.last_interaction).toLocaleString('es-MX') : '-';
+            return '<tr>' +
+              '<td style="font-family: var(--font-mono); font-weight: 600;">' + s.phone + '</td>' +
+              '<td>' + clientText + '</td>' +
+              '<td><span class="pill pill-blue">' + (s.step || '-') + '</span></td>' +
+              '<td>' + (s.onu_id || '-') + '</td>' +
+              '<td>' + optOutBadge + '</td>' +
+              '<td style="color: var(--text-muted); font-size: 12px;">' + dateStr + '</td>' +
+            '</tr>';
+          }).join('');
         }
       } catch (err) {
         tbody.innerHTML = '<tr><td colspan="6" style="color: red; text-align:center;">Error al cargar sesiones</td></tr>';
