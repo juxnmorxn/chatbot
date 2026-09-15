@@ -4,6 +4,7 @@ import { SettingsService } from './settings.service';
 import { Logger } from '../utils/logger';
 import { normalizePhone10 } from '../utils/spintax';
 import { cleanPersonName, computeNameMatchScore } from '../utils/fuzzy-matcher';
+import { TursoService, WisphubClientRecord } from './turso.service';
 
 const logger = new Logger('WispHubService');
 
@@ -311,6 +312,109 @@ export class WispHubService {
         folio: fallbackFolio,
         mensaje: 'Ticket registrado con respaldo de emergencia',
       };
+    }
+  }
+
+  // Control de sincronización
+  private static isSyncing: boolean = false;
+  private static lastSyncTimestamp: number = 0;
+
+  /**
+   * Sincroniza todos los clientes desde WispHub API hacia Turso DB (Solo lectura de la API de WispHub)
+   * Recorre la paginación con lotes de 100 registros.
+   */
+  static async syncAllClientesToTurso(force: boolean = false): Promise<{
+    success: boolean;
+    count: number;
+    message: string;
+  }> {
+    const apiKey = this.getApiKey();
+    if (!apiKey || apiKey.includes('tu_token')) {
+      return {
+        success: false,
+        count: 0,
+        message: 'WISPHUB_API_KEY no está configurada o es plantilla.',
+      };
+    }
+
+    if (this.isSyncing) {
+      return {
+        success: false,
+        count: 0,
+        message: 'Ya hay una sincronización de WispHub en progreso.',
+      };
+    }
+
+    this.isSyncing = true;
+    try {
+      logger.info('Iniciando sincronización masiva de clientes desde WispHub (/api/clientes/)...');
+      const api = this.getApi();
+      let offset = 0;
+      const limit = 100;
+      let totalFetched = 0;
+      let hasMore = true;
+
+      while (hasMore) {
+        logger.info(`Descargando clientes de WispHub: offset=${offset}, limit=${limit}...`);
+        const response = await api.get('/clientes/', {
+          params: { limit, offset },
+        });
+
+        const data = response.data;
+        const results = Array.isArray(data) ? data : (data?.results || []);
+
+        if (results.length === 0) {
+          hasMore = false;
+          break;
+        }
+
+        const records: WisphubClientRecord[] = results.map((c: any) => ({
+          id_servicio: c.id_servicio || c.id,
+          nombre: String(c.nombre || `${c.nombre || ''} ${c.apellidos || ''}`).trim(),
+          servicio: String(c.servicio || c.nombre || '').trim(),
+          ip: String(c.ip || '').trim(),
+          estado: String(c.estado || 'Activo'),
+          estado_facturas: String(c.estado_facturas || 'Pagadas'),
+          precio_plan: String(c.precio_plan || '0'),
+          saldo: String(c.saldo || '0'),
+          plan_internet: typeof c.plan_internet === 'object' ? String(c.plan_internet?.nombre || '') : String(c.plan_internet || ''),
+          router: typeof c.router === 'object' ? String(c.router?.nombre || '') : String(c.router || ''),
+          sn_onu: String(c.sn_onu || ''),
+          telefono: String(c.telefono || ''),
+          direccion: String(c.direccion || ''),
+          raw_data: JSON.stringify({
+            fecha_corte: c.fecha_corte,
+            ultimo_cambio: c.ultimo_cambio,
+            usuario: c.usuario,
+          }),
+        }));
+
+        await TursoService.saveWisphubClients(records);
+        totalFetched += results.length;
+        offset += results.length;
+
+        // Si WispHub indica que no hay siguiente página o trajimos menos del límite
+        if (!data?.next || results.length < limit) {
+          hasMore = false;
+        }
+      }
+
+      this.lastSyncTimestamp = Date.now();
+      logger.info(`Sincronización de WispHub finalizada: ${totalFetched} clientes guardados.`);
+      return {
+        success: true,
+        count: totalFetched,
+        message: `Sincronización exitosa: ${totalFetched} clientes de WispHub guardados en Turso DB.`,
+      };
+    } catch (error: any) {
+      logger.error('Error al sincronizar clientes de WispHub:', error?.response?.data || error?.message || error);
+      return {
+        success: false,
+        count: 0,
+        message: `Error al contactar WispHub: ${error?.response?.data?.detail || error?.message || 'Error de conexión'}`,
+      };
+    } finally {
+      this.isSyncing = false;
     }
   }
 }

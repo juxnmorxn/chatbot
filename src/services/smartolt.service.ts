@@ -138,6 +138,7 @@ export class SmartOLTService {
           zone_name: onu.zone_name || onu.zone || '',
           speed_profile: onu.speed_profile_name || onu.speed_profile || onu.plan || '',
           olt_name: onu.olt_name || onu.olt || '',
+          ip_address: String(onu.ip_address || onu.ip || onu.ipv4_address || onu.wan_ip || '').trim(),
           raw_data: JSON.stringify({
             board: onu.board,
             slot: onu.slot,

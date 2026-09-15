@@ -14,8 +14,46 @@ export interface SmartOltOnuRecord {
   zone_name?: string;
   speed_profile?: string;
   olt_name?: string;
+  ip_address?: string;
   raw_data?: string;
   updated_at?: string;
+}
+
+export interface WisphubClientRecord {
+  id_servicio: number | string;
+  nombre: string;
+  nombre_normalized?: string;
+  servicio?: string;
+  ip?: string;
+  estado?: string;
+  estado_facturas?: string;
+  precio_plan?: string | number;
+  saldo?: string | number;
+  plan_internet?: string;
+  router?: string;
+  sn_onu?: string;
+  telefono?: string;
+  direccion?: string;
+  raw_data?: string;
+  updated_at?: string;
+}
+
+export interface AuditIpItem {
+  id: string;
+  folio: string;
+  cliente: string;
+  servicio: string;
+  smartolt_ip: string | null;
+  wisphub_ip: string | null;
+  ip_status: 'MISMATCH' | 'MATCH' | 'NO_IP' | 'ONLY_SMARTOLT' | 'ONLY_WISPHUB';
+  wisphub_estado: string | null;
+  wisphub_facturas: string | null;
+  wisphub_plan: string | null;
+  zona_o_router: string | null;
+  sn_smartolt: string | null;
+  sn_wisphub: string | null;
+  smartolt_id: string | null;
+  wisphub_id: string | number | null;
 }
 
 export interface Session {
@@ -296,8 +334,8 @@ export class TursoService {
             sql: `
               INSERT INTO smartolt_onus (
                 unique_external_id, sn, name, name_normalized, phone, address,
-                zone_name, speed_profile, olt_name, raw_data, updated_at
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                zone_name, speed_profile, olt_name, ip_address, raw_data, updated_at
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
               ON CONFLICT(unique_external_id) DO UPDATE SET
                 sn = excluded.sn,
                 name = excluded.name,
@@ -307,6 +345,7 @@ export class TursoService {
                 zone_name = excluded.zone_name,
                 speed_profile = excluded.speed_profile,
                 olt_name = excluded.olt_name,
+                ip_address = CASE WHEN excluded.ip_address IS NOT NULL AND excluded.ip_address != '' THEN excluded.ip_address ELSE smartolt_onus.ip_address END,
                 raw_data = excluded.raw_data,
                 updated_at = excluded.updated_at
             `,
@@ -320,6 +359,7 @@ export class TursoService {
               item.zone_name || '',
               item.speed_profile || '',
               item.olt_name || '',
+              item.ip_address || '',
               item.raw_data || '',
               now,
             ],
@@ -334,6 +374,79 @@ export class TursoService {
       return totalInserted;
     } catch (error: any) {
       logger.error('Error al guardar lote de ONUs en Turso DB:', error?.message || error);
+      throw error;
+    }
+  }
+
+  /**
+   * Guarda o actualiza un lote de clientes provenientes de WispHub en Turso DB
+   */
+  static async saveWisphubClients(clients: WisphubClientRecord[]): Promise<number> {
+    if (!clients || clients.length === 0) return 0;
+    try {
+      const client = getTursoClient();
+      const now = new Date().toISOString();
+
+      const batchSize = 40;
+      let totalInserted = 0;
+
+      for (let i = 0; i < clients.length; i += batchSize) {
+        const batch = clients.slice(i, i + batchSize);
+        const statements = batch.map(c => {
+          const normName = normalizeText(c.nombre || '');
+          return {
+            sql: `
+              INSERT INTO wisphub_clients (
+                id_servicio, nombre, nombre_normalized, servicio, ip, estado,
+                estado_facturas, precio_plan, saldo, plan_internet, router,
+                sn_onu, telefono, direccion, raw_data, updated_at
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              ON CONFLICT(id_servicio) DO UPDATE SET
+                nombre = excluded.nombre,
+                nombre_normalized = excluded.nombre_normalized,
+                servicio = excluded.servicio,
+                ip = excluded.ip,
+                estado = excluded.estado,
+                estado_facturas = excluded.estado_facturas,
+                precio_plan = excluded.precio_plan,
+                saldo = excluded.saldo,
+                plan_internet = excluded.plan_internet,
+                router = excluded.router,
+                sn_onu = excluded.sn_onu,
+                telefono = excluded.telefono,
+                direccion = excluded.direccion,
+                raw_data = excluded.raw_data,
+                updated_at = excluded.updated_at
+            `,
+            args: [
+              Number(c.id_servicio),
+              c.nombre || '',
+              normName,
+              c.servicio || '',
+              c.ip || '',
+              c.estado || 'Activo',
+              c.estado_facturas || 'Pagadas',
+              String(c.precio_plan || '0'),
+              String(c.saldo || '0'),
+              c.plan_internet || '',
+              c.router || '',
+              c.sn_onu || '',
+              c.telefono || '',
+              c.direccion || '',
+              c.raw_data || '',
+              now,
+            ],
+          };
+        });
+
+        await client.batch(statements, 'write');
+        totalInserted += batch.length;
+      }
+
+      logger.info(`Sincronización exitosa: ${totalInserted} clientes de WispHub guardados en Turso DB`);
+      return totalInserted;
+    } catch (error: any) {
+      logger.error('Error al guardar clientes de WispHub en Turso DB:', error?.message || error);
       throw error;
     }
   }
@@ -511,6 +624,250 @@ export class TursoService {
     } catch (error: any) {
       logger.error('Error al obtener estadísticas de SmartOLT en Turso:', error?.message || error);
       return { count: 0, lastSync: null };
+    }
+  }
+
+  /**
+   * Obtiene estadísticas de sincronización de WispHub
+   */
+  static async getWisphubSyncStats(): Promise<{ count: number; lastSync: string | null }> {
+    try {
+      const client = getTursoClient();
+      const res = await client.execute(`
+        SELECT COUNT(*) as total, MAX(updated_at) as last_sync 
+        FROM wisphub_clients
+      `);
+      const row = res.rows[0];
+      return {
+        count: Number(row?.total || 0),
+        lastSync: row?.last_sync ? String(row.last_sync) : null,
+      };
+    } catch (error: any) {
+      logger.error('Error al obtener estadísticas de WispHub en Turso:', error?.message || error);
+      return { count: 0, lastSync: null };
+    }
+  }
+
+  /**
+   * Realiza el cruce de datos entre SmartOLT y WispHub (detección de discrepancias de IP)
+   * 100% solo lectura. Cruza por número de folio/contrato (ej: 2861) y por nombre normalizado.
+   */
+  static async getAuditIpCross(options: {
+    filter?: 'all' | 'mismatches' | 'matches' | 'only_olt' | 'only_wisphub' | 'no_ip';
+    search?: string;
+    page?: number;
+    limit?: number;
+    offset?: number;
+  } = {}): Promise<{
+    summary: {
+      totalSmartOlt: number;
+      totalWisphub: number;
+      mismatches: number;
+      matches: number;
+      onlySmartOlt: number;
+      onlyWisphub: number;
+      noIp: number;
+    };
+    items: AuditIpItem[];
+    total: number;
+    page: number;
+    totalPages: number;
+  }> {
+    const filter = options.filter || 'all';
+    const search = (options.search || '').toLowerCase().trim();
+    const limit = options.limit || 50;
+    const page = options.page || 1;
+    const offset = options.offset !== undefined ? options.offset : (page - 1) * limit;
+
+    try {
+      const client = getTursoClient();
+
+      // 1. Obtener todas las ONUs de SmartOLT
+      const resOlt = await client.execute('SELECT * FROM smartolt_onus');
+      // 2. Obtener todos los clientes de WispHub
+      const resWh = await client.execute('SELECT * FROM wisphub_clients');
+
+      const oltRows = resOlt.rows;
+      const whRows = resWh.rows;
+
+      // Indexar WispHub por Folio numérico y por Nombre Normalizado
+      const whByFolio = new Map<string, any>();
+      const whByName = new Map<string, any>();
+      const whUsedIds = new Set<string | number>();
+
+      for (const row of whRows) {
+        const servicioStr = String(row.servicio || row.nombre || '');
+        const folioMatch = servicioStr.match(/^([0-9]{1,6})[-\s_]/);
+        if (folioMatch && folioMatch[1]) {
+          whByFolio.set(folioMatch[1], row);
+        }
+        const normName = String(row.nombre_normalized || normalizeText(cleanPersonName(String(row.nombre || ''))));
+        if (normName) {
+          whByName.set(normName, row);
+        }
+      }
+
+      const matchedItems: AuditIpItem[] = [];
+
+      // 3. Procesar registros de SmartOLT y buscar su par en WispHub
+      for (const olt of oltRows) {
+        const oltName = String(olt.name || '');
+        const oltFolioMatch = oltName.match(/^([0-9]{1,6})[-\s_]/);
+        const oltFolio = oltFolioMatch ? oltFolioMatch[1] : '';
+        const oltNormName = String(olt.name_normalized || normalizeText(cleanPersonName(oltName)));
+        const oltIp = olt.ip_address ? String(olt.ip_address).trim() : null;
+
+        // Buscar coincidencia en WispHub: primero por folio, luego por nombre normalizado
+        let whMatch = oltFolio ? whByFolio.get(oltFolio) : null;
+        if (!whMatch && oltNormName) {
+          whMatch = whByName.get(oltNormName);
+        }
+
+        if (whMatch) {
+          whUsedIds.add(whMatch.id_servicio);
+          const whIp = whMatch.ip ? String(whMatch.ip).trim() : null;
+
+          let ipStatus: AuditIpItem['ip_status'] = 'NO_IP';
+          if (oltIp && whIp) {
+            ipStatus = (oltIp.toLowerCase() === whIp.toLowerCase()) ? 'MATCH' : 'MISMATCH';
+          } else if (!oltIp && !whIp) {
+            ipStatus = 'NO_IP';
+          } else {
+            ipStatus = 'NO_IP';
+          }
+
+          matchedItems.push({
+            id: `MATCH-${olt.unique_external_id}-${whMatch.id_servicio}`,
+            folio: oltFolio || String(whMatch.id_servicio),
+            cliente: String(whMatch.nombre || cleanPersonName(oltName)),
+            servicio: String(whMatch.servicio || oltName),
+            smartolt_ip: oltIp,
+            wisphub_ip: whIp,
+            ip_status: ipStatus,
+            wisphub_estado: String(whMatch.estado || 'Activo'),
+            wisphub_facturas: String(whMatch.estado_facturas || 'Pagadas'),
+            wisphub_plan: String(whMatch.plan_internet || ''),
+            zona_o_router: String(olt.zone_name || whMatch.router || ''),
+            sn_smartolt: String(olt.sn || ''),
+            sn_wisphub: String(whMatch.sn_onu || ''),
+            smartolt_id: String(olt.unique_external_id),
+            wisphub_id: whMatch.id_servicio ? Number(whMatch.id_servicio) : null,
+          });
+        } else {
+          // Solo en SmartOLT
+          matchedItems.push({
+            id: `OLT-${olt.unique_external_id}`,
+            folio: oltFolio || 'N/A',
+            cliente: cleanPersonName(oltName) || oltName,
+            servicio: oltName,
+            smartolt_ip: oltIp,
+            wisphub_ip: null,
+            ip_status: 'ONLY_SMARTOLT',
+            wisphub_estado: null,
+            wisphub_facturas: null,
+            wisphub_plan: null,
+            zona_o_router: String(olt.zone_name || olt.olt_name || ''),
+            sn_smartolt: String(olt.sn || ''),
+            sn_wisphub: null,
+            smartolt_id: String(olt.unique_external_id),
+            wisphub_id: null,
+          });
+        }
+      }
+
+      // 4. Agregar registros de WispHub que no tuvieron par en SmartOLT
+      for (const wh of whRows) {
+        if (wh.id_servicio && !whUsedIds.has(wh.id_servicio as any)) {
+          const servicioStr = String(wh.servicio || wh.nombre || '');
+          const folioMatch = servicioStr.match(/^([0-9]{1,6})[-\s_]/);
+          const whIp = wh.ip ? String(wh.ip).trim() : null;
+
+          matchedItems.push({
+            id: `WH-${wh.id_servicio}`,
+            folio: folioMatch ? folioMatch[1] : String(wh.id_servicio),
+            cliente: String(wh.nombre || ''),
+            servicio: servicioStr,
+            smartolt_ip: null,
+            wisphub_ip: whIp,
+            ip_status: 'ONLY_WISPHUB',
+            wisphub_estado: String(wh.estado || 'Activo'),
+            wisphub_facturas: String(wh.estado_facturas || 'Pagadas'),
+            wisphub_plan: String(wh.plan_internet || ''),
+            zona_o_router: String(wh.router || ''),
+            sn_smartolt: null,
+            sn_wisphub: String(wh.sn_onu || ''),
+            smartolt_id: null,
+            wisphub_id: wh.id_servicio ? Number(wh.id_servicio) : null,
+          });
+        }
+      }
+
+      // 5. Calcular resumen global
+      const summary = {
+        totalSmartOlt: oltRows.length,
+        totalWisphub: whRows.length,
+        mismatches: matchedItems.filter(i => i.ip_status === 'MISMATCH').length,
+        matches: matchedItems.filter(i => i.ip_status === 'MATCH').length,
+        onlySmartOlt: matchedItems.filter(i => i.ip_status === 'ONLY_SMARTOLT').length,
+        onlyWisphub: matchedItems.filter(i => i.ip_status === 'ONLY_WISPHUB').length,
+        noIp: matchedItems.filter(i => i.ip_status === 'NO_IP').length,
+      };
+
+      // 6. Aplicar filtro
+      let filtered = matchedItems;
+      if (filter === 'mismatches') {
+        filtered = filtered.filter(i => i.ip_status === 'MISMATCH');
+      } else if (filter === 'matches') {
+        filtered = filtered.filter(i => i.ip_status === 'MATCH');
+      } else if (filter === 'only_olt') {
+        filtered = filtered.filter(i => i.ip_status === 'ONLY_SMARTOLT');
+      } else if (filter === 'only_wisphub') {
+        filtered = filtered.filter(i => i.ip_status === 'ONLY_WISPHUB');
+      } else if (filter === 'no_ip') {
+        filtered = filtered.filter(i => i.ip_status === 'NO_IP');
+      }
+
+      // 7. Aplicar búsqueda por texto si existe
+      if (search) {
+        filtered = filtered.filter(i =>
+          i.cliente.toLowerCase().includes(search) ||
+          i.folio.toLowerCase().includes(search) ||
+          i.servicio.toLowerCase().includes(search) ||
+          (i.smartolt_ip && i.smartolt_ip.includes(search)) ||
+          (i.wisphub_ip && i.wisphub_ip.includes(search)) ||
+          (i.zona_o_router && i.zona_o_router.toLowerCase().includes(search)) ||
+          (i.sn_smartolt && i.sn_smartolt.toLowerCase().includes(search)) ||
+          (i.sn_wisphub && i.sn_wisphub.toLowerCase().includes(search))
+        );
+      }
+
+      // Priorizar discrepancias al inicio cuando se muestra 'all'
+      if (filter === 'all' && !search) {
+        filtered.sort((a, b) => {
+          const priority = (st: string) => st === 'MISMATCH' ? 0 : (st === 'MATCH' ? 1 : 2);
+          return priority(a.ip_status) - priority(b.ip_status);
+        });
+      }
+
+      const totalCount = filtered.length;
+      const paginated = filtered.slice(offset, offset + limit);
+
+      return {
+        summary,
+        items: paginated,
+        total: totalCount,
+        page,
+        totalPages: Math.max(1, Math.ceil(totalCount / limit)),
+      };
+    } catch (error: any) {
+      logger.error('Error al realizar cruce de IPs SmartOLT vs WispHub:', error?.message || error);
+      return {
+        summary: { totalSmartOlt: 0, totalWisphub: 0, mismatches: 0, matches: 0, onlySmartOlt: 0, onlyWisphub: 0, noIp: 0 },
+        items: [],
+        total: 0,
+        page: 1,
+        totalPages: 1,
+      };
     }
   }
 

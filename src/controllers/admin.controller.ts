@@ -347,4 +347,54 @@ export class AdminController {
       res.status(500).json({ success: false, error: error?.message || error });
     }
   }
+
+  /**
+   * Dispara la sincronización completa de clientes de WispHub a Turso DB (100% solo lectura de API)
+   */
+  static async syncWisphub(req: Request, res: Response): Promise<void> {
+    try {
+      logger.info('Iniciando sincronización manual de clientes WispHub...');
+      const result = await WispHubService.syncAllClientesToTurso();
+      res.json({
+        success: result.success,
+        message: result.message || `Sincronización completada: ${result.count} clientes procesados en Turso DB.`,
+        stats: result,
+      });
+    } catch (error: any) {
+      logger.error('Error al sincronizar WispHub:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Obtiene estadísticas de sincronización de WispHub en Turso
+   */
+  static async getWisphubStats(_req: Request, res: Response): Promise<void> {
+    try {
+      const stats = await TursoService.getWisphubSyncStats();
+      res.json({ success: true, stats });
+    } catch (error: any) {
+      logger.error('Error al obtener stats de WispHub:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Realiza la auditoría de cruce de IPs entre SmartOLT y WispHub
+   */
+  static async getAuditIpCross(req: Request, res: Response): Promise<void> {
+    try {
+      const filter = (req.query.filter as any) || 'all';
+      const search = (req.query.search as string) || '';
+      const page = parseInt(req.query.page as string, 10) || 1;
+      const limit = parseInt(req.query.limit as string, 10) || 50;
+
+      const result = await TursoService.getAuditIpCross({ filter, search, page, limit });
+      res.json({ success: true, ...result });
+    } catch (error: any) {
+      logger.error('Error al auditar cruce de IPs:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
 }
+

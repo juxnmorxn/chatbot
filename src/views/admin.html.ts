@@ -394,6 +394,7 @@ export function getAdminDashboardHtml(): string {
     <!-- Navigation Tabs -->
     <div class="nav-tabs">
       <button class="nav-tab active" onclick="switchTab('apis', this)">🔑 Conexión y Pagos</button>
+      <button class="nav-tab" onclick="switchTab('audit', this)" style="border: 1px solid rgba(239, 68, 68, 0.4); background: rgba(239, 68, 68, 0.08); color: #fca5a5;">🔍 Auditoría IPs (SmartOLT vs WispHub)</button>
       <button class="nav-tab" onclick="switchTab('whatsapp', this)">📲 Vincular WhatsApp</button>
       <button class="nav-tab" onclick="switchTab('tickets', this)">🎫 Mesa de Tickets</button>
       <button class="nav-tab" onclick="switchTab('sessions', this)">👥 Sesiones en Turso</button>
@@ -469,7 +470,7 @@ export function getAdminDashboardHtml(): string {
 
           <div class="form-group">
             <label>URL Base de API WispHub</label>
-            <input type="text" id="wisphubUrl" placeholder="https://api.wisphub.net/api">
+            <input type="text" id="wisphubUrl" placeholder="https://api.wisphub.io/api">
           </div>
 
           <div class="form-group">
@@ -477,8 +478,13 @@ export function getAdminDashboardHtml(): string {
             <input type="password" id="wisphubApiKey" class="mono" placeholder="Pega tu token de WispHub aquí">
           </div>
 
-          <div style="margin-top: 14px;">
-            <button type="button" class="btn btn-secondary btn-test" onclick="testService('wisphub')">🩺 Probar Conexión WispHub</button>
+          <div style="margin-top: 14px; display: flex; gap: 10px; flex-wrap: wrap;">
+            <button type="button" class="btn btn-secondary btn-test" onclick="testService('wisphub')">🩺 Probar Conexión</button>
+            <button type="button" id="btnSyncWh" class="btn btn-cyan" onclick="syncWisphubAction()">🔄 Sincronizar con Turso DB</button>
+          </div>
+
+          <div id="wisphubStatsBox" style="margin-top: 12px; padding: 8px 12px; background: rgba(255,255,255,0.03); border-radius: 6px; font-size: 12px; color: var(--text-muted); border: 1px solid rgba(255,255,255,0.06);">
+            📊 <strong>Clientes en Turso:</strong> <span id="whStatsText">Consultando...</span> (Auto-sync cada 10 min)
           </div>
         </div>
 
@@ -574,6 +580,118 @@ export function getAdminDashboardHtml(): string {
               <input type="time" id="workHoursEnd" value="18:00">
               <small style="color: var(--text-muted); font-size: 11px;">Hora en que concluye el turno regular de atención en oficina.</small>
             </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 2: Auditoría de IPs (SmartOLT vs WispHub) -->
+    <div id="tab-audit" class="tab-pane">
+      <div class="card" style="margin-bottom: 20px;">
+        <div class="card-header" style="flex-wrap: wrap; gap: 12px;">
+          <div>
+            <div class="card-title" style="display: flex; align-items: center; gap: 8px;">
+              <span>🔍 Auditoría de Cruce de IPs (SmartOLT vs WispHub)</span>
+              <span class="card-badge" style="background: rgba(239,68,68,0.2); color: #f87171; border: 1px solid rgba(239,68,68,0.4);">Detección de Discrepancias</span>
+            </div>
+            <p style="color: var(--text-muted); font-size: 13px; margin-top: 4px;">
+              Comparación cruzada 100% de Solo Lectura. Compara la IP asignada en SmartOLT contra la IP registrada en WispHub para el mismo folio o cliente.
+            </p>
+          </div>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <button class="btn btn-secondary" onclick="loadAuditData(1)">🔄 Refrescar Cruce</button>
+            <button class="btn btn-cyan" id="btnSyncAuditWh" onclick="syncWisphubAction()">📥 Sincronizar WispHub</button>
+          </div>
+        </div>
+
+        <!-- Banner Modo Solo Lectura -->
+        <div style="background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.25); border-radius: 10px; padding: 10px 16px; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; font-size: 13px;">
+          <span style="font-size: 18px;">🛡️</span>
+          <span><strong>Modo 100% Seguro (Solo Lectura):</strong> Este módulo jamás altera nombres ni IPs en SmartOLT ni en WispHub. Toda la auditoría se procesa localmente en las tablas <code>smartolt_onus</code> y <code>wisphub_clients</code> de Turso DB.</span>
+        </div>
+
+        <!-- KPI Metrics Grid -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 20px;">
+          <div class="stat-card" style="border-left: 4px solid #ef4444; background: rgba(239, 68, 68, 0.08); padding: 14px; border-radius: 10px; border: 1px solid rgba(239,68,68,0.2); cursor: pointer;" onclick="setAuditFilter('mismatches')">
+            <div style="font-size: 11px; color: #fca5a5; font-weight: 600; text-transform: uppercase;">🔴 Discrepancias de IP</div>
+            <div id="statMismatches" style="font-size: 28px; font-weight: 700; color: #f87171; margin: 4px 0;">-</div>
+            <div style="font-size: 11px; color: var(--text-muted);">Mismo cliente, distinta IP</div>
+          </div>
+
+          <div class="stat-card" style="border-left: 4px solid #10b981; background: rgba(16, 185, 129, 0.08); padding: 14px; border-radius: 10px; border: 1px solid rgba(16,185,129,0.2); cursor: pointer;" onclick="setAuditFilter('matches')">
+            <div style="font-size: 11px; color: #6ee7b7; font-weight: 600; text-transform: uppercase;">🟢 IPs Coincidentes</div>
+            <div id="statMatches" style="font-size: 28px; font-weight: 700; color: #34d399; margin: 4px 0;">-</div>
+            <div style="font-size: 11px; color: var(--text-muted);">IP SmartOLT = IP WispHub</div>
+          </div>
+
+          <div class="stat-card" style="border-left: 4px solid #06b6d4; background: rgba(6, 182, 212, 0.08); padding: 14px; border-radius: 10px; border: 1px solid rgba(6,182,212,0.2);">
+            <div style="font-size: 11px; color: #67e8f9; font-weight: 600; text-transform: uppercase;">📡 ONUs en SmartOLT</div>
+            <div id="statTotalOlt" style="font-size: 28px; font-weight: 700; color: #22d3ee; margin: 4px 0;">-</div>
+            <div style="font-size: 11px; color: var(--text-muted);">Total en base de datos</div>
+          </div>
+
+          <div class="stat-card" style="border-left: 4px solid #818cf8; background: rgba(99, 102, 241, 0.08); padding: 14px; border-radius: 10px; border: 1px solid rgba(99,102,241,0.2);">
+            <div style="font-size: 11px; color: #a5b4fc; font-weight: 600; text-transform: uppercase;">🏢 Clientes WispHub</div>
+            <div id="statTotalWh" style="font-size: 28px; font-weight: 700; color: #818cf8; margin: 4px 0;">-</div>
+            <div style="font-size: 11px; color: var(--text-muted);">Total en base de datos</div>
+          </div>
+
+          <div class="stat-card" style="border-left: 4px solid #f59e0b; background: rgba(245, 158, 11, 0.08); padding: 14px; border-radius: 10px; border: 1px solid rgba(245,158,11,0.2); cursor: pointer;" onclick="setAuditFilter('no_ip')">
+            <div style="font-size: 11px; color: #fcd34d; font-weight: 600; text-transform: uppercase;">⚠️ Sin IP Registrada</div>
+            <div id="statNoIp" style="font-size: 28px; font-weight: 700; color: #fbbf24; margin: 4px 0;">-</div>
+            <div style="font-size: 11px; color: var(--text-muted);">Falta IP en un sistema</div>
+          </div>
+        </div>
+
+        <!-- Filter Controls & Search -->
+        <div style="display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-bottom: 16px; background: rgba(0,0,0,0.25); padding: 12px 16px; border-radius: 12px; border: 1px solid var(--card-border);">
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;" id="auditFilterButtons">
+            <button class="btn btn-secondary btn-test" id="filterBtn-all" onclick="setAuditFilter('all')">📋 Todos</button>
+            <button class="btn btn-secondary btn-test" id="filterBtn-mismatches" style="color: #f87171; border-color: rgba(239,68,68,0.4);" onclick="setAuditFilter('mismatches')">🔴 Solo Discrepancias (Alertas)</button>
+            <button class="btn btn-secondary btn-test" id="filterBtn-matches" style="color: #34d399;" onclick="setAuditFilter('matches')">🟢 IPs Coincidentes</button>
+            <button class="btn btn-secondary btn-test" id="filterBtn-only_olt" onclick="setAuditFilter('only_olt')">📡 Solo SmartOLT</button>
+            <button class="btn btn-secondary btn-test" id="filterBtn-only_wisphub" onclick="setAuditFilter('only_wisphub')">🏢 Solo WispHub</button>
+          </div>
+
+          <div style="display: flex; gap: 8px; min-width: 280px; flex: 1; max-width: 400px;">
+            <input type="text" id="auditSearchInput" placeholder="🔍 Buscar por folio, cliente, IP o serie..." oninput="onAuditSearchChange()" style="padding: 8px 12px; font-size: 13px;">
+          </div>
+        </div>
+
+        <!-- Table Container -->
+        <div class="table-container" style="border: 1px solid var(--card-border); border-radius: 10px; background: rgba(0,0,0,0.2);">
+          <table>
+            <thead>
+              <tr style="background: rgba(255,255,255,0.02);">
+                <th style="width: 80px;">Folio</th>
+                <th>Cliente / Servicio</th>
+                <th style="color: #60a5fa;">🌐 IP WispHub</th>
+                <th style="color: #22d3ee;">⚡ IP SmartOLT</th>
+                <th>Estatus Cruce</th>
+                <th>Estado WispHub</th>
+                <th>Zona / Router</th>
+                <th>Serie ONU</th>
+              </tr>
+            </thead>
+            <tbody id="auditTableBody">
+              <tr>
+                <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 30px;">
+                  ⏳ Cargando datos de auditoría...
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Pagination Footer -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px; flex-wrap: wrap; gap: 10px;">
+          <div style="font-size: 13px; color: var(--text-muted);" id="auditPaginationInfo">
+            Mostrando 0 registros
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn btn-secondary btn-test" id="btnAuditPrev" onclick="changeAuditPage(-1)">◀ Anterior</button>
+            <span id="auditPageIndicator" style="display: inline-flex; align-items: center; font-size: 13px; padding: 0 10px; font-family: var(--font-mono);">Pág 1 / 1</span>
+            <button class="btn btn-secondary btn-test" id="btnAuditNext" onclick="changeAuditPage(1)">Siguiente ▶</button>
           </div>
         </div>
       </div>
@@ -822,6 +940,10 @@ export function getAdminDashboardHtml(): string {
       }
 
       try {
+        if (tabId === 'audit') {
+          loadAuditData(1);
+          loadWisphubStats();
+        }
         if (tabId === 'whatsapp') loadWhatsAppStatus();
         if (tabId === 'tickets') loadTickets();
         if (tabId === 'sessions') loadSessions();
@@ -1307,9 +1429,183 @@ export function getAdminDashboardHtml(): string {
       }
     }
 
+    // ==========================================
+    // MÓDULO DE AUDITORÍA DE CRUCE DE IPS
+    // ==========================================
+    let currentAuditPage = 1;
+    let currentAuditFilter = 'all';
+    let currentAuditSearch = '';
+    let auditSearchDebounce = null;
+    let totalAuditPages = 1;
+
+    function setAuditFilter(filterType) {
+      currentAuditFilter = filterType;
+      document.querySelectorAll('#auditFilterButtons button').forEach(b => {
+        b.style.borderColor = '';
+        b.style.boxShadow = '';
+      });
+      const activeBtn = document.getElementById('filterBtn-' + filterType);
+      if (activeBtn) {
+        activeBtn.style.borderColor = 'var(--primary)';
+        activeBtn.style.boxShadow = '0 0 0 2px var(--primary-glow)';
+      }
+      loadAuditData(1);
+    }
+
+    function onAuditSearchChange() {
+      clearTimeout(auditSearchDebounce);
+      auditSearchDebounce = setTimeout(() => {
+        currentAuditSearch = (document.getElementById('auditSearchInput').value || '').trim();
+        loadAuditData(1);
+      }, 300);
+    }
+
+    function changeAuditPage(delta) {
+      const target = currentAuditPage + delta;
+      if (target >= 1 && target <= totalAuditPages) {
+        loadAuditData(target);
+      }
+    }
+
+    async function loadAuditData(page = 1) {
+      currentAuditPage = page;
+      const tbody = document.getElementById('auditTableBody');
+      if (!tbody) return;
+
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 30px;">⏳ Consultando cruce de IPs en Turso DB...</td></tr>';
+
+      try {
+        const queryParams = new URLSearchParams({
+          filter: currentAuditFilter,
+          search: currentAuditSearch,
+          page: String(currentAuditPage),
+          limit: '50',
+        });
+
+        const res = await fetch('/api/audit/ip-cross?' + queryParams.toString());
+        const data = await res.json();
+
+        if (!data.success) {
+          tbody.innerHTML = '<tr><td colspan="8" style="color: #f87171; text-align: center; padding: 24px;">❌ Error: ' + (data.error || 'No se pudo cargar la auditoría') + '</td></tr>';
+          return;
+        }
+
+        // Actualizar contadores KPI
+        if (data.summary) {
+          document.getElementById('statMismatches').innerText = data.summary.mismatches || 0;
+          document.getElementById('statMatches').innerText = data.summary.matches || 0;
+          document.getElementById('statTotalOlt').innerText = data.summary.totalSmartOlt || 0;
+          document.getElementById('statTotalWh').innerText = data.summary.totalWisphub || 0;
+          document.getElementById('statNoIp').innerText = data.summary.noIp || 0;
+        }
+
+        totalAuditPages = data.totalPages || 1;
+        document.getElementById('auditPageIndicator').innerText = 'Pág ' + data.page + ' / ' + totalAuditPages;
+        document.getElementById('auditPaginationInfo').innerText = 'Mostrando ' + data.items.length + ' de ' + data.total + ' registros (Filtro: ' + currentAuditFilter + ')';
+        document.getElementById('btnAuditPrev').disabled = currentAuditPage <= 1;
+        document.getElementById('btnAuditNext').disabled = currentAuditPage >= totalAuditPages;
+
+        if (!data.items || data.items.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 30px;">No se encontraron registros con los criterios actuales.</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = data.items.map(item => {
+          let statusBadge = '';
+          let rowBg = '';
+          if (item.ip_status === 'MISMATCH') {
+            statusBadge = '<span class="pill pill-red" style="font-weight: 700; font-size: 11px;">🔴 IP DIFERENTE</span>';
+            rowBg = 'background: rgba(239, 68, 68, 0.05);';
+          } else if (item.ip_status === 'MATCH') {
+            statusBadge = '<span class="pill pill-green">🟢 IP COINCIDE</span>';
+          } else if (item.ip_status === 'NO_IP') {
+            statusBadge = '<span class="pill pill-amber">⚠️ SIN IP</span>';
+          } else if (item.ip_status === 'ONLY_SMARTOLT') {
+            statusBadge = '<span class="pill pill-blue">📡 SOLO EN SMARTOLT</span>';
+          } else if (item.ip_status === 'ONLY_WISPHUB') {
+            statusBadge = '<span class="pill pill-purple">🏢 SOLO EN WISPHUB</span>';
+          }
+
+          const whIpText = item.wisphub_ip 
+            ? '<span style="font-family: var(--font-mono); font-weight: 600; color: #60a5fa;">' + item.wisphub_ip + '</span>' 
+            : '<span style="color: var(--text-muted); font-size: 11px;">-</span>';
+
+          const oltIpText = item.smartolt_ip 
+            ? '<span style="font-family: var(--font-mono); font-weight: 600; color: #22d3ee;">' + item.smartolt_ip + '</span>' 
+            : '<span style="color: var(--text-muted); font-size: 11px;">-</span>';
+
+          const whEstadoBadge = item.wisphub_estado
+            ? '<span class="pill ' + (item.wisphub_estado.toLowerCase() === 'activo' ? 'pill-green' : 'pill-red') + '">' + item.wisphub_estado + '</span>'
+            : '<span style="color: var(--text-muted); font-size: 11px;">-</span>';
+
+          const clientFull = '<strong>' + (item.cliente || '-') + '</strong><br><small style="color: var(--text-muted);">' + (item.servicio || '') + '</small>';
+
+          return '<tr style="' + rowBg + '">' +
+            '<td style="font-family: var(--font-mono); font-weight: 700; color: #f9fafb;">' + (item.folio || '-') + '</td>' +
+            '<td>' + clientFull + '</td>' +
+            '<td>' + whIpText + '</td>' +
+            '<td>' + oltIpText + '</td>' +
+            '<td>' + statusBadge + '</td>' +
+            '<td>' + whEstadoBadge + '</td>' +
+            '<td style="font-size: 12px; color: var(--text-muted);">' + (item.zona_o_router || '-') + '</td>' +
+            '<td style="font-family: var(--font-mono); font-size: 11px;">' + (item.sn_smartolt || item.sn_wisphub || '-') + '</td>' +
+          '</tr>';
+        }).join('');
+
+      } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="8" style="color: #f87171; text-align: center; padding: 24px;">❌ Error de conexión al servidor: ' + err.message + '</td></tr>';
+      }
+    }
+
+    async function loadWisphubStats() {
+      const el = document.getElementById('whStatsText');
+      if (!el) return;
+      try {
+        const res = await fetch('/api/wisphub/stats');
+        const data = await res.json();
+        if (data.success && data.stats) {
+          const count = data.stats.count || 0;
+          const last = data.stats.lastSync ? new Date(data.stats.lastSync).toLocaleString('es-MX') : 'Nunca';
+          el.innerHTML = '<strong style="color: #818cf8;">' + count + ' clientes registrados</strong> (Último sync: ' + last + ')';
+        } else {
+          el.innerText = 'Sin registros sincronizados aún.';
+        }
+      } catch (e) {
+        el.innerText = 'No se pudo obtener el estado.';
+      }
+    }
+
+    async function syncWisphubAction() {
+      const btnTab1 = document.getElementById('btnSyncWh');
+      const btnAudit = document.getElementById('btnSyncAuditWh');
+      const el = document.getElementById('whStatsText');
+
+      if (btnTab1) { btnTab1.disabled = true; btnTab1.innerText = '⏳ Sincronizando...'; }
+      if (btnAudit) { btnAudit.disabled = true; btnAudit.innerText = '⏳ Sincronizando...'; }
+      if (el) el.innerText = 'Descargando clientes desde WispHub API (Paginado)...';
+
+      try {
+        const res = await fetch('/api/wisphub/sync', { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+          showToast('✅ ' + data.message);
+          loadWisphubStats();
+          loadAuditData(currentAuditPage);
+        } else {
+          showToast('❌ Error: ' + (data.error || data.message), true);
+        }
+      } catch (err) {
+        showToast('❌ Error al conectar: ' + err.message, true);
+      } finally {
+        if (btnTab1) { btnTab1.disabled = false; btnTab1.innerText = '🔄 Sincronizar con Turso DB'; }
+        if (btnAudit) { btnAudit.disabled = false; btnAudit.innerText = '📥 Sincronizar WispHub'; }
+      }
+    }
+
     // Inicializar
     loadSettings();
     loadSmartOltStats();
+    loadWisphubStats();
   </script>
 </body>
 </html>`;

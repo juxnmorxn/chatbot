@@ -33,6 +33,11 @@ router.post('/api/smartolt/sync', AdminController.syncSmartOlt);
 router.get('/api/smartolt/stats', AdminController.getSmartOltStats);
 router.get('/api/smartolt/search', AdminController.searchClients);
 
+// WispHub y Auditoría de Cruce de IPs (SmartOLT vs WispHub)
+router.post('/api/wisphub/sync', AdminController.syncWisphub);
+router.get('/api/wisphub/stats', AdminController.getWisphubStats);
+router.get('/api/audit/ip-cross', AdminController.getAuditIpCross);
+
 // Mesa de Tickets de Soporte
 router.get('/api/tickets', AdminController.getTickets);
 router.patch('/api/tickets/:folio/status', AdminController.updateTicketStatus);

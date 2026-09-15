@@ -45,6 +45,7 @@ async function startServer() {
 
     // Sincronización en segundo plano de SmartOLT hacia Turso DB (Cada 60 minutos = 1 llamada/hora de las 15 permitidas)
     const { SmartOLTService } = await import('./services/smartolt.service');
+    const { WispHubService } = await import('./services/wisphub.service');
     const { TursoService } = await import('./services/turso.service');
     
     // Verificación inicial 10 segundos después del arranque
@@ -57,12 +58,21 @@ async function startServer() {
         } else {
           logger.info(`Inventario SmartOLT listo en Turso: ${stats.count} ONUs (Última sync: ${stats.lastSync || 'Previa'})`);
         }
+
+        // Verificación e importación inicial de WispHub
+        const whStats = await TursoService.getWisphubSyncStats();
+        if (whStats.count === 0) {
+          logger.info('Tabla wisphub_clients vacía en Turso. Iniciando sincronización inicial de WispHub...');
+          await WispHubService.syncAllClientesToTurso();
+        } else {
+          logger.info(`Clientes WispHub listos en Turso: ${whStats.count} clientes (Última sync: ${whStats.lastSync || 'Previa'})`);
+        }
       } catch (err: any) {
-        logger.warn('No se pudo ejecutar sincronización inicial de SmartOLT:', err?.message || err);
+        logger.warn('No se pudo ejecutar sincronización inicial:', err?.message || err);
       }
     }, 10000);
 
-    // Ciclo recurrente cada 60 minutos
+    // Ciclo recurrente de SmartOLT cada 60 minutos
     setInterval(async () => {
       try {
         logger.info('Ejecutando sincronización horaria de inventario SmartOLT...');
@@ -71,6 +81,16 @@ async function startServer() {
         logger.warn('Error en sincronización horaria de SmartOLT:', err?.message || err);
       }
     }, 60 * 60 * 1000);
+
+    // Ciclo recurrente de WispHub cada 10 minutos (100% Solo Lectura de API hacia Turso DB)
+    setInterval(async () => {
+      try {
+        logger.info('Ejecutando sincronización periódica de WispHub (cada 10 min)...');
+        await WispHubService.syncAllClientesToTurso();
+      } catch (err: any) {
+        logger.warn('Error en sincronización periódica de WispHub:', err?.message || err);
+      }
+    }, 10 * 60 * 1000);
   } catch (error: any) {
     logger.error('Error crítico al iniciar el servidor:', error?.message || error);
     process.exit(1);

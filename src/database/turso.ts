@@ -68,15 +68,48 @@ export async function initTursoDatabase(): Promise<void> {
         zone_name TEXT,
         speed_profile TEXT,
         olt_name TEXT,
+        ip_address TEXT,
         raw_data TEXT,
         updated_at TEXT
       );
     `);
 
+    // Migración no destructiva de columna ip_address si no existe en tablas previas
+    try {
+      await client.execute(`ALTER TABLE smartolt_onus ADD COLUMN ip_address TEXT;`);
+    } catch (_) {}
+
     // Índices para búsquedas rápidas
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_onus_name_norm ON smartolt_onus(name_normalized);`);
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_onus_sn ON smartolt_onus(sn);`);
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_onus_phone ON smartolt_onus(phone);`);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_onus_ip ON smartolt_onus(ip_address);`);
+
+    // Tabla de Clientes sincronizados de WispHub
+    await client.execute(`
+      CREATE TABLE IF NOT EXISTS wisphub_clients (
+        id_servicio INTEGER PRIMARY KEY,
+        nombre TEXT,
+        nombre_normalized TEXT,
+        servicio TEXT,
+        ip TEXT,
+        estado TEXT,
+        estado_facturas TEXT,
+        precio_plan TEXT,
+        saldo TEXT,
+        plan_internet TEXT,
+        router TEXT,
+        sn_onu TEXT,
+        telefono TEXT,
+        direccion TEXT,
+        raw_data TEXT,
+        updated_at TEXT
+      );
+    `);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_wh_nombre_norm ON wisphub_clients(nombre_normalized);`);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_wh_servicio ON wisphub_clients(servicio);`);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_wh_ip ON wisphub_clients(ip);`);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_wh_estado ON wisphub_clients(estado);`);
 
     // Tabla de Tickets para modificaciones manuales en SmartOLT y seguimiento
     await client.execute(`
@@ -103,7 +136,7 @@ export async function initTursoDatabase(): Promise<void> {
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status);`);
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_tickets_created_at ON tickets(created_at);`);
 
-    logger.info('Tablas "sessions", "settings", "conversation_logs", "smartolt_onus" y "tickets" listas en Turso.');
+    logger.info('Tablas "sessions", "settings", "conversation_logs", "smartolt_onus", "wisphub_clients" y "tickets" listas en Turso.');
   } catch (error: any) {
     logger.error('Error al inicializar Turso DB:', error?.message || error);
     throw error;
