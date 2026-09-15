@@ -759,32 +759,37 @@ export class BotOrchestrator {
 
     logger.info(`Iniciando diagnóstico interno silencioso para cliente ${phone} (${session.client_name || 'N/A'})...`);
 
-    // --- 1. VERIFICACIÓN SILENCIOSA DE MOROSIDAD EN WISPHUB ---
-    if (session.client_id) {
-      try {
-        const facturas = await WispHubService.obtenerFacturasPendientes(session.client_id);
-        if (facturas.length > 0) {
-          const totalDeuda = facturas.reduce((acc, f) => acc + (f.monto || 0), 0);
-          logger.info(`Cliente ${phone} presenta morosidad en WispHub: $${totalDeuda} MXN (${facturas.length} facturas)`);
+    // --- 1. VERIFICACIÓN SILENCIOSA DE MOROSIDAD O CORTE EN WISPHUB ---
+    try {
+      const estadoFinanciero = await WispHubService.verificarEstadoFinanciero({
+        clienteId: session.client_id,
+        nombre: session.client_name,
+        phone,
+      });
 
-          const bank = SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK', 'BBVA');
-          const account = SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', '012 180 0000000000 00');
-          const beneficiary = SettingsService.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', this.getIspName());
+      if (estadoFinanciero.suspendido || estadoFinanciero.totalDeuda > 0) {
+        logger.info(`Cliente ${phone} (${session.client_name}) presenta suspensión o adeudo en WispHub: Deuda=$${estadoFinanciero.totalDeuda} (${estadoFinanciero.motivo || 'Suspendido'})`);
 
-          const mensajeMoroso =
-            `Hola${nombre}, revisé tu servicio en el sistema y registras un recibo pendiente por *$${totalDeuda.toFixed(2)} MXN*.\n\n` +
-            `💳 *${bank}* | CLABE: *${account}*\n` +
-            `Beneficiario: *${beneficiary}*\n` +
-            `Concepto: *${session.client_name}*\n\n` +
-            `En cuanto realices tu pago, mándanos por aquí la foto de tu comprobante para reactivarte de inmediato.`;
+        const bank = SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK', 'BBVA');
+        const account = SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', '012 180 0000000000 00');
+        const beneficiary = SettingsService.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', this.getIspName());
+        const montoTexto = estadoFinanciero.totalDeuda > 0
+          ? `registras un recibo pendiente por *$${estadoFinanciero.totalDeuda.toFixed(2)} MXN*`
+          : `tu servicio se encuentra suspendido por corte de pago pendiente`;
 
-          await this.enviarYLoguear(phone, mensajeMoroso, 'CONSULTAR_SALDO', 'AVISO_MOROSIDAD_SILENCIOSA', targetJid);
-          await TursoService.updateStep(phone, 'ESPERANDO_COMPROBANTE');
-          return;
-        }
-      } catch (err: any) {
-        logger.warn(`Error al consultar morosidad silenciosa en WispHub para ${phone}:`, err?.message || err);
+        const mensajeMoroso =
+          `Hola${nombre}, revisé tu servicio en el sistema y ${montoTexto}.\n\n` +
+          `💳 *${bank}* | CLABE: *${account}*\n` +
+          `Beneficiario: *${beneficiary}*\n` +
+          `Concepto: *${session.client_name || phone}*\n\n` +
+          `En cuanto realices tu pago, envíanos por aquí la foto de tu comprobante para reactivarte de inmediato.`;
+
+        await this.enviarYLoguear(phone, mensajeMoroso, 'CONSULTAR_SALDO', 'AVISO_MOROSIDAD_SILENCIOSA', targetJid);
+        await TursoService.updateStep(phone, 'ESPERANDO_COMPROBANTE');
+        return;
       }
+    } catch (err: any) {
+      logger.warn(`Error al consultar morosidad silenciosa en WispHub para ${phone}:`, err?.message || err);
     }
 
     // --- 2. VERIFICACIÓN SILENCIOSA DE CONECTIVIDAD EN SMARTOLT ---
