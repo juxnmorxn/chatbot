@@ -31,6 +31,7 @@ router.post('/api/whatsapp/disconnect', AdminController.disconnectWhatsApp);
 router.post('/api/test/:service', AdminController.testService);
 router.post('/api/smartolt/sync', AdminController.syncSmartOlt);
 router.get('/api/smartolt/stats', AdminController.getSmartOltStats);
+router.get('/api/smartolt/search', AdminController.searchClients);
 
 // Mesa de Tickets de Soporte
 router.get('/api/tickets', AdminController.getTickets);

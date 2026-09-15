@@ -1,6 +1,6 @@
 import { getTursoClient } from '../database/turso';
 import { Logger } from '../utils/logger';
-import { normalizeText, computeNameMatchScore } from '../utils/fuzzy-matcher';
+import { normalizeText, computeNameMatchScore, cleanPersonName } from '../utils/fuzzy-matcher';
 
 const logger = new Logger('TursoService');
 
@@ -349,7 +349,8 @@ export class TursoService {
     const rawQuery = (query || '').trim();
     if (!rawQuery) return [];
 
-    const normQuery = normalizeText(rawQuery);
+    const cleanedQuery = cleanPersonName(rawQuery);
+    const normQuery = normalizeText(cleanedQuery || rawQuery);
     if (!normQuery) return [];
 
     try {
@@ -381,23 +382,49 @@ export class TursoService {
       }
 
       // 2. Extraer palabras clave de la consulta para filtrar candidatos en SQL
-      const queryWords = normQuery.split(' ').filter(w => w.length > 2);
-      let candidatesQuery = 'SELECT * FROM smartolt_onus';
-      const args: any[] = [];
+      const STOP_QUERY = new Set(['de', 'del', 'la', 'las', 'el', 'los', 'y', 'en', 'onu', 'casa', 'soy', 'yo', 'me', 'llamo', 'mi', 'nombre', 'es', 'hola']);
+      const queryWords = normQuery.split(' ').filter(w => w.length > 1 && !STOP_QUERY.has(w));
+      const candidateRowsMap = new Map<string, any>();
 
       if (queryWords.length > 0) {
-        const likeClauses = queryWords.map(() => 'name_normalized LIKE ?');
-        candidatesQuery += ` WHERE ${likeClauses.join(' OR ')} LIMIT 100`;
-        queryWords.forEach(w => args.push(`%${w}%`));
-      } else {
-        candidatesQuery += ' LIMIT 100';
+        // A. Búsqueda con AND (todas las palabras presentes)
+        if (queryWords.length >= 2) {
+          const andClauses = queryWords.map(() => 'name_normalized LIKE ?').join(' AND ');
+          const andRes = await client.execute({
+            sql: `SELECT * FROM smartolt_onus WHERE ${andClauses} LIMIT 50`,
+            args: queryWords.map(w => `%${w}%`),
+          });
+          for (const r of andRes.rows) {
+            candidateRowsMap.set(String(r.unique_external_id), r);
+          }
+        }
+
+        // B. Búsqueda prioritaria por primer nombre (nombre de pila)
+        const firstName = queryWords[0];
+        if (firstName && firstName.length >= 3) {
+          const fnRes = await client.execute({
+            sql: `SELECT * FROM smartolt_onus WHERE name_normalized LIKE ? LIMIT 150`,
+            args: [`%${firstName}%`],
+          });
+          for (const r of fnRes.rows) {
+            candidateRowsMap.set(String(r.unique_external_id), r);
+          }
+        }
+
+        // C. Búsqueda general OR si tenemos pocos candidatos
+        if (candidateRowsMap.size < 50) {
+          const orClauses = queryWords.map(() => 'name_normalized LIKE ?').join(' OR ');
+          const orRes = await client.execute({
+            sql: `SELECT * FROM smartolt_onus WHERE ${orClauses} LIMIT 300`,
+            args: queryWords.map(w => `%${w}%`),
+          });
+          for (const r of orRes.rows) {
+            candidateRowsMap.set(String(r.unique_external_id), r);
+          }
+        }
       }
 
-      const candidatesResult = await client.execute({ sql: candidatesQuery, args });
-      
-      // Si la búsqueda con LIKE no encontró suficientes candidatos (ej. por error ortográfico en cada palabra),
-      // tomamos una muestra más amplia para analizar con algoritmo fonético/Levenshtein
-      let rowsToEvaluate = candidatesResult.rows;
+      let rowsToEvaluate = Array.from(candidateRowsMap.values());
       if (rowsToEvaluate.length === 0) {
         const sampleResult = await client.execute('SELECT * FROM smartolt_onus ORDER BY updated_at DESC LIMIT 200');
         rowsToEvaluate = sampleResult.rows;
@@ -408,7 +435,7 @@ export class TursoService {
 
       for (const row of rowsToEvaluate) {
         const candidateName = String(row.name || '');
-        const score = computeNameMatchScore(rawQuery, candidateName);
+        const score = computeNameMatchScore(cleanedQuery || rawQuery, candidateName);
 
         // Umbral mínimo de similitud: 50%
         if (score >= 50) {

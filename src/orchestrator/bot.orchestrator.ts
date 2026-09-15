@@ -7,6 +7,7 @@ import { config } from '../config/env';
 import { SettingsService } from '../services/settings.service';
 import { Logger } from '../utils/logger';
 import { parseSpintax } from '../utils/spintax';
+import { cleanPersonName } from '../utils/fuzzy-matcher';
 
 const logger = new Logger('BotOrchestrator');
 
@@ -1299,11 +1300,12 @@ export class BotOrchestrator {
     targetJid?: string
   ): Promise<void> {
     const rawInput = input.trim();
-    logger.info(`Buscando coincidencias para identificación de ${phone}: "${rawInput}"`);
+    const cleanSearchTerm = cleanPersonName(rawInput) || rawInput;
+    logger.info(`Buscando coincidencias para identificación de ${phone}: "${rawInput}" (Término limpio: "${cleanSearchTerm}")`);
 
     // 1. Intentar búsqueda flexible en Turso DB (Caché local de SmartOLT)
     try {
-      const coincidenciasOlt = await TursoService.searchOnusFuzzy(rawInput, 6);
+      const coincidenciasOlt = await TursoService.searchOnusFuzzy(cleanSearchTerm, 6);
 
       if (coincidenciasOlt.length > 0) {
         const mejorScore = coincidenciasOlt[0].matchScore;
@@ -1477,10 +1479,11 @@ export class BotOrchestrator {
     }
 
     // 3. Extraer y limpiar el nombre (incluso si dijo "me llamo Juan", "soy Carlos", o simplemente "Maria")
-    let nombreLimpio = clasificacion.nombre_mencionado || rawInput;
-    nombreLimpio = nombreLimpio
+    let nombreLimpio = clasificacion.nombre_mencionado || cleanPersonName(rawInput) || rawInput;
+    nombreLimpio = cleanPersonName(nombreLimpio)
       .replace(/^(me llamo|soy|mi nombre es|mi nombre|nombre:?)\s+/i, '')
       .replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]/g, '')
+      .replace(/\s+/g, ' ')
       .trim();
 
     // Capitalizar palabras

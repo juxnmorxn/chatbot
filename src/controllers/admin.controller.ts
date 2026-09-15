@@ -130,6 +130,24 @@ export class AdminController {
   }
 
   /**
+   * Busca clientes en SmartOLT / Turso para diagnóstico
+   */
+  static async searchClients(req: Request, res: Response): Promise<void> {
+    try {
+      const q = String(req.query.q || '');
+      const client = getTursoClient();
+      const dbRows = await client.execute({
+        sql: 'SELECT name, unique_external_id, sn, phone FROM smartolt_onus WHERE name LIKE ? LIMIT 20',
+        args: [`%${q}%`]
+      });
+      const fuzzy = await TursoService.searchOnusFuzzy(q, 10);
+      res.json({ success: true, query: q, rawCount: dbRows.rows.length, rawMatches: dbRows.rows, fuzzyMatches: fuzzy });
+    } catch (e: any) {
+      res.status(500).json({ success: false, error: e?.message || e });
+    }
+  }
+
+  /**
    * Prueba de conectividad con los servicios externos
    */
   static async testService(req: Request, res: Response): Promise<void> {

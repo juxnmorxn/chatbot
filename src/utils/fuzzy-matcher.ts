@@ -91,16 +91,21 @@ export function diceCoefficient(str1: string, str2: string): number {
 /**
  * Palabras comunes irrelevantes en nombres de personas o descripciones de ONU
  */
-const STOP_WORDS = new Set(['de', 'del', 'la', 'las', 'el', 'los', 'y', 'en', 'onu', 'cliente', 'casa']);
+const STOP_WORDS = new Set(['de', 'del', 'la', 'las', 'el', 'los', 'y', 'en', 'onu', 'cliente', 'casa', 'soy', 'yo', 'me', 'llamo', 'mi', 'nombre', 'es', 'hola']);
 
 /**
  * Elimina prefijos numéricos de contrato comunes en SmartOLT (ej: "2095-Magdalena", "696-Maria")
+ * y limpia frases conversacionales comunes (ej: "soy virginia no magdalena", "hola me llamo juan")
  */
 export function cleanPersonName(name: string): string {
   if (!name) return '';
   return name
     .replace(/^[0-9]+[-\s_]+/g, '') // Elimina prefijos como "2095-", "696 "
     .replace(/^(cli|onu|srv|cto)[-_0-9]+\s*/i, '')
+    .replace(/^(?:hola|buenas|buen dia|buen día|buenas tardes|buenas noches|que tal|hey|hi)?\s*(?:soy|me llamo|mi nombre es|yo soy|mi nombre)\s+/i, '')
+    .replace(/\b(?:no)\s+[a-zA-ZáéíóúÁÉÍÓÚñÑ]+/gi, '') // Elimina aclaraciones negativas como "no magdalena", "no pedro"
+    .replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ0-9\s-]/g, ' ')
+    .replace(/\s+/g, ' ')
     .trim();
 }
 
