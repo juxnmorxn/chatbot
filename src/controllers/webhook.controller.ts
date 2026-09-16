@@ -3,6 +3,7 @@ import { BotOrchestrator, IncomingMessageEvent } from '../orchestrator/bot.orche
 import { config } from '../config/env';
 import { SettingsService } from '../services/settings.service';
 import { EvolutionService } from '../services/evolution.service';
+import { GroqService } from '../services/groq.service';
 import { TursoService } from '../services/turso.service';
 import { Logger } from '../utils/logger';
 import { LidRegistry } from '../utils/lid-registry';
@@ -212,6 +213,19 @@ export class WebhookController {
 
       const extracted = WebhookController.extractMessageContent(messageObj);
 
+      // --- MANEJO DE NOTAS DE VOZ / AUDIOS CON GROQ WHISPER ---
+      if (extracted.isAudio) {
+        logger.info(`[Audio recibido] Descargando nota de voz de ${phone} para transcripción con Groq Whisper...`);
+        const media = await EvolutionService.getBase64FromMedia(messageObj);
+        if (media && media.buffer) {
+          const trans = await GroqService.transcribirAudio(media.buffer, media.mimeType);
+          if (trans) {
+            extracted.text = trans;
+            logger.info(`[Audio Transcrito] ${phone}: "${trans}"`);
+          }
+        }
+      }
+
       if (!extracted.text && !extracted.buttonId && !extracted.isMedia) {
         logger.debug(`No se encontró texto ni acción en el mensaje de ${phone}`);
         return;
@@ -234,8 +248,8 @@ export class WebhookController {
         isMedia: extracted.isMedia,
       };
 
-      // Si es un clic de botón o archivo multimedia, procesamos de inmediato
-      if (extracted.buttonId || extracted.isMedia) {
+      // Si es un clic de botón o archivo multimedia sin texto, procesamos de inmediato
+      if (extracted.buttonId || (extracted.isMedia && !extracted.text)) {
         setImmediate(() => {
           BotOrchestrator.procesarMensaje(incomingEvent).catch((err) => {
             logger.error(`Error en BotOrchestrator para ${phone}:`, err?.message || err);
@@ -244,7 +258,7 @@ export class WebhookController {
         return;
       }
 
-      // Si es mensaje de texto normal:
+      // Si es mensaje de texto o audio transcrito:
       // 1. Activar estado "Escribiendo..." (composing) en WhatsApp para simulación humana inmediata
       EvolutionService.enviarPresencia(phone, 'composing', 5000).catch(() => {});
 
@@ -301,9 +315,9 @@ export class WebhookController {
   }
 
   /**
-   * Extrae texto, respuestas de botones y archivos multimedia de los payloads de WhatsApp
+   * Extrae texto, respuestas de botones, notas de voz, ubicaciones y archivos multimedia de los payloads de WhatsApp
    */
-  private static extractMessageContent(msg: any): { text?: string; buttonId?: string; isMedia?: boolean } {
+  private static extractMessageContent(msg: any): { text?: string; buttonId?: string; isMedia?: boolean; isAudio?: boolean } {
     const message = msg.message || {};
 
     // 1. Botón interactivo tradicional
@@ -350,7 +364,25 @@ export class WebhookController {
       return { text: message.extendedTextMessage.text };
     }
 
-    // 6. Archivos multimedia (imágenes, documentos para comprobantes de pago)
+    // 6. Ubicación / GPS compartido por WhatsApp
+    if (message.locationMessage || message.liveLocationMessage) {
+      const loc = message.locationMessage || message.liveLocationMessage;
+      const lat = loc.degreesLatitude;
+      const lon = loc.degreesLongitude;
+      const addr = loc.address || loc.name || '';
+      const text = `Ubicación GPS: ${lat}, ${lon}${addr ? ` (${addr})` : ''}`;
+      return { text, isMedia: false };
+    }
+
+    // 7. Notas de voz y audios de WhatsApp (para transcripción Whisper)
+    if (message.audioMessage || message.pttMessage) {
+      return {
+        isAudio: true,
+        isMedia: true,
+      };
+    }
+
+    // 8. Archivos multimedia (imágenes, documentos para comprobantes de pago o evidencia)
     if (message.imageMessage || message.documentMessage) {
       const caption = message.imageMessage?.caption || message.documentMessage?.caption || '';
       return {
@@ -362,3 +394,4 @@ export class WebhookController {
     return {};
   }
 }
+

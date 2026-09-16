@@ -577,8 +577,8 @@ export class BotOrchestrator {
       clasificacion.intencion = 'FALLA_INTERNET';
     }
 
-    // Si es una acción específica de telecomunicaciones (Niveles, Falla, Saldo, Reboot, Asesor, Wi-Fi)
-    if (['CONSULTAR_NIVELES', 'FALLA_INTERNET', 'REINICIAR_MODEM', 'CONSULTAR_SALDO', 'REPORTAR_PAGO', 'HABLAR_HUMANO', 'CANCELAR_SUSCRIPCION', 'DATOS_WIFI'].includes(clasificacion.intencion)) {
+    // Si es una acción específica de telecomunicaciones (Niveles, Falla, Saldo, Reboot, Asesor, Wi-Fi, Mudanza/Cobertura, Agenda Cuadrilla)
+    if (['CONSULTAR_NIVELES', 'FALLA_INTERNET', 'REINICIAR_MODEM', 'CONSULTAR_SALDO', 'REPORTAR_PAGO', 'HABLAR_HUMANO', 'CANCELAR_SUSCRIPCION', 'DATOS_WIFI', 'CAMBIO_DOMICILIO', 'ESTATUS_TECNICO_AGENDA'].includes(clasificacion.intencion)) {
       await this.ejecutarIntencion(phone, clasificacion, session, rawText, targetJid, event);
       return;
     }
@@ -712,6 +712,81 @@ export class BotOrchestrator {
       case 'HABLAR_HUMANO':
         await this.flujoHablarAsesor(phone, session, targetJid);
         break;
+
+      case 'CAMBIO_DOMICILIO': {
+        const nombre = session?.client_name ? ` *${session.client_name}*` : '';
+        const ticket = await TursoService.createTicket({
+          phone,
+          client_name: session?.client_name,
+          onu_id: session?.onu_id,
+          issue_summary: 'Solicitud de Cambio de Domicilio / Validación de Cobertura',
+          checks_performed: `Cliente solicitó información o trámite para cambio de casa: "${mensajeOriginal}"`,
+          status: 'ABIERTO',
+          is_out_of_hours: this.isFueraDeHorario() ? 1 : 0,
+        });
+
+        if (session?.client_id) {
+          await WispHubService.crearTicketSoporte(
+            session.client_id,
+            `Cambio de Domicilio - ${ticket.folio}`,
+            `Cliente solicita cambio de domicilio. Requiere validar cobertura en nueva dirección. Folio: ${ticket.folio}`,
+            'Media'
+          ).catch(() => {});
+        }
+
+        let meta: any = {};
+        try { meta = JSON.parse(session?.metadata || '{}'); } catch {}
+
+        await TursoService.upsertSession({
+          phone,
+          step: 'ESPERANDO_UBICACION_TECNICO',
+          metadata: JSON.stringify({
+            ...meta,
+            ticketFolio: ticket.folio,
+            motivoUbicacion: 'CAMBIO_DOMICILIO',
+          }),
+        });
+
+        const msjCambio =
+          `¡Hola${nombre}! 📍 Con gusto te apoyamos para reubicar tu servicio a tu nueva casa.\n\n` +
+          `Para validar la cobertura de fibra óptica y los postes disponibles:\n` +
+          `👉 *Por favor compártenos tu ubicación actual por WhatsApp* o tu *dirección completa con referencias (calle, número, colonia y entrecalles)*.\n\n` +
+          `Ya te generé tu reporte *#${ticket.folio}* para que el equipo de campo confirme la factibilidad de tu nuevo domicilio.`;
+
+        await this.enviarYLoguear(phone, msjCambio, 'CAMBIO_DOMICILIO', `CAMBIO_DOMICILIO_${ticket.folio}`, targetJid);
+        break;
+      }
+
+      case 'ESTATUS_TECNICO_AGENDA': {
+        const nombre = session?.client_name ? ` *${session.client_name}*` : '';
+        const ticket = await TursoService.createTicket({
+          phone,
+          client_name: session?.client_name,
+          onu_id: session?.onu_id,
+          issue_summary: 'Consulta de Estatus de Cuadrilla / Agenda de Instalación',
+          checks_performed: `Cliente consultó horario o estatus de visita técnica: "${mensajeOriginal}"`,
+          status: 'ABIERTO',
+          is_out_of_hours: this.isFueraDeHorario() ? 1 : 0,
+        });
+
+        if (session?.client_id) {
+          await WispHubService.crearTicketSoporte(
+            session.client_id,
+            `Agenda Cuadrilla - ${ticket.folio}`,
+            `Consulta sobre horario/estatus de técnico. Detalle: ${mensajeOriginal}. Folio: ${ticket.folio}`,
+            'Media'
+          ).catch(() => {});
+        }
+
+        const msjAgenda =
+          `Hola${nombre}. 🛠️ Nuestro asistente virtual no gestiona la agenda ni el GPS en tiempo real de los técnicos en campo.\n\n` +
+          `📋 Ya registré tu consulta con el reporte *#${ticket.folio}* y notifiqué al coordinador de cuadrillas para que revise la ruta del personal técnico y se comunique directamente contigo.\n\n` +
+          `¡Muchas gracias por tu paciencia!`;
+
+        await this.enviarYLoguear(phone, msjAgenda, 'ESTATUS_TECNICO_AGENDA', `CONSULTA_AGENDA_${ticket.folio}`, targetJid);
+        await this.marcarConsultaFinalizada(phone, session);
+        break;
+      }
 
       case 'CANCELAR_SUSCRIPCION':
         await TursoService.setOptOut(phone, true);
@@ -874,6 +949,47 @@ export class BotOrchestrator {
       }
     }
 
+    // CASO ESPECIAL: NO ABREN CIERTAS PÁGINAS O APLICACIONES ESPECÍFICAS (BLOQUEO / ENRUTAMIENTO / DNS)
+    if (c.bloqueo_paginas_apps) {
+      const ticket = await TursoService.createTicket({
+        phone,
+        client_name: session.client_name,
+        onu_id: session.onu_id,
+        issue_summary: 'Problema de acceso a páginas o aplicaciones específicas (Enrutamiento / DNS / Puertos)',
+        checks_performed: `Cliente reporta que no puede acceder a ciertas páginas o apps: "${detalleQueja}". Línea activa. No requiere reinicio de módem.`,
+        status: 'ABIERTO',
+        is_out_of_hours: this.isFueraDeHorario() ? 1 : 0,
+      });
+
+      if (session.client_id) {
+        await WispHubService.crearTicketSoporte(
+          session.client_id,
+          `Enrutamiento/DNS - ${ticket.folio}`,
+          `Falla de acceso a páginas o apps específicas: ${detalleQueja}. Folio local: ${ticket.folio}`,
+          'Media'
+        ).catch(() => {});
+      }
+
+      const mensajeBloqueo =
+        `Hola${nombre}, revisé tu línea en el sistema y tu módem está debidamente conectado a nuestra central.\n\n` +
+        `Cuando el detalle ocurre únicamente en ciertas páginas o aplicaciones específicas, esto no depende de la señal de tu módem (no es necesario reiniciarlo).\n\n` +
+        `🛠️ Ya te generé tu reporte *#${ticket.folio}* para que el equipo de ingeniería en sistemas revise las rutas de DNS y apertura de puertos de tu servicio.\n\n` +
+        `👉 Por favor indícanos: ¿cuáles son las páginas o aplicaciones exactas que no te permiten entrar?`;
+
+      await TursoService.upsertSession({
+        phone,
+        step: 'COMPROBACION_EVIDENCIA',
+        metadata: JSON.stringify({
+          ...meta,
+          resumenFalla: 'Bloqueo o falla de acceso a páginas/apps específicas',
+          ticketFolio: ticket.folio,
+        }),
+      });
+
+      await this.enviarYLoguear(phone, mensajeBloqueo, 'FALLA_INTERNET', `REPORTE_DNS_PAGINAS_${ticket.folio}`, targetJid);
+      return;
+    }
+
     // CASO ESPECIAL: WI-FI / SSIDs NO VISIBLES EN DOMICILIO (WLAN APAGADO)
     if (c.red_wifi_no_visible) {
       const ticket = await TursoService.createTicket({
@@ -914,7 +1030,7 @@ export class BotOrchestrator {
       return;
     }
 
-    // CASO A: CORTE FÍSICO DE CABLE / FIBRA (SmartOLT LOS)
+    // CASO A1: CORTE FÍSICO DE CABLE / FIBRA (SmartOLT LOS)
     if (diag && diag.status === 'LOS') {
       const ticket = await TursoService.createTicket({
         phone,
@@ -936,9 +1052,10 @@ export class BotOrchestrator {
       }
 
       const mensajeCorte =
-        `Hola${nombre}, revisé tu línea aquí en el sistema y detectamos un problema en el cableado que llega a tu casa.\n\n` +
-        `🛠️ Ya te generé tu reporte *#${ticket.folio}* para mandarte a un técnico.\n\n` +
-        `📍 Por favor compártenos tu *ubicación actual por WhatsApp* o tu *dirección completa con referencias* para que pase la cuadrilla a tu domicilio.`;
+        `Hola${nombre}, revisamos tu servicio en nuestro sistema y detectamos un inconveniente con la señal física del cable que llega a tu domicilio.\n\n` +
+        `🛠️ Hemos registrado tu reporte con el folio *#${ticket.folio}* para canalizar una visita técnica a tu domicilio lo más pronto posible.\n\n` +
+        `📞 Un compañero de nuestro equipo se comunicará contigo para coordinar qué día y horario pasan a revisarlo.\n\n` +
+        `📍 Por favor compártenos tu *ubicación actual por WhatsApp* o tu *dirección completa con referencias* para registrarla en la orden de visita.`;
 
       await TursoService.upsertSession({
         phone,
@@ -951,6 +1068,50 @@ export class BotOrchestrator {
       });
 
       await this.enviarYLoguear(phone, mensajeCorte, 'FALLA_INTERNET', `CORTE_FIBRA_LOS_${ticket.folio}`, targetJid);
+      return;
+    }
+
+    // CASO A2: ATENUACIÓN ÓPTICA CRÍTICA / SEÑAL FÍSICA DEGRADADA (NIVELES FUERA DE RANGO < -27.5 dBm)
+    const powerDbm = diag?.opticalPowerDbm;
+    const tieneAtenuacionCritica = powerDbm != null && (powerDbm < -27.5 || powerDbm > -10);
+    if (diag && diag.status === 'ONLINE' && tieneAtenuacionCritica) {
+      const ticket = await TursoService.createTicket({
+        phone,
+        client_name: session.client_name,
+        onu_id: session.onu_id,
+        issue_summary: `Atenuación óptica crítica en domicilio (${powerDbm} dBm)`,
+        checks_performed: `SmartOLT detectó niveles de potencia óptica fuera de norma (${powerDbm} dBm). Se requiere revisión física de fibra/empalmes en domicilio. No reiniciar módem.`,
+        status: 'ABIERTO',
+        is_out_of_hours: this.isFueraDeHorario() ? 1 : 0,
+      });
+
+      if (session.client_id) {
+        await WispHubService.crearTicketSoporte(
+          session.client_id,
+          `Atenuación Crítica - ${ticket.folio}`,
+          `Potencia óptica detectada: ${powerDbm} dBm. Requiere visita técnica a domicilio para revisar acometida y conectores. Folio local: ${ticket.folio}`,
+          'Alta'
+        ).catch(() => {});
+      }
+
+      // Al cliente no se le mencionan tecnicismos (regla estricta)
+      const mensajeAtenuacion =
+        `Hola${nombre}, revisamos tu servicio en nuestro sistema y detectamos una variación en la señal física que llega a tu domicilio.\n\n` +
+        `🛠️ Hemos registrado tu reporte con el folio *#${ticket.folio}* para canalizar una visita técnica a tu domicilio lo más pronto posible.\n\n` +
+        `📞 Un compañero de nuestro equipo se comunicará contigo para coordinar el día y horario en que el técnico pasará a tu domicilio.\n\n` +
+        `📍 Por favor compártenos tu *ubicación por WhatsApp* o tu *dirección completa con referencias* para registrarla en la orden de visita.`;
+
+      await TursoService.upsertSession({
+        phone,
+        step: 'ESPERANDO_UBICACION_TECNICO',
+        metadata: JSON.stringify({
+          ...meta,
+          resumenFalla: `Variación de señal física (${powerDbm} dBm)`,
+          ticketFolio: ticket.folio,
+        }),
+      });
+
+      await this.enviarYLoguear(phone, mensajeAtenuacion, 'FALLA_INTERNET', `ATENUACION_CRITICA_${ticket.folio}`, targetJid);
       return;
     }
 
@@ -1313,7 +1474,7 @@ export class BotOrchestrator {
     await this.enviarYLoguear(
       phone,
       `¡Listo${nombre}! Ya anoté tu dirección en tu reporte *#${folio || 'PENDIENTE'}*.\n\n` +
-      `El técnico pasará a tu domicilio a revisar el cableado a la brevedad. ¡Muchas gracias!`,
+      `Un compañero de nuestro equipo se comunicará contigo para coordinar el día y horario en que el técnico pasará a tu domicilio. ¡Muchas gracias!`,
       'FALLA_INTERNET',
       `UBICACION_CONFIRMADA_${folio}`,
       targetJid
@@ -1512,11 +1673,51 @@ export class BotOrchestrator {
 
       await this.enviarYLoguear(
         phone,
-        `Hola${nombre}, revisé tu línea aquí en el sistema y detectamos un problema en el cableado que llega a tu casa.\n\n🛠️ Ya te generé tu reporte *#${ticket.folio}* para mandarte a un técnico.\n\n📍 Por favor compártenos tu ubicación por aquí o tu dirección completa con referencias para que pase la cuadrilla a tu domicilio.`,
+        `Hola${nombre}, revisamos tu servicio en nuestro sistema y detectamos un inconveniente con la señal física del cable que llega a tu domicilio.\n\n` +
+        `🛠️ Hemos registrado tu reporte con el folio *#${ticket.folio}* para canalizar una visita técnica a tu domicilio lo más pronto posible.\n\n` +
+        `📞 Un compañero de nuestro equipo se comunicará contigo para coordinar qué día y horario pasan a revisarlo.\n\n` +
+        `📍 Por favor compártenos tu ubicación por aquí o tu dirección completa con referencias para registrarla en la orden de visita.`,
         'CONSULTAR_NIVELES',
         `TICKET_FIBRA_CORTADA_${ticket.folio}`,
         targetJid
       );
+      return;
+    }
+
+    // Validación de atenuación óptica fuera de rango (< -27.5 dBm ó > -10 dBm)
+    const powerLevel = estadoOnu.opticalPowerDbm;
+    const tieneAtenuacion = powerLevel != null && (powerLevel < -27.5 || powerLevel > -10);
+
+    if (estadoOnu.status === 'ONLINE' && tieneAtenuacion) {
+      const ticket = await TursoService.createTicket({
+        phone,
+        client_name: session?.client_name,
+        onu_id: session?.onu_id,
+        issue_summary: `Atenuación óptica detectada en consulta (${powerLevel} dBm)`,
+        checks_performed: `Niveles ópticos en central: ${powerLevel} dBm fuera de rango (< -27.5 dBm). Requiere visita técnica a domicilio para revisar acometida.`,
+        status: 'ABIERTO',
+        is_out_of_hours: this.isFueraDeHorario() ? 1 : 0,
+      });
+
+      if (session?.client_id) {
+        await WispHubService.crearTicketSoporte(
+          session.client_id,
+          `Atenuación - ${ticket.folio}`,
+          `Nivel óptico: ${powerLevel} dBm. Requiere visita a domicilio. Folio: ${ticket.folio}`,
+          'Alta'
+        ).catch(() => {});
+      }
+
+      await this.enviarYLoguear(
+        phone,
+        `Hola${nombre}, revisamos tu servicio en nuestro sistema y detectamos una variación en la señal física que llega a tu domicilio.\n\n` +
+        `🛠️ Hemos registrado tu reporte con el folio *#${ticket.folio}* para canalizar una visita técnica lo más pronto posible.\n\n` +
+        `📞 Un compañero de nuestro equipo se comunicará contigo para coordinar el día y horario en que puedan pasar a tu domicilio.`,
+        'CONSULTAR_NIVELES',
+        `NIVELES_ATENUACION_${ticket.folio}`,
+        targetJid
+      );
+      await this.marcarConsultaFinalizada(phone, session);
       return;
     }
 

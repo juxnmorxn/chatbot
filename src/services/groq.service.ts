@@ -1,4 +1,4 @@
-import Groq from 'groq-sdk';
+import Groq, { toFile } from 'groq-sdk';
 import { config } from '../config/env';
 import { SettingsService } from './settings.service';
 import { Logger } from '../utils/logger';
@@ -14,6 +14,8 @@ export type BotIntent =
   | 'REINICIAR_MODEM'
   | 'DATOS_WIFI'
   | 'HABLAR_HUMANO'
+  | 'CAMBIO_DOMICILIO'
+  | 'ESTATUS_TECNICO_AGENDA'
   | 'CANCELAR_SUSCRIPCION'
   | 'IDENTIFICAR_CLIENTE'
   | 'DESCONOCIDO';
@@ -24,6 +26,7 @@ export interface GroqClassificationResult {
   equipo_apagado: boolean;
   reporta_lentitud: boolean;
   red_wifi_no_visible: boolean;
+  bloqueo_paginas_apps: boolean;
   ya_reinicio: boolean;
   nombre_mencionado: string | null;
   telefono_mencionado: string | null;
@@ -44,6 +47,33 @@ export class GroqService {
       this.client = new Groq({ apiKey });
     }
     return this.client;
+  }
+
+  /**
+   * Transcribe una nota de voz o audio de WhatsApp a texto utilizando Groq Whisper (whisper-large-v3-turbo).
+   * 100% Gratuito y de ultra baja latencia.
+   */
+  static async transcribirAudio(audioBuffer: Buffer, mimeType: string = 'audio/ogg'): Promise<string> {
+    try {
+      const groq = this.getClient();
+      const ext = mimeType.includes('mp4') || mimeType.includes('m4a') ? 'm4a' : (mimeType.includes('mp3') ? 'mp3' : 'ogg');
+      const file = await toFile(audioBuffer, `audio.${ext}`, { type: mimeType });
+
+      logger.info(`Transcribiendo audio de WhatsApp (${audioBuffer.length} bytes, ${mimeType}) con Groq Whisper...`);
+      const transcription = await groq.audio.transcriptions.create({
+        file,
+        model: 'whisper-large-v3-turbo',
+        language: 'es',
+        temperature: 0.0,
+      });
+
+      const text = (transcription.text || '').trim();
+      logger.info(`[Groq Whisper] Transcripción completada: "${text}"`);
+      return text;
+    } catch (error: any) {
+      logger.error('Error al transcribir audio con Groq Whisper:', error?.message || error);
+      return '';
+    }
   }
 
   /**
@@ -156,6 +186,8 @@ CATEGORÍAS DE INTENCIÓN PERMITIDAS (Elige EXACTAMENTE una de esta lista):
 - "REINICIAR_MODEM": Peticiones explícitas de reinicio remoto de módem ("reinicien mi modem", "pueden resetearlo desde allá").
 - "DATOS_WIFI": Consultas sobre contraseña, nombre de la red WiFi o configuración inalámbrica.
 - "HABLAR_HUMANO": Solicitudes de comunicarse con un asesor, operador, recepcionista o persona humana.
+- "CAMBIO_DOMICILIO": Peticiones de cambio de casa, mudanza, mover el servicio a otra dirección o validar cobertura en un nuevo domicilio ("me voy a cambiar de casa", "cambio de domicilio", "quiero mover mi servicio a otra casa", "tienen cobertura en la calle X").
+- "ESTATUS_TECNICO_AGENDA": Preguntas sobre la hora de llegada del técnico, reagendar citas, cancelaciones de visita técnica o quejas sobre el instalador ("a qué hora viene el técnico", "cuándo viene la cuadrilla", "el técnico no vino", "quiero cambiar la fecha de la cita").
 - "CANCELAR_SUSCRIPCION": Peticiones de no recibir más mensajes automáticos, "cancelar", "baja", "ya no me envíen mensajes".
 - "IDENTIFICAR_CLIENTE": Cuando el usuario provee su nombre (incluso si solo envía una palabra como "Juan", "Carlos", "María López", o "soy Juan"), número de contrato o ID de servicio. Si el paso actual es "ESPERANDO_IDENTIFICACION" y el usuario envía un texto, asume casi siempre "IDENTIFICAR_CLIENTE" a menos que sea un saludo o queja explícita.
 - "DESCONOCIDO": Mensajes incoherentes, bromas, temas ajenos al servicio de telecomunicaciones o dudas no contempladas.
@@ -165,6 +197,7 @@ EXTRACCIÓN DE BANDERAS Y DETALLES:
 - "equipo_apagado": true si dice que el módem no prende, se fue la luz en la casa, o no encienden las luces del equipo; false si no.
 - "reporta_lentitud": true si dice que el internet está lento, intermitente, sube y baja o hay lag; false si no.
 - "red_wifi_no_visible": true si indica que no le aparece el nombre de su red Wi-Fi, no sale su red en el celular, no encuentra la red, se le borró el internet o no prende el foco de WLAN/Wi-Fi; false si no.
+- "bloqueo_paginas_apps": true si indica que no le abren ciertas páginas web, no cargan aplicaciones específicas (ej. banco, Netflix, YouTube, Facebook), solo entra a WhatsApp, le sale pantalla de aviso/bloqueo de portal cautivo, o problemas de acceso a ciertos sitios; false si no.
 - "ya_reinicio": true si el usuario aclara que ya lo desconectó, ya lo reinició o ya lo apagó y prendió; false si no.
 - "nombre_mencionado": string con el nombre propio limpio y capitalizado (ej. si dice "me llamo Juan Manuel" -> "Juan Manuel", si dice "carlos" -> "Carlos"), o null si no menciona nombre.
 - "telefono_mencionado": string de 10 dígitos si menciona algún número telefónico, o null.
@@ -200,6 +233,7 @@ Contexto actual del cliente:
         equipo_apagado: Boolean(parsed.equipo_apagado),
         reporta_lentitud: Boolean(parsed.reporta_lentitud),
         red_wifi_no_visible: Boolean(parsed.red_wifi_no_visible),
+        bloqueo_paginas_apps: Boolean(parsed.bloqueo_paginas_apps),
         ya_reinicio: Boolean(parsed.ya_reinicio),
         nombre_mencionado: parsed.nombre_mencionado || null,
         telefono_mencionado: parsed.telefono_mencionado || null,
@@ -226,7 +260,11 @@ Contexto actual del cliente:
       intencion = 'CONSULTAR_SALDO';
     } else if (lower.includes('pague') || lower.includes('transferencia') || lower.includes('comprobante')) {
       intencion = 'REPORTAR_PAGO';
-    } else if (lower.includes('no tengo internet') || lower.includes('sin señal') || lower.includes('falla') || lower.includes('lento')) {
+    } else if (lower.includes('cambio de domicilio') || lower.includes('cambiar de casa') || lower.includes('cobertura')) {
+      intencion = 'CAMBIO_DOMICILIO';
+    } else if (lower.includes('a que hora') || lower.includes('agenda') || lower.includes('tecnico no vino')) {
+      intencion = 'ESTATUS_TECNICO_AGENDA';
+    } else if (lower.includes('no tengo internet') || lower.includes('sin señal') || lower.includes('falla') || lower.includes('lento') || lower.includes('no abre')) {
       intencion = 'FALLA_INTERNET';
     } else if (lower.includes('reiniciar') || lower.includes('reset')) {
       intencion = 'REINICIAR_MODEM';
@@ -242,10 +280,11 @@ Contexto actual del cliente:
       equipo_apagado: lower.includes('apagado') || lower.includes('no prende') || lower.includes('sin luz'),
       reporta_lentitud: lower.includes('lento') || lower.includes('lentitud') || lower.includes('intermitente'),
       red_wifi_no_visible: lower.includes('no aparece') || lower.includes('no sale mi') || lower.includes('no veo mi red') || lower.includes('se borro') || lower.includes('wlan'),
+      bloqueo_paginas_apps: lower.includes('no abre') || lower.includes('no abren') || lower.includes('ciertas paginas') || lower.includes('algunas paginas') || lower.includes('portal cautivo') || lower.includes('bloquea'),
       ya_reinicio: lower.includes('ya reinicie') || lower.includes('ya lo apague'),
       nombre_mencionado: null,
       telefono_mencionado: null,
-      resumen_queja: text.slice(0, 40),
+      resumen_queja: text.slice(0, 50),
     };
   }
 }

@@ -175,4 +175,52 @@ export class EvolutionService {
     logger.info(`Enviando menú estructurado a ${recipient}: ${botones.map((b) => b.title).join(' | ')}`);
     return this.enviarTexto(recipient, mensajeCompleto);
   }
+
+  /**
+   * Descarga el archivo base64 de un mensaje multimedia (audio, imagen o documento) desde Evolution API
+   */
+  static async getBase64FromMedia(messageObj: any): Promise<{ buffer: Buffer; mimeType: string; base64: string } | null> {
+    try {
+      // 1. Si el payload del webhook ya incluye base64 directo
+      const directBase64 = messageObj.base64 || messageObj.message?.base64;
+      if (directBase64 && typeof directBase64 === 'string') {
+        const cleanBase64 = directBase64.replace(/^data:[^;]+;base64,/, '');
+        const mimeType = messageObj.mimetype || messageObj.message?.mimetype || 'audio/ogg';
+        return {
+          buffer: Buffer.from(cleanBase64, 'base64'),
+          mimeType,
+          base64: cleanBase64,
+        };
+      }
+
+      // 2. Si no, consultar el endpoint de descarga de Evolution API
+      const api = this.getApi();
+      const instance = this.getInstanceName();
+      logger.info(`Solicitando base64 de archivo multimedia para mensaje a Evolution API...`);
+
+      const response = await api.post(`/chat/getBase64FromMediaMessage/${instance}`, {
+        message: messageObj,
+        convertToMp4: false,
+      });
+
+      const resData = response.data;
+      const base64Data = resData?.base64 || resData?.data?.base64;
+      const mimeType = resData?.mimetype || resData?.data?.mimetype || messageObj.message?.audioMessage?.mimetype || messageObj.message?.imageMessage?.mimetype || 'audio/ogg';
+
+      if (base64Data && typeof base64Data === 'string') {
+        const cleanBase64 = base64Data.replace(/^data:[^;]+;base64,/, '');
+        return {
+          buffer: Buffer.from(cleanBase64, 'base64'),
+          mimeType,
+          base64: cleanBase64,
+        };
+      }
+
+      return null;
+    } catch (error: any) {
+      logger.warn('No se pudo descargar base64 de Evolution API:', error?.response?.data || error?.message || error);
+      return null;
+    }
+  }
 }
+

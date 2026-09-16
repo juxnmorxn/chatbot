@@ -17,22 +17,21 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Rutas
 app.use('/', apiRoutes);
 
+// Manejadores globales de errores para evitar que caídas de red o promesas no controladas detengan el servidor (Evita error 502 en Render)
+process.on('uncaughtException', (err) => {
+  logger.error('Uncaught Exception capturada globalmente:', err?.message || err);
+});
+
+process.on('unhandledRejection', (reason) => {
+  logger.error('Unhandled Rejection capturada globalmente:', reason);
+});
+
 // Arranque del servidor
 async function startServer() {
   try {
     logger.info(`Iniciando Chatbot ISP para "${config.isp.name}"...`);
 
-    // Inicializar Turso libSQL
-    await initTursoDatabase();
-
-    // Inicializar caché de configuración dinámica
-    await SettingsService.init();
-
-    // Sincronizar mapeos WhatsApp LID <-> Teléfono en memoria
-    const { WebhookController } = await import('./controllers/webhook.controller');
-    await WebhookController.syncLidMappings();
-
-    // Levantar Express
+    // 1. Levantar Express de inmediato para que Render / Webhook no den 502 por timeout de arranque
     app.listen(config.port, () => {
       logger.info(`====================================================`);
       logger.info(`🚀 Servidor ejecutándose en el puerto: ${config.port}`);
@@ -41,6 +40,22 @@ async function startServer() {
       logger.info(`📩 Webhook Evolution API en:    http://localhost:${config.port}/webhook`);
       logger.info(`☁️ Entorno: ${config.nodeEnv}`);
       logger.info(`====================================================`);
+    });
+
+    // 2. Inicializar Turso libSQL
+    await initTursoDatabase().catch((err) => {
+      logger.error('Error al inicializar base de datos Turso:', err?.message || err);
+    });
+
+    // 3. Inicializar caché de configuración dinámica
+    await SettingsService.init().catch((err) => {
+      logger.error('Error al inicializar SettingsService:', err?.message || err);
+    });
+
+    // 4. Sincronizar mapeos WhatsApp LID <-> Teléfono en segundo plano
+    const { WebhookController } = await import('./controllers/webhook.controller');
+    WebhookController.syncLidMappings().catch((err) => {
+      logger.warn('Aviso: syncLidMappings falló en segundo plano:', err?.message || err);
     });
 
     // Sincronización en segundo plano de SmartOLT hacia Turso DB (Cada 60 minutos = 1 llamada/hora de las 15 permitidas)
