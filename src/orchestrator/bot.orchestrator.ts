@@ -68,7 +68,7 @@ export class BotOrchestrator {
   }
 
   /**
-   * Determina si la hora actual está fuera del horario laboral de oficina (por defecto 9:00 AM a 6:00 PM)
+   * Determina si la hora actual está fuera del horario laboral de oficina (9:00 AM a 6:00 PM hora Hidalgo, México)
    */
   private static isFueraDeHorario(): boolean {
     try {
@@ -77,9 +77,11 @@ export class BotOrchestrator {
       const [startH, startM] = startStr.split(':').map(n => parseInt(n, 10));
       const [endH, endM] = endStr.split(':').map(n => parseInt(n, 10));
 
-      const now = new Date();
-      const currentH = now.getHours();
-      const currentM = now.getMinutes();
+      // Obtener hora local exacta en la zona horaria de Hidalgo / México (America/Mexico_City)
+      const nowMexicoStr = new Date().toLocaleString('en-US', { timeZone: 'America/Mexico_City' });
+      const nowMexico = new Date(nowMexicoStr);
+      const currentH = nowMexico.getHours();
+      const currentM = nowMexico.getMinutes();
 
       const cur = currentH * 60 + currentM;
       const start = (isNaN(startH) ? 9 : startH) * 60 + (isNaN(startM) ? 0 : startM);
@@ -1154,7 +1156,7 @@ export class BotOrchestrator {
       ).catch(() => {});
     }
 
-    const notaHorario = outOfHours ? '\n\n⏰ *Nota:* Tu reporte se atenderá con prioridad a primera hora a partir de las 9:00 AM.' : '';
+    const notaHorario = outOfHours ? '\n\n⏰ *Nota:* Tu reporte quedó registrado en el sistema y un técnico lo revisará mañana a primera hora con tu número de reporte.' : '';
 
     const mensajeTicket =
       `Enterado${nombre}. Como la falla continúa tras el reinicio, ya te generé tu reporte formal *#${ticket.folio}* para que el equipo de soporte técnico revise tu configuración en cabecera.${notaHorario}\n\n` +
@@ -1341,7 +1343,7 @@ export class BotOrchestrator {
       ).catch(() => {});
     }
 
-    const notaHorario = outOfHours ? '\n\n⏰ *Nota:* Tu reporte se atenderá con prioridad a primera hora a partir de las 9:00 AM.' : '';
+    const notaHorario = outOfHours ? '\n\n⏰ *Nota:* Tu reporte quedó registrado en el sistema y un técnico lo revisará mañana a primera hora con tu número de reporte.' : '';
 
     const mensajeTurno2 =
       `Enterado. Si después del reinicio sigue igual, por favor mándanos una foto de las luces de tu módem o captura de Speedtest.${notaHorario}\n\n` +
@@ -1630,14 +1632,46 @@ export class BotOrchestrator {
    * Transferencia a atención con asesor humano
    */
   private static async flujoHablarAsesor(phone: string, session: Session | null, targetJid?: string): Promise<void> {
+    const outOfHours = this.isFueraDeHorario();
     const contactoAsesor = config.isp.soporteHumanoPhone ? ` o puedes comunicarte al: *${config.isp.soporteHumanoPhone}*` : '';
-    await this.enviarYLoguear(
-      phone,
-      `👨‍💼 *Atención Personalizada:*\n\nUn asesor humano de *${this.getIspName()}* ha sido notificado sobre tu solicitud${contactoAsesor}.\n\nEn breve uno de nuestros agentes tomará este chat para darte seguimiento directo. ¡Gracias por tu paciencia!`,
-      'HABLAR_HUMANO',
-      'TRANSFERENCIA_ASESOR',
-      targetJid
-    );
+
+    if (outOfHours) {
+      const ticket = await TursoService.createTicket({
+        phone,
+        client_name: session?.client_name,
+        onu_id: session?.onu_id,
+        issue_summary: 'Solicitud de atención con asesor humano (Fuera de horario)',
+        checks_performed: 'Cliente solicitó hablar con asesor fuera de horario laboral',
+        status: 'ABIERTO',
+        is_out_of_hours: 1,
+      });
+
+      if (session?.client_id) {
+        await WispHubService.crearTicketSoporte(
+          session.client_id,
+          `Atención Asesor - ${ticket.folio}`,
+          `Solicitud de contacto fuera de horario. Folio local: ${ticket.folio}`,
+          'Media'
+        ).catch(() => {});
+      }
+
+      await this.enviarYLoguear(
+        phone,
+        `👨‍💼 *Atención con Asesor:*\n\nTu solicitud ha quedado registrada con el reporte *#${ticket.folio}*. Por la hora, un técnico lo revisará mañana a primera hora para darte seguimiento directo.${contactoAsesor}\n\n¡Muchas gracias por tu paciencia!`,
+        'HABLAR_HUMANO',
+        `SOLICITUD_ASESOR_REGISTRADA_${ticket.folio}`,
+        targetJid
+      );
+    } else {
+      await this.enviarYLoguear(
+        phone,
+        `👨‍💼 *Atención Personalizada:*\n\nUn asesor humano de *${this.getIspName()}* ha sido notificado sobre tu solicitud${contactoAsesor}.\n\nEn breve uno de nuestros agentes tomará este chat para darte seguimiento directo. ¡Gracias por tu paciencia!`,
+        'HABLAR_HUMANO',
+        'TRANSFERENCIA_ASESOR',
+        targetJid
+      );
+    }
+
     await this.marcarConsultaFinalizada(phone, session);
   }
 
@@ -1741,7 +1775,7 @@ export class BotOrchestrator {
 
           await this.enviarYLoguear(
             phone,
-            `¡Perfecto! Te he localizado en nuestro sistema de SmartOLT ✅\nBienvenido(a) *${mejor.name}*.${planTexto}${zonaTexto}\n\nCuéntame, ¿cuál es el detalle o falla que presentas con tu servicio de internet?`,
+            `¡Perfecto, te he ubicado en nuestro sistema! ✅\nBienvenido(a) *${mejor.name}*.${planTexto}${zonaTexto}\n\nCuéntame, ¿cuál es el detalle o falla que presentas con tu servicio de internet?`,
             'IDENTIFICAR_CLIENTE',
             'VINCULADO_SMARTOLT',
             targetJid

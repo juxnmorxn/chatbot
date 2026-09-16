@@ -1,6 +1,6 @@
 import { getTursoClient } from '../database/turso';
 import { Logger } from '../utils/logger';
-import { normalizeText, computeNameMatchScore, cleanPersonName } from '../utils/fuzzy-matcher';
+import { normalizeText, computeNameMatchScore, cleanPersonName, generateSearchFragments, phoneticNormalize } from '../utils/fuzzy-matcher';
 
 const logger = new Logger('TursoService');
 
@@ -499,12 +499,25 @@ export class TursoService {
       const queryWords = normQuery.split(' ').filter(w => w.length > 1 && !STOP_QUERY.has(w));
       const candidateRowsMap = new Map<string, any>();
 
+      // A. Búsqueda por fragmentos fonéticos y trigramas (tolera errores tipográficos como "mribel", "marivel", "arrivel")
+      const fragments = generateSearchFragments(cleanedQuery || normQuery);
+      if (fragments.length > 0) {
+        const fragClauses = fragments.map(() => 'name_normalized LIKE ?').join(' OR ');
+        const fragRes = await client.execute({
+          sql: `SELECT * FROM smartolt_onus WHERE ${fragClauses} LIMIT 400`,
+          args: fragments.map(f => `%${f}%`),
+        });
+        for (const r of fragRes.rows) {
+          candidateRowsMap.set(String(r.unique_external_id), r);
+        }
+      }
+
       if (queryWords.length > 0) {
-        // A. Búsqueda con AND (todas las palabras presentes)
+        // B. Búsqueda con AND (todas las palabras presentes)
         if (queryWords.length >= 2) {
           const andClauses = queryWords.map(() => 'name_normalized LIKE ?').join(' AND ');
           const andRes = await client.execute({
-            sql: `SELECT * FROM smartolt_onus WHERE ${andClauses} LIMIT 50`,
+            sql: `SELECT * FROM smartolt_onus WHERE ${andClauses} LIMIT 100`,
             args: queryWords.map(w => `%${w}%`),
           });
           for (const r of andRes.rows) {
@@ -512,7 +525,7 @@ export class TursoService {
           }
         }
 
-        // B. Búsqueda prioritaria por primer nombre (nombre de pila)
+        // C. Búsqueda prioritaria por primer nombre
         const firstName = queryWords[0];
         if (firstName && firstName.length >= 3) {
           const fnRes = await client.execute({
@@ -523,24 +536,15 @@ export class TursoService {
             candidateRowsMap.set(String(r.unique_external_id), r);
           }
         }
-
-        // C. Búsqueda general OR si tenemos pocos candidatos
-        if (candidateRowsMap.size < 50) {
-          const orClauses = queryWords.map(() => 'name_normalized LIKE ?').join(' OR ');
-          const orRes = await client.execute({
-            sql: `SELECT * FROM smartolt_onus WHERE ${orClauses} LIMIT 300`,
-            args: queryWords.map(w => `%${w}%`),
-          });
-          for (const r of orRes.rows) {
-            candidateRowsMap.set(String(r.unique_external_id), r);
-          }
-        }
       }
 
       let rowsToEvaluate = Array.from(candidateRowsMap.values());
-      if (rowsToEvaluate.length === 0) {
-        const sampleResult = await client.execute('SELECT * FROM smartolt_onus ORDER BY updated_at DESC LIMIT 200');
-        rowsToEvaluate = sampleResult.rows;
+      if (rowsToEvaluate.length < 50) {
+        const sampleResult = await client.execute('SELECT * FROM smartolt_onus LIMIT 600');
+        for (const r of sampleResult.rows) {
+          candidateRowsMap.set(String(r.unique_external_id), r);
+        }
+        rowsToEvaluate = Array.from(candidateRowsMap.values());
       }
 
       // 3. Evaluar cada candidato con el algoritmo de scoring difuso
@@ -659,11 +663,24 @@ export class TursoService {
       const queryWords = normQuery.split(' ').filter(w => w.length > 1 && !STOP_QUERY.has(w));
       const candidateRowsMap = new Map<string, any>();
 
+      // A. Búsqueda por fragmentos fonéticos y trigramas
+      const fragments = generateSearchFragments(cleanedQuery || normQuery);
+      if (fragments.length > 0) {
+        const fragClauses = fragments.map(() => 'nombre_normalized LIKE ?').join(' OR ');
+        const fragRes = await client.execute({
+          sql: `SELECT * FROM wisphub_clients WHERE ${fragClauses} LIMIT 400`,
+          args: fragments.map(f => `%${f}%`),
+        });
+        for (const r of fragRes.rows) {
+          candidateRowsMap.set(String(r.id_servicio), r);
+        }
+      }
+
       if (queryWords.length > 0) {
         if (queryWords.length >= 2) {
           const andClauses = queryWords.map(() => 'nombre_normalized LIKE ?').join(' AND ');
           const andRes = await client.execute({
-            sql: `SELECT * FROM wisphub_clients WHERE ${andClauses} LIMIT 50`,
+            sql: `SELECT * FROM wisphub_clients WHERE ${andClauses} LIMIT 100`,
             args: queryWords.map(w => `%${w}%`),
           });
           for (const r of andRes.rows) {
@@ -681,23 +698,15 @@ export class TursoService {
             candidateRowsMap.set(String(r.id_servicio), r);
           }
         }
-
-        if (candidateRowsMap.size < 50) {
-          const orClauses = queryWords.map(() => 'nombre_normalized LIKE ?').join(' OR ');
-          const orRes = await client.execute({
-            sql: `SELECT * FROM wisphub_clients WHERE ${orClauses} LIMIT 300`,
-            args: queryWords.map(w => `%${w}%`),
-          });
-          for (const r of orRes.rows) {
-            candidateRowsMap.set(String(r.id_servicio), r);
-          }
-        }
       }
 
       let rowsToEvaluate = Array.from(candidateRowsMap.values());
-      if (rowsToEvaluate.length === 0) {
-        const sampleResult = await client.execute('SELECT * FROM wisphub_clients ORDER BY updated_at DESC LIMIT 200');
-        rowsToEvaluate = sampleResult.rows;
+      if (rowsToEvaluate.length < 50) {
+        const sampleResult = await client.execute('SELECT * FROM wisphub_clients LIMIT 600');
+        for (const r of sampleResult.rows) {
+          candidateRowsMap.set(String(r.id_servicio), r);
+        }
+        rowsToEvaluate = Array.from(candidateRowsMap.values());
       }
 
       const scored: Array<WisphubClientRecord & { matchScore: number }> = [];

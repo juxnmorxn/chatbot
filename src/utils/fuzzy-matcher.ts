@@ -1,7 +1,7 @@
 /**
  * Utilidades para normalización de texto y comparación difusa (Fuzzy Matching)
  * Permite encontrar coincidencias en nombres propios aun con faltas ortográficas,
- * ausencia de tildes o variaciones tipográficas comunes.
+ * ausencia de tildes, intercambio b/v, z/c/s, o variaciones tipográficas comunes.
  */
 
 /**
@@ -20,6 +20,54 @@ export function normalizeText(text: string): string {
     .replace(/[^a-z0-9\s]/g, ' ')     // Conserva solo letras, números y espacios
     .replace(/\s+/g, ' ')            // Reemplaza múltiples espacios por uno
     .trim();
+}
+
+/**
+ * Normalización fonética adaptada al español:
+ * - b y v suenan igual (v -> b)
+ * - z, c (ante e,i) y s suenan igual (z -> s, ce/ci -> se/si)
+ * - ll e y suenan igual (ll -> y)
+ * - h es muda (se elimina)
+ * - qu y k suenan como k (qu -> k, c antes de a,o,u -> k)
+ * - Letras dobles consecutivas se reducen (rr -> r, mm -> m, nn -> n, etc.)
+ */
+export function phoneticNormalize(text: string): string {
+  let s = normalizeText(text);
+  if (!s) return '';
+  s = s.replace(/h/g, '');
+  s = s.replace(/v/g, 'b');
+  s = s.replace(/z/g, 's');
+  s = s.replace(/c(?=[ei])/g, 's');
+  s = s.replace(/qu/g, 'k');
+  s = s.replace(/c(?=[aou])/g, 'k');
+  s = s.replace(/ll/g, 'y');
+  s = s.replace(/(.)\1+/g, '$1'); // Reducir letras duplicadas (ej: marribel -> maribel)
+  return s.trim();
+}
+
+/**
+ * Genera fragmentos de búsqueda (trigramas y prefijos fonéticos) para consultas SQL en SQLite/Turso
+ */
+export function generateSearchFragments(query: string): string[] {
+  const norm = normalizeText(query);
+  const phon = phoneticNormalize(query);
+  const words = Array.from(new Set([...norm.split(' '), ...phon.split(' ')])).filter(w => w.length >= 2);
+  const fragments = new Set<string>();
+
+  for (const w of words) {
+    // Prefijos de 3 y 4 letras
+    if (w.length >= 3) fragments.add(w.slice(0, 3));
+    if (w.length >= 4) fragments.add(w.slice(0, 4));
+    // Palabra completa
+    fragments.add(w);
+
+    // Trigramas internos si la palabra tiene 4 o más caracteres
+    for (let i = 0; i <= w.length - 3; i++) {
+      fragments.add(w.slice(i, i + 3));
+    }
+  }
+
+  return Array.from(fragments).filter(f => f.length >= 3).slice(0, 12);
 }
 
 /**
@@ -59,7 +107,7 @@ export function levenshteinDistance(a: string, b: string): number {
 }
 
 /**
- * Calcula el coeficiente de Dice (Bigramas) para medir similitud fonética/estructural (0 a 1)
+ * Calcula el coeficiente de Dice (Bigramas) para medir similitud estructural (0 a 1)
  */
 export function diceCoefficient(str1: string, str2: string): number {
   const s1 = normalizeText(str1);
@@ -111,8 +159,11 @@ export function cleanPersonName(name: string): string {
 
 /**
  * Calcula un puntaje de coincidencia global (0 a 100) entre la consulta del usuario y un registro.
- * Valida estrictamente el nombre de pila (primer nombre) para evitar que personas con los mismos
- * apellidos (ej. hermanos o parientes) se confundan entre sí.
+ * Soporta:
+ * 1. Errores tipográficos fuertes (ej. "maribel", "mribel", "marribel", "marivel", "arrivel").
+ * 2. Nombre de pila + 1 solo apellido (ej. "Maribel Lopez" vs "MARIBEL LOPEZ HERNANDEZ").
+ * 3. 1 solo nombre (ej. "Maribel" vs "MARIBEL HERNANDEZ").
+ * 4. Fonética en español (b/v, z/c/s, h muda, etc.).
  */
 export function computeNameMatchScore(query: string, targetName: string): number {
   const qClean = cleanPersonName(query);
@@ -124,73 +175,112 @@ export function computeNameMatchScore(query: string, targetName: string): number
   if (!qNorm || !tNorm) return 0;
   if (qNorm === tNorm) return 100;
 
+  const qPhon = phoneticNormalize(qClean);
+  const tPhon = phoneticNormalize(tClean);
+  if (qPhon === tPhon) return 98;
+
   // Tokenización excluyendo palabras vacías
   const qTokens = qNorm.split(' ').filter(w => w.length > 1 && !STOP_WORDS.has(w));
   const tTokens = tNorm.split(' ').filter(w => w.length > 1 && !STOP_WORDS.has(w));
 
+  const qPhonTokens = qPhon.split(' ').filter(w => w.length > 1 && !STOP_WORDS.has(w));
+  const tPhonTokens = tPhon.split(' ').filter(w => w.length > 1 && !STOP_WORDS.has(w));
+
   if (qTokens.length === 0 || tTokens.length === 0) return 0;
 
-  // 1. VALIDACIÓN DEL NOMBRE DE PILA (Primer nombre propio):
-  // En español el primer token (ej. "Virginia" vs "Magdalena") es el nombre de pila.
-  // Si los primeros nombres son completamente distintos, NO deben coincidir aunque compartan ambos apellidos.
+  // Evaluar cobertura de palabras del query en el target
+  let allQueryWordsMatched = true;
+  let totalTokenMatchScore = 0;
+
+  for (let i = 0; i < qTokens.length; i++) {
+    const qWord = qTokens[i];
+    const qPWord = qPhonTokens[i] || qWord;
+    let bestMatchForThisToken = 0;
+
+    for (let j = 0; j < tTokens.length; j++) {
+      const tWord = tTokens[j];
+      const tPWord = tPhonTokens[j] || tWord;
+
+      // 1. Coincidencia exacta estándar o fonética
+      if (qWord === tWord || qPWord === tPWord) {
+        bestMatchForThisToken = 1.0;
+        break;
+      }
+
+      // 2. Substring directo
+      if (tWord.startsWith(qWord) || qWord.startsWith(tWord) || tPWord.startsWith(qPWord) || qPWord.startsWith(tPWord)) {
+        const ratio = Math.min(qWord.length, tWord.length) / Math.max(qWord.length, tWord.length);
+        if (ratio >= 0.6) {
+          bestMatchForThisToken = Math.max(bestMatchForThisToken, 0.85 + (ratio * 0.1));
+          continue;
+        }
+      }
+
+      // 3. Distancia Levenshtein estándar y fonética
+      const maxLen = Math.max(qWord.length, tWord.length);
+      const distStd = levenshteinDistance(qWord, tWord);
+      const distPhon = levenshteinDistance(qPWord, tPWord);
+      const bestDist = Math.min(distStd, distPhon);
+
+      // Tolerancia según longitud:
+      // >= 6 caracteres: hasta 2 errores (ej. "maribel" vs "arrivel" / "mribel")
+      // >= 4 caracteres: hasta 1 error (ej. "juan" vs "jua")
+      const maxAllowedDist = maxLen >= 6 ? 2 : (maxLen >= 4 ? 1 : 0);
+      if (bestDist <= maxAllowedDist) {
+        const sim = 1.0 - (bestDist / (maxLen + 1));
+        if (sim > bestMatchForThisToken) bestMatchForThisToken = sim;
+      } else {
+        const dice = Math.max(diceCoefficient(qWord, tWord), diceCoefficient(qPWord, tPWord));
+        if (dice >= 0.65 && dice > bestMatchForThisToken) {
+          bestMatchForThisToken = dice;
+        }
+      }
+    }
+
+    if (bestMatchForThisToken < 0.65) {
+      allQueryWordsMatched = false;
+    }
+    totalTokenMatchScore += bestMatchForThisToken;
+  }
+
+  const queryCoverage = totalTokenMatchScore / qTokens.length;
+
+  // Validación de Primer Nombre (Nombre de Pila)
   const qFirstName = qTokens[0];
+  const qPFirstName = qPhonTokens[0] || qFirstName;
   let firstNameMatched = false;
   let bestFirstNameSim = 0;
 
-  for (const tWord of tTokens) {
-    if (qFirstName === tWord) {
+  for (let j = 0; j < tTokens.length; j++) {
+    const tWord = tTokens[j];
+    const tPWord = tPhonTokens[j] || tWord;
+
+    if (qFirstName === tWord || qPFirstName === tPWord) {
       firstNameMatched = true;
       bestFirstNameSim = 1.0;
       break;
     }
     const maxLen = Math.max(qFirstName.length, tWord.length);
-    const dist = levenshteinDistance(qFirstName, tWord);
+    const dist = Math.min(levenshteinDistance(qFirstName, tWord), levenshteinDistance(qPFirstName, tPWord));
     const maxAllowedDist = maxLen >= 6 ? 2 : (maxLen >= 4 ? 1 : 0);
     if (dist <= maxAllowedDist) {
-      const sim = 1.0 - (dist / maxLen);
+      const sim = 1.0 - (dist / (maxLen + 1));
       if (sim > bestFirstNameSim) bestFirstNameSim = sim;
-      if (sim >= 0.7) firstNameMatched = true;
+      if (sim >= 0.65) firstNameMatched = true;
     }
   }
 
-  // Si el usuario ingresó nombre y apellido(s), pero el primer nombre no coincide en absoluto
-  if (qTokens.length >= 2 && !firstNameMatched && bestFirstNameSim < 0.6) {
-    // Penalización estricta: son personas distintas con mismos apellidos
-    return Math.round(bestFirstNameSim * 30);
+  // Si el primer nombre no coincide nada (personas distintas con apellidos iguales)
+  if (!firstNameMatched && bestFirstNameSim < 0.55) {
+    return Math.round(bestFirstNameSim * 20);
   }
 
-  // Si una cadena contiene exactamente a la otra y el primer nombre coincide
-  if (tNorm.includes(qNorm) || qNorm.includes(tNorm)) {
-    const lengthRatio = Math.min(qNorm.length, tNorm.length) / Math.max(qNorm.length, tNorm.length);
-    return Math.round(80 + (20 * lengthRatio));
+  // Si todas las palabras del usuario (ej. 1 nombre o 1 nombre + 1 apellido) coincidieron sólidamente:
+  if (allQueryWordsMatched && queryCoverage >= 0.8) {
+    return Math.round(82 + (queryCoverage * 16));
   }
 
-  // 2. Comparación token por token para tolerar errores como "gonzales" vs "gonzalez"
-  let matchedTokensScore = 0;
-  for (const qWord of qTokens) {
-    let bestWordMatch = 0;
-    for (const tWord of tTokens) {
-      if (qWord === tWord) {
-        bestWordMatch = 1.0;
-        break;
-      }
-      const maxLen = Math.max(qWord.length, tWord.length);
-      const dist = levenshteinDistance(qWord, tWord);
-      const maxAllowedDist = maxLen >= 6 ? 2 : (maxLen >= 4 ? 1 : 0);
-      if (dist <= maxAllowedDist) {
-        const sim = 1.0 - (dist / maxLen);
-        if (sim > bestWordMatch) bestWordMatch = sim;
-      } else {
-        const dice = diceCoefficient(qWord, tWord);
-        if (dice > 0.7 && dice > bestWordMatch) bestWordMatch = dice;
-      }
-    }
-    matchedTokensScore += bestWordMatch;
-  }
-
-  const tokenCoverage = matchedTokensScore / qTokens.length;
-  const diceOverall = diceCoefficient(qNorm, tNorm);
-
-  const finalScore = (tokenCoverage * 0.75 + diceOverall * 0.25) * 100;
+  const diceOverall = Math.max(diceCoefficient(qNorm, tNorm), diceCoefficient(qPhon, tPhon));
+  const finalScore = (queryCoverage * 0.70 + diceOverall * 0.30) * 100;
   return Math.round(Math.min(100, Math.max(0, finalScore)));
 }
