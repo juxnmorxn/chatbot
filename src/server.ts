@@ -91,25 +91,37 @@ async function startServer() {
       }
     }, 10000);
 
-    // Ciclo recurrente de SmartOLT cada 60 minutos
+    // Ciclo recurrente de SmartOLT cada 6 horas (Evita saturar límites y CPU)
     setInterval(async () => {
       try {
-        logger.info('Ejecutando sincronización horaria de inventario SmartOLT...');
+        logger.info('Ejecutando sincronización de inventario SmartOLT...');
         await SmartOLTService.syncAllOnusToTurso(false);
       } catch (err: any) {
-        logger.warn('Error en sincronización horaria de SmartOLT:', err?.message || err);
+        logger.warn('Error en sincronización de SmartOLT:', err?.message || err);
       }
-    }, 60 * 60 * 1000);
+    }, 6 * 60 * 60 * 1000);
 
-    // Ciclo recurrente de WispHub cada 10 minutos (100% Solo Lectura de API hacia Turso DB)
+    // Ciclo recurrente de WispHub cada 6 horas (Evita saturar CPU en Render)
     setInterval(async () => {
       try {
-        logger.info('Ejecutando sincronización periódica de WispHub (cada 10 min)...');
+        logger.info('Ejecutando sincronización periódica de WispHub (cada 6 horas)...');
         await WispHubService.syncAllClientesToTurso();
       } catch (err: any) {
         logger.warn('Error en sincronización periódica de WispHub:', err?.message || err);
       }
-    }, 10 * 60 * 1000);
+    }, 6 * 60 * 60 * 1000);
+
+    // Keepalive anti-inactividad para Render Free Tier (Evita que el servidor se duerma tras 15 min de inactividad)
+    const axios = (await import('axios')).default;
+    setInterval(async () => {
+      try {
+        await axios.get(`http://localhost:${config.port}/api/health`, { timeout: 5000 });
+        const appUrl = config.appUrl || 'https://chatbot-rr1w.onrender.com';
+        if (appUrl.startsWith('http') && !appUrl.includes('localhost')) {
+          await axios.get(`${appUrl.replace(/\/$/, '')}/api/health`, { timeout: 8000 }).catch(() => {});
+        }
+      } catch {}
+    }, 4 * 60 * 1000);
   } catch (error: any) {
     logger.error('Error crítico al iniciar el servidor:', error?.message || error);
     process.exit(1);
