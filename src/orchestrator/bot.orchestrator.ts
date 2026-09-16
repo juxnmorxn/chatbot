@@ -591,8 +591,8 @@ export class BotOrchestrator {
       clasificacion.intencion = 'FALLA_INTERNET';
     }
 
-    // Si es una acción específica de telecomunicaciones (Niveles, Falla, Saldo, Reboot, Asesor, Wi-Fi, Mudanza/Cobertura, Agenda Cuadrilla)
-    if (['CONSULTAR_NIVELES', 'FALLA_INTERNET', 'REINICIAR_MODEM', 'CONSULTAR_SALDO', 'REPORTAR_PAGO', 'HABLAR_HUMANO', 'CANCELAR_SUSCRIPCION', 'DATOS_WIFI', 'CAMBIO_DOMICILIO', 'ESTATUS_TECNICO_AGENDA'].includes(clasificacion.intencion)) {
+    // Si es una acción específica de telecomunicaciones (Niveles, Plan/Velocidad, Falla, Saldo, Reboot, Asesor, Wi-Fi, Mudanza/Cobertura, Agenda Cuadrilla)
+    if (['CONSULTAR_NIVELES', 'CONSULTAR_PLAN', 'FALLA_INTERNET', 'REINICIAR_MODEM', 'CONSULTAR_SALDO', 'REPORTAR_PAGO', 'HABLAR_HUMANO', 'CANCELAR_SUSCRIPCION', 'DATOS_WIFI', 'CAMBIO_DOMICILIO', 'ESTATUS_TECNICO_AGENDA'].includes(clasificacion.intencion)) {
       await this.ejecutarIntencion(phone, clasificacion, session, rawText, targetJid, event);
       return;
     }
@@ -763,6 +763,10 @@ export class BotOrchestrator {
 
       case 'CONSULTAR_SALDO':
         await this.flujoConsultarSaldo(phone, session, targetJid);
+        break;
+
+      case 'CONSULTAR_PLAN':
+        await this.flujoConsultarPlan(phone, session, targetJid);
         break;
 
       case 'REPORTAR_PAGO':
@@ -2266,6 +2270,42 @@ export class BotOrchestrator {
     textoFacturas += this.getFichaBancaria(session);
 
     await this.enviarYLoguear(phone, textoFacturas, 'CONSULTAR_SALDO', 'FACTURAS_PENDIENTES_ENVIADAS', targetJid);
+  }
+
+  /**
+   * Consulta de paquete contratado, velocidad oficial de descarga y mensualidad en Turso / WispHub
+   */
+  private static async flujoConsultarPlan(phone: string, session: Session | null, targetJid?: string): Promise<void> {
+    if (!session?.client_id && !session?.client_name) {
+      await this.enviarYLoguear(
+        phone,
+        `Para consultar los datos de tu paquete y velocidad contratada, por favor indícame tu *Nombre completo* o número de contrato:`,
+        'CONSULTAR_PLAN',
+        'SOLICITAR_IDENTIFICACION_PLAN',
+        targetJid
+      );
+      await TursoService.updateStep(phone, 'ESPERANDO_IDENTIFICACION');
+      return;
+    }
+
+    const clienteCtx = await this.obtenerContextoClienteCompleto(phone, session);
+    const nombre = session.client_name ? ` *${session.client_name}*` : '';
+    const plan = clienteCtx.planInternet || 'Plan Fibra Óptica';
+    const megas = clienteCtx.velocidadMegas ? `*${clienteCtx.velocidadMegas} Mbps* (Megas de descarga)` : 'Velocidad contratada';
+    const precio = clienteCtx.precioPlan ? `*$${clienteCtx.precioPlan} MXN*` : 'Tarifa contratada';
+    const ip = clienteCtx.ip ? `\n• *IP asignada:* \`${clienteCtx.ip}\`` : '';
+    const estado = clienteCtx.estadoServicio ? `\n• *Estado:* ${clienteCtx.estadoServicio} ✅` : '';
+
+    const mensajePlan =
+      `📋 *Información de tu Paquete - ${this.getIspName()}*\n\n` +
+      `¡Hola${nombre}! Aquí tienes el detalle oficial de tu servicio:\n\n` +
+      `• *Plan contratado:* *${plan}*\n` +
+      `• *Velocidad:* ${megas}\n` +
+      `• *Mensualidad:* ${precio}${ip}${estado}\n\n` +
+      `💡 Si requieres realizar un cambio de paquete, aumento de velocidad o tienes dudas técnicas, con gusto te apoyamos. ¿En qué más podemos ayudarte hoy?`;
+
+    await this.enviarYLoguear(phone, mensajePlan, 'CONSULTAR_PLAN', 'DETALLE_PLAN_ENVIADO', targetJid);
+    await TursoService.updateStep(phone, 'CONVERSACIONAL');
   }
 
   /**

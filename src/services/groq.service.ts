@@ -9,6 +9,7 @@ export type BotIntent =
   | 'SALUDO'
   | 'CONSULTAR_NIVELES'
   | 'CONSULTAR_SALDO'
+  | 'CONSULTAR_PLAN'
   | 'REPORTAR_PAGO'
   | 'FALLA_INTERNET'
   | 'REINICIAR_MODEM'
@@ -333,6 +334,7 @@ CATEGORÍAS DE INTENCIÓN PERMITIDAS (Elige EXACTAMENTE una de esta lista):
 - "SALUDO": Cualquier saludo ("hola", "buenas tardes", "buen dia", "hola qué tal", "hola me pueden ayudar", "saludos", "hola disculpe").
 - "CONSULTAR_NIVELES": Preguntas sobre niveles de señal, potencia óptica, dBm, decibeles, potencia de luz, estado de la fibra o señal ("cuáles son mis niveles", "dime mis niveles", "mis dBm", "cómo andan mis niveles", "qué nivel tengo", "revisa mis niveles", "cómo está mi señal", "revisa mi conexión").
 - "CONSULTAR_SALDO": Preguntas sobre saldo pendiente, recibo, factura, cuánto debo, fecha límite de pago o dónde pagar.
+- "CONSULTAR_PLAN": Preguntas sobre qué plan tiene contratado, qué velocidad tiene, cuál debería ser su velocidad, cuántos megas le corresponden, costo mensual del paquete ("cuál es mi velocidad", "qué plan tengo", "cuál debería ser mi velocidad", "cuántos megas tengo", "qué paquete tengo", "cuánto cuesta mi plan", "información de mi plan", "qué velocidad tengo contratada").
 - "REPORTAR_PAGO": Mensajes donde el cliente indica que ya realizó su pago, transfirió dinero o envía comprobante.
 - "FALLA_INTERNET": Cualquier reporte de falla de internet, lentitud, intermitencia, desconexión, "no tengo internet", "no da internet", "sigue sin internet", "se cayó el servicio", páginas que no cargan o luces rojas.
 - "REINICIAR_MODEM": Peticiones explícitas de reinicio remoto de módem ("reinicien mi modem", "pueden resetearlo desde allá").
