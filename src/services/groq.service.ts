@@ -347,13 +347,24 @@ Contexto actual del cliente:
       const parsed = JSON.parse(content) as GroqClassificationResult;
 
       // Normalizaciones y validaciones por seguridad
+      let finalIntent: BotIntent = parsed.intencion || 'DESCONOCIDO';
+      const reportaLentitud = Boolean(parsed.reporta_lentitud);
+      const focoRojo = Boolean(parsed.foco_rojo);
+      const equipoApagado = Boolean(parsed.equipo_apagado);
+      const redWifiNoVisible = Boolean(parsed.red_wifi_no_visible);
+      const bloqueoPaginas = Boolean(parsed.bloqueo_paginas_apps);
+
+      if ((reportaLentitud || focoRojo || equipoApagado || redWifiNoVisible || bloqueoPaginas) && (finalIntent === 'DESCONOCIDO' || finalIntent === 'IDENTIFICAR_CLIENTE' || finalIntent === 'SALUDO')) {
+        finalIntent = 'FALLA_INTERNET';
+      }
+
       return {
-        intencion: parsed.intencion || 'DESCONOCIDO',
-        foco_rojo: Boolean(parsed.foco_rojo),
-        equipo_apagado: Boolean(parsed.equipo_apagado),
-        reporta_lentitud: Boolean(parsed.reporta_lentitud),
-        red_wifi_no_visible: Boolean(parsed.red_wifi_no_visible),
-        bloqueo_paginas_apps: Boolean(parsed.bloqueo_paginas_apps),
+        intencion: finalIntent,
+        foco_rojo: focoRojo,
+        equipo_apagado: equipoApagado,
+        reporta_lentitud: reportaLentitud,
+        red_wifi_no_visible: redWifiNoVisible,
+        bloqueo_paginas_apps: bloqueoPaginas,
         ya_reinicio: Boolean(parsed.ya_reinicio),
         nombre_mencionado: parsed.nombre_mencionado || null,
         telefono_mencionado: parsed.telefono_mencionado || null,

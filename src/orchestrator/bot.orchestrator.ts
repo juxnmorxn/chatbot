@@ -2275,8 +2275,37 @@ export class BotOrchestrator {
     targetJid?: string
   ): Promise<void> {
     const rawInput = input.trim();
-    const cleanSearchTerm = cleanPersonName(rawInput) || rawInput;
-    logger.info(`Buscando coincidencias para identificación de ${phone}: "${rawInput}" (Término limpio: "${cleanSearchTerm}")`);
+    let metaPre: any = {};
+    try { metaPre = JSON.parse(session?.metadata || '{}'); } catch {}
+
+    // 0. Clasificar con Groq para detectar si el texto incluye nombre mencionado, queja/problema o ambos
+    const clasificacion = await GroqService.clasificarMensaje(rawInput, {
+      clientName: session?.client_name || null,
+      currentStep: 'ESPERANDO_IDENTIFICACION',
+    });
+
+    // Extraer el nombre si fue mencionado en el mensaje
+    let candidateName = clasificacion.nombre_mencionado || '';
+    if (!candidateName) {
+      const cleaned = cleanPersonName(rawInput)
+        .replace(/^(me llamo|soy|mi nombre es|mi nombre|nombre:?)\s+/i, '')
+        .trim();
+      if (cleaned.length >= 2 && (clasificacion.intencion === 'IDENTIFICAR_CLIENTE' || clasificacion.intencion === 'DESCONOCIDO')) {
+        candidateName = cleaned;
+      }
+    }
+
+    // Si viene acompañada de una queja o intención técnica/financiera, guardarla en metadata para auto-continuar tras identificarse
+    if (clasificacion.intencion && !['SALUDO', 'IDENTIFICAR_CLIENTE', 'DESCONOCIDO'].includes(clasificacion.intencion)) {
+      metaPre.initialQuery = rawInput;
+      metaPre.initialIntent = clasificacion.intencion;
+      metaPre.initialClasif = clasificacion;
+      metaPre.resumen_queja = clasificacion.resumen_queja;
+    }
+
+    const searchTerm = candidateName || cleanPersonName(rawInput) || rawInput;
+    const cleanSearchTerm = cleanPersonName(searchTerm) || searchTerm;
+    logger.info(`Buscando coincidencias para identificación de ${phone}: "${rawInput}" (Término búsqueda: "${searchTerm}", Limpio: "${cleanSearchTerm}")`);
 
     // 1. Intentar búsqueda flexible en Turso DB (Caché local de SmartOLT)
     try {
@@ -2311,6 +2340,12 @@ export class BotOrchestrator {
 
           logger.info(`Ambigüedad: se detectaron ${gruposPorPersona.length} personas distintas para "${rawInput}". Solicitando apellidos.`);
 
+          await TursoService.upsertSession({
+            phone,
+            step: 'ESPERANDO_IDENTIFICACION',
+            metadata: JSON.stringify(metaPre),
+          });
+
           await this.enviarYLoguear(
             phone,
             `Encontramos varias cuentas registradas con ese nombre en nuestro sistema.\n\n` +
@@ -2319,7 +2354,6 @@ export class BotOrchestrator {
             'SOLICITAR_APELLIDOS_AMBIGUEDAD',
             targetJid
           );
-          await TursoService.updateStep(phone, 'ESPERANDO_IDENTIFICACION');
           return;
         }
 
@@ -2347,6 +2381,7 @@ export class BotOrchestrator {
             client_name: primerNombre,
             step: 'ESPERANDO_SELECCION_SERVICIO',
             metadata: JSON.stringify({
+              ...metaPre,
               registeredServices: serviciosPersona.slice(0, 5).map(c => ({
                 unique_external_id: c.unique_external_id,
                 sn: c.sn,
@@ -2376,9 +2411,6 @@ export class BotOrchestrator {
         // CASO C: Coincidencia única sólida de una sola persona
         const mejor = serviciosPersona[0] || coincidenciasOlt[0];
         if (mejor.matchScore >= 70) {
-          let metaPre: any = {};
-          try { metaPre = JSON.parse(session?.metadata || '{}'); } catch {}
-
           const meta = {
             ...metaPre,
             speed_profile: mejor.speed_profile,
@@ -2407,13 +2439,10 @@ export class BotOrchestrator {
 
     // 2. Intentar buscar en WispHub como alternativa de facturación
     try {
-      const coincidencias = await WispHubService.buscarClientePorNombre(rawInput);
+      const coincidencias = await WispHubService.buscarClientePorNombre(searchTerm);
 
       if (coincidencias.length === 1) {
         const c = coincidencias[0];
-        let metaPre: any = {};
-        try { metaPre = JSON.parse(session?.metadata || '{}'); } catch {}
-
         const sessionActualizada = await TursoService.upsertSession({
           phone,
           client_id: String(c.id),
@@ -2440,6 +2469,7 @@ export class BotOrchestrator {
           client_name: coincidencias[0].nombre,
           step: 'ESPERANDO_SELECCION_SERVICIO',
           metadata: JSON.stringify({
+            ...metaPre,
             registeredServices: coincidencias.slice(0, 4).map(c => ({
               unique_external_id: c.onu_id || `ONU-${c.id}`,
               sn: String(c.servicio_id || c.id),
@@ -2469,29 +2499,33 @@ export class BotOrchestrator {
       logger.warn(`Error al consultar WispHub durante identificación:`, err?.message || err);
     }
 
-    // 2. Si no hubo coincidencia en WispHub, verificar con Groq si el usuario expresó una intención en lugar de su nombre
-    const clasificacion = await GroqService.clasificarMensaje(rawInput, {
-      clientName: null,
-      currentStep: 'ESPERANDO_IDENTIFICACION',
-    });
-
-    // Si el usuario dijo "no tengo internet", "cuanto debo", etc., NO lo forzamos a identificarse, lo atendemos
-    if (clasificacion.intencion !== 'IDENTIFICAR_CLIENTE' && clasificacion.intencion !== 'DESCONOCIDO') {
-      logger.info(`El usuario envió la intención "${clasificacion.intencion}" en lugar de un nombre. Ejecutando intención directamente.`);
-      await TursoService.updateStep(phone, 'ESPERANDO_PROBLEMA');
-      await this.ejecutarIntencion(phone, clasificacion, session, rawInput);
+    // 3. Si no hubo coincidencia y el usuario envió SOLO un problema/intención sin nombre
+    if (!candidateName && clasificacion.intencion !== 'IDENTIFICAR_CLIENTE' && clasificacion.intencion !== 'DESCONOCIDO' && clasificacion.intencion !== 'SALUDO') {
+      logger.info(`El usuario envió la intención "${clasificacion.intencion}" sin nombre identificable. Solicitando nombre y guardando intención.`);
+      const queja = clasificacion.resumen_queja ? ` sobre: _"${clasificacion.resumen_queja}"_` : '';
+      await this.enviarYLoguear(
+        phone,
+        `Entendido tu reporte${queja}. Veo que presentas inconvenientes con tu conexión.\n\nPara poder verificar tu línea y ayudarte de inmediato, ¿podrías indicarme tu *Nombre completo* o número de contrato?`,
+        'FALLA_INTERNET',
+        'SOLICITAR_NOMBRE_PARA_DIAGNOSTICO',
+        targetJid
+      );
+      await TursoService.upsertSession({
+        phone,
+        step: 'ESPERANDO_IDENTIFICACION',
+        metadata: JSON.stringify(metaPre),
+      });
       return;
     }
 
-    // 3. Extraer y limpiar el nombre (incluso si dijo "me llamo Juan", "soy Carlos", o simplemente "Maria")
-    let nombreLimpio = clasificacion.nombre_mencionado || cleanPersonName(rawInput) || rawInput;
+    // 4. Extraer y limpiar el nombre (si se detectó formato de nombre pero no estaba en BD)
+    let nombreLimpio = candidateName || cleanPersonName(rawInput) || rawInput;
     nombreLimpio = cleanPersonName(nombreLimpio)
       .replace(/^(me llamo|soy|mi nombre es|mi nombre|nombre:?)\s+/i, '')
       .replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]/g, '')
       .replace(/\s+/g, ' ')
       .trim();
 
-    // Capitalizar palabras
     if (nombreLimpio.length >= 2) {
       nombreLimpio = nombreLimpio
         .split(/\s+/)
@@ -2501,9 +2535,6 @@ export class BotOrchestrator {
 
     // Si tiene un formato de nombre creíble (2 a 45 caracteres)
     if (nombreLimpio.length >= 2 && nombreLimpio.length <= 45) {
-      let metaPre: any = {};
-      try { metaPre = JSON.parse(session?.metadata || '{}'); } catch {}
-
       const sessionActualizada = await TursoService.upsertSession({
         phone,
         client_name: nombreLimpio,
@@ -2515,7 +2546,7 @@ export class BotOrchestrator {
       return;
     }
 
-    // 4. Si lo escrito es incomprensible, no nos quedamos en bucle: avanzamos al problema amablemente
+    // 5. Si lo escrito es incomprensible, avanzamos al problema amablemente
     await this.enviarYLoguear(
       phone,
       `No te preocupes. ¿Cuál es el problema o consulta que tienes con tu servicio? Estoy aquí para ayudarte.`,
