@@ -342,7 +342,7 @@ export class WispHubService {
 
   /**
    * Diagnóstico financiero integral en TIEMPO REAL:
-   * Consulta directamente la API en vivo de WispHub (/clientes/, /facturas/) y valida
+   * Consulta directamente la API en vivo de WispHub (/clientes/{id}/, /facturas/) y valida
    * si el cliente está Suspendido/Cancelado/Desactivado o tiene facturas pendientes/saldo adeudado.
    */
   static async verificarEstadoFinanciero(params: {
@@ -362,6 +362,7 @@ export class WispHubService {
     const { clienteId, nombre, phone, sn, ip } = params;
     let clienteEncontrado: WispHubCliente | null = null;
     let facturas: WispHubFactura[] = [];
+    let liveData: any = null;
 
     // Extraer número de contrato/servicio del nombre o de clienteId (ignorar seriales ONU como HWTC... o ZTEG...)
     let idNum: string | null = null;
@@ -376,72 +377,8 @@ export class WispHubService {
 
     logger.info(`[WispHub Live Diagnostic] Verificando en tiempo real: ID_Contrato=${idNum || 'N/A'}, Nombre="${nombre || 'N/A'}", Tel="${phone || 'N/A'}", IP="${ip || 'N/A'}"`);
 
-    // 1. Si tenemos nombre (o nombre con prefijo), buscar exhaustivamente con scoring en API WispHub
-    if (nombre) {
-      const clientesPorNombre = await this.buscarClientePorNombre(nombre);
-      if (clientesPorNombre.length > 0) {
-        clienteEncontrado = clientesPorNombre[0];
-        if (clienteEncontrado.id) {
-          facturas = await this.obtenerFacturasPendientes(clienteEncontrado.id);
-        }
-      }
-    }
-
-    // 2. Si aún no se localizó y tenemos número de contrato/ID numérico, buscar por ID o código de contrato en WispHub
-    if (!clienteEncontrado && idNum) {
-      try {
-        const api = this.getApi();
-        const resClientes = await api.get('/clientes/', { params: { search: idNum } });
-        const list = resClientes.data?.results || resClientes.data;
-        if (Array.isArray(list) && list.length > 0) {
-          const padded = idNum.padStart(4, '0');
-          // Buscar únicamente registros que verdaderamente coincidan con el contrato o ID
-          const match = list.find((c: any) => {
-            const cId = String(c.id || c.id_servicio || '');
-            const cNombre = String(c.nombre || '');
-            const cUser = String(c.usuario || c.email || '');
-            return (
-              cId === idNum ||
-              cNombre.startsWith(idNum) ||
-              cNombre.startsWith(padded) ||
-              cUser.startsWith(idNum) ||
-              cUser.startsWith(padded)
-            );
-          });
-          if (match) {
-            clienteEncontrado = {
-              id: match.id_servicio || match.id,
-              nombre: String(match.nombre || `${match.nombre || ''} ${match.apellidos || ''}`).trim(),
-              telefono: match.telefono || phone || '',
-              direccion: match.direccion || '',
-              ip: match.ip || '',
-              servicio_id: String(match.id_servicio || match.id),
-              onu_id: match.custom_onu_id || match.onu_id || null,
-              estado: this.normalizarEstado(match.estado),
-              estado_facturas: match.estado_facturas || (Number(match.saldo || 0) > 0 ? 'Pendiente' : 'Pagadas'),
-              precio_plan: match.precio_plan || 0,
-              saldo: match.saldo || 0,
-            };
-            facturas = await this.obtenerFacturasPendientes(match.id_servicio || match.id);
-          }
-        }
-      } catch (err: any) {
-        logger.warn(`Error al consultar WispHub por ID ${idNum} en tiempo real:`, err?.message || err);
-      }
-    }
-
-    // 3. Consulta en tiempo real por teléfono en API WispHub si aún no se tiene
-    if (!clienteEncontrado && phone) {
-      const clientePorTel = await this.buscarClientePorTelefono(phone);
-      if (clientePorTel) {
-        clienteEncontrado = clientePorTel;
-        if (facturas.length === 0 && clienteEncontrado.id) {
-          facturas = await this.obtenerFacturasPendientes(clienteEncontrado.id);
-        }
-      }
-    }
-
-    // 4. Fallback con base de datos local de Turso (wisphub_clients)
+    // 1. Ubicar el registro en la base de datos indexada de Turso (sincronizada con todos los 3400+ clientes)
+    let targetId: string | number | null = null;
     try {
       const dbClient = await TursoService.getWisphubClientByAny({
         id: idNum || clienteId,
@@ -452,29 +389,65 @@ export class WispHubService {
       });
 
       if (dbClient) {
-        logger.info(`Cliente ubicado en base local Turso: ID=${dbClient.id_servicio}, Nombre="${dbClient.nombre}", Estado="${dbClient.estado}", Saldo=$${dbClient.saldo}`);
-        
-        if (!clienteEncontrado) {
-          clienteEncontrado = {
-            id: dbClient.id_servicio,
-            nombre: dbClient.nombre,
-            telefono: dbClient.telefono || phone || '',
-            direccion: dbClient.direccion,
-            ip: dbClient.ip,
-            servicio_id: String(dbClient.id_servicio),
-            onu_id: dbClient.sn_onu,
-            estado: this.normalizarEstado(dbClient.estado),
-            estado_facturas: dbClient.estado_facturas,
-            precio_plan: dbClient.precio_plan,
-            saldo: dbClient.saldo,
-          };
-          if (facturas.length === 0 && dbClient.id_servicio) {
-            facturas = await this.obtenerFacturasPendientes(dbClient.id_servicio);
-          }
-        }
+        targetId = dbClient.id_servicio;
+        logger.info(`Cliente ubicado en base local Turso: ID=${dbClient.id_servicio}, Nombre="${dbClient.nombre}", Estado="${dbClient.estado}", IP="${dbClient.ip}"`);
+        clienteEncontrado = {
+          id: dbClient.id_servicio,
+          nombre: dbClient.nombre,
+          telefono: dbClient.telefono || phone || '',
+          direccion: dbClient.direccion,
+          ip: dbClient.ip,
+          servicio_id: String(dbClient.id_servicio),
+          onu_id: dbClient.sn_onu,
+          estado: this.normalizarEstado(dbClient.estado),
+          estado_facturas: dbClient.estado_facturas,
+          precio_plan: dbClient.precio_plan,
+          saldo: dbClient.saldo,
+        };
       }
     } catch (err: any) {
-      logger.warn('Error al consultar estado financiero en Turso fallback:', err?.message || err);
+      logger.warn('Error al consultar cliente en Turso:', err?.message || err);
+    }
+
+    // 2. Si no se ubicó en Turso y tenemos idNum, usar idNum como targetId
+    if (!targetId && idNum) {
+      targetId = idNum;
+    }
+
+    // 3. Consultar directamente el endpoint en vivo de WispHub para el cliente (/clientes/{id}/)
+    if (targetId) {
+      try {
+        const api = this.getApi();
+        const liveRes = await api.get(`/clientes/${targetId}/`);
+        if (liveRes.data && (liveRes.data.id_servicio || liveRes.data.id || liveRes.data.usuario_rb)) {
+          liveData = liveRes.data;
+          logger.info(`[WispHub Live API] Datos en vivo para ID ${targetId}: Estado="${liveData.estado}", FacturasPagadas=${liveData.facturas_pagadas}, Saldo=$${liveData.saldo || 0}`);
+          
+          clienteEncontrado = {
+            id: liveData.id_servicio || targetId,
+            nombre: liveData.nombre || liveData.usuario_rb || clienteEncontrado?.nombre || String(nombre || ''),
+            telefono: liveData.telefono || clienteEncontrado?.telefono || phone || '',
+            direccion: liveData.direccion || clienteEncontrado?.direccion || '',
+            ip: liveData.ip || clienteEncontrado?.ip || '',
+            servicio_id: String(liveData.id_servicio || targetId),
+            onu_id: liveData.sn_onu || clienteEncontrado?.onu_id || null,
+            estado: this.normalizarEstado(liveData.estado),
+            estado_facturas: liveData.facturas_pagadas ? 'Pagadas' : (clienteEncontrado?.estado_facturas || 'Pendiente'),
+            precio_plan: liveData.precio_plan || liveData.plan_internet?.precio || clienteEncontrado?.precio_plan || 0,
+            saldo: liveData.saldo || clienteEncontrado?.saldo || 0,
+          };
+
+          // Consultar facturas pendientes en vivo
+          facturas = await this.obtenerFacturasPendientes(targetId);
+        }
+      } catch (err: any) {
+        logger.warn(`Error al consultar /clientes/${targetId}/ en vivo:`, err?.response?.data || err?.message || err);
+      }
+    }
+
+    // 4. Si aún no tenemos facturas pero tenemos ID, consultar facturas
+    if (clienteEncontrado?.id && facturas.length === 0) {
+      facturas = await this.obtenerFacturasPendientes(clienteEncontrado.id);
     }
 
     let totalDeuda = facturas.reduce((acc, f) => acc + (f.monto || 0), 0);
@@ -484,9 +457,9 @@ export class WispHubService {
     }
 
     const estado = (clienteEncontrado?.estado || '').toLowerCase().trim();
-    const estadoFacturas = (clienteEncontrado?.estado_facturas || '').toLowerCase().trim();
+    const facturasPagadas = liveData ? liveData.facturas_pagadas === true : false;
     
-    // Estados de suspensión o corte en WispHub (detecta tanto texto como número normalizado):
+    // Estados de suspensión o corte en WispHub:
     const esSuspendido = estado === 'suspendido' ||
       estado === 'cortado' ||
       estado === 'cancelado' ||
@@ -498,24 +471,25 @@ export class WispHubService {
       estado.includes('susp');
 
     // Facturas impagas o morosidad real explícita:
-    const tieneFacturaPendiente = estadoFacturas.includes('pendiente') ||
-      estadoFacturas.includes('moros') ||
-      estadoFacturas.includes('vencid') ||
-      estadoFacturas.includes('debe') ||
-      estadoFacturas.includes('impag') ||
-      totalDeuda > 0;
+    const tieneFacturaPendiente = facturas.length > 0 || (liveData && liveData.facturas_pagadas === false && totalDeuda > 0) || totalDeuda > 0;
 
     // Distinción de casos:
-    // CASO A: El cliente está en WispHub como Suspendido pero NO tiene facturas pendientes ni saldo adeudado.
+    // CASO A: El cliente está en WispHub como Suspendido pero sus facturas están pagadas (facturas_pagadas === true o totalDeuda === 0 y sin facturas pendientes).
     // => Ya pagó su mensualidad pero quedó desincronizado o pendiente de activación en WispHub/MikroTik.
-    const yaPagoPeroNoActivo = esSuspendido && !tieneFacturaPendiente && totalDeuda === 0;
+    const yaPagoPeroNoActivo = esSuspendido && (facturasPagadas || (!tieneFacturaPendiente && totalDeuda === 0));
 
-    // CASO B: El cliente tiene recibos pendientes o saldo > 0.
+    // CASO B: El cliente tiene recibos pendientes o facturas no pagadas con deuda.
     // => Suspendido o moroso por falta de pago.
-    const esMorosoReal = tieneFacturaPendiente && totalDeuda > 0;
+    const esMorosoReal = esSuspendido && !yaPagoPeroNoActivo;
+
+    // Si es moroso pero totalDeuda es 0, asignar el precio del plan contratado
+    if (esMorosoReal && totalDeuda === 0) {
+      const precioPlan = Number(clienteEncontrado?.precio_plan || 0);
+      totalDeuda = precioPlan > 0 ? precioPlan : 0;
+    }
 
     const motivo = esMorosoReal
-      ? `Factura o saldo pendiente ($${totalDeuda.toFixed(2)} MXN)`
+      ? (totalDeuda > 0 ? `Factura o saldo pendiente ($${totalDeuda.toFixed(2)} MXN)` : 'Servicio suspendido en WispHub')
       : (yaPagoPeroNoActivo ? 'Cuenta al corriente pero servicio pendiente de reconexión/activación' : undefined);
 
     logger.info(`[WispHub Live Result] Cliente="${clienteEncontrado?.nombre || 'N/A'}" Estado="${clienteEncontrado?.estado || 'Desconocido'}" SuspendidoReal=${esMorosoReal} YaPagoPeroNoActivo=${yaPagoPeroNoActivo} Deuda=$${totalDeuda}`);
