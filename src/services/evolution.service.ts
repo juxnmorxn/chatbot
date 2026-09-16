@@ -222,5 +222,57 @@ export class EvolutionService {
       return null;
     }
   }
+
+  /**
+   * Verifica el estado de la instancia en Evolution API y re-habilita el webhook
+   */
+  static async verifyAndEnableWebhook(webhookBaseUrl?: string): Promise<{ state: string; webhookOk: boolean }> {
+    const url = SettingsService.get('EVOLUTION_URL', 'EVOLUTION_URL', config.evolution.url).replace(/\/+$/, '');
+    const apiKey = SettingsService.get('EVOLUTION_API_KEY', 'EVOLUTION_API_KEY', config.evolution.apiKey);
+    const instance = this.getInstanceName();
+
+    if (!apiKey || apiKey.includes('tu_api_key')) {
+      return { state: 'unconfigured', webhookOk: false };
+    }
+
+    try {
+      const api = this.getApi();
+      let state = 'close';
+      try {
+        const stateRes = await api.get(`/instance/connectionState/${instance}`);
+        state = stateRes.data?.instance?.state || 'close';
+      } catch (err: any) {
+        logger.warn(`Error al consultar estado de instancia Evolution "${instance}":`, err?.message || err);
+      }
+
+      let webhookOk = false;
+      const targetUrl = webhookBaseUrl || (process.env.RENDER_EXTERNAL_URL ? `${process.env.RENDER_EXTERNAL_URL}/webhook` : 'https://chatbot-rr1w.onrender.com/webhook');
+
+      try {
+        await api.post(`/webhook/set/${instance}`, {
+          webhook: {
+            enabled: true,
+            url: targetUrl,
+            byEvents: false,
+            base64: true,
+            events: [
+              'MESSAGES_UPSERT',
+              'MESSAGES_UPDATE',
+              'SEND_MESSAGE'
+            ],
+          },
+        });
+        webhookOk = true;
+        logger.info(`Webhook de Evolution API re-sincronizado exitosamente hacia: ${targetUrl} (Estado WhatsApp: ${state})`);
+      } catch (e: any) {
+        logger.warn('No se pudo re-sincronizar webhook en Evolution:', e?.response?.data || e?.message || e);
+      }
+
+      return { state, webhookOk };
+    } catch (err: any) {
+      logger.error('Error al verificar Evolution API:', err?.message || err);
+      return { state: 'error', webhookOk: false };
+    }
+  }
 }
 

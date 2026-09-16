@@ -52,10 +52,14 @@ async function startServer() {
       logger.error('Error al inicializar SettingsService:', err?.message || err);
     });
 
-    // 4. Sincronizar mapeos WhatsApp LID <-> Teléfono en segundo plano
+    // 4. Sincronizar mapeos WhatsApp LID <-> Teléfono y re-habilitar Webhook en Evolution API
     const { WebhookController } = await import('./controllers/webhook.controller');
+    const { EvolutionService } = await import('./services/evolution.service');
     WebhookController.syncLidMappings().catch((err) => {
       logger.warn('Aviso: syncLidMappings falló en segundo plano:', err?.message || err);
+    });
+    EvolutionService.verifyAndEnableWebhook().catch((err) => {
+      logger.warn('Aviso: verifyAndEnableWebhook falló en segundo plano:', err?.message || err);
     });
 
     // Sincronización en segundo plano de SmartOLT hacia Turso DB (Cada 60 minutos = 1 llamada/hora de las 15 permitidas)
