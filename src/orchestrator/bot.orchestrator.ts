@@ -557,19 +557,26 @@ export class BotOrchestrator {
           return;
         }
 
-        // Si reporta falla directamente sin estar registrado, le pedimos el nombre para ubicar su línea
-        if (clasif.intencion === 'FALLA_INTERNET') {
-          const queja = clasif.resumen_queja ? ` sobre: _"${clasif.resumen_queja}"_` : '';
-          await this.enviarYLoguear(
-            phone,
-            `Entendido tu reporte${queja}. Veo que presentas problemas con tu conexión.\n\nPara poder revisar los niveles de luz y señal de tu módem en nuestra central, ¿me indicas tu *Nombre completo* o número de contrato?`,
-            'FALLA_INTERNET',
-            'SOLICITAR_NOMBRE_PARA_DIAGNOSTICO',
-            targetJid
-          );
-          await TursoService.updateStep(phone, 'ESPERANDO_IDENTIFICACION');
-          return;
-        }
+        // Si reporta falla o cualquier consulta directamente sin estar registrado, guardamos su intención y le pedimos el nombre
+        const queja = clasif.resumen_queja ? ` sobre: _"${clasif.resumen_queja}"_` : '';
+        await this.enviarYLoguear(
+          phone,
+          `Entendido tu reporte${queja}. Veo que presentas problemas con tu conexión.\n\nPara poder revisar los niveles de luz y señal de tu módem en nuestra central, ¿me indicas tu *Nombre completo* o número de contrato?`,
+          'FALLA_INTERNET',
+          'SOLICITAR_NOMBRE_PARA_DIAGNOSTICO',
+          targetJid
+        );
+        await TursoService.upsertSession({
+          phone,
+          step: 'ESPERANDO_IDENTIFICACION',
+          metadata: JSON.stringify({
+            initialQuery: rawText,
+            initialIntent: clasif.intencion,
+            initialClasif: clasif,
+            resumen_queja: clasif.resumen_queja,
+          }),
+        });
+        return;
       }
     }
 
@@ -2276,33 +2283,28 @@ export class BotOrchestrator {
         // CASO B: Coincidencia única sólida
         const mejor = candidatosRelevantes[0] || coincidenciasOlt[0];
         if (mejor.matchScore >= 75 || (coincidenciasOlt.length === 1 && mejor.matchScore >= 70)) {
-          const meta = JSON.stringify({
+          let metaPre: any = {};
+          try { metaPre = JSON.parse(session?.metadata || '{}'); } catch {}
+
+          const meta = {
+            ...metaPre,
             speed_profile: mejor.speed_profile,
             zone: mejor.zone_name,
             address: mejor.address,
             sn: mejor.sn,
-          });
+          };
 
-          await TursoService.upsertSession({
+          const sessionActualizada = await TursoService.upsertSession({
             phone,
             client_id: mejor.unique_external_id,
             service_id: mejor.sn,
             client_name: mejor.name,
             onu_id: mejor.unique_external_id,
-            metadata: meta,
-            step: 'ESPERANDO_PROBLEMA',
+            metadata: JSON.stringify(meta),
+            step: 'IDENTIFICADO',
           });
 
-          const planTexto = mejor.speed_profile ? `\n📦 *Plan:* ${mejor.speed_profile}` : '';
-          const zonaTexto = mejor.address || mejor.zone_name ? `\n📍 *Ubicación:* ${mejor.address || mejor.zone_name}` : '';
-
-          await this.enviarYLoguear(
-            phone,
-            `¡Perfecto, te he ubicado en nuestro sistema! ✅\nBienvenido(a) *${mejor.name}*.${planTexto}${zonaTexto}\n\nCuéntame, ¿cuál es el detalle o falla que presentas con tu servicio de internet?`,
-            'IDENTIFICAR_CLIENTE',
-            'VINCULADO_SMARTOLT',
-            targetJid
-          );
+          await this.finalizarIdentificacionYContinuarFlujo(phone, sessionActualizada, metaPre, targetJid);
           return;
         }
       }
@@ -2316,22 +2318,20 @@ export class BotOrchestrator {
 
       if (coincidencias.length === 1) {
         const c = coincidencias[0];
-        await TursoService.upsertSession({
+        let metaPre: any = {};
+        try { metaPre = JSON.parse(session?.metadata || '{}'); } catch {}
+
+        const sessionActualizada = await TursoService.upsertSession({
           phone,
           client_id: String(c.id),
           service_id: String(c.servicio_id || c.id),
           client_name: c.nombre,
           onu_id: c.onu_id || `ONU-${c.id}`,
-          step: 'ESPERANDO_PROBLEMA',
+          metadata: JSON.stringify({ ...metaPre, speed_profile: c.precio_plan, address: c.direccion, sn: c.onu_id }),
+          step: 'IDENTIFICADO',
         });
 
-        await this.enviarYLoguear(
-          phone,
-          `¡Perfecto, te he ubicado en el sistema! ✅\nBienvenido(a) *${c.nombre}*. Tu cuenta ha quedado vinculada a este chat.\n\nCuéntame, ¿cuál es el problema o consulta que presentas con tu servicio de internet?`,
-          'IDENTIFICAR_CLIENTE',
-          'VINCULADO_WISPHUB',
-          targetJid
-        );
+        await this.finalizarIdentificacionYContinuarFlujo(phone, sessionActualizada, metaPre, targetJid);
         return;
       }
 
@@ -2408,19 +2408,17 @@ export class BotOrchestrator {
 
     // Si tiene un formato de nombre creíble (2 a 45 caracteres)
     if (nombreLimpio.length >= 2 && nombreLimpio.length <= 45) {
-      await TursoService.upsertSession({
+      let metaPre: any = {};
+      try { metaPre = JSON.parse(session?.metadata || '{}'); } catch {}
+
+      const sessionActualizada = await TursoService.upsertSession({
         phone,
         client_name: nombreLimpio,
-        step: 'ESPERANDO_PROBLEMA',
+        metadata: JSON.stringify(metaPre),
+        step: 'IDENTIFICADO',
       });
 
-      await this.enviarYLoguear(
-        phone,
-        `¡Mucho gusto, *${nombreLimpio}*! 👋\nHe registrado tu nombre en nuestro sistema para atenderte de manera personalizada.\n\nCuéntame, ¿cuál es el detalle o falla que presentas con tu servicio de internet?`,
-        'IDENTIFICAR_CLIENTE',
-        'NOMBRE_MEMORIZADO_TURSO',
-        targetJid
-      );
+      await this.finalizarIdentificacionYContinuarFlujo(phone, sessionActualizada, metaPre, targetJid);
       return;
     }
 
@@ -2581,32 +2579,68 @@ export class BotOrchestrator {
       client_name: elegido.name,
       onu_id: elegido.unique_external_id,
       metadata: JSON.stringify(nuevoMeta),
-      step: 'ESPERANDO_PROBLEMA',
+      step: 'IDENTIFICADO',
     });
 
-    const ubicacion = elegido.address || elegido.zone_name ? ` en *${elegido.address || elegido.zone_name}*` : '';
-    const plan = elegido.speed_profile ? `\n📦 *Plan:* ${elegido.speed_profile}` : '';
+    await this.finalizarIdentificacionYContinuarFlujo(phone, sessionActualizada, meta, targetJid);
+  }
 
+  /**
+   * Finaliza la identificación del cliente, le da la bienvenida y CONTINÚA automáticamente
+   * con el reporte/consulta que había enviado inicialmente, evitando que tenga que repetirlo.
+   */
+  private static async finalizarIdentificacionYContinuarFlujo(
+    phone: string,
+    session: Session,
+    sessionAnteriorMeta?: any,
+    targetJid?: string
+  ): Promise<void> {
+    let meta: any = {};
+    try { meta = JSON.parse(session.metadata || '{}'); } catch {}
+    if (sessionAnteriorMeta && typeof sessionAnteriorMeta === 'object') {
+      meta = { ...sessionAnteriorMeta, ...meta };
+    }
+
+    const nombre = session.client_name || 'Cliente';
+    const planTexto = meta.speed_profile ? `\n📦 *Plan:* ${meta.speed_profile}` : '';
+    const zonaTexto = meta.address || meta.zone ? `\n📍 *Ubicación:* ${meta.address || meta.zone}` : '';
+
+    const initialQuery = meta.initialQuery;
+    const initialIntent = meta.initialIntent;
+    const initialClasif = meta.initialClasif;
+    const quejaTexto = meta.resumen_queja || (typeof initialQuery === 'string' ? initialQuery : '');
+
+    // Si el usuario reportó un problema o intención antes de identificarse (ej. "esta lento mi internet", "cuanto debo", etc.)
+    if (initialIntent && !['SALUDO', 'IDENTIFICAR_CLIENTE', 'DESCONOCIDO'].includes(initialIntent)) {
+      logger.info(`[Auto-Continuación] Cliente ${phone} (${nombre}) identificado. Continuando con reporte previo: "${initialIntent}" ("${initialQuery}")`);
+
+      await this.enviarYLoguear(
+        phone,
+        `¡Perfecto, te he ubicado en nuestro sistema! ✅\nBienvenido(a) *${nombre}*.${planTexto}${zonaTexto}\n\nCon respecto a tu reporte sobre *"${quejaTexto || 'tu conexión'}"*, ya estoy revisando tu servicio en tiempo real en nuestra central...`,
+        'IDENTIFICAR_CLIENTE',
+        'VINCULADO_Y_CONTINUANDO_REPORTE',
+        targetJid
+      );
+
+      const clasifAEjecutar = initialClasif || {
+        intencion: initialIntent,
+        resumen_queja: quejaTexto,
+        confianza: 0.95,
+      };
+
+      await this.ejecutarIntencion(phone, clasifAEjecutar, session, initialQuery || 'Reporte inicial', targetJid);
+      return;
+    }
+
+    // Si el usuario no tenía reporte previo (solo saludó o se identificó)
     await this.enviarYLoguear(
       phone,
-      `¡Entendido! He seleccionado tu servicio${ubicacion} ✅${plan}\n\n¿Cuál es la falla o consulta que tienes con este servicio?`,
-      'SELECCION_SERVICIO',
-      'SERVICIO_SELECCIONADO',
+      `¡Perfecto, te he ubicado en nuestro sistema! ✅\nBienvenido(a) *${nombre}*.${planTexto}${zonaTexto}\n\nCuéntame, ¿cuál es el detalle o falla que presentas con tu servicio de internet?`,
+      'IDENTIFICAR_CLIENTE',
+      'VINCULADO_ESPERANDO_PROBLEMA',
       targetJid
     );
-
-    // Si el usuario había enviado una queja o consulta antes de seleccionar el servicio (ej. "no tengo internet")
-    if (meta.initialQuery && typeof meta.initialQuery === 'string') {
-      const q = meta.initialQuery.trim();
-      const clasif = await GroqService.clasificarMensaje(q, {
-        clientName: elegido.name,
-        currentStep: 'ESPERANDO_PROBLEMA',
-      });
-      if (clasif.intencion !== 'IDENTIFICAR_CLIENTE' && clasif.intencion !== 'SALUDO' && clasif.intencion !== 'DESCONOCIDO') {
-        logger.info(`Ejecutando queja inicial "${clasif.intencion}" tras seleccionar servicio para ${phone}`);
-        await this.ejecutarIntencion(phone, clasif, sessionActualizada, q, targetJid);
-      }
-    }
+    await TursoService.updateStep(phone, 'ESPERANDO_PROBLEMA');
   }
 
   /**

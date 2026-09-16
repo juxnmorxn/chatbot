@@ -68,9 +68,31 @@ export class WispHubService {
   /**
    * Busca cliente por número telefónico (comparando últimos 10 dígitos)
    */
+  /**
+   * Normaliza el estado que devuelve WispHub (puede ser número o texto)
+   */
+  private static normalizarEstado(estadoRaw: any): string {
+    if (estadoRaw === 1 || estadoRaw === '1') return 'Activo';
+    if (estadoRaw === 2 || estadoRaw === '2') return 'Suspendido';
+    if (estadoRaw === 3 || estadoRaw === '3') return 'Cancelado';
+    if (estadoRaw === 4 || estadoRaw === '4') return 'Desactivado';
+    const s = String(estadoRaw || '').toLowerCase().trim();
+    if (s.includes('susp')) return 'Suspendido';
+    if (s.includes('cort')) return 'Suspendido';
+    if (s.includes('inact')) return 'Inactivo';
+    if (s.includes('desact')) return 'Desactivado';
+    if (s.includes('canc')) return 'Cancelado';
+    if (s.includes('baja')) return 'Baja';
+    if (s.includes('act')) return 'Activo';
+    return s || 'Activo';
+  }
+
+  /**
+   * Busca cliente por número telefónico (comparando últimos 10 dígitos)
+   */
   static async buscarClientePorTelefono(rawPhone: string): Promise<WispHubCliente | null> {
     const phone10 = normalizePhone10(rawPhone);
-    logger.info(`Buscando cliente por teléfono: ${phone10}`);
+    logger.info(`Buscando cliente por teléfono en WispHub en tiempo real: ${phone10}`);
     const apiKey = this.getApiKey();
 
     if (!apiKey || apiKey.includes('tu_token')) {
@@ -80,40 +102,75 @@ export class WispHubService {
 
     try {
       const api = this.getApi();
-      const response = await api.get('/clientes/', {
-        params: { telefono: phone10 },
+      // 1. Intentar en /clientes/ con search y telefono
+      let response = await api.get('/clientes/', {
+        params: { search: phone10 },
       });
 
-      const results = response.data?.results || response.data;
+      let results = response.data?.results || response.data;
+      if (!Array.isArray(results) || results.length === 0) {
+        response = await api.get('/clientes/', {
+          params: { telefono: phone10 },
+        });
+        results = response.data?.results || response.data;
+      }
+
+      // 2. Si no se encontró en /clientes/, buscar en /servicios/
+      if (!Array.isArray(results) || results.length === 0) {
+        const srvRes = await api.get('/servicios/', {
+          params: { search: phone10 },
+        });
+        const srvResults = srvRes.data?.results || srvRes.data;
+        if (Array.isArray(srvResults) && srvResults.length > 0) {
+          const s = srvResults[0];
+          return {
+            id: s.id_servicio || s.id,
+            nombre: String(s.nombre || s.cliente?.nombre || `${s.cliente?.nombre || ''} ${s.cliente?.apellidos || ''}`).trim(),
+            telefono: s.telefono || s.cliente?.telefono || phone10,
+            direccion: s.direccion || s.cliente?.direccion || '',
+            ip: s.ip || '',
+            servicio_id: String(s.id_servicio || s.id),
+            onu_id: s.custom_onu_id || s.onu_id || null,
+            estado: this.normalizarEstado(s.estado || s.estado_servicio),
+            estado_facturas: s.estado_facturas || (Number(s.saldo || 0) > 0 ? 'Pendiente' : 'Pagadas'),
+            precio_plan: s.precio_plan || s.plan_precio || 0,
+            saldo: s.saldo || s.cliente?.saldo || 0,
+          };
+        }
+      }
+
       if (Array.isArray(results) && results.length > 0) {
         const c = results[0];
         return {
           id: c.id_servicio || c.id,
-          nombre: `${c.nombre || ''} ${c.apellidos || ''}`.trim(),
+          nombre: `${c.nombre || ''} ${c.apellidos || ''}`.trim() || c.nombre || '',
           telefono: c.telefono || phone10,
           direccion: c.direccion || '',
           ip: c.ip || '',
           servicio_id: String(c.id_servicio || c.id),
           onu_id: c.custom_onu_id || c.onu_id || null,
-          estado: c.estado || 'Activo',
+          estado: this.normalizarEstado(c.estado),
+          estado_facturas: c.estado_facturas || (Number(c.saldo || 0) > 0 ? 'Pendiente' : 'Pagadas'),
+          precio_plan: c.precio_plan || 0,
+          saldo: c.saldo || 0,
         };
       }
       return null;
     } catch (error: any) {
-      logger.error('Error al consultar cliente en WispHub:', error?.response?.data || error?.message || error);
+      logger.error('Error al consultar cliente por teléfono en WispHub:', error?.response?.data || error?.message || error);
       return null;
     }
   }
 
   /**
-   * Busca clientes coincidentes por nombre con algoritmo difuso tolerante
+   * Busca clientes coincidentes por nombre o contrato con algoritmo difuso tolerante en tiempo real
    */
   static async buscarClientePorNombre(nombre: string): Promise<WispHubCliente[]> {
     const rawNombre = (nombre || '').trim();
     if (!rawNombre) return [];
 
     const cleanName = cleanPersonName(rawNombre) || rawNombre;
-    logger.info(`Buscando cliente por nombre en WispHub: "${rawNombre}" (Limpio: "${cleanName}")`);
+    logger.info(`Buscando cliente por nombre/contrato en WispHub en tiempo real: "${rawNombre}" (Limpio: "${cleanName}")`);
     const apiKey = this.getApiKey();
 
     if (!apiKey || apiKey.includes('tu_token')) {
@@ -122,39 +179,94 @@ export class WispHubService {
 
     try {
       const api = this.getApi();
+      const candidatosEncontrados: any[] = [];
+
+      // 0. Si el nombre trae prefijo numérico (ej. "696-Maria del Pilar" o "0696"), buscar por ID numérico en /servicios/ y /clientes/
+      const matchNum = rawNombre.match(/^0*(\d+)/);
+      if (matchNum) {
+        const idNum = matchNum[1];
+        try {
+          const srvRes = await api.get('/servicios/', { params: { search: idNum } });
+          const srvList = srvRes.data?.results || srvRes.data;
+          if (Array.isArray(srvList)) candidatosEncontrados.push(...srvList);
+        } catch {}
+      }
+
+      // 1. Buscar en /servicios/ por search (nombre o RB name como "0696 Maria Pilar Perez Mendoza")
       const words = cleanName.split(/\s+/).filter(w => w.length > 2);
-      const searchWord = words[0] || cleanName;
+      const searchWord = words.slice(0, 2).join(' ') || cleanName;
 
-      // Consultar a WispHub filtrando por primer nombre o nombre limpio
-      const response = await api.get('/clientes/', {
-        params: { nombre: searchWord },
-      });
+      try {
+        const resServicios = await api.get('/servicios/', {
+          params: { search: searchWord },
+        });
+        const listServicios = resServicios.data?.results || resServicios.data;
+        if (Array.isArray(listServicios)) {
+          candidatosEncontrados.push(...listServicios);
+        }
+      } catch (e: any) {
+        logger.warn('Consulta a /servicios/ con search:', e?.message || e);
+      }
 
-      const results = response.data?.results || response.data;
-      if (Array.isArray(results) && results.length > 0) {
+      // 2. Buscar en /clientes/ por search
+      try {
+        const resClientes = await api.get('/clientes/', {
+          params: { search: searchWord },
+        });
+        const listClientes = resClientes.data?.results || resClientes.data;
+        if (Array.isArray(listClientes)) {
+          candidatosEncontrados.push(...listClientes);
+        }
+      } catch (e: any) {
+        logger.warn('Consulta a /clientes/ con search:', e?.message || e);
+      }
+
+      // 3. Fallback con primer palabra si aún no hay resultados
+      if (candidatosEncontrados.length === 0 && words[0] && words[0] !== searchWord) {
+        try {
+          const resFallback = await api.get('/clientes/', {
+            params: { search: words[0] },
+          });
+          const listFallback = resFallback.data?.results || resFallback.data;
+          if (Array.isArray(listFallback)) candidatosEncontrados.push(...listFallback);
+        } catch {}
+      }
+
+      if (candidatosEncontrados.length > 0) {
+        // Eliminar duplicados por id
+        const unicos = new Map<string, any>();
+        candidatosEncontrados.forEach((c: any) => {
+          const idUnico = String(c.id_servicio || c.id || Math.random());
+          if (!unicos.has(idUnico)) unicos.set(idUnico, c);
+        });
+
         // Evaluar candidatos con algoritmo de scoring
-        const scoredCandidates = results.map((c: any) => {
-          const clientName = String(c.nombre || `${c.nombre || ''} ${c.apellidos || ''}`).trim();
+        const scoredCandidates: (WispHubCliente & { score: number })[] = Array.from(unicos.values()).map((c: any) => {
+          const clientName = String(
+            c.nombre ||
+            (c.cliente?.nombre ? `${c.cliente.nombre || ''} ${c.cliente.apellidos || ''}` : '') ||
+            `${c.nombre || ''} ${c.apellidos || ''}`
+          ).trim();
           const score = computeNameMatchScore(cleanName, clientName);
           return {
-            id: c.id_servicio || c.id,
+            id: c.id_servicio || c.id || c.cliente?.id,
             nombre: clientName,
-            telefono: c.telefono || '',
-            direccion: c.direccion || '',
+            telefono: c.telefono || c.cliente?.telefono || '',
+            direccion: c.direccion || c.cliente?.direccion || '',
             ip: c.ip || '',
             servicio_id: String(c.id_servicio || c.id),
             onu_id: c.custom_onu_id || c.onu_id || null,
-            estado: c.estado || 'Activo',
-            estado_facturas: c.estado_facturas || 'Pagadas',
-            precio_plan: c.precio_plan || 0,
-            saldo: c.saldo || 0,
+            estado: this.normalizarEstado(c.estado || c.estado_servicio),
+            estado_facturas: c.estado_facturas || (Number(c.saldo || 0) > 0 ? 'Pendiente' : 'Pagadas'),
+            precio_plan: c.precio_plan || c.plan_precio || 0,
+            saldo: c.saldo || c.cliente?.saldo || 0,
             score,
           };
         });
 
         // Filtrar y ordenar por mejor score
         scoredCandidates.sort((a, b) => b.score - a.score);
-        return scoredCandidates.filter(c => c.score >= 60).slice(0, 4);
+        return scoredCandidates.filter(c => c.score >= 50).slice(0, 4);
       }
       return [];
     } catch (error: any) {
@@ -167,7 +279,8 @@ export class WispHubService {
    * Obtiene las facturas pendientes de un cliente (/facturas/?cliente={id}&estado=1)
    */
   static async obtenerFacturasPendientes(clienteId: string | number): Promise<WispHubFactura[]> {
-    logger.info(`Consultando facturas pendientes para cliente: ${clienteId}`);
+    const idClean = String(clienteId).replace(/\D/g, '') || String(clienteId);
+    logger.info(`Consultando facturas pendientes en tiempo real para cliente WispHub ID: ${idClean}`);
     const apiKey = this.getApiKey();
 
     if (!apiKey || apiKey.includes('tu_token')) {
@@ -178,7 +291,7 @@ export class WispHubService {
       const api = this.getApi();
       const response = await api.get('/facturas/', {
         params: {
-          cliente: clienteId,
+          cliente: idClean,
           estado: 1, // 1 = Pendiente
         },
       });
@@ -202,9 +315,9 @@ export class WispHubService {
   }
 
   /**
-   * Diagnóstico financiero integral:
-   * Verifica si el cliente está Suspendido/Cancelado/Desactivado en WispHub o tiene facturas pendientes/saldo adeudado.
-   * Consulta tanto la API en vivo de WispHub como la base de datos local sincronizada en Turso.
+   * Diagnóstico financiero integral en TIEMPO REAL:
+   * Consulta directamente la API en vivo de WispHub (/servicios/, /clientes/, /facturas/) y valida
+   * si el cliente está Suspendido/Cancelado/Desactivado o tiene facturas pendientes/saldo adeudado.
    */
   static async verificarEstadoFinanciero(params: {
     clienteId?: string | number | null;
@@ -224,13 +337,50 @@ export class WispHubService {
     let clienteEncontrado: WispHubCliente | null = null;
     let facturas: WispHubFactura[] = [];
 
-    // 1. Buscar cliente por ID numérico en API WispHub
-    if (clienteId && !String(clienteId).startsWith('HWTC') && !String(clienteId).startsWith('ONU-')) {
-      facturas = await this.obtenerFacturasPendientes(clienteId);
+    // Extraer número de contrato/servicio si viene en clienteId o en el nombre (ej. "696-Maria del Pilar" o "0696")
+    let idNum: string | null = null;
+    if (clienteId) {
+      const m = String(clienteId).match(/\d+/);
+      if (m) idNum = m[0];
+    }
+    if (!idNum && nombre) {
+      const m = String(nombre).match(/^0*(\d+)/);
+      if (m) idNum = m[1];
     }
 
-    // 2. Buscar por nombre en API WispHub si no tenemos facturas o cliente
-    if (nombre) {
+    logger.info(`[WispHub Live Diagnostic] Verificando en tiempo real: ID=${idNum || 'N/A'}, Nombre="${nombre || 'N/A'}", Tel="${phone || 'N/A'}", IP="${ip || 'N/A'}"`);
+
+    // 1. Consulta en tiempo real por ID numérico en API WispHub
+    if (idNum) {
+      try {
+        const api = this.getApi();
+        // Buscar servicio directamente en API
+        const srvRes = await api.get('/servicios/', { params: { search: idNum } });
+        const srvList = srvRes.data?.results || srvRes.data;
+        if (Array.isArray(srvList) && srvList.length > 0) {
+          const s = srvList[0];
+          clienteEncontrado = {
+            id: s.id_servicio || s.id,
+            nombre: String(s.nombre || s.cliente?.nombre || `${s.cliente?.nombre || ''} ${s.cliente?.apellidos || ''}`).trim(),
+            telefono: s.telefono || s.cliente?.telefono || phone || '',
+            direccion: s.direccion || s.cliente?.direccion || '',
+            ip: s.ip || '',
+            servicio_id: String(s.id_servicio || s.id),
+            onu_id: s.custom_onu_id || s.onu_id || null,
+            estado: this.normalizarEstado(s.estado || s.estado_servicio),
+            estado_facturas: s.estado_facturas || (Number(s.saldo || 0) > 0 ? 'Pendiente' : 'Pagadas'),
+            precio_plan: s.precio_plan || s.plan_precio || 0,
+            saldo: s.saldo || s.cliente?.saldo || 0,
+          };
+        }
+        facturas = await this.obtenerFacturasPendientes(idNum);
+      } catch (err: any) {
+        logger.warn(`Error al consultar WispHub por ID ${idNum} en tiempo real:`, err?.message || err);
+      }
+    }
+
+    // 2. Consulta en tiempo real por nombre en API WispHub si aún no se tiene
+    if (!clienteEncontrado && nombre) {
       const nombreLimpio = cleanPersonName(nombre) || nombre;
       const clientesPorNombre = await this.buscarClientePorNombre(nombreLimpio);
       if (clientesPorNombre.length > 0) {
@@ -241,7 +391,7 @@ export class WispHubService {
       }
     }
 
-    // 3. Buscar por teléfono en API WispHub si no se ha encontrado
+    // 3. Consulta en tiempo real por teléfono en API WispHub si aún no se tiene
     if (!clienteEncontrado && phone) {
       const clientePorTel = await this.buscarClientePorTelefono(phone);
       if (clientePorTel) {
@@ -252,10 +402,10 @@ export class WispHubService {
       }
     }
 
-    // 4. Búsqueda y validación con la base de datos sincronizada de Turso (wisphub_clients)
+    // 4. Fallback con base de datos local de Turso (wisphub_clients)
     try {
       const dbClient = await TursoService.getWisphubClientByAny({
-        id: clienteId,
+        id: idNum || clienteId,
         phone,
         sn,
         name: nombre,
@@ -263,7 +413,7 @@ export class WispHubService {
       });
 
       if (dbClient) {
-        logger.info(`Cliente localizado en base de datos local de WispHub: ID=${dbClient.id_servicio}, Nombre="${dbClient.nombre}", Estado="${dbClient.estado}", Facturas="${dbClient.estado_facturas}", Saldo=$${dbClient.saldo}`);
+        logger.info(`Cliente ubicado en base local Turso: ID=${dbClient.id_servicio}, Nombre="${dbClient.nombre}", Estado="${dbClient.estado}", Saldo=$${dbClient.saldo}`);
         
         if (!clienteEncontrado) {
           clienteEncontrado = {
@@ -274,21 +424,15 @@ export class WispHubService {
             ip: dbClient.ip,
             servicio_id: String(dbClient.id_servicio),
             onu_id: dbClient.sn_onu,
-            estado: dbClient.estado,
+            estado: this.normalizarEstado(dbClient.estado),
             estado_facturas: dbClient.estado_facturas,
             precio_plan: dbClient.precio_plan,
             saldo: dbClient.saldo,
           };
-        } else {
-          // Completar datos si faltaban
-          clienteEncontrado.estado = clienteEncontrado.estado || dbClient.estado;
-          clienteEncontrado.estado_facturas = clienteEncontrado.estado_facturas || dbClient.estado_facturas;
-          clienteEncontrado.saldo = clienteEncontrado.saldo || dbClient.saldo;
-          clienteEncontrado.precio_plan = clienteEncontrado.precio_plan || dbClient.precio_plan;
         }
       }
     } catch (err: any) {
-      logger.warn('Error al consultar estado financiero en Turso:', err?.message || err);
+      logger.warn('Error al consultar estado financiero en Turso fallback:', err?.message || err);
     }
 
     let totalDeuda = facturas.reduce((acc, f) => acc + (f.monto || 0), 0);
@@ -300,7 +444,7 @@ export class WispHubService {
     const estado = (clienteEncontrado?.estado || '').toLowerCase().trim();
     const estadoFacturas = (clienteEncontrado?.estado_facturas || '').toLowerCase().trim();
     
-    // Estados de suspensión o corte en WispHub:
+    // Estados de suspensión o corte en WispHub (detecta tanto texto como número normalizado):
     const esSuspendido = estado === 'suspendido' ||
       estado === 'cortado' ||
       estado === 'cancelado' ||
@@ -334,6 +478,8 @@ export class WispHubService {
     const motivo = esMorosoReal
       ? `Factura pendiente de pago ($${totalDeuda.toFixed(2)} MXN)`
       : (yaPagoPeroNoActivo ? 'Cuenta al corriente pero pendiente de activación' : undefined);
+
+    logger.info(`[WispHub Live Result] Cliente="${clienteEncontrado?.nombre || 'N/A'}" Estado="${clienteEncontrado?.estado || 'Desconocido'}" SuspendidoReal=${esMorosoReal} YaPagoPeroNoActivo=${yaPagoPeroNoActivo} Deuda=$${totalDeuda}`);
 
     return {
       suspendido: esMorosoReal,
