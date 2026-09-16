@@ -918,6 +918,24 @@ export class BotOrchestrator {
         ip: meta.ip,
       });
 
+      // CASO ESPECIAL: El cliente ya pagó y está al corriente, pero su servicio quedó inactivo o desincronizado en WispHub
+      if (estadoFinanciero.yaPagoPeroNoActivo && (estadoFinanciero.cliente?.id || session.client_id)) {
+        const idClienteWisp = estadoFinanciero.cliente?.id || session.client_id;
+        logger.info(`Cliente ${phone} (${session.client_name}) ya pagó pero estaba inactivo. Reactivando automáticamente en WispHub (ID: ${idClienteWisp})...`);
+        await WispHubService.activarServicioCliente(idClienteWisp!);
+
+        await this.enviarYLoguear(
+          phone,
+          `Hola${nombre}, revisé tu servicio en nuestro sistema y confirmamos que tu cuenta se encuentra al corriente y sin ningún adeudo pendiente. 👍\n\n` +
+          `Detectamos que tu línea estaba pendiente de sincronización en el servidor, por lo que acabamos de enviar la señal de activación a tu módem. En aproximadamente 1 a 2 minutos quedará restablecida tu navegación con normalidad.`,
+          'FALLA_INTERNET',
+          'AUTO_ACTIVACION_PAGADO',
+          targetJid
+        );
+        await TursoService.updateStep(phone, 'CONVERSACIONAL');
+        return;
+      }
+
       if (estadoFinanciero.suspendido || estadoFinanciero.totalDeuda > 0) {
         logger.info(`Cliente ${phone} (${session.client_name}) presenta suspensión o adeudo en WispHub: Deuda=$${estadoFinanciero.totalDeuda} (${estadoFinanciero.motivo || 'Suspendido'})`);
 
@@ -2005,6 +2023,12 @@ export class BotOrchestrator {
         ip: meta.ip,
       });
 
+      if (estadoFinanciero.yaPagoPeroNoActivo && (estadoFinanciero.cliente?.id || session?.client_id)) {
+        const idClienteWisp = estadoFinanciero.cliente?.id || session?.client_id;
+        logger.info(`Reinicio de módem: Cliente ${phone} ya pagó pero estaba inactivo. Reactivando en WispHub ID ${idClienteWisp}...`);
+        await WispHubService.activarServicioCliente(idClienteWisp!);
+      }
+
       if (estadoFinanciero.suspendido || estadoFinanciero.totalDeuda > 0) {
         logger.info(`Intento de reinicio bloqueado: Cliente ${phone} (${session?.client_name}) suspendido/adeudo en WispHub.`);
         const bank = SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK', 'BBVA');
@@ -2054,7 +2078,7 @@ export class BotOrchestrator {
    * Consulta de facturas y saldos pendientes en WispHub
    */
   private static async flujoConsultarSaldo(phone: string, session: Session | null, targetJid?: string): Promise<void> {
-    if (!session?.client_id) {
+    if (!session?.client_id && !session?.client_name) {
       await this.enviarYLoguear(
         phone,
         `Para consultar tu estado de cuenta requerimos tu número de contrato o nombre. Por favor escribe tu *Nombre completo* o *ID de contrato*:`,
@@ -2066,13 +2090,42 @@ export class BotOrchestrator {
       return;
     }
 
-    const facturas = await WispHubService.obtenerFacturasPendientes(session.client_id);
+    let meta: any = {};
+    try { meta = JSON.parse(session?.metadata || '{}'); } catch {}
 
-    if (facturas.length === 0) {
+    const estadoFinanciero = await WispHubService.verificarEstadoFinanciero({
+      clienteId: session?.client_id,
+      nombre: session?.client_name,
+      phone,
+      sn: meta.sn,
+      ip: meta.ip,
+    });
+
+    if (estadoFinanciero.yaPagoPeroNoActivo && (estadoFinanciero.cliente?.id || session?.client_id)) {
+      const idClienteWisp = estadoFinanciero.cliente?.id || session?.client_id;
+      logger.info(`Consulta saldo: Cliente ${phone} ya pagó pero estaba inactivo. Reactivando automáticamente en WispHub ID ${idClienteWisp}...`);
+      await WispHubService.activarServicioCliente(idClienteWisp!);
+
+      await this.enviarYLoguear(
+        phone,
+        `🎉 *¡Tu cuenta está al corriente!*\n\nEstimado(a) *${session?.client_name || 'Cliente'}*, confirmamos que no tienes facturas pendientes de pago. 👍\n\n` +
+        `Detectamos que tu línea estaba pendiente de reactivación en el servidor, por lo que acabamos de mandar la señal de reconexión a tu módem. En 1 a 2 minutos podrás navegar con normalidad.`,
+        'CONSULTAR_SALDO',
+        'AUTO_ACTIVACION_PAGADO_SALDO',
+        targetJid
+      );
+      return;
+    }
+
+    const facturas = estadoFinanciero.facturas.length > 0
+      ? estadoFinanciero.facturas
+      : (session?.client_id ? await WispHubService.obtenerFacturasPendientes(session.client_id) : []);
+
+    if (facturas.length === 0 && estadoFinanciero.totalDeuda === 0) {
       const ficha = this.getFichaBancaria(session);
       await this.enviarYLoguear(
         phone,
-        `🎉 *¡Tu cuenta está al corriente!*\n\nEstimado(a) *${session.client_name || 'Cliente'}*, no tienes facturas pendientes de pago en este momento. ¡Gracias por ser cliente de *${this.getIspName()}*!${ficha}`,
+        `🎉 *¡Tu cuenta está al corriente!*\n\nEstimado(a) *${session?.client_name || 'Cliente'}*, no tienes facturas pendientes de pago en este momento. ¡Gracias por ser cliente de *${this.getIspName()}*!${ficha}`,
         'CONSULTAR_SALDO',
         'CUENTA_AL_CORRIENTE',
         targetJid

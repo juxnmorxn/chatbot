@@ -214,6 +214,7 @@ export class WispHubService {
     ip?: string | null;
   }): Promise<{
     suspendido: boolean;
+    yaPagoPeroNoActivo: boolean;
     totalDeuda: number;
     facturas: WispHubFactura[];
     cliente: WispHubCliente | null;
@@ -310,7 +311,7 @@ export class WispHubService {
       estado === 'desconectado' ||
       estado.includes('susp');
 
-    // Facturas impagas o morosidad:
+    // Facturas impagas o morosidad real:
     const tieneFacturaPendiente = estadoFacturas.includes('pendiente') ||
       estadoFacturas.includes('moros') ||
       estadoFacturas.includes('vencid') ||
@@ -318,23 +319,63 @@ export class WispHubService {
       estadoFacturas.includes('impag') ||
       totalDeuda > 0;
 
-    // Si está suspendido o tiene factura pendiente pero el desglose de facturas vino vacío, asignamos el precio del plan o monto estándar
-    if ((esSuspendido || tieneFacturaPendiente) && totalDeuda === 0) {
+    // Distinguir entre:
+    // A) Moroso real: Tiene facturas pendientes o saldo > 0
+    // B) Pagado pero en espera de reconexión/activación: totalDeuda === 0 y no tiene facturas pendientes, pero estado está suspendido/desactivado
+    const yaPagoPeroNoActivo = !tieneFacturaPendiente && totalDeuda === 0 && esSuspendido;
+    const esMorosoReal = tieneFacturaPendiente && totalDeuda > 0;
+
+    // Si tiene factura pendiente pero el array vino vacío y sabemos que debe, asignamos precio del plan
+    if (tieneFacturaPendiente && totalDeuda === 0) {
       const precioPlan = Number(clienteEncontrado?.precio_plan || 0);
       totalDeuda = precioPlan > 0 ? precioPlan : 250;
     }
 
-    const motivo = esSuspendido
-      ? `Servicio suspendido en WispHub (Estado: ${clienteEncontrado?.estado || 'Suspendido'}${totalDeuda > 0 ? `, Saldo: $${totalDeuda.toFixed(2)} MXN` : ''})`
-      : (tieneFacturaPendiente ? `Factura pendiente de pago ($${totalDeuda.toFixed(2)} MXN)` : undefined);
+    const motivo = esMorosoReal
+      ? `Factura pendiente de pago ($${totalDeuda.toFixed(2)} MXN)`
+      : (yaPagoPeroNoActivo ? 'Cuenta al corriente pero pendiente de activación' : undefined);
 
     return {
-      suspendido: esSuspendido || tieneFacturaPendiente,
-      totalDeuda,
+      suspendido: esMorosoReal,
+      yaPagoPeroNoActivo,
+      totalDeuda: esMorosoReal ? totalDeuda : 0,
       facturas,
       cliente: clienteEncontrado,
       motivo,
     };
+  }
+
+  /**
+   * Activa o reconecta el servicio del cliente en WispHub (y MikroTik si el router API está habilitado)
+   */
+  static async activarServicioCliente(clienteId: string | number): Promise<{ success: boolean; mensaje: string }> {
+    const id = String(clienteId).replace(/\D/g, '');
+    if (!id) return { success: false, mensaje: 'ID de cliente inválido' };
+
+    logger.info(`Solicitando activación/reconexión en WispHub para cliente ID: ${id}...`);
+    const apiKey = this.getApiKey();
+    if (!apiKey || apiKey.includes('tu_token')) {
+      return { success: false, mensaje: 'API key de WispHub no configurada' };
+    }
+
+    try {
+      const api = this.getApi();
+      let res;
+      try {
+        res = await api.post(`/clientes/${id}/activar/`, {});
+      } catch {
+        try {
+          res = await api.post(`/servicios/${id}/activar/`, {});
+        } catch {
+          res = await api.patch(`/clientes/${id}/`, { estado: 1 });
+        }
+      }
+      logger.info(`Respuesta de activación en WispHub para cliente ${id}:`, res?.data);
+      return { success: true, mensaje: 'Servicio activado exitosamente en WispHub' };
+    } catch (err: any) {
+      logger.warn(`Error al activar servicio en WispHub para ${id}:`, err?.response?.data || err?.message || err);
+      return { success: false, mensaje: err?.message || 'Error al solicitar activación' };
+    }
   }
 
   /**
