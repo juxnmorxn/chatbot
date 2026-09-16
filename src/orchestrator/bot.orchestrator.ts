@@ -145,8 +145,8 @@ export class BotOrchestrator {
 
     txt += `\n📌 *CONCEPTO O MOTIVO DE PAGO:*`;
     txt += `\n👉 Por favor coloca tu nombre: *${clientName}*\n`;
-    txt += `\n📸 *Sugerencia importante:*`;
-    txt += `\nUna vez realizada tu transferencia o pago, por favor envía la *captura de pantalla o foto de tu comprobante* con tu nombre visible en este mismo chat para validarlo de inmediato en el sistema. ¡Muchas gracias!`;
+    txt += `\n📸 *Importante al enviar tu comprobante:*`;
+    txt += `\nUna vez realizada tu transferencia o pago, por favor envía la *foto o captura de pantalla de tu comprobante* y escribe tu *Nombre completo* aquí en el chat para validarlo y aplicarlo de inmediato en el sistema. ¡Muchas gracias!`;
 
     return txt;
   }
@@ -927,7 +927,7 @@ export class BotOrchestrator {
           `💳 *${bank}* | CLABE: *${account}*\n` +
           `Beneficiario: *${beneficiary}*\n` +
           `Concepto / Referencia: *${session.client_name || phone}*\n\n` +
-          `En cuanto realices tu abono, envíanos por aquí la foto o captura de tu comprobante para reactivarte de inmediato.`;
+          `📸 En cuanto realices tu abono, por favor envía la *foto o captura de tu comprobante* y escribe tu *Nombre completo* aquí en el chat para reactivarte de inmediato.`;
 
         await this.enviarYLoguear(phone, mensajeMoroso, 'CONSULTAR_SALDO', 'AVISO_MOROSIDAD_SILENCIOSA', targetJid);
         await TursoService.updateStep(phone, 'ESPERANDO_COMPROBANTE');
@@ -1787,7 +1787,7 @@ export class BotOrchestrator {
           `💳 *${bank}* | CLABE: *${account}*\n` +
           `Beneficiario: *${beneficiary}*\n` +
           `Concepto: *${session?.client_name || phone}*\n\n` +
-          `En cuanto tengas tu comprobante, compártelo por aquí con nosotros para reactivar tu servicio.`;
+          `📸 En cuanto realices tu pago, por favor envía la *foto o captura de tu comprobante* y escribe tu *Nombre completo* en este chat para reactivar tu servicio.`;
 
         await this.enviarYLoguear(phone, msj, 'CONSULTAR_SALDO', 'REINICIO_BLOQUEADO_POR_SUSPENSION', targetJid);
         await TursoService.updateStep(phone, 'ESPERANDO_COMPROBANTE');
