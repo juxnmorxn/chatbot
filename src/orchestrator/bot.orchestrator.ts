@@ -1643,17 +1643,42 @@ export class BotOrchestrator {
       const ping = analysis.speedtest?.ping_ms ? ` (Latencia: ${analysis.speedtest.ping_ms} ms)` : '';
       const folio = meta.ticketFolio;
 
+      // Obtener plan contratado para comparar
+      let planContratado = meta.speed_profile || '';
+      if (!planContratado && session?.onu_id) {
+        try {
+          const onuInfo = await TursoService.getOnuById(session.onu_id);
+          planContratado = onuInfo?.speed_profile || '';
+        } catch {}
+      }
+
+      const planTexto = planContratado ? `\n• *Paquete contratado:* ${planContratado}` : '';
+
+      // Comparación de megas si se detectó número
+      const bajadaNum = analysis.speedtest?.bajada_mbps;
+      const matchMegasPlan = planContratado.match(/(\d+)\s*(?:mbps|megas|m)/i);
+      const planMegasNum = matchMegasPlan ? parseInt(matchMegasPlan[1], 10) : null;
+
+      let diagnosticoVelocidad = '';
+      if (bajadaNum && planMegasNum) {
+        if (bajadaNum >= planMegasNum * 0.7) {
+          diagnosticoVelocidad = `\n\n✅ Tu velocidad de *${bajada}* se encuentra dentro del rango óptimo de tu paquete contratado (*${planContratado}*). Si notas lentitud en algún equipo en particular, te sugerimos acercarte al módem o reconectar el Wi-Fi en ese dispositivo.`;
+        } else {
+          diagnosticoVelocidad = `\n\n⚠️ Tu velocidad de *${bajada}* se encuentra por debajo de tu paquete contratado (*${planContratado}*).`;
+        }
+      }
+
       if (folio) {
         await TursoService.updateTicketStatus(
           folio,
           'ABIERTO',
-          `📊 Speedtest recibido por cliente: Bajada=${bajada}, Subida=${subida}${ping}`
+          `📊 Speedtest recibido: Bajada=${bajada}, Subida=${subida}${ping}. Plan=${planContratado || 'N/A'}`
         );
 
         const msj =
           `¡Recibí tu prueba de velocidad de Speedtest! 📊\n\n` +
           `• *Descarga (Download):* ${bajada}\n` +
-          `• *Subida (Upload):* ${subida}${ping ? `\n• *Ping:* ${ping}` : ''}\n\n` +
+          `• *Subida (Upload):* ${subida}${ping ? `\n• *Ping:* ${ping}` : ''}${planTexto}${diagnosticoVelocidad}\n\n` +
           `Ya adjunté esta medición a tu reporte *#${folio}*. El equipo de soporte técnico revisará el rendimiento de tu enlace. ¡Muchas gracias!`;
 
         await this.enviarYLoguear(phone, msj, 'FALLA_INTERNET', `SPEEDTEST_ADJUNTADO_${folio}`, targetJid);
@@ -1666,8 +1691,8 @@ export class BotOrchestrator {
         phone,
         client_name: session?.client_name,
         onu_id: session?.onu_id,
-        issue_summary: `Prueba de velocidad / Speedtest (${bajada} bajada / ${subida} subida)`,
-        checks_performed: `Captura de Speedtest recibida: Bajada=${bajada}, Subida=${subida}${ping}`,
+        issue_summary: `Prueba de velocidad / Speedtest (${bajada} bajada / ${subida} subida vs plan ${planContratado || 'N/A'})`,
+        checks_performed: `Captura de Speedtest recibida: Bajada=${bajada}, Subida=${subida}${ping}. Plan=${planContratado || 'N/A'}`,
         has_photo: 1,
         has_speedtest: 1,
         status: 'ABIERTO',
@@ -1678,7 +1703,7 @@ export class BotOrchestrator {
         await WispHubService.crearTicketSoporte(
           session.client_id,
           `Speedtest - ${ticket.folio}`,
-          `Prueba de velocidad enviada por cliente: Bajada=${bajada}, Subida=${subida}${ping}. Folio: ${ticket.folio}`,
+          `Prueba de velocidad enviada por cliente: Bajada=${bajada}, Subida=${subida}${ping}. Plan: ${planContratado || 'N/A'}. Folio: ${ticket.folio}`,
           'Media'
         ).catch(() => {});
       }
@@ -1686,7 +1711,7 @@ export class BotOrchestrator {
       const msj =
         `¡Recibí tu prueba de velocidad de Speedtest! 📊\n\n` +
         `• *Descarga:* ${bajada}\n` +
-        `• *Subida:* ${subida}${ping ? `\n• *Ping:* ${ping}` : ''}\n\n` +
+        `• *Subida:* ${subida}${ping ? `\n• *Ping:* ${ping}` : ''}${planTexto}${diagnosticoVelocidad}\n\n` +
         `Ya registré tus resultados con el reporte *#${ticket.folio}* para que el personal técnico revise la estabilidad y velocidad asignada a tu servicio.`;
 
       await this.enviarYLoguear(phone, msj, 'FALLA_INTERNET', `SPEEDTEST_NUEVO_${ticket.folio}`, targetJid);
@@ -1776,7 +1801,7 @@ export class BotOrchestrator {
       }
     }
 
-    // 3. CASO COMPROBANTE DE PAGO
+    // 3. CASO COMPROBANTE DE PAGO (VALIDACIÓN EN PROCESO - CERO ACTIVACIÓN AUTOMÁTICA A CIEGAS)
     if (analysis?.tipo === 'COMPROBANTE_PAGO') {
       const datos = analysis.datos_pago;
       let detalle = '';
@@ -1786,7 +1811,7 @@ export class BotOrchestrator {
 
       const msj =
         `¡Muchas gracias por tu comprobante! 📸 Hemos recibido la captura de tu pago${nombre}.${detalle}\n\n` +
-        `Nuestro equipo administrativo validará la transferencia en el sistema para aplicar tu abono a la brevedad. ¡Que tengas un excelente día!`;
+        `⏳ *Validación en proceso:* Nuestro personal administrativo está corroborando el abono en el sistema y banco. En cuanto quede confirmada la transacción, se aplicará a tu cuenta y se restablecerá tu servicio. ¡Muchas gracias por tu paciencia!`;
 
       await this.enviarYLoguear(phone, msj, 'REPORTAR_PAGO', 'COMPROBANTE_VALIDADO_VISION', targetJid);
       await this.marcarConsultaFinalizada(phone, session);
