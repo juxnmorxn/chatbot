@@ -505,28 +505,24 @@ export class WispHubService {
       estadoFacturas.includes('impag') ||
       totalDeuda > 0;
 
-    // Distinguir entre:
-    // A) Moroso real: Tiene facturas pendientes o saldo > 0
-    // B) Pagado pero en espera de reconexión/activación: totalDeuda === 0 y no tiene facturas pendientes, pero estado está suspendido/desactivado
-    const yaPagoPeroNoActivo = !tieneFacturaPendiente && totalDeuda === 0 && esSuspendido;
-    const esMorosoReal = tieneFacturaPendiente && totalDeuda > 0;
-
-    // Si tiene factura pendiente pero el array vino vacío y sabemos que debe, asignamos precio del plan
-    if (tieneFacturaPendiente && totalDeuda === 0) {
+    // Si está suspendido en WispHub pero totalDeuda es 0, asignar el precio del plan
+    if ((esSuspendido || tieneFacturaPendiente) && totalDeuda === 0) {
       const precioPlan = Number(clienteEncontrado?.precio_plan || 0);
-      totalDeuda = precioPlan > 0 ? precioPlan : 250;
+      totalDeuda = precioPlan > 0 ? precioPlan : 0;
     }
 
-    const motivo = esMorosoReal
-      ? `Factura pendiente de pago ($${totalDeuda.toFixed(2)} MXN)`
-      : (yaPagoPeroNoActivo ? 'Cuenta al corriente pero pendiente de activación' : undefined);
+    const estaRealmenteSuspendido = esSuspendido || tieneFacturaPendiente || totalDeuda > 0;
 
-    logger.info(`[WispHub Live Result] Cliente="${clienteEncontrado?.nombre || 'N/A'}" Estado="${clienteEncontrado?.estado || 'Desconocido'}" SuspendidoReal=${esMorosoReal} YaPagoPeroNoActivo=${yaPagoPeroNoActivo} Deuda=$${totalDeuda}`);
+    const motivo = estaRealmenteSuspendido
+      ? (totalDeuda > 0 ? `Factura o saldo pendiente ($${totalDeuda.toFixed(2)} MXN)` : 'Servicio suspendido en WispHub')
+      : undefined;
+
+    logger.info(`[WispHub Live Result] Cliente="${clienteEncontrado?.nombre || 'N/A'}" Estado="${clienteEncontrado?.estado || 'Desconocido'}" SuspendidoReal=${estaRealmenteSuspendido} Deuda=$${totalDeuda}`);
 
     return {
-      suspendido: esMorosoReal,
-      yaPagoPeroNoActivo,
-      totalDeuda: esMorosoReal ? totalDeuda : 0,
+      suspendido: estaRealmenteSuspendido,
+      yaPagoPeroNoActivo: false,
+      totalDeuda,
       facturas,
       cliente: clienteEncontrado,
       motivo,

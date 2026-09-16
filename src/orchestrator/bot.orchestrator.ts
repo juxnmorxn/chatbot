@@ -597,7 +597,46 @@ export class BotOrchestrator {
       return;
     }
 
-    // 4. Si es saludo o conversación general, respondemos de forma inteligente con Groq enriquecido
+    // 4. Si el cliente ya está identificado y envía saludo o mensaje general, verificar si se encuentra suspendido en WispHub
+    if (session?.client_name) {
+      try {
+        let meta: any = {};
+        try { meta = JSON.parse(session?.metadata || '{}'); } catch {}
+        const estadoFinanciero = await WispHubService.verificarEstadoFinanciero({
+          clienteId: session?.client_id,
+          nombre: session?.client_name,
+          phone,
+          sn: meta.sn,
+          ip: meta.ip,
+        });
+
+        if (estadoFinanciero.suspendido || estadoFinanciero.totalDeuda > 0) {
+          const bank = SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK', 'BBVA');
+          const account = SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', '012 180 0000000000 00');
+          const beneficiary = SettingsService.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', this.getIspName());
+          const montoTexto = estadoFinanciero.totalDeuda > 0
+            ? `un saldo/recibo pendiente por *$${estadoFinanciero.totalDeuda.toFixed(2)} MXN*`
+            : `tu servicio se encuentra suspendido por corte o inactividad`;
+
+          const mensajeMoroso =
+            `¡Hola, *${session.client_name}*! 👋\n\n` +
+            `Revisé tu cuenta en nuestro sistema y detectamos que ${montoTexto}.\n\n` +
+            `Para reactivar tu servicio y navegar con normalidad, por favor realiza tu abono a:\n` +
+            `💳 *${bank}* | CLABE: *${account}*\n` +
+            `Beneficiario: *${beneficiary}*\n` +
+            `Concepto / Referencia: *${session.client_name || phone}*\n\n` +
+            `📸 En cuanto realices tu pago, envía la *foto o captura de tu comprobante* y escribe tu *Nombre completo* por este chat para reactivarte de inmediato.`;
+
+          await this.enviarYLoguear(phone, mensajeMoroso, 'CONSULTAR_SALDO', 'AVISO_SUSPENSION_SALUDO', targetJid);
+          await TursoService.updateStep(phone, 'ESPERANDO_COMPROBANTE');
+          return;
+        }
+      } catch (err: any) {
+        logger.warn('Error al verificar suspensión en mensaje conversacional:', err?.message || err);
+      }
+    }
+
+    // 5. Si es saludo o conversación general y no está suspendido, respondemos de forma inteligente con Groq enriquecido
     const historial = await TursoService.getHistorialReciente(phone, 8);
 
     // Contexto enriquecido de SmartOLT si tiene ONU
