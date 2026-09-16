@@ -521,29 +521,28 @@ export class WispHubService {
       const api = this.getApi();
       let activado = false;
       
-      // Intentos de activación en los distintos endpoints de WispHub API
+      // 1. Endpoint oficial de WispHub para activación de servicios en router y sistema
       try {
-        const res = await api.post(`/clientes/${id}/activar/`, {});
-        if (res?.status >= 200 && res?.status < 300) activado = true;
-      } catch {}
+        const res = await api.post('/clientes/activar/', { servicios: [Number(id)] });
+        if (res?.status >= 200 && res?.status < 300) {
+          activado = true;
+          logger.info(`WispHub POST /clientes/activar/ exitoso para ID ${id}: task_id=${res.data?.task_id || 'ok'}`);
+        }
+      } catch (e: any) {
+        logger.warn(`Intento /clientes/activar/ falló para ${id}:`, e?.response?.data || e?.message);
+      }
 
+      // 2. Fallbacks si fuera necesario
       if (!activado) {
         try {
-          const res = await api.post(`/servicios/${id}/activar/`, {});
+          const res = await api.post(`/clientes/${id}/activar/`, {});
           if (res?.status >= 200 && res?.status < 300) activado = true;
         } catch {}
       }
 
       if (!activado) {
         try {
-          await api.patch(`/clientes/${id}/`, { estado: 1 });
-          activado = true;
-        } catch {}
-      }
-
-      if (!activado) {
-        try {
-          await api.patch(`/servicios/${id}/`, { estado: 1, estado_servicio: 1 });
+          await api.patch(`/clientes/${id}/`, { estado: 'Activo', auto_activar_servicio: true });
           activado = true;
         } catch {}
       }
