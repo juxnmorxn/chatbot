@@ -181,34 +181,23 @@ export class WispHubService {
       const api = this.getApi();
       const candidatosEncontrados: any[] = [];
 
-      // 0. Si el nombre trae prefijo numérico (ej. "696-Maria del Pilar" o "0696"), buscar por ID numérico en /servicios/ y /clientes/
+      // 0. Si el nombre trae prefijo numérico (ej. "696-Maria del Pilar" o "0696"), buscar por ID/contrato en /clientes/
       const matchNum = rawNombre.match(/^0*(\d+)/);
       if (matchNum) {
         const idNum = matchNum[1];
         try {
-          const srvRes = await api.get('/servicios/', { params: { search: idNum } });
-          const srvList = srvRes.data?.results || srvRes.data;
-          if (Array.isArray(srvList)) candidatosEncontrados.push(...srvList);
+          const resClientesId = await api.get('/clientes/', { params: { search: idNum } });
+          const listId = resClientesId.data?.results || resClientesId.data;
+          if (Array.isArray(listId)) candidatosEncontrados.push(...listId);
         } catch {}
       }
 
-      // 1. Buscar en /servicios/ por search (nombre o RB name como "0696 Maria Pilar Perez Mendoza")
-      const words = cleanName.split(/\s+/).filter(w => w.length > 2);
+      // 1. Filtrar palabras vacías (del, de, la, los, y) para búsquedas precisas
+      const stopwords = new Set(['de', 'del', 'la', 'las', 'los', 'el', 'y', 'en', 'san', 'santa']);
+      const words = cleanName.split(/\s+/).filter(w => w.length > 2 && !stopwords.has(w.toLowerCase()));
       const searchWord = words.slice(0, 2).join(' ') || cleanName;
 
-      try {
-        const resServicios = await api.get('/servicios/', {
-          params: { search: searchWord },
-        });
-        const listServicios = resServicios.data?.results || resServicios.data;
-        if (Array.isArray(listServicios)) {
-          candidatosEncontrados.push(...listServicios);
-        }
-      } catch (e: any) {
-        logger.warn('Consulta a /servicios/ con search:', e?.message || e);
-      }
-
-      // 2. Buscar en /clientes/ por search
+      // 2. Buscar en /clientes/ con los primeros 2 nombres significativos (ej. "Maria Pilar")
       try {
         const resClientes = await api.get('/clientes/', {
           params: { search: searchWord },
@@ -221,14 +210,15 @@ export class WispHubService {
         logger.warn('Consulta a /clientes/ con search:', e?.message || e);
       }
 
-      // 3. Fallback con primer palabra si aún no hay resultados
-      if (candidatosEncontrados.length === 0 && words[0] && words[0] !== searchWord) {
+      // 3. Si no hubo resultados o para mayor cobertura, buscar por apellidos (ej. "Perez Mendoza")
+      if (words.length >= 3) {
+        const apellidosSearch = words.slice(-2).join(' ');
         try {
-          const resFallback = await api.get('/clientes/', {
-            params: { search: words[0] },
+          const resApellidos = await api.get('/clientes/', {
+            params: { search: apellidosSearch },
           });
-          const listFallback = resFallback.data?.results || resFallback.data;
-          if (Array.isArray(listFallback)) candidatosEncontrados.push(...listFallback);
+          const listApellidos = resApellidos.data?.results || resApellidos.data;
+          if (Array.isArray(listApellidos)) candidatosEncontrados.push(...listApellidos);
         } catch {}
       }
 
@@ -316,7 +306,7 @@ export class WispHubService {
 
   /**
    * Diagnóstico financiero integral en TIEMPO REAL:
-   * Consulta directamente la API en vivo de WispHub (/servicios/, /clientes/, /facturas/) y valida
+   * Consulta directamente la API en vivo de WispHub (/clientes/, /facturas/) y valida
    * si el cliente está Suspendido/Cancelado/Desactivado o tiene facturas pendientes/saldo adeudado.
    */
   static async verificarEstadoFinanciero(params: {
@@ -337,43 +327,43 @@ export class WispHubService {
     let clienteEncontrado: WispHubCliente | null = null;
     let facturas: WispHubFactura[] = [];
 
-    // Extraer número de contrato/servicio si viene en clienteId o en el nombre (ej. "696-Maria del Pilar" o "0696")
+    // Extraer número de contrato/servicio del nombre o de clienteId (ignorar seriales ONU como HWTC... o ZTEG...)
     let idNum: string | null = null;
-    if (clienteId) {
-      const m = String(clienteId).match(/\d+/);
-      if (m) idNum = m[0];
-    }
-    if (!idNum && nombre) {
+    if (nombre) {
       const m = String(nombre).match(/^0*(\d+)/);
       if (m) idNum = m[1];
     }
+    if (!idNum && clienteId && !String(clienteId).startsWith('HWTC') && !String(clienteId).startsWith('ONU-') && !String(clienteId).startsWith('ZTEG')) {
+      const m = String(clienteId).match(/^\d+/);
+      if (m) idNum = m[0];
+    }
 
-    logger.info(`[WispHub Live Diagnostic] Verificando en tiempo real: ID=${idNum || 'N/A'}, Nombre="${nombre || 'N/A'}", Tel="${phone || 'N/A'}", IP="${ip || 'N/A'}"`);
+    logger.info(`[WispHub Live Diagnostic] Verificando en tiempo real: ID_Contrato=${idNum || 'N/A'}, Nombre="${nombre || 'N/A'}", Tel="${phone || 'N/A'}", IP="${ip || 'N/A'}"`);
 
-    // 1. Consulta en tiempo real por ID numérico en API WispHub
+    // 1. Consulta en tiempo real por ID de contrato en API WispHub /clientes/?search=idNum
     if (idNum) {
       try {
         const api = this.getApi();
-        // Buscar servicio directamente en API
-        const srvRes = await api.get('/servicios/', { params: { search: idNum } });
-        const srvList = srvRes.data?.results || srvRes.data;
-        if (Array.isArray(srvList) && srvList.length > 0) {
-          const s = srvList[0];
+        const resClientes = await api.get('/clientes/', { params: { search: idNum } });
+        const list = resClientes.data?.results || resClientes.data;
+        if (Array.isArray(list) && list.length > 0) {
+          // Buscar el registro que coincida con el número o nombre
+          const match = list.find((c: any) => String(c.id || c.id_servicio) === idNum || String(c.nombre || '').includes(idNum)) || list[0];
           clienteEncontrado = {
-            id: s.id_servicio || s.id,
-            nombre: String(s.nombre || s.cliente?.nombre || `${s.cliente?.nombre || ''} ${s.cliente?.apellidos || ''}`).trim(),
-            telefono: s.telefono || s.cliente?.telefono || phone || '',
-            direccion: s.direccion || s.cliente?.direccion || '',
-            ip: s.ip || '',
-            servicio_id: String(s.id_servicio || s.id),
-            onu_id: s.custom_onu_id || s.onu_id || null,
-            estado: this.normalizarEstado(s.estado || s.estado_servicio),
-            estado_facturas: s.estado_facturas || (Number(s.saldo || 0) > 0 ? 'Pendiente' : 'Pagadas'),
-            precio_plan: s.precio_plan || s.plan_precio || 0,
-            saldo: s.saldo || s.cliente?.saldo || 0,
+            id: match.id_servicio || match.id,
+            nombre: String(match.nombre || `${match.nombre || ''} ${match.apellidos || ''}`).trim(),
+            telefono: match.telefono || phone || '',
+            direccion: match.direccion || '',
+            ip: match.ip || '',
+            servicio_id: String(match.id_servicio || match.id),
+            onu_id: match.custom_onu_id || match.onu_id || null,
+            estado: this.normalizarEstado(match.estado),
+            estado_facturas: match.estado_facturas || (Number(match.saldo || 0) > 0 ? 'Pendiente' : 'Pagadas'),
+            precio_plan: match.precio_plan || 0,
+            saldo: match.saldo || 0,
           };
+          facturas = await this.obtenerFacturasPendientes(match.id_servicio || match.id);
         }
-        facturas = await this.obtenerFacturasPendientes(idNum);
       } catch (err: any) {
         logger.warn(`Error al consultar WispHub por ID ${idNum} en tiempo real:`, err?.message || err);
       }
@@ -381,8 +371,7 @@ export class WispHubService {
 
     // 2. Consulta en tiempo real por nombre en API WispHub si aún no se tiene
     if (!clienteEncontrado && nombre) {
-      const nombreLimpio = cleanPersonName(nombre) || nombre;
-      const clientesPorNombre = await this.buscarClientePorNombre(nombreLimpio);
+      const clientesPorNombre = await this.buscarClientePorNombre(nombre);
       if (clientesPorNombre.length > 0) {
         clienteEncontrado = clientesPorNombre[0];
         if (facturas.length === 0 && clienteEncontrado.id) {
