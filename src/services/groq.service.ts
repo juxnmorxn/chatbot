@@ -203,14 +203,43 @@ Devuelve EXCLUSIVAMENTE un JSON válido con esta estructura:
   static async generarRespuestaConversacional(
     mensajeUsuario: string,
     historial: Array<{ role: 'user' | 'assistant'; content: string }> = [],
-    contexto?: { clientName?: string | null; ispName?: string }
+    contexto?: {
+      clientName?: string | null;
+      ispName?: string;
+      planInternet?: string | null;
+      precioPlan?: string | null;
+      velocidadMegas?: number | string | null;
+      ip?: string | null;
+      estadoServicio?: string | null;
+      infoOlt?: string | null;
+    }
   ): Promise<string> {
     try {
       const groq = this.getClient();
       const ispName = contexto?.ispName || 'CloudWareMx';
-      const clienteTexto = contexto?.clientName
+      
+      let clienteTexto = contexto?.clientName
         ? `El cliente se llama: ${contexto.clientName}.`
         : 'Aún no sabemos el nombre del cliente (si se presenta o dice su nombre, recuérdalo y salúdalo amablemente por su nombre).';
+
+      if (contexto?.planInternet) {
+        clienteTexto += `\n- Paquete / Plan contratado: ${contexto.planInternet}`;
+      }
+      if (contexto?.velocidadMegas) {
+        clienteTexto += `\n- Velocidad oficial contratada: ${contexto.velocidadMegas} Mbps (Megas de descarga)`;
+      }
+      if (contexto?.precioPlan) {
+        clienteTexto += `\n- Mensualidad: $${contexto.precioPlan} MXN`;
+      }
+      if (contexto?.estadoServicio) {
+        clienteTexto += `\n- Estado en el sistema: ${contexto.estadoServicio}`;
+      }
+      if (contexto?.ip) {
+        clienteTexto += `\n- IP asignada: ${contexto.ip}`;
+      }
+      if (contexto?.infoOlt) {
+        clienteTexto += `\n- Estado de conexión SmartOLT: ${contexto.infoOlt}`;
+      }
 
       const systemPrompt = `
 Eres el asistente virtual inteligente de soporte técnico y atención a clientes de "${ispName}", una empresa proveedora de servicios de internet de fibra óptica de alta velocidad y telecomunicaciones.
@@ -229,10 +258,13 @@ Objetivo y comportamiento:
    - Sé empático y dale pasos sencillos y claros de revisión rápida (ej. verificar que el módem esté conectado a la luz, que el cable de fibra amarillo no esté doblado, o reiniciar desconectando de la corriente por 30 segundos).
    - Indícale que si el problema persiste o si tiene foco rojo (corte de fibra), con gusto canalizamos el reporte técnico para que la cuadrilla lo revise.
 5. Si el usuario pregunta por pagos, saldos o contratación, oriéntalo con amabilidad.
-6. REGLA ESTRICTA DE PRIVACIDAD TÉCNICA (NIVELES / dBm):
+6. REGLA ESTRICTA DE PLANES Y VELOCIDADES:
+   - Si el usuario pregunta cuál es o cuál debería ser su velocidad, o qué plan tiene contratado, infórmale con EXACTITUD los datos de su registro oficial: "${contexto?.planInternet || 'tu plan contratado'}" (${contexto?.velocidadMegas ? contexto.velocidadMegas + ' Mbps' : 'velocidad contratada'}).
+   - NUNCA inventes o hallucines velocidades o planes diferentes a los indicados en el Contexto del usuario.
+7. REGLA ESTRICTA DE PRIVACIDAD TÉCNICA (NIVELES / dBm):
    - NUNCA menciones números técnicos de decibeles o potencia óptica (ej. "-19.4 dBm", "-22 dBm") al cliente final. Esos valores son de diagnóstico técnico confidencial del NOC e ingeniería.
    - Si el cliente pregunta por sus niveles de señal o potencia, explícale en lenguaje comercial amable que su línea y señal de fibra se encuentran en estado óptimo y completamente estable con la central.
-7. Contexto del usuario:
+8. Contexto del usuario:
 ${clienteTexto}
 
 ¡Responde de inmediato al último mensaje del usuario!

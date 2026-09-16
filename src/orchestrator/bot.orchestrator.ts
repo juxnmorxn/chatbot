@@ -653,7 +653,7 @@ export class BotOrchestrator {
       }
     }
 
-    // 5. Si es saludo o conversación general y no está suspendido, respondemos de forma inteligente con Groq enriquecido
+    // 5. Si es saludo o conversación general y no está suspendido, respondemos de forma inteligente con Groq enriquecido con los datos reales de su plan en la BD
     const historial = await TursoService.getHistorialReciente(phone, 8);
 
     // Contexto enriquecido de SmartOLT si tiene ONU
@@ -663,10 +663,18 @@ export class BotOrchestrator {
       infoOltContext = `El cliente tiene la ONU ${session.onu_id}, estado en central: ${diag.status}, potencia: ${diag.opticalPowerDbm || 'N/A'} dBm.`;
     }
 
-    logger.info(`Generando respuesta conversacional con Groq para ${phone}...`);
+    const clienteCtx = await this.obtenerContextoClienteCompleto(phone, session);
+
+    logger.info(`Generando respuesta conversacional con Groq para ${phone} (Plan: "${clienteCtx.planInternet || 'N/A'}", ${clienteCtx.velocidadMegas || 'N/A'} Mbps)...`);
     const respuestaIA = await GroqService.generarRespuestaConversacional(rawText, historial, {
       clientName: session?.client_name,
       ispName: this.getIspName(),
+      planInternet: clienteCtx.planInternet,
+      precioPlan: clienteCtx.precioPlan,
+      velocidadMegas: clienteCtx.velocidadMegas,
+      ip: clienteCtx.ip,
+      estadoServicio: clienteCtx.estadoServicio,
+      infoOlt: infoOltContext,
     });
 
     await this.enviarYLoguear(
@@ -1700,6 +1708,55 @@ export class BotOrchestrator {
   }
 
   /**
+   * Obtiene la información técnica y de plan más completa del cliente desde Turso DB (wisphub_clients y smartolt_onus)
+   */
+  private static async obtenerContextoClienteCompleto(phone: string, session: Session | null) {
+    let meta: any = {};
+    try { meta = JSON.parse(session?.metadata || '{}'); } catch {}
+
+    let clientWh: any = null;
+    try {
+      clientWh = await TursoService.getWisphubClientByAny({
+        id: session?.client_id || meta.id_servicio,
+        name: session?.client_name,
+        ip: meta.ip,
+        sn: meta.sn || session?.onu_id,
+        phone,
+      });
+    } catch {}
+
+    let planInternet = clientWh?.plan_internet || meta.speed_profile || '';
+    if (!planInternet && session?.onu_id) {
+      try {
+        const onuInfo = await TursoService.getOnuById(session.onu_id);
+        planInternet = onuInfo?.speed_profile || '';
+      } catch {}
+    }
+
+    const precioPlan = clientWh?.precio_plan || '';
+    const ip = clientWh?.ip || meta.ip || '';
+    const estadoServicio = clientWh?.estado || 'Activo';
+
+    // Extraer megas numéricos del plan (ej. de "Pakete Basic 40M" -> 40, de "Pakete Elite 200M" -> 200, "100 Mbps" -> 100)
+    let velocidadMegas: number | null = null;
+    if (planInternet) {
+      const matchMegas = planInternet.match(/(\d+)\s*(?:mbps|megas|m\b)/i);
+      if (matchMegas) {
+        velocidadMegas = parseInt(matchMegas[1], 10);
+      }
+    }
+
+    return {
+      clientWh,
+      planInternet,
+      precioPlan,
+      velocidadMegas,
+      ip,
+      estadoServicio,
+    };
+  }
+
+  /**
    * Procesa de forma inteligente imágenes recibidas (Speedtest, Luces de módem Huawei x6/v5, Comprobantes de pago)
    * utilizando visión computacional de Groq.
    */
@@ -1724,28 +1781,25 @@ export class BotOrchestrator {
       const ping = analysis.speedtest?.ping_ms ? ` (Latencia: ${analysis.speedtest.ping_ms} ms)` : '';
       const folio = meta.ticketFolio;
 
-      // Obtener plan contratado para comparar
-      let planContratado = meta.speed_profile || '';
-      if (!planContratado && session?.onu_id) {
-        try {
-          const onuInfo = await TursoService.getOnuById(session.onu_id);
-          planContratado = onuInfo?.speed_profile || '';
-        } catch {}
-      }
+      // Obtener plan y velocidad real del cliente en WispHub / Turso DB
+      const clienteCtx = await this.obtenerContextoClienteCompleto(phone, session);
+      const planContratado = clienteCtx.planInternet || meta.speed_profile || '';
+      const velocidadMegasOficial = clienteCtx.velocidadMegas;
 
-      const planTexto = planContratado ? `\n• *Paquete contratado:* ${planContratado}` : '';
+      const planTexto = planContratado
+        ? `\n• *Paquete contratado:* ${planContratado}${velocidadMegasOficial ? ` (${velocidadMegasOficial} Mbps de descarga)` : ''}`
+        : '';
 
       // Comparación de megas si se detectó número
       const bajadaNum = analysis.speedtest?.bajada_mbps;
-      const matchMegasPlan = planContratado.match(/(\d+)\s*(?:mbps|megas|m)/i);
-      const planMegasNum = matchMegasPlan ? parseInt(matchMegasPlan[1], 10) : null;
+      const planMegasNum = velocidadMegasOficial;
 
       let diagnosticoVelocidad = '';
       if (bajadaNum && planMegasNum) {
         if (bajadaNum >= planMegasNum * 0.7) {
-          diagnosticoVelocidad = `\n\n✅ Tu velocidad de *${bajada}* se encuentra dentro del rango óptimo de tu paquete contratado (*${planContratado}*). Si notas lentitud en algún equipo en particular, te sugerimos acercarte al módem o reconectar el Wi-Fi en ese dispositivo.`;
+          diagnosticoVelocidad = `\n\n✅ Tu velocidad de *${bajada}* se encuentra dentro del rango óptimo de tu paquete contratado (*${planContratado}* de ${planMegasNum} Mbps). Si notas lentitud en algún equipo en particular, te sugerimos acercarte al módem o reconectar el Wi-Fi en ese dispositivo.`;
         } else {
-          diagnosticoVelocidad = `\n\n⚠️ Tu velocidad de *${bajada}* se encuentra por debajo de tu paquete contratado (*${planContratado}*).`;
+          diagnosticoVelocidad = `\n\n⚠️ Tu velocidad de *${bajada}* se encuentra por debajo de tu paquete contratado (*${planContratado}* de ${planMegasNum} Mbps). Registré esta diferencia para que nuestro equipo técnico lo calibre.`;
         }
       }
 
@@ -1753,7 +1807,7 @@ export class BotOrchestrator {
         await TursoService.updateTicketStatus(
           folio,
           'ABIERTO',
-          `📊 Speedtest recibido: Bajada=${bajada}, Subida=${subida}${ping}. Plan=${planContratado || 'N/A'}`
+          `📊 Speedtest recibido: Bajada=${bajada}, Subida=${subida}${ping}. Plan=${planContratado || 'N/A'} (${planMegasNum || 'N/A'} Mbps)`
         );
 
         const msj =
@@ -1773,7 +1827,7 @@ export class BotOrchestrator {
         client_name: session?.client_name,
         onu_id: session?.onu_id,
         issue_summary: `Prueba de velocidad / Speedtest (${bajada} bajada / ${subida} subida vs plan ${planContratado || 'N/A'})`,
-        checks_performed: `Captura de Speedtest recibida: Bajada=${bajada}, Subida=${subida}${ping}. Plan=${planContratado || 'N/A'}`,
+        checks_performed: `Captura de Speedtest recibida: Bajada=${bajada}, Subida=${subida}${ping}. Plan=${planContratado || 'N/A'} (${planMegasNum || 'N/A'} Mbps)`,
         has_photo: 1,
         has_speedtest: 1,
         status: 'ABIERTO',
