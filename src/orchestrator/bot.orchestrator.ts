@@ -49,6 +49,36 @@ export class BotOrchestrator {
   }
 
   /**
+   * Finaliza la intervención humana cuando el operador envía una despedida (ej. "buen día").
+   * Quita la pausa y reinicia el estado de la sesión en Turso para que el siguiente mensaje empiece limpiamente desde 0.
+   */
+  static async finalizarIntervencionHumana(phone: string): Promise<void> {
+    const cleanPhone = phone.replace(/\D/g, '');
+    this.humanTakeoverMap.delete(cleanPhone);
+    try {
+      const session = await TursoService.getSession(cleanPhone);
+      let metaObj: any = {};
+      try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
+
+      metaObj.consultaFinalizada = true;
+      metaObj.consultaFinalizadaAt = new Date().toISOString();
+      metaObj.comprobacionIniciada = null;
+      metaObj.resumenFalla = null;
+      metaObj.ticketFolio = null;
+      metaObj.pendingServices = [];
+
+      await TursoService.upsertSession({
+        phone: cleanPhone,
+        step: 'CONSULTA_FINALIZADA',
+        metadata: JSON.stringify(metaObj),
+      });
+      logger.info(`[Human Takeover] Conversación finalizada por operador para ${cleanPhone}. Próximo mensaje iniciará desde 0.`);
+    } catch (err: any) {
+      logger.warn(`Error al finalizar intervención humana para ${cleanPhone}:`, err?.message || err);
+    }
+  }
+
+  /**
    * Consulta si el bot está pausado para un número y cuántos minutos le restan
    */
   static estaBotPausado(phone: string): { pausado: boolean; minutosRestantes: number } {
@@ -357,13 +387,20 @@ export class BotOrchestrator {
       return;
     }
 
-    // Si el cliente envía despedida o agradecimiento, cerramos la consulta actual
-    const despedidas = ['gracias', 'muchas gracias', 'todo bien', 'ya quedo', 'ya quedó', 'listo gracias', 'excelente gracias', 'muchas gracias por la ayuda', 'todo bien gracias'];
-    if (despedidas.some(d => lowerMsg === d || lowerMsg.startsWith(d))) {
+    // Si el cliente envía despedida o agradecimiento (ej. "buen día", "gracias", "excelente día"), cerramos la consulta actual
+    const despedidas = [
+      'gracias', 'muchas gracias', 'todo bien', 'ya quedo', 'ya quedó', 'listo gracias',
+      'excelente gracias', 'muchas gracias por la ayuda', 'todo bien gracias',
+      'que tengas buen dia', 'que tengas buen día', 'que tenga buen dia', 'que tenga buen día',
+      'excelente dia', 'excelente día', 'lindo dia', 'lindo día', 'hasta luego', 'hasta pronto',
+      'buen dia', 'buen día'
+    ];
+    const esDespedida = despedidas.some(d => lowerMsg === d || (lowerMsg.startsWith(d) && lowerMsg.length < 35));
+    if (esDespedida && session?.step !== 'INICIO' && session?.client_name) {
       await this.marcarConsultaFinalizada(phone, session);
       await this.enviarYLoguear(
         phone,
-        `¡Con mucho gusto! 😊 En *${this.getIspName()}* estamos siempre para servirte. Si llegas a necesitar apoyo con cualquiera de tus servicios, solo escríbenos nuevamente. ¡Que tengas un excelente día!`,
+        `¡Con mucho gusto! 😊 En *${this.getIspName()}* estamos siempre para servirte. Si llegas a necesitar apoyo más adelante, solo escríbenos nuevamente. ¡Que tengas un excelente día!`,
         'DESPEDIDA',
         'CONSULTA_CERRADA_SATISFACTORIA',
         targetJid

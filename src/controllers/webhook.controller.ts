@@ -177,13 +177,22 @@ export class WebhookController {
         // 2. Si NO fue enviado por el bot -> ¡Un operador humano respondió manualmente desde WhatsApp Web o su celular!
         const phone = WebhookController.extractPhone(key, data);
         const extracted = WebhookController.extractMessageContent(messageObj);
+        const textOperador = (extracted.text || '').toLowerCase().trim();
         logger.info(`[Human Takeover] Mensaje de operador detectado para ${phone}: "${extracted.text || ''}"`);
 
         // Cancelamos cualquier respuesta automática pendiente en la cola de espera
         WebhookController.cancelPendingDebounce(phone);
 
-        // Pausamos el bot para este cliente durante 60 minutos
-        BotOrchestrator.activarPausaOperador(phone, 60, 'Operador respondió desde WhatsApp');
+        // Detectar si el operador escribió frase de despedida/cierre (ej. "buen día", "excelente día", "lindo día", "que tenga buen día", "hasta luego")
+        const esCierreOperador = /\b(buen\s*(dia|día)|excelente\s*(dia|día)|lindo\s*(dia|día)|que\s*tengas?\s*buen\s*(dia|día)|hasta\s*luego|hasta\s*pronto|un\s*gusto\s*atenderle|a\s*la\s*orden)\b/i.test(textOperador);
+
+        if (esCierreOperador) {
+          logger.info(`[Human Takeover] Operador cerró la conversación con frase de despedida ("${extracted.text}"). Finalizando sesión para ${phone}.`);
+          BotOrchestrator.finalizarIntervencionHumana(phone).catch(() => {});
+        } else {
+          // Pausamos el bot para este cliente durante 60 minutos mientras el operador conversa
+          BotOrchestrator.activarPausaOperador(phone, 60, 'Operador respondió desde WhatsApp');
+        }
 
         // Auditoría en Turso
         if (extracted.text) {
