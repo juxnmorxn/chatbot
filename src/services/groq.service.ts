@@ -33,6 +33,25 @@ export interface GroqClassificationResult {
   resumen_queja: string;
 }
 
+export interface GroqImageAnalysisResult {
+  tipo: 'COMPROBANTE_PAGO' | 'SPEEDTEST' | 'MODEM_LUCES' | 'OTRO';
+  descripcion: string;
+  foco_rojo: boolean;
+  equipo_apagado: boolean;
+  luces_verdes: boolean;
+  speedtest?: {
+    bajada_mbps: number | null;
+    subida_mbps: number | null;
+    ping_ms: number | null;
+  };
+  datos_pago?: {
+    monto: string | null;
+    banco: string | null;
+    referencia: string | null;
+    fecha: string | null;
+  };
+}
+
 export class GroqService {
   private static client: Groq | null = null;
   private static lastApiKey: string = '';
@@ -47,6 +66,107 @@ export class GroqService {
       this.client = new Groq({ apiKey });
     }
     return this.client;
+  }
+
+  /**
+   * Analiza una imagen enviada por WhatsApp (foto de comprobante, speedtest o luces de módem)
+   * utilizando el modelo de visión de Groq (qwen/qwen3.8-27b).
+   */
+  static async analizarImagen(imageBuffer: Buffer, mimeType: string = 'image/jpeg'): Promise<GroqImageAnalysisResult> {
+    try {
+      const groq = this.getClient();
+      const base64 = imageBuffer.toString('base64');
+      const cleanMime = mimeType.split(';')[0].trim() || 'image/jpeg';
+      const dataUri = `data:${cleanMime};base64,${base64}`;
+
+      logger.info(`Analizando imagen con Groq Vision (${imageBuffer.length} bytes, ${cleanMime})...`);
+
+      const systemPrompt = `
+Eres un analista visual experto en soporte técnico de un proveedor de servicios de internet (ISP).
+Tu objetivo es examinar la imagen enviada por el cliente y clasificarla estrictamente en una de estas categorías:
+
+1. "SPEEDTEST":
+   - Captura de pantalla de test de velocidad (Speedtest por Ookla, Fast.com, Google Speedtest, etc.).
+   - Extrae con precisión: velocidad de descarga en Mbps (bajada_mbps), velocidad de subida en Mbps (subida_mbps), y latencia (ping_ms) si son legibles.
+
+2. "COMPROBANTE_PAGO":
+   - Recibo o captura de transferencia bancaria (BBVA, Banamex, Santander, Mercado Pago, Nu, etc.), ticket de OXXO / 7-Eleven, o ficha de depósito.
+   - Extrae monto ($), banco/emisor, folio o referencia, y fecha si son legibles.
+
+3. "MODEM_LUCES":
+   - Foto de un módem / router / ONT (modelos Huawei EG8145V5, HG8245H, OptiXstar, x6, v5, etc., o cualquier equipo de fibra).
+   - foco_rojo = true si observas algún LED rojo (foco LOS parpadeando en rojo o alarma).
+   - equipo_apagado = true si el equipo no tiene ninguna luz encendida (apagado total).
+   - luces_verdes = true si las luces principales (PON, POWER, LAN, WLAN) se ven en verde o azul normal.
+
+4. "OTRO":
+   - Cualquier otra imagen que no pertenezca a las categorías anteriores.
+
+Devuelve EXCLUSIVAMENTE un JSON válido con esta estructura:
+{
+  "tipo": "COMPROBANTE_PAGO" | "SPEEDTEST" | "MODEM_LUCES" | "OTRO",
+  "descripcion": "resumen en 1 oración de lo que se ve en la foto",
+  "foco_rojo": boolean,
+  "equipo_apagado": boolean,
+  "luces_verdes": boolean,
+  "speedtest": {
+    "bajada_mbps": number | null,
+    "subida_mbps": number | null,
+    "ping_ms": number | null
+  },
+  "datos_pago": {
+    "monto": string | null,
+    "banco": string | null,
+    "referencia": string | null,
+    "fecha": string | null
+  }
+}
+`.trim();
+
+      const response = await groq.chat.completions.create({
+        model: 'qwen/qwen3.8-27b',
+        max_tokens: 300,
+        response_format: { type: 'json_object' },
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: systemPrompt },
+              { type: 'image_url', image_url: { url: dataUri } },
+            ],
+          },
+        ],
+      });
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) {
+        throw new Error('Groq Vision devolvió contenido vacío');
+      }
+
+      const parsed = JSON.parse(content) as GroqImageAnalysisResult;
+      logger.info(`[Groq Vision] Imagen clasificada como "${parsed.tipo}": ${parsed.descripcion}`);
+
+      return {
+        tipo: parsed.tipo || 'OTRO',
+        descripcion: parsed.descripcion || 'Imagen recibida',
+        foco_rojo: Boolean(parsed.foco_rojo),
+        equipo_apagado: Boolean(parsed.equipo_apagado),
+        luces_verdes: Boolean(parsed.luces_verdes),
+        speedtest: parsed.speedtest || { bajada_mbps: null, subida_mbps: null, ping_ms: null },
+        datos_pago: parsed.datos_pago || { monto: null, banco: null, referencia: null, fecha: null },
+      };
+    } catch (error: any) {
+      logger.warn('Error al analizar imagen con Groq Vision:', error?.message || error);
+      return {
+        tipo: 'OTRO',
+        descripcion: 'Imagen adjunta recibida',
+        foco_rojo: false,
+        equipo_apagado: false,
+        luces_verdes: false,
+        speedtest: { bajada_mbps: null, subida_mbps: null, ping_ms: null },
+        datos_pago: { monto: null, banco: null, referencia: null, fecha: null },
+      };
+    }
   }
 
   /**

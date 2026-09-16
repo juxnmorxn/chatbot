@@ -226,6 +226,16 @@ export class WebhookController {
         }
       }
 
+      // --- MANEJO DE IMÁGENES CON GROQ VISION (SPEEDTEST, PAGOS, LUCES MÓDEM HUAWEI) ---
+      let imageAnalysis: any = null;
+      if (extracted.isMedia && !extracted.isAudio) {
+        logger.info(`[Imagen recibida] Descargando imagen de ${phone} para análisis visual con Groq Vision...`);
+        const media = await EvolutionService.getBase64FromMedia(messageObj);
+        if (media && media.buffer) {
+          imageAnalysis = await GroqService.analizarImagen(media.buffer, media.mimeType);
+        }
+      }
+
       if (!extracted.text && !extracted.buttonId && !extracted.isMedia) {
         logger.debug(`No se encontró texto ni acción en el mensaje de ${phone}`);
         return;
@@ -246,6 +256,7 @@ export class WebhookController {
         text: extracted.text,
         buttonId: extracted.buttonId,
         isMedia: extracted.isMedia,
+        imageAnalysis,
       };
 
       // Si es un clic de botón o archivo multimedia sin texto, procesamos de inmediato

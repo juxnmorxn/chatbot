@@ -1,5 +1,5 @@
 import { TursoService, Session } from '../services/turso.service';
-import { GroqService, GroqClassificationResult } from '../services/groq.service';
+import { GroqService, GroqClassificationResult, GroqImageAnalysisResult } from '../services/groq.service';
 import { WispHubService, WispHubCliente } from '../services/wisphub.service';
 import { SmartOLTService, SmartOltStatusResult } from '../services/smartolt.service';
 import { EvolutionService, BotButton } from '../services/evolution.service';
@@ -18,6 +18,7 @@ export interface IncomingMessageEvent {
   text?: string;
   buttonId?: string;
   isMedia?: boolean;
+  imageAnalysis?: GroqImageAnalysisResult | null;
 }
 
 export class BotOrchestrator {
@@ -321,6 +322,12 @@ export class BotOrchestrator {
         );
         return;
       }
+    }
+
+    // --- ENRUTAMIENTO DE IMÁGENES ANALIZADAS CON VISIÓN (SPEEDTEST, PAGOS, LUCES MÓDEM HUAWEI) ---
+    if (event.isMedia) {
+      await this.procesarImagenInteligente(phone, rawText, event, session, targetJid);
+      return;
     }
 
     // Pasos técnicos del diagnóstico escalonado:
@@ -1609,6 +1616,206 @@ export class BotOrchestrator {
     );
 
     await this.marcarConsultaFinalizada(phone, session);
+  }
+
+  /**
+   * Procesa de forma inteligente imágenes recibidas (Speedtest, Luces de módem Huawei x6/v5, Comprobantes de pago)
+   * utilizando visión computacional de Groq.
+   */
+  private static async procesarImagenInteligente(
+    phone: string,
+    rawText: string,
+    event: IncomingMessageEvent,
+    session: Session | null,
+    targetJid?: string
+  ): Promise<void> {
+    const analysis = event.imageAnalysis;
+    const nombre = session?.client_name ? ` *${session.client_name}*` : '';
+    let meta: any = {};
+    try { meta = JSON.parse(session?.metadata || '{}'); } catch {}
+
+    logger.info(`[Visión Inteligente] Procesando imagen para ${phone}: Tipo=${analysis?.tipo || 'OTRO'} | Descripción: "${analysis?.descripcion || ''}"`);
+
+    // 1. CASO SPEEDTEST / TEST DE VELOCIDAD
+    if (analysis?.tipo === 'SPEEDTEST') {
+      const bajada = analysis.speedtest?.bajada_mbps ? `${analysis.speedtest.bajada_mbps} Mbps` : 'detectada';
+      const subida = analysis.speedtest?.subida_mbps ? `${analysis.speedtest.subida_mbps} Mbps` : 'N/A';
+      const ping = analysis.speedtest?.ping_ms ? ` (Latencia: ${analysis.speedtest.ping_ms} ms)` : '';
+      const folio = meta.ticketFolio;
+
+      if (folio) {
+        await TursoService.updateTicketStatus(
+          folio,
+          'ABIERTO',
+          `📊 Speedtest recibido por cliente: Bajada=${bajada}, Subida=${subida}${ping}`
+        );
+
+        const msj =
+          `¡Recibí tu prueba de velocidad de Speedtest! 📊\n\n` +
+          `• *Descarga (Download):* ${bajada}\n` +
+          `• *Subida (Upload):* ${subida}${ping ? `\n• *Ping:* ${ping}` : ''}\n\n` +
+          `Ya adjunté esta medición a tu reporte *#${folio}*. El equipo de soporte técnico revisará el rendimiento de tu enlace. ¡Muchas gracias!`;
+
+        await this.enviarYLoguear(phone, msj, 'FALLA_INTERNET', `SPEEDTEST_ADJUNTADO_${folio}`, targetJid);
+        await this.marcarConsultaFinalizada(phone, session);
+        return;
+      }
+
+      // Si no había ticket previo, creamos el reporte formal de velocidad
+      const ticket = await TursoService.createTicket({
+        phone,
+        client_name: session?.client_name,
+        onu_id: session?.onu_id,
+        issue_summary: `Prueba de velocidad / Speedtest (${bajada} bajada / ${subida} subida)`,
+        checks_performed: `Captura de Speedtest recibida: Bajada=${bajada}, Subida=${subida}${ping}`,
+        has_photo: 1,
+        has_speedtest: 1,
+        status: 'ABIERTO',
+        is_out_of_hours: this.isFueraDeHorario() ? 1 : 0,
+      });
+
+      if (session?.client_id) {
+        await WispHubService.crearTicketSoporte(
+          session.client_id,
+          `Speedtest - ${ticket.folio}`,
+          `Prueba de velocidad enviada por cliente: Bajada=${bajada}, Subida=${subida}${ping}. Folio: ${ticket.folio}`,
+          'Media'
+        ).catch(() => {});
+      }
+
+      const msj =
+        `¡Recibí tu prueba de velocidad de Speedtest! 📊\n\n` +
+        `• *Descarga:* ${bajada}\n` +
+        `• *Subida:* ${subida}${ping ? `\n• *Ping:* ${ping}` : ''}\n\n` +
+        `Ya registré tus resultados con el reporte *#${ticket.folio}* para que el personal técnico revise la estabilidad y velocidad asignada a tu servicio.`;
+
+      await this.enviarYLoguear(phone, msj, 'FALLA_INTERNET', `SPEEDTEST_NUEVO_${ticket.folio}`, targetJid);
+      await this.marcarConsultaFinalizada(phone, session);
+      return;
+    }
+
+    // 2. CASO LUCES DE MÓDEM (Huawei EG8145V5 / HG8245H / OptiXstar / x6 / v5, etc.)
+    if (analysis?.tipo === 'MODEM_LUCES') {
+      if (analysis.foco_rojo) {
+        const ticket = await TursoService.createTicket({
+          phone,
+          client_name: session?.client_name,
+          onu_id: session?.onu_id,
+          issue_summary: 'Foco rojo / LOS detectado en foto de módem',
+          checks_performed: 'Foto analizada con Visión IA: Módem presenta foco rojo / LOS activo (sin señal de fibra óptica).',
+          has_photo: 1,
+          status: 'ABIERTO',
+          is_out_of_hours: this.isFueraDeHorario() ? 1 : 0,
+        });
+
+        if (session?.client_id) {
+          await WispHubService.crearTicketSoporte(
+            session.client_id,
+            `Foco Rojo - ${ticket.folio}`,
+            `Foto enviada por cliente muestra foco rojo/LOS activo. Folio: ${ticket.folio}`,
+            'Alta'
+          ).catch(() => {});
+        }
+
+        const msj =
+          `Hola${nombre}, he revisado la foto de tu módem y observo que tiene un *foco rojo* encendido (indica una interrupción en la señal física de la fibra óptica).\n\n` +
+          `🛠️ Hemos registrado tu reporte con el folio *#${ticket.folio}* para canalizar una visita técnica a tu domicilio lo más pronto posible.\n\n` +
+          `📞 Un compañero de nuestro equipo se comunicará contigo para coordinar qué día y horario pasan a revisarlo.\n\n` +
+          `📍 Por favor compártenos tu *ubicación actual por WhatsApp* o tu *dirección completa con referencias* para registrarla en la orden de visita.`;
+
+        await TursoService.upsertSession({
+          phone,
+          step: 'ESPERANDO_UBICACION_TECNICO',
+          metadata: JSON.stringify({
+            ...meta,
+            ticketFolio: ticket.folio,
+            resumenFalla: 'Foco rojo detectado en foto de módem',
+          }),
+        });
+
+        await this.enviarYLoguear(phone, msj, 'FALLA_INTERNET', `FOCO_ROJO_FOTO_${ticket.folio}`, targetJid);
+        return;
+      }
+
+      if (analysis.equipo_apagado) {
+        const msj =
+          `Hola${nombre}, he revisado la foto de tu equipo y parece estar totalmente apagado o sin corriente eléctrica.\n\n` +
+          `Por favor verifica que el cable de corriente esté bien conectado al enchufe y que el botón de encendido posterior esté presionado. (Por favor no muevas el cable delgado de internet).\n\n` +
+          `¿Logra encender alguna luz?`;
+
+        await TursoService.upsertSession({
+          phone,
+          step: 'COMPROBACION_TURNO_1',
+          metadata: JSON.stringify({
+            ...meta,
+            resumenFalla: 'Módem apagado detectado en foto',
+          }),
+        });
+
+        await this.enviarYLoguear(phone, msj, 'FALLA_INTERNET', 'MODEM_APAGADO_FOTO', targetJid);
+        return;
+      }
+
+      if (analysis.luces_verdes) {
+        const msj =
+          `Hola${nombre}, he revisado la foto de tu módem y las luces se observan encendidas y con señal normal (verde/azul). 👍\n\n` +
+          `Como la señal física llega bien a tu equipo:\n` +
+          `¿La lentitud o problema te pasa en *todos tus aparatos (celulares, pantallas, computadoras)* o *solo en uno en específico*?`;
+
+        await TursoService.upsertSession({
+          phone,
+          step: 'DIAGNOSTICO_TRIAGE_DISPOSITIVOS',
+          metadata: JSON.stringify({
+            ...meta,
+            resumenFalla: 'Luces verdes normales en foto',
+          }),
+        });
+
+        await this.enviarYLoguear(phone, msj, 'FALLA_INTERNET', 'LUCES_VERDES_FOTO', targetJid);
+        return;
+      }
+    }
+
+    // 3. CASO COMPROBANTE DE PAGO
+    if (analysis?.tipo === 'COMPROBANTE_PAGO') {
+      const datos = analysis.datos_pago;
+      let detalle = '';
+      if (datos?.banco) detalle += `\n• *Banco / Emisor:* ${datos.banco}`;
+      if (datos?.monto) detalle += `\n• *Monto detectado:* ${datos.monto}`;
+      if (datos?.referencia) detalle += `\n• *Folio / Ref:* ${datos.referencia}`;
+
+      const msj =
+        `¡Muchas gracias por tu comprobante! 📸 Hemos recibido la captura de tu pago${nombre}.${detalle}\n\n` +
+        `Nuestro equipo administrativo validará la transferencia en el sistema para aplicar tu abono a la brevedad. ¡Que tengas un excelente día!`;
+
+      await this.enviarYLoguear(phone, msj, 'REPORTAR_PAGO', 'COMPROBANTE_VALIDADO_VISION', targetJid);
+      await this.marcarConsultaFinalizada(phone, session);
+      return;
+    }
+
+    // 4. OTRO TIPO DE IMAGEN (O EN PASO DE ESPERA)
+    if (session?.step === 'COMPROBACION_EVIDENCIA') {
+      await this.procesarEvidenciaTicket(phone, rawText, event, session, targetJid);
+      return;
+    }
+
+    if (session?.step === 'ESPERANDO_COMPROBANTE') {
+      const msj =
+        `¡Muchas gracias por tu imagen! 📸 Hemos recibido tu archivo adjunto${nombre}.\n\n` +
+        `Nuestro equipo administrativo revisará el comprobante en el sistema para aplicar tu abono a la brevedad. ¡Que tengas un excelente día!`;
+
+      await this.enviarYLoguear(phone, msj, 'REPORTAR_PAGO', 'COMPROBANTE_GENERICO_RECIBIDO', targetJid);
+      await this.marcarConsultaFinalizada(phone, session);
+      return;
+    }
+
+    // Si envió una imagen en frío sin paso previo
+    const desc = analysis?.descripcion ? `_${analysis.descripcion}_\n\n` : '';
+    const msj =
+      `¡Hola${nombre}! 📸 Recibí tu imagen adjunta.\n\n${desc}` +
+      `¿En qué podemos apoyarte el día de hoy con tu servicio de internet? Cuéntame tu duda o reporte.`;
+
+    await this.enviarYLoguear(phone, msj, 'DESCONOCIDO', 'IMAGEN_RECIBIDA_CONVERSACIONAL', targetJid);
   }
 
   /**
