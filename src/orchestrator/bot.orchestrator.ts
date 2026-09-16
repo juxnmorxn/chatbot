@@ -7,7 +7,7 @@ import { config } from '../config/env';
 import { SettingsService } from '../services/settings.service';
 import { Logger } from '../utils/logger';
 import { parseSpintax } from '../utils/spintax';
-import { cleanPersonName } from '../utils/fuzzy-matcher';
+import { cleanPersonName, computeNameMatchScore } from '../utils/fuzzy-matcher';
 
 const logger = new Logger('BotOrchestrator');
 
@@ -2284,19 +2284,56 @@ export class BotOrchestrator {
 
       if (coincidenciasOlt.length > 0) {
         const mejorScore = coincidenciasOlt[0].matchScore;
-        // Candidatos con score alto (>= 75) y cercanos al mejor score (dentro de 10 puntos de margen)
+        // Candidatos con score alto y cercanos al mejor score
         const candidatosRelevantes = coincidenciasOlt.filter(
-          c => c.matchScore >= 75 && c.matchScore >= (mejorScore - 10)
+          c => c.matchScore >= 70 && c.matchScore >= (mejorScore - 15)
         );
 
-        // CASO A: El cliente tiene 2 o más servicios registrados (o homónimos)
-        if (candidatosRelevantes.length > 1) {
-          const primerNombre = candidatosRelevantes[0].name;
-          logger.info(`Se detectaron ${candidatosRelevantes.length} servicios para "${rawInput}". Solicitando selección al cliente.`);
+        // Agrupar candidatos por persona real (validando que tengan el mismo nombre completo con apellidos)
+        const gruposPorPersona: Array<{ nombrePrincipal: string; servicios: typeof candidatosRelevantes }> = [];
+        for (const cand of candidatosRelevantes) {
+          const grupoExistente = gruposPorPersona.find(g => 
+            computeNameMatchScore(cleanPersonName(cand.name), cleanPersonName(g.nombrePrincipal)) >= 80
+          );
+          if (grupoExistente) {
+            grupoExistente.servicios.push(cand);
+          } else {
+            gruposPorPersona.push({ nombrePrincipal: cand.name, servicios: [cand] });
+          }
+        }
 
-          let mensajeOpciones = `¡Hola, *${primerNombre}*! 👋 Detectamos que tienes *${candidatosRelevantes.length} servicios* registrados en nuestro sistema:\n\n`;
+        // CASO A: Múltiples personas DISTINTAS (homónimos con diferentes apellidos o falta de apellidos)
+        if (gruposPorPersona.length > 1) {
+          const ejemplosNombres = gruposPorPersona
+            .slice(0, 3)
+            .map(g => cleanPersonName(g.nombrePrincipal))
+            .join('_, _');
 
-          candidatosRelevantes.slice(0, 5).forEach((c, idx) => {
+          logger.info(`Ambigüedad: se detectaron ${gruposPorPersona.length} personas distintas para "${rawInput}". Solicitando apellidos.`);
+
+          await this.enviarYLoguear(
+            phone,
+            `Encontramos varias cuentas registradas con ese nombre en nuestro sistema.\n\n` +
+            `Para poder ubicar tu módem con exactitud, por favor indícame tu *Nombre con al menos un apellido* (ejemplo: _${ejemplosNombres}_) o tu *Número de contrato*.`,
+            'IDENTIFICAR_CLIENTE',
+            'SOLICITAR_APELLIDOS_AMBIGUEDAD',
+            targetJid
+          );
+          await TursoService.updateStep(phone, 'ESPERANDO_IDENTIFICACION');
+          return;
+        }
+
+        // CASO B: Una sola persona con 2 o más servicios en distintas ubicaciones (Multiservicio real)
+        const personaUnica = gruposPorPersona[0];
+        const serviciosPersona = personaUnica?.servicios || candidatosRelevantes;
+
+        if (serviciosPersona.length > 1) {
+          const primerNombre = serviciosPersona[0].name;
+          logger.info(`Se detectaron ${serviciosPersona.length} servicios reales para "${primerNombre}". Solicitando selección.`);
+
+          let mensajeOpciones = `¡Hola, *${primerNombre}*! 👋 Detectamos que tienes *${serviciosPersona.length} servicios* registrados en nuestro sistema:\n\n`;
+
+          serviciosPersona.slice(0, 5).forEach((c, idx) => {
             const ubicacion = c.address || c.zone_name ? `\n📍 *Ubicación / Zona:* ${c.address || c.zone_name}` : '';
             const plan = c.speed_profile ? `\n📦 *Plan:* ${c.speed_profile}` : '';
             const sn = c.sn ? `\n🆔 *SN:* ${c.sn}` : '';
@@ -2310,7 +2347,7 @@ export class BotOrchestrator {
             client_name: primerNombre,
             step: 'ESPERANDO_SELECCION_SERVICIO',
             metadata: JSON.stringify({
-              registeredServices: candidatosRelevantes.slice(0, 5).map(c => ({
+              registeredServices: serviciosPersona.slice(0, 5).map(c => ({
                 unique_external_id: c.unique_external_id,
                 sn: c.sn,
                 name: c.name,
@@ -2318,7 +2355,7 @@ export class BotOrchestrator {
                 zone_name: c.zone_name,
                 address: c.address,
               })),
-              pendingServices: candidatosRelevantes.slice(0, 5).map(c => ({
+              pendingServices: serviciosPersona.slice(0, 5).map(c => ({
                 unique_external_id: c.unique_external_id,
                 sn: c.sn,
                 name: c.name,
@@ -2336,9 +2373,9 @@ export class BotOrchestrator {
           return;
         }
 
-        // CASO B: Coincidencia única sólida
-        const mejor = candidatosRelevantes[0] || coincidenciasOlt[0];
-        if (mejor.matchScore >= 75 || (coincidenciasOlt.length === 1 && mejor.matchScore >= 70)) {
+        // CASO C: Coincidencia única sólida de una sola persona
+        const mejor = serviciosPersona[0] || coincidenciasOlt[0];
+        if (mejor.matchScore >= 70) {
           let metaPre: any = {};
           try { metaPre = JSON.parse(session?.metadata || '{}'); } catch {}
 
