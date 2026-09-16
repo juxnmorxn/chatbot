@@ -610,6 +610,23 @@ export class BotOrchestrator {
           ip: meta.ip,
         });
 
+        if (estadoFinanciero.yaPagoPeroNoActivo && (estadoFinanciero.cliente?.id || session?.client_id)) {
+          const idClienteWisp = estadoFinanciero.cliente?.id || session?.client_id;
+          logger.info(`Cliente ${phone} (${session?.client_name}) ya pagó pero estaba inactivo. Reactivando automáticamente en WispHub (ID: ${idClienteWisp})...`);
+          await WispHubService.activarServicioCliente(idClienteWisp!);
+
+          await this.enviarYLoguear(
+            phone,
+            `¡Hola, *${session.client_name}*! 👋 Revisé tu servicio en nuestro sistema y confirmamos que tu cuenta se encuentra al corriente y sin ningún adeudo pendiente. 👍\n\n` +
+            `Detectamos que tu línea estaba pendiente de sincronización en el servidor, por lo que acabamos de mandar la señal de activación a tu módem. En aproximadamente 1 a 2 minutos quedará restablecida tu navegación con normalidad.`,
+            'SALUDO',
+            'AUTO_ACTIVACION_PAGADO_SALUDO',
+            targetJid
+          );
+          await TursoService.updateStep(phone, 'CONVERSACIONAL');
+          return;
+        }
+
         if (estadoFinanciero.suspendido || estadoFinanciero.totalDeuda > 0) {
           const bank = SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK', 'BBVA');
           const account = SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', '012 180 0000000000 00');

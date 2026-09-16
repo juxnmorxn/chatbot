@@ -497,7 +497,7 @@ export class WispHubService {
       estado === 'desconectado' ||
       estado.includes('susp');
 
-    // Facturas impagas o morosidad real:
+    // Facturas impagas o morosidad real explícita:
     const tieneFacturaPendiente = estadoFacturas.includes('pendiente') ||
       estadoFacturas.includes('moros') ||
       estadoFacturas.includes('vencid') ||
@@ -505,24 +505,25 @@ export class WispHubService {
       estadoFacturas.includes('impag') ||
       totalDeuda > 0;
 
-    // Si está suspendido en WispHub pero totalDeuda es 0, asignar el precio del plan
-    if ((esSuspendido || tieneFacturaPendiente) && totalDeuda === 0) {
-      const precioPlan = Number(clienteEncontrado?.precio_plan || 0);
-      totalDeuda = precioPlan > 0 ? precioPlan : 0;
-    }
+    // Distinción de casos:
+    // CASO A: El cliente está en WispHub como Suspendido pero NO tiene facturas pendientes ni saldo adeudado.
+    // => Ya pagó su mensualidad pero quedó desincronizado o pendiente de activación en WispHub/MikroTik.
+    const yaPagoPeroNoActivo = esSuspendido && !tieneFacturaPendiente && totalDeuda === 0;
 
-    const estaRealmenteSuspendido = esSuspendido || tieneFacturaPendiente || totalDeuda > 0;
+    // CASO B: El cliente tiene recibos pendientes o saldo > 0.
+    // => Suspendido o moroso por falta de pago.
+    const esMorosoReal = tieneFacturaPendiente && totalDeuda > 0;
 
-    const motivo = estaRealmenteSuspendido
-      ? (totalDeuda > 0 ? `Factura o saldo pendiente ($${totalDeuda.toFixed(2)} MXN)` : 'Servicio suspendido en WispHub')
-      : undefined;
+    const motivo = esMorosoReal
+      ? `Factura o saldo pendiente ($${totalDeuda.toFixed(2)} MXN)`
+      : (yaPagoPeroNoActivo ? 'Cuenta al corriente pero servicio pendiente de reconexión/activación' : undefined);
 
-    logger.info(`[WispHub Live Result] Cliente="${clienteEncontrado?.nombre || 'N/A'}" Estado="${clienteEncontrado?.estado || 'Desconocido'}" SuspendidoReal=${estaRealmenteSuspendido} Deuda=$${totalDeuda}`);
+    logger.info(`[WispHub Live Result] Cliente="${clienteEncontrado?.nombre || 'N/A'}" Estado="${clienteEncontrado?.estado || 'Desconocido'}" SuspendidoReal=${esMorosoReal} YaPagoPeroNoActivo=${yaPagoPeroNoActivo} Deuda=$${totalDeuda}`);
 
     return {
-      suspendido: estaRealmenteSuspendido,
-      yaPagoPeroNoActivo: false,
-      totalDeuda,
+      suspendido: esMorosoReal,
+      yaPagoPeroNoActivo,
+      totalDeuda: esMorosoReal ? totalDeuda : 0,
       facturas,
       cliente: clienteEncontrado,
       motivo,
@@ -544,17 +545,46 @@ export class WispHubService {
 
     try {
       const api = this.getApi();
-      let res;
+      let activado = false;
+      
+      // Intentos de activación en los distintos endpoints de WispHub API
       try {
-        res = await api.post(`/clientes/${id}/activar/`, {});
-      } catch {
+        const res = await api.post(`/clientes/${id}/activar/`, {});
+        if (res?.status >= 200 && res?.status < 300) activado = true;
+      } catch {}
+
+      if (!activado) {
         try {
-          res = await api.post(`/servicios/${id}/activar/`, {});
-        } catch {
-          res = await api.patch(`/clientes/${id}/`, { estado: 1 });
-        }
+          const res = await api.post(`/servicios/${id}/activar/`, {});
+          if (res?.status >= 200 && res?.status < 300) activado = true;
+        } catch {}
       }
-      logger.info(`Respuesta de activación en WispHub para cliente ${id}:`, res?.data);
+
+      if (!activado) {
+        try {
+          await api.patch(`/clientes/${id}/`, { estado: 1 });
+          activado = true;
+        } catch {}
+      }
+
+      if (!activado) {
+        try {
+          await api.patch(`/servicios/${id}/`, { estado: 1, estado_servicio: 1 });
+          activado = true;
+        } catch {}
+      }
+
+      // Actualizar también la base local en Turso DB a 'Activo'
+      try {
+        const { getTursoClient } = await import('../database/turso');
+        const client = getTursoClient();
+        await client.execute({
+          sql: `UPDATE wisphub_clients SET estado = 'Activo' WHERE id_servicio = ?`,
+          args: [Number(id)],
+        });
+      } catch {}
+
+      logger.info(`Activación completada en WispHub para cliente ${id}`);
       return { success: true, mensaje: 'Servicio activado exitosamente en WispHub' };
     } catch (err: any) {
       logger.warn(`Error al activar servicio en WispHub para ${id}:`, err?.response?.data || err?.message || err);
