@@ -458,5 +458,127 @@ export class AdminController {
       res.status(500).json({ success: false, error: error?.message || error });
     }
   }
+
+  // ==========================================
+  // GESTIÓN DE TÉCNICOS AUTORIZADOS
+  // ==========================================
+
+  /**
+   * Obtiene la lista de técnicos registrados
+   */
+  static async getTechnicians(_req: Request, res: Response): Promise<void> {
+    try {
+      const technicians = await TursoService.getTechnicians();
+      res.json({ success: true, count: technicians.length, technicians });
+    } catch (error: any) {
+      logger.error('Error al listar técnicos:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Registra un nuevo técnico
+   */
+  static async createTechnician(req: Request, res: Response): Promise<void> {
+    try {
+      const { name, phone, pin, role, notes, is_active } = req.body;
+      if (!name || !phone || !pin) {
+        res.status(400).json({ success: false, error: 'Nombre, teléfono WhatsApp y PIN de 5 dígitos son obligatorios.' });
+        return;
+      }
+
+      const tech = await TursoService.createTechnician({
+        name,
+        phone,
+        pin,
+        role,
+        notes,
+        is_active: is_active === undefined ? 1 : Number(is_active),
+      });
+
+      res.json({ success: true, message: `Técnico ${tech.name} registrado exitosamente.`, technician: tech });
+    } catch (error: any) {
+      logger.error('Error al crear técnico:', error?.message || error);
+      res.status(400).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Actualiza un técnico existente
+   */
+  static async updateTechnician(req: Request, res: Response): Promise<void> {
+    try {
+      const id = parseInt(req.params.id as string, 10);
+      if (isNaN(id)) {
+        res.status(400).json({ success: false, error: 'ID de técnico inválido' });
+        return;
+      }
+
+      const { name, phone, pin, role, notes, is_active } = req.body;
+      const ok = await TursoService.updateTechnician(id, {
+        name,
+        phone,
+        pin,
+        role,
+        notes,
+        is_active: is_active === undefined ? undefined : Number(is_active),
+      });
+
+      if (ok) {
+        res.json({ success: true, message: 'Datos del técnico actualizados correctamente.' });
+      } else {
+        res.status(404).json({ success: false, error: 'Técnico no encontrado' });
+      }
+    } catch (error: any) {
+      logger.error(`Error al actualizar técnico ${req.params.id}:`, error?.message || error);
+      res.status(400).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Elimina un técnico
+   */
+  static async deleteTechnician(req: Request, res: Response): Promise<void> {
+    try {
+      const id = parseInt(req.params.id as string, 10);
+      if (isNaN(id)) {
+        res.status(400).json({ success: false, error: 'ID de técnico inválido' });
+        return;
+      }
+
+      const ok = await TursoService.deleteTechnician(id);
+      if (ok) {
+        res.json({ success: true, message: 'Técnico eliminado del sistema.' });
+      } else {
+        res.status(404).json({ success: false, error: 'Técnico no encontrado' });
+      }
+    } catch (error: any) {
+      logger.error(`Error al eliminar técnico ${req.params.id}:`, error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Cambia el estado activo/inactivo de un técnico
+   */
+  static async toggleTechnician(req: Request, res: Response): Promise<void> {
+    try {
+      const id = parseInt(req.params.id as string, 10);
+      if (isNaN(id)) {
+        res.status(400).json({ success: false, error: 'ID de técnico inválido' });
+        return;
+      }
+
+      const ok = await TursoService.toggleTechnicianActive(id);
+      if (ok) {
+        res.json({ success: true, message: 'Estado del técnico modificado exitosamente.' });
+      } else {
+        res.status(404).json({ success: false, error: 'Técnico no encontrado' });
+      }
+    } catch (error: any) {
+      logger.error(`Error al alternar estado de técnico ${req.params.id}:`, error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
 }
 

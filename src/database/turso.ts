@@ -136,7 +136,25 @@ export async function initTursoDatabase(): Promise<void> {
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status);`);
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_tickets_created_at ON tickets(created_at);`);
 
-    logger.info('Tablas "sessions", "settings", "conversation_logs", "smartolt_onus", "wisphub_clients" y "tickets" listas en Turso.');
+    // Tabla de Técnicos Autorizados con PIN de 5 dígitos y número de WhatsApp
+    await client.execute(`
+      CREATE TABLE IF NOT EXISTS technicians (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        phone TEXT UNIQUE NOT NULL,
+        pin TEXT NOT NULL,
+        is_active INTEGER DEFAULT 1,
+        role TEXT DEFAULT 'TECNICO',
+        notes TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_tech_phone ON technicians(phone);`);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_tech_pin ON technicians(pin);`);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_tech_active ON technicians(is_active);`);
+
+    logger.info('Tablas "sessions", "settings", "conversation_logs", "smartolt_onus", "wisphub_clients", "tickets" y "technicians" listas en Turso.');
   } catch (error: any) {
     logger.error('Error al inicializar Turso DB:', error?.message || error);
     throw error;

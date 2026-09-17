@@ -87,6 +87,18 @@ export interface TicketRecord {
   resolved_at?: string | null;
 }
 
+export interface TechnicianRecord {
+  id: number;
+  name: string;
+  phone: string;
+  pin: string;
+  is_active: number;
+  role: string;
+  notes?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export class TursoService {
   /**
    * Obtiene la sesión activa de un número de teléfono
@@ -1419,6 +1431,285 @@ export class TursoService {
     const res = await client.execute('DELETE FROM tickets');
     logger.info('Todos los tickets han sido eliminados de Turso DB.');
     return res.rowsAffected || 0;
+  }
+
+  // ==========================================
+  // GESTIÓN DE TÉCNICOS AUTORIZADOS Y PINS
+  // ==========================================
+
+  /**
+   * Obtiene la lista completa de técnicos registrados
+   */
+  static async getTechnicians(): Promise<TechnicianRecord[]> {
+    try {
+      const client = getTursoClient();
+      const res = await client.execute('SELECT * FROM technicians ORDER BY name ASC');
+      return res.rows.map((r: any) => ({
+        id: Number(r.id),
+        name: String(r.name || ''),
+        phone: String(r.phone || ''),
+        pin: String(r.pin || ''),
+        is_active: Number(r.is_active || 1),
+        role: String(r.role || 'TECNICO'),
+        notes: r.notes ? String(r.notes) : null,
+        created_at: String(r.created_at || ''),
+        updated_at: String(r.updated_at || ''),
+      }));
+    } catch (error: any) {
+      logger.error('Error al obtener lista de técnicos:', error?.message || error);
+      return [];
+    }
+  }
+
+  /**
+   * Obtiene un técnico por ID
+   */
+  static async getTechnicianById(id: number): Promise<TechnicianRecord | null> {
+    try {
+      const client = getTursoClient();
+      const res = await client.execute({
+        sql: 'SELECT * FROM technicians WHERE id = ? LIMIT 1',
+        args: [id],
+      });
+      if (res.rows.length === 0) return null;
+      const r: any = res.rows[0];
+      return {
+        id: Number(r.id),
+        name: String(r.name || ''),
+        phone: String(r.phone || ''),
+        pin: String(r.pin || ''),
+        is_active: Number(r.is_active || 1),
+        role: String(r.role || 'TECNICO'),
+        notes: r.notes ? String(r.notes) : null,
+        created_at: String(r.created_at || ''),
+        updated_at: String(r.updated_at || ''),
+      };
+    } catch (error: any) {
+      logger.error(`Error al obtener técnico por id ${id}:`, error?.message || error);
+      return null;
+    }
+  }
+
+  /**
+   * Registra un nuevo técnico con su PIN de 5 dígitos
+   */
+  static async createTechnician(data: {
+    name: string;
+    phone: string;
+    pin: string;
+    role?: string;
+    notes?: string;
+    is_active?: number;
+  }): Promise<TechnicianRecord> {
+    const client = getTursoClient();
+    const now = new Date().toISOString();
+    const cleanPhone = data.phone.replace(/\D/g, '');
+    const cleanPin = (data.pin || '').replace(/\D/g, '').slice(0, 5);
+
+    if (cleanPin.length !== 5) {
+      throw new Error('El PIN debe tener exactamente 5 dígitos numéricos.');
+    }
+    if (!data.name.trim()) {
+      throw new Error('El nombre del técnico es obligatorio.');
+    }
+    if (cleanPhone.length < 10) {
+      throw new Error('El número de teléfono debe tener al menos 10 dígitos.');
+    }
+
+    const res = await client.execute({
+      sql: `
+        INSERT INTO technicians (name, phone, pin, is_active, role, notes, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      args: [
+        data.name.trim(),
+        cleanPhone,
+        cleanPin,
+        data.is_active ?? 1,
+        data.role || 'TECNICO',
+        data.notes || '',
+        now,
+        now,
+      ],
+    });
+
+    logger.info(`Técnico registrado exitosamente: ${data.name} (${cleanPhone})`);
+    return {
+      id: Number(res.lastInsertRowid || 0),
+      name: data.name.trim(),
+      phone: cleanPhone,
+      pin: cleanPin,
+      is_active: data.is_active ?? 1,
+      role: data.role || 'TECNICO',
+      notes: data.notes || '',
+      created_at: now,
+      updated_at: now,
+    };
+  }
+
+  /**
+   * Actualiza los datos de un técnico existente
+   */
+  static async updateTechnician(
+    id: number,
+    data: {
+      name?: string;
+      phone?: string;
+      pin?: string;
+      role?: string;
+      notes?: string;
+      is_active?: number;
+    }
+  ): Promise<boolean> {
+    try {
+      const client = getTursoClient();
+      const now = new Date().toISOString();
+
+      const sets: string[] = ['updated_at = ?'];
+      const args: any[] = [now];
+
+      if (data.name !== undefined) {
+        sets.push('name = ?');
+        args.push(data.name.trim());
+      }
+      if (data.phone !== undefined) {
+        sets.push('phone = ?');
+        args.push(data.phone.replace(/\D/g, ''));
+      }
+      if (data.pin !== undefined) {
+        const cleanPin = data.pin.replace(/\D/g, '').slice(0, 5);
+        if (cleanPin.length !== 5) throw new Error('El PIN debe tener exactamente 5 dígitos.');
+        sets.push('pin = ?');
+        args.push(cleanPin);
+      }
+      if (data.role !== undefined) {
+        sets.push('role = ?');
+        args.push(data.role);
+      }
+      if (data.notes !== undefined) {
+        sets.push('notes = ?');
+        args.push(data.notes);
+      }
+      if (data.is_active !== undefined) {
+        sets.push('is_active = ?');
+        args.push(data.is_active);
+      }
+
+      args.push(id);
+
+      const res = await client.execute({
+        sql: `UPDATE technicians SET ${sets.join(', ')} WHERE id = ?`,
+        args,
+      });
+
+      return (res.rowsAffected || 0) > 0;
+    } catch (error: any) {
+      logger.error(`Error al actualizar técnico ${id}:`, error?.message || error);
+      throw error;
+    }
+  }
+
+  /**
+   * Elimina un técnico por ID
+   */
+  static async deleteTechnician(id: number): Promise<boolean> {
+    try {
+      const client = getTursoClient();
+      const res = await client.execute({
+        sql: 'DELETE FROM technicians WHERE id = ?',
+        args: [id],
+      });
+      return (res.rowsAffected || 0) > 0;
+    } catch (error: any) {
+      logger.error(`Error al eliminar técnico ${id}:`, error?.message || error);
+      return false;
+    }
+  }
+
+  /**
+   * Alterna el estado activo/inactivo de un técnico
+   */
+  static async toggleTechnicianActive(id: number): Promise<boolean> {
+    try {
+      const client = getTursoClient();
+      const res = await client.execute({
+        sql: `UPDATE technicians SET is_active = CASE WHEN is_active = 1 THEN 0 ELSE 1 END, updated_at = ? WHERE id = ?`,
+        args: [new Date().toISOString(), id],
+      });
+      return (res.rowsAffected || 0) > 0;
+    } catch (error: any) {
+      logger.error(`Error al cambiar estado de técnico ${id}:`, error?.message || error);
+      return false;
+    }
+  }
+
+  /**
+   * Verifica si un número o PIN pertenece a un técnico activo y autorizado
+   */
+  static async isAuthorizedTechnician(phone: string, pin?: string): Promise<TechnicianRecord | null> {
+    try {
+      const client = getTursoClient();
+      const cleanPhone = (phone || '').replace(/\D/g, '');
+      const last10 = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
+
+      // 1. Si enviaron PIN de 5 dígitos, buscar por PIN y verificar que esté activo
+      if (pin) {
+        const cleanPin = pin.replace(/\D/g, '').slice(0, 5);
+        if (cleanPin.length === 5) {
+          const pinRes = await client.execute({
+            sql: 'SELECT * FROM technicians WHERE pin = ? AND is_active = 1 LIMIT 1',
+            args: [cleanPin],
+          });
+          if (pinRes.rows.length > 0) {
+            const r: any = pinRes.rows[0];
+            return {
+              id: Number(r.id),
+              name: String(r.name || ''),
+              phone: String(r.phone || ''),
+              pin: String(r.pin || ''),
+              is_active: Number(r.is_active || 1),
+              role: String(r.role || 'TECNICO'),
+              notes: r.notes ? String(r.notes) : null,
+              created_at: String(r.created_at || ''),
+              updated_at: String(r.updated_at || ''),
+            };
+          }
+        }
+      }
+
+      // 2. Si no hay técnicos en la base de datos, retornar null (o permitir primer registro)
+      if (!last10) return null;
+
+      // 3. Buscar por teléfono exacto o terminación de 10 dígitos (para soportar 521..., 52..., etc.)
+      const phoneRes = await client.execute({
+        sql: `
+          SELECT * FROM technicians 
+          WHERE (phone = ? OR phone LIKE ? OR ? LIKE '%' || phone) AND is_active = 1 
+          LIMIT 1
+        `,
+        args: [cleanPhone, `%${last10}`, cleanPhone],
+      });
+
+      if (phoneRes.rows.length > 0) {
+        const r: any = phoneRes.rows[0];
+        return {
+          id: Number(r.id),
+          name: String(r.name || ''),
+          phone: String(r.phone || ''),
+          pin: String(r.pin || ''),
+          is_active: Number(r.is_active || 1),
+          role: String(r.role || 'TECNICO'),
+          notes: r.notes ? String(r.notes) : null,
+          created_at: String(r.created_at || ''),
+          updated_at: String(r.updated_at || ''),
+        };
+      }
+
+      return null;
+    } catch (error: any) {
+      logger.error(`Error al verificar autorización de técnico ${phone}:`, error?.message || error);
+      return null;
+    }
   }
 }
 

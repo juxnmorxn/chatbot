@@ -44,6 +44,14 @@ router.get('/api/ipam/available', AdminController.getIpamAvailable);
 router.get('/api/smartolt/unconfigured', AdminController.getSmartOltUnconfigured);
 router.post('/api/smartolt/authorize', AdminController.authorizeSmartOltOnu);
 
+// Gestión de Técnicos Autorizados y PINs de 5 dígitos
+router.get('/api/technicians', AdminController.getTechnicians);
+router.post('/api/technicians', AdminController.createTechnician);
+router.put('/api/technicians/:id', AdminController.updateTechnician);
+router.post('/api/technicians/:id/update', AdminController.updateTechnician);
+router.delete('/api/technicians/:id', AdminController.deleteTechnician);
+router.post('/api/technicians/:id/toggle', AdminController.toggleTechnician);
+
 // Mesa de Tickets de Soporte
 router.get('/api/tickets', AdminController.getTickets);
 router.patch('/api/tickets/:folio/status', AdminController.updateTicketStatus);

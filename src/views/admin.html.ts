@@ -394,6 +394,7 @@ export function getAdminDashboardHtml(): string {
     <!-- Navigation Tabs -->
     <div class="nav-tabs">
       <button class="nav-tab active" onclick="switchTab('apis', this)">🔑 Conexión y Pagos</button>
+      <button class="nav-tab" onclick="switchTab('technicians', this)" style="border: 1px solid rgba(99, 102, 241, 0.4); background: rgba(99, 102, 241, 0.08); color: #a5b4fc;">👷 Técnicos y PINs</button>
       <button class="nav-tab" onclick="switchTab('audit', this)" style="border: 1px solid rgba(239, 68, 68, 0.4); background: rgba(239, 68, 68, 0.08); color: #fca5a5;">🔍 Auditoría IPs (SmartOLT vs WispHub)</button>
       <button class="nav-tab" onclick="switchTab('ipam', this)" style="border: 1px solid rgba(16, 185, 129, 0.4); background: rgba(16, 185, 129, 0.08); color: #6ee7b7;">🌐 Pool de IPs y VLANs (IPAM)</button>
       <button class="nav-tab" onclick="switchTab('whatsapp', this)">📲 Vincular WhatsApp</button>
@@ -1057,6 +1058,130 @@ export function getAdminDashboardHtml(): string {
       </div>
     </div>
 
+    <!-- TAB TÉCNICOS AUTORIZADOS Y PINS -->
+    <div id="tab-technicians" class="tab-pane">
+      <!-- KPI Stats -->
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 20px;">
+        <div style="background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 12px; padding: 16px;">
+          <div style="font-size: 12px; color: #a5b4fc; text-transform: uppercase; font-weight: 600;">👷 Técnicos Registrados</div>
+          <div id="statTotalTechs" style="font-size: 28px; font-weight: 700; color: #f9fafb; margin-top: 4px;">0</div>
+          <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Guardados en Turso DB</div>
+        </div>
+
+        <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 12px; padding: 16px;">
+          <div style="font-size: 12px; color: #6ee7b7; text-transform: uppercase; font-weight: 600;">🟢 Técnicos Activos</div>
+          <div id="statActiveTechs" style="font-size: 28px; font-weight: 700; color: #34d399; margin-top: 4px;">0</div>
+          <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Con permisos de activación y planes</div>
+        </div>
+
+        <div style="background: rgba(6, 182, 212, 0.1); border: 1px solid rgba(6, 182, 212, 0.3); border-radius: 12px; padding: 16px;">
+          <div style="font-size: 12px; color: #67e8f9; text-transform: uppercase; font-weight: 600;">🔐 Seguridad y PIN</div>
+          <div style="font-size: 16px; font-weight: 700; color: #e0f2fe; margin-top: 6px;">PIN Personal (5 Dígitos)</div>
+          <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Validación automática por WhatsApp</div>
+        </div>
+      </div>
+
+      <!-- Main Card -->
+      <div class="card">
+        <div class="card-header" style="flex-wrap: wrap; gap: 10px;">
+          <div>
+            <div class="card-title">👷 Lista de Técnicos Autorizados para WhatsApp</div>
+            <p style="color: var(--text-muted); font-size: 13px; margin-top: 4px;">
+              Solo los números y PINs registrados en esta lista pueden ejecutar comandos de activación en SmartOLT y cambios de paquetes.
+            </p>
+          </div>
+          <div style="display: flex; gap: 10px;">
+            <button type="button" class="btn btn-primary" onclick="openTechnicianModal()">➕ Registrar Nuevo Técnico</button>
+            <button type="button" class="btn btn-secondary btn-test" onclick="loadTechnicians()">🔄 Refrescar</button>
+          </div>
+        </div>
+
+        <!-- Guía rápida de Comandos -->
+        <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--card-border); border-radius: 10px; padding: 14px; margin-bottom: 20px;">
+          <div style="font-weight: 600; font-size: 13px; color: #38bdf8; margin-bottom: 6px;">💡 Comandos habilitados para los técnicos autorizados en WhatsApp:</div>
+          <div style="font-size: 12px; color: var(--text-muted); line-height: 1.6;">
+            • <strong>Activación en un solo mensaje:</strong> <code style="color: #67e8f9; font-family: var(--font-mono);">activar cliente [SN] [Folio-Nombre] [Plan] [Zona]</code><br>
+            • <strong>Cambio de Paquete en tiempo real:</strong> <code style="color: #67e8f9; font-family: var(--font-mono);">cambiar plan [Folio o SN] a [Nuevo Paquete]</code> <em>(ej: cambiar plan 3000 a 600 megas)</em>
+          </div>
+        </div>
+
+        <!-- Tabla de Técnicos -->
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Nombre del Técnico</th>
+                <th>Teléfono WhatsApp</th>
+                <th>PIN (5 Dígitos)</th>
+                <th>Estatus</th>
+                <th>Rol / Permisos</th>
+                <th>Fecha de Alta</th>
+                <th style="text-align: right;">Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="techniciansTableBody">
+              <tr>
+                <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 24px;">⏳ Cargando técnicos desde Turso DB...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL REGISTRO / EDICIÓN DE TÉCNICO -->
+    <div id="technicianModal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.75); backdrop-filter: blur(8px); z-index: 1000; align-items: center; justify-content: center; padding: 20px;">
+      <div style="background: #111827; border: 1px solid var(--card-border); border-radius: 16px; width: 100%; max-width: 520px; padding: 24px; box-shadow: 0 20px 50px rgba(0,0,0,0.7);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px;">
+          <h3 id="modalTechTitle" style="font-size: 18px; font-weight: 700; color: #f9fafb;">➕ Registrar Técnico Autorizado</h3>
+          <button type="button" onclick="closeTechnicianModal()" style="background: transparent; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer;">✕</button>
+        </div>
+
+        <form id="techForm" onsubmit="event.preventDefault(); saveTechnician();">
+          <input type="hidden" id="techId" value="">
+
+          <div class="form-group">
+            <label>Nombre Completo del Técnico *</label>
+            <input type="text" id="techName" placeholder="Ej: Juan Pérez / Técnico Zona 1" required>
+          </div>
+
+          <div class="form-group">
+            <label>Número de WhatsApp (con lada o 10 dígitos) *</label>
+            <input type="text" id="techPhone" class="mono" placeholder="Ej: 7721155543 o 5217721155543" required>
+            <small style="color: var(--text-muted); font-size: 11px;">El bot identificará automáticamente los mensajes provenientes de este número.</small>
+          </div>
+
+          <div class="form-group">
+            <label>PIN Personal de 5 Dígitos *</label>
+            <div class="input-row">
+              <input type="text" id="techPin" class="mono" maxlength="5" placeholder="12345" required style="font-size: 16px; letter-spacing: 2px; font-weight: 700;">
+              <button type="button" class="btn btn-cyan" onclick="generateRandomPin()" title="Generar PIN aleatorio">🎲 Generar PIN</button>
+            </div>
+            <small style="color: var(--text-muted); font-size: 11px;">PIN exclusivo de 5 dígitos numéricos asignado a este técnico.</small>
+          </div>
+
+          <div class="form-group">
+            <label>Estado en el Sistema</label>
+            <select id="techActive">
+              <option value="1">🟢 Activo (Autorizado para activar y cambiar planes)</option>
+              <option value="0">🔴 Inactivo (Acceso suspendido)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>Notas / Zona Asignada (Opcional)</label>
+            <input type="text" id="techNotes" placeholder="Ej: Técnico de campo Actopan / San Agustín">
+          </div>
+
+          <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px;">
+            <button type="button" class="btn btn-secondary" onclick="closeTechnicianModal()">Cancelar</button>
+            <button type="submit" id="btnSaveTech" class="btn btn-primary">💾 Guardar en Turso DB</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <!-- Floating Save Bar -->
     <div class="floating-bar">
       <span style="font-size: 13px; color: var(--text-muted);">Los cambios se guardan directamente en Turso Cloud.</span>
@@ -1087,6 +1212,9 @@ export function getAdminDashboardHtml(): string {
       }
 
       try {
+        if (tabId === 'technicians') {
+          loadTechnicians();
+        }
         if (tabId === 'audit') {
           loadAuditData(1);
           loadWisphubStats();
@@ -1899,10 +2027,212 @@ export function getAdminDashboardHtml(): string {
       }
     }
 
+    // ==========================================
+    // MÓDULO DE GESTIÓN DE TÉCNICOS Y PINS
+    // ==========================================
+    let allTechnicians = [];
+
+    async function loadTechnicians() {
+      const tbody = document.getElementById('techniciansTableBody');
+      if (!tbody) return;
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 24px;">⏳ Consultando técnicos en Turso DB...</td></tr>';
+
+      try {
+        const res = await fetch('/api/technicians');
+        const data = await res.json();
+
+        if (data.success && data.technicians) {
+          allTechnicians = data.technicians;
+
+          const total = allTechnicians.length;
+          const active = allTechnicians.filter(t => t.is_active === 1).length;
+          document.getElementById('statTotalTechs').innerText = total;
+          document.getElementById('statActiveTechs').innerText = active;
+
+          if (allTechnicians.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 30px;">' +
+              'No hay técnicos registrados aún.<br>' +
+              '<button class="btn btn-primary" onclick="openTechnicianModal()" style="margin-top: 10px; font-size: 12px;">➕ Registrar Primer Técnico</button>' +
+            '</td></tr>';
+            return;
+          }
+
+          tbody.innerHTML = allTechnicians.map(t => {
+            const dateStr = t.created_at ? new Date(t.created_at).toLocaleDateString('es-MX', { year: 'numeric', month: 'short', day: 'numeric' }) : '-';
+            const isActive = t.is_active === 1;
+            const statusBadge = isActive
+              ? '<span class="pill pill-green">🟢 Activo</span>'
+              : '<span class="pill pill-red">🔴 Inactivo</span>';
+
+            const cleanPhone = t.phone.replace(/\D/g, '');
+            const waLink = '<a href="https://wa.me/' + cleanPhone + '" target="_blank" style="color: #60a5fa; text-decoration: none; font-family: var(--font-mono); font-weight: 600;">' + t.phone + ' ↗</a>';
+
+            const pinDisplay = '<span style="font-family: var(--font-mono); font-size: 15px; font-weight: 700; color: #fbbf24; background: rgba(245, 158, 11, 0.12); padding: 2px 8px; border-radius: 6px; letter-spacing: 2px;">' + t.pin + '</span> ' +
+              '<button type="button" onclick="copyPinToClipboard(&quot;' + t.pin + '&quot;)" style="background: transparent; border: none; cursor: pointer; font-size: 13px; color: var(--text-muted);" title="Copiar PIN">📋</button>';
+
+            const notesText = t.notes ? '<br><small style="color: var(--text-muted);">' + t.notes + '</small>' : '';
+
+            return '<tr>' +
+              '<td style="color: var(--text-muted); font-family: var(--font-mono);">' + t.id + '</td>' +
+              '<td style="font-weight: 700; color: #f9fafb;">' + t.name + notesText + '</td>' +
+              '<td>' + waLink + '</td>' +
+              '<td>' + pinDisplay + '</td>' +
+              '<td>' + statusBadge + '</td>' +
+              '<td><span class="pill pill-blue">' + (t.role || 'TECNICO') + '</span></td>' +
+              '<td style="font-size: 12px; color: var(--text-muted);">' + dateStr + '</td>' +
+              '<td style="text-align: right; white-space: nowrap;">' +
+                '<button class="btn btn-secondary btn-test" onclick="editTechnicianAction(' + t.id + ')" style="padding: 4px 8px; font-size: 11px; margin-right: 4px;">✏️ Editar</button>' +
+                '<button class="btn btn-secondary btn-test" onclick="toggleTechnicianStatus(' + t.id + ')" style="padding: 4px 8px; font-size: 11px; margin-right: 4px;">' + (isActive ? '⏸️ Desactivar' : '▶️ Activar') + '</button>' +
+                '<button class="btn btn-secondary btn-test" onclick="deleteTechnicianAction(' + t.id + ', &quot;' + t.name + '&quot;)" style="padding: 4px 8px; font-size: 11px; color: #f87171;">🗑️</button>' +
+              '</td>' +
+            '</tr>';
+          }).join('');
+        }
+      } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="8" style="color: #f87171; text-align: center; padding: 24px;">❌ Error al cargar técnicos desde Turso DB</td></tr>';
+      }
+    }
+
+    function generateRandomPin() {
+      const pin = Math.floor(10000 + Math.random() * 90000).toString();
+      document.getElementById('techPin').value = pin;
+    }
+
+    function copyPinToClipboard(pin) {
+      navigator.clipboard.writeText(pin).then(() => {
+        showToast('📋 PIN ' + pin + ' copiado');
+      }).catch(() => {
+        showToast('PIN: ' + pin);
+      });
+    }
+
+    function openTechnicianModal(editData = null) {
+      const modal = document.getElementById('technicianModal');
+      const title = document.getElementById('modalTechTitle');
+      const techId = document.getElementById('techId');
+      const techName = document.getElementById('techName');
+      const techPhone = document.getElementById('techPhone');
+      const techPin = document.getElementById('techPin');
+      const techActive = document.getElementById('techActive');
+      const techNotes = document.getElementById('techNotes');
+
+      if (editData) {
+        title.innerText = '✏️ Editar Técnico';
+        techId.value = editData.id;
+        techName.value = editData.name || '';
+        techPhone.value = editData.phone || '';
+        techPin.value = editData.pin || '';
+        techActive.value = String(editData.is_active ?? 1);
+        techNotes.value = editData.notes || '';
+      } else {
+        title.innerText = '➕ Registrar Nuevo Técnico';
+        techId.value = '';
+        techName.value = '';
+        techPhone.value = '';
+        generateRandomPin();
+        techActive.value = '1';
+        techNotes.value = '';
+      }
+
+      modal.style.display = 'flex';
+    }
+
+    function closeTechnicianModal() {
+      document.getElementById('technicianModal').style.display = 'none';
+    }
+
+    function editTechnicianAction(id) {
+      const tech = allTechnicians.find(t => t.id === id);
+      if (tech) {
+        openTechnicianModal(tech);
+      }
+    }
+
+    async function saveTechnician() {
+      const id = document.getElementById('techId').value;
+      const name = document.getElementById('techName').value.trim();
+      const phone = document.getElementById('techPhone').value.trim();
+      const pin = document.getElementById('techPin').value.trim();
+      const is_active = parseInt(document.getElementById('techActive').value, 10);
+      const notes = document.getElementById('techNotes').value.trim();
+      const btn = document.getElementById('btnSaveTech');
+
+      if (!name || !phone || !pin) {
+        showToast('Por favor completa nombre, teléfono y PIN de 5 dígitos', true);
+        return;
+      }
+
+      if (pin.length !== 5) {
+        showToast('El PIN debe tener exactamente 5 dígitos numéricos', true);
+        return;
+      }
+
+      btn.disabled = true;
+      btn.innerText = 'Guardando en Turso...';
+
+      try {
+        const payload = { name, phone, pin, is_active, notes, role: 'TECNICO' };
+        const url = id ? ('/api/technicians/' + id + '/update') : '/api/technicians';
+        const method = 'POST';
+
+        const res = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+        if (data.success) {
+          showToast('✅ ' + (data.message || 'Técnico guardado exitosamente'));
+          closeTechnicianModal();
+          loadTechnicians();
+        } else {
+          showToast('❌ Error: ' + (data.error || 'No se pudo guardar'), true);
+        }
+      } catch (err) {
+        showToast('❌ Error de conexión: ' + err.message, true);
+      } finally {
+        btn.disabled = false;
+        btn.innerText = '💾 Guardar en Turso DB';
+      }
+    }
+
+    async function toggleTechnicianStatus(id) {
+      try {
+        const res = await fetch('/api/technicians/' + id + '/toggle', { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+          showToast('✅ Estado del técnico actualizado');
+          loadTechnicians();
+        } else {
+          showToast('Error: ' + data.error, true);
+        }
+      } catch (err) {
+        showToast('Error al cambiar estado', true);
+      }
+    }
+
+    async function deleteTechnicianAction(id, name) {
+      if (!confirm('¿Estás seguro de que deseas eliminar al técnico "' + name + '" del sistema?')) return;
+      try {
+        const res = await fetch('/api/technicians/' + id, { method: 'DELETE' });
+        const data = await res.json();
+        if (data.success) {
+          showToast('✅ Técnico eliminado');
+          loadTechnicians();
+        } else {
+          showToast('Error: ' + data.error, true);
+        }
+      } catch (err) {
+        showToast('Error al eliminar técnico', true);
+      }
+    }
+
     // Inicializar
     loadSettings();
     loadSmartOltStats();
     loadWisphubStats();
+    loadTechnicians();
   </script>
 </body>
 </html>`;

@@ -347,7 +347,16 @@ export class BotOrchestrator {
       }
     }
 
-    // D. Comando de activación de técnico (ej: "ACTIVAR 4317B5", "ACTIVAR 4317B5 3456-Juan Perez", "ALTA ONU 4317B5")
+    // D. Comando de cambio de paquete/plan para técnicos (ej: "cambiar paquete 3000 a 600 megas", "cambiar plan c24b0 800 megas")
+    const esComandoCambioPaquete = /(?:cambiar|modificar|actualizar|subir|bajar)\s+(?:de\s+)?(?:paquete|plan|velocidad|megas)\b/i.test(rawText) ||
+      /^cambiar\s+(?:paquete|plan)\b/i.test(lowerMsg);
+
+    if (esComandoCambioPaquete) {
+      await this.procesarCambioPaqueteTecnico(phone, rawText, session, targetJid);
+      return;
+    }
+
+    // E. Comando de activación de técnico (ej: "ACTIVAR 4317B5", "ACTIVAR 4317B5 3456-Juan Perez", "activar cliente c24b0 3000 Juan Perez 600 megas")
     const esComandoActivacion = buttonId === 'BTN_ACTIVAR_MODEM' ||
       /(?:activar|alta|aprovisionar|registrar)\s+(?:modem|onu|equipo|serie)?\s*[a-zA-Z0-9]{4,16}/i.test(rawText) ||
       lowerMsg.startsWith('activar ') ||
@@ -3232,6 +3241,161 @@ export class BotOrchestrator {
   }
 
   /**
+   * Verifica si el remitente es un técnico autorizado.
+   * Si no hay ningún técnico registrado en la BD aún, permite la operación para pruebas iniciales.
+   */
+  private static async verificarAutorizacionTecnico(phone: string, rawText?: string): Promise<{ autorizado: boolean; tech: any | null }> {
+    try {
+      const allTechs = await TursoService.getTechnicians();
+      // Si aún no se ha dado de alta ningún técnico en el panel, se permite acceso para configuración inicial
+      if (allTechs.length === 0) {
+        return { autorizado: true, tech: null };
+      }
+
+      // Buscar si incluyeron un PIN de 5 dígitos en el texto
+      const pinMatch = (rawText || '').match(/\b(\d{5})\b/);
+      const pin = pinMatch ? pinMatch[1] : undefined;
+
+      const tech = await TursoService.isAuthorizedTechnician(phone, pin);
+      return { autorizado: Boolean(tech), tech };
+    } catch (err: any) {
+      logger.error('Error al verificar técnico:', err?.message || err);
+      return { autorizado: false, tech: null };
+    }
+  }
+
+  /**
+   * Procesa la solicitud de cambio de paquete/velocidad en caliente para técnicos de campo
+   * Comando: "cambiar plan [Folio/Nombre/SN] a [Nuevo Paquete]"
+   */
+  private static async procesarCambioPaqueteTecnico(
+    phone: string,
+    rawText: string,
+    session: Session | null,
+    targetJid: string
+  ): Promise<void> {
+    const auth = await this.verificarAutorizacionTecnico(phone, rawText);
+    if (!auth.autorizado) {
+      await this.enviarYLoguear(
+        phone,
+        `⚠️ *Acceso Restringido - Área Técnica*\n\nTu número (*${phone}*) no está registrado como técnico autorizado para cambiar paquetes o activar equipos.\n\n👉 Solicita tu registro y tu *PIN de 5 dígitos* al administrador en el panel de control.`,
+        'CAMBIO_PAQUETE_TECNICO',
+        'NO_AUTORIZADO',
+        targetJid
+      );
+      return;
+    }
+
+    // Extraer velocidad solicitada (ej. "600 megas", "100M", "50 MB", "800")
+    const cleanLower = rawText.toLowerCase().replace(/^(?:cambiar|modificar|actualizar|subir|bajar)\s+(?:de\s+)?(?:paquete|plan|velocidad|megas)\s*/i, '').trim();
+    
+    // Buscar patrón de velocidad (ej. "600 megas", "a 600m", "40mb", "600")
+    const speedMatch = cleanLower.match(/(?:a\s+)?(\d{2,4})\s*(?:m|mb|megas|mega)?\b/i);
+    if (!speedMatch) {
+      await this.enviarYLoguear(
+        phone,
+        `🛠️ *Cambio de Paquete en SmartOLT*\n\nPara modificar el plan de un cliente, envía:\n\n👉 *cambiar plan [Folio o SN o Nombre] a [Nuevo Paquete]*\n\n_Ejemplos:_\n• \`cambiar plan 3000 a 600 megas\`\n• \`cambiar paquete c24b0 800 megas\`\n• \`cambiar plan Juan de Dios Moran a 400 megas\``,
+        'CAMBIO_PAQUETE_TECNICO',
+        'AYUDA_CAMBIO_PAQUETE',
+        targetJid
+      );
+      return;
+    }
+
+    const megas = speedMatch[1];
+    const newPlan = `${megas} megas`;
+
+    // Extraer identificador del cliente (eliminar la parte de la velocidad y palabras clave)
+    let target = cleanLower
+      .replace(speedMatch[0], '')
+      .replace(/\b(?:a|al|para|del|cliente|folio|sn|onu|modem|pin\s*\d{5})\b/gi, '')
+      .trim();
+
+    if (!target) {
+      await this.enviarYLoguear(
+        phone,
+        `⚠️ *Por favor indica el cliente o SN al que deseas cambiarle el paquete.*\n\nEjemplo: \`cambiar plan 3000 a ${megas} megas\` o \`cambiar plan c24b0 a ${megas} megas\`.`,
+        'CAMBIO_PAQUETE_TECNICO',
+        'FALTA_DESTINO',
+        targetJid
+      );
+      return;
+    }
+
+    await this.enviarYLoguear(
+      phone,
+      `🔍 Localizando cliente o módem *${target}* en SmartOLT para aplicar ${newPlan}...`,
+      'CAMBIO_PAQUETE_TECNICO',
+      'BUSCANDO_CLIENTE_CAMBIO',
+      targetJid
+    );
+
+    // 1. Buscar en Turso DB / SmartOLT
+    let onuRecord = await TursoService.getOnuById(target);
+
+    if (!onuRecord) {
+      // Búsqueda por folio o prefijo numérico
+      const folioMatch = target.match(/^(\d{1,6})/);
+      if (folioMatch) {
+        const client = await TursoService.getWisphubClientByAny({ id: folioMatch[1] });
+        if (client && client.sn_onu) {
+          onuRecord = await TursoService.getOnuById(client.sn_onu);
+        }
+      }
+    }
+
+    if (!onuRecord) {
+      // Búsqueda difusa por nombre
+      const fuzzy = await TursoService.searchOnusFuzzy(target, 1);
+      if (fuzzy.length > 0 && fuzzy[0].matchScore >= 45) {
+        onuRecord = fuzzy[0];
+      }
+    }
+
+    if (!onuRecord) {
+      await this.enviarYLoguear(
+        phone,
+        `❌ *No se encontró el cliente o módem "${target}" en el sistema.*\n\n💡 *Consejo:* Intenta buscando por el número de Folio (ej: 3000), por los últimos dígitos del SN (ej: c24b0) o por el nombre del cliente.`,
+        'CAMBIO_PAQUETE_TECNICO',
+        'CLIENTE_NO_ENCONTRADO',
+        targetJid
+      );
+      return;
+    }
+
+    // 2. Ejecutar cambio de velocidad en SmartOLT
+    const result = await SmartOLTService.updateSpeedProfile(onuRecord.unique_external_id || onuRecord.sn, newPlan);
+
+    if (result.success) {
+      const techInfo = auth.tech ? `• *Técnico:* ${auth.tech.name}\n` : '';
+      const cardSuccess = `⚡ *PAQUETE ACTUALIZADO CON ÉXITO*
+──────────────────────────────
+• *Cliente:* *${onuRecord.name}*
+• *Serie (SN):* *${onuRecord.sn}*
+• *Nuevo Paquete:* *${megas} Megas* (${result.downProfile} / ${result.upProfile})
+• *Zona:* *${onuRecord.zone_name || 'Actopan'}*
+${techInfo}──────────────────────────────
+✅ Perfil de velocidad aplicado y activo en SmartOLT.`;
+
+      await this.enviarYLoguear(
+        phone,
+        cardSuccess,
+        'CAMBIO_PAQUETE_TECNICO',
+        'CAMBIO_PAQUETE_EXITOSO',
+        targetJid
+      );
+    } else {
+      await this.enviarYLoguear(
+        phone,
+        `❌ *Error al cambiar el paquete en SmartOLT:*\n\n${result.message}`,
+        'CAMBIO_PAQUETE_TECNICO',
+        'ERROR_CAMBIO_PAQUETE',
+        targetJid
+      );
+    }
+  }
+
+  /**
    * Procesa la solicitud de activación/autorización de ONU para técnicos de campo en un solo mensaje
    * Comando: "activar cliente [6 dígitos SN] [Folio-Nombre] [Plan] [Zona]"
    */
@@ -3241,6 +3405,18 @@ export class BotOrchestrator {
     session: Session | null,
     targetJid: string
   ): Promise<void> {
+    const auth = await this.verificarAutorizacionTecnico(phone, rawText);
+    if (!auth.autorizado) {
+      await this.enviarYLoguear(
+        phone,
+        `⚠️ *Acceso Restringido - Área Técnica*\n\nTu número (*${phone}*) no está registrado como técnico autorizado para activar equipos en SmartOLT.\n\n👉 Solicita tu alta y tu *PIN de 5 dígitos* al administrador en el panel de control.`,
+        'ACTIVACION_TECNICO',
+        'NO_AUTORIZADO',
+        targetJid
+      );
+      return;
+    }
+
     const parsed = this.parseActivationMessage(rawText);
 
     // Si el mensaje viene vacío o solo enviaron "activar cliente" sin los datos

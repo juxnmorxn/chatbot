@@ -498,4 +498,105 @@ export class SmartOLTService {
       };
     }
   }
+
+  /**
+   * Actualiza el perfil de velocidad (Paquete) de una ONU en SmartOLT en tiempo real
+   */
+  static async updateSpeedProfile(
+    idOrSn: string,
+    plan: string
+  ): Promise<{ success: boolean; message: string; downProfile: string; upProfile: string; onuRecord?: SmartOltOnuRecord | null }> {
+    const profiles = getSmartOltSpeedProfiles(plan);
+    logger.info(`Actualizando perfil de velocidad para ONU ${idOrSn} a ${profiles.down} / ${profiles.up}`);
+
+    // 1. Buscar registro en Turso DB para tener datos completos del cliente
+    let onuRecord = await TursoService.getOnuById(idOrSn);
+    if (!onuRecord) {
+      const fuzzy = await TursoService.searchOnusFuzzy(idOrSn, 1);
+      if (fuzzy.length > 0 && fuzzy[0].matchScore >= 50) {
+        onuRecord = fuzzy[0];
+      }
+    }
+
+    const externalId = onuRecord?.unique_external_id || idOrSn;
+    const apiKey = this.getApiKey();
+
+    if (!apiKey || apiKey.includes('tu_token')) {
+      logger.info('Modo DEV: Actualización de perfil de velocidad simulada.');
+      if (onuRecord) {
+        TursoService.saveSmartOltOnus([
+          {
+            ...onuRecord,
+            speed_profile: profiles.down,
+            updated_at: new Date().toISOString(),
+          },
+        ]).catch(() => {});
+      }
+      return {
+        success: true,
+        message: `Perfil actualizado a ${profiles.down} (Modo Simulación)`,
+        downProfile: profiles.down,
+        upProfile: profiles.up,
+        onuRecord,
+      };
+    }
+
+    try {
+      const api = this.getApi();
+      const bodyData = {
+        onu_external_id: externalId,
+        download_speed_profile_name: profiles.down,
+        upload_speed_profile_name: profiles.up,
+      };
+
+      let response;
+      try {
+        response = await api.post('/onu/update_onu_speed_profiles', bodyData);
+      } catch (err: any) {
+        // Reintentar con endpoint alternativo si el principal difiere por versión
+        response = await api.post('/onu/set_speed_profiles', bodyData);
+      }
+
+      const resData = response.data;
+      logger.info('Respuesta cambio de paquete SmartOLT:', JSON.stringify(resData));
+
+      if (resData?.status === true || response.status === 200 || resData?.response === 'success') {
+        if (onuRecord) {
+          TursoService.saveSmartOltOnus([
+            {
+              ...onuRecord,
+              speed_profile: profiles.down,
+              updated_at: new Date().toISOString(),
+            },
+          ]).catch(() => {});
+        }
+
+        return {
+          success: true,
+          message: resData?.message || `Perfil de velocidad actualizado exitosamente a ${profiles.down}.`,
+          downProfile: profiles.down,
+          upProfile: profiles.up,
+          onuRecord,
+        };
+      } else {
+        return {
+          success: false,
+          message: resData?.message || resData?.error || 'SmartOLT no pudo actualizar el perfil.',
+          downProfile: profiles.down,
+          upProfile: profiles.up,
+          onuRecord,
+        };
+      }
+    } catch (error: any) {
+      logger.error('Error al actualizar perfil de velocidad en SmartOLT:', error?.response?.data || error?.message || error);
+      const errMsg = error?.response?.data?.message || error?.response?.data?.error || error?.message || 'Fallo de comunicación con SmartOLT';
+      return {
+        success: false,
+        message: `Error en SmartOLT: ${errMsg}`,
+        downProfile: profiles.down,
+        upProfile: profiles.up,
+        onuRecord,
+      };
+    }
+  }
 }
