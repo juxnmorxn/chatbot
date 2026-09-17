@@ -2288,12 +2288,12 @@ export function getAdminDashboardHtml(): string {
       const btn = document.getElementById('btnSaveTech');
 
       if (!name || !phone || !pin) {
-        showToast('Por favor completa nombre, teléfono y PIN de 5 dígitos', true);
+        showToast('Por favor completa nombre, teléfono y PIN', true);
         return;
       }
 
-      if (pin.length !== 5) {
-        showToast('El PIN debe tener exactamente 5 dígitos numéricos', true);
+      if (pin.length < 4 || pin.length > 8) {
+        showToast('El PIN debe tener entre 4 y 8 dígitos numéricos', true);
         return;
       }
 

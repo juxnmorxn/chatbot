@@ -1654,10 +1654,10 @@ export class TursoService {
       const cleanPhone = (phone || '').replace(/\D/g, '');
       const last10 = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
 
-      // 1. Si enviaron PIN de 5 dígitos, buscar por PIN y verificar que esté activo
+      // 1. Si enviaron PIN, buscar por PIN y verificar que esté activo
       if (pin) {
-        const cleanPin = pin.replace(/\D/g, '').slice(0, 5);
-        if (cleanPin.length === 5) {
+        const cleanPin = pin.replace(/\D/g, '');
+        if (cleanPin.length >= 4 && cleanPin.length <= 8) {
           const pinRes = await client.execute({
             sql: 'SELECT * FROM technicians WHERE pin = ? AND is_active = 1 LIMIT 1',
             args: [cleanPin],
@@ -1679,32 +1679,32 @@ export class TursoService {
         }
       }
 
-      // 2. Si no hay técnicos en la base de datos, retornar null (o permitir primer registro)
-      if (!last10) return null;
+      // 2. Si no hay teléfono, retornar null
+      if (!last10 && !cleanPhone) return null;
 
-      // 3. Buscar por teléfono exacto o terminación de 10 dígitos (para soportar 521..., 52..., etc.)
-      const phoneRes = await client.execute({
-        sql: `
-          SELECT * FROM technicians 
-          WHERE (phone = ? OR phone LIKE ? OR ? LIKE '%' || phone) AND is_active = 1 
-          LIMIT 1
-        `,
-        args: [cleanPhone, `%${last10}`, cleanPhone],
-      });
+      // 3. Buscar entre técnicos activos comparando números limpios
+      const phoneRes = await client.execute('SELECT * FROM technicians WHERE is_active = 1');
 
-      if (phoneRes.rows.length > 0) {
-        const r: any = phoneRes.rows[0];
-        return {
-          id: Number(r.id),
-          name: String(r.name || ''),
-          phone: String(r.phone || ''),
-          pin: String(r.pin || ''),
-          is_active: Number(r.is_active || 1),
-          role: String(r.role || 'TECNICO'),
-          notes: r.notes ? String(r.notes) : null,
-          created_at: String(r.created_at || ''),
-          updated_at: String(r.updated_at || ''),
-        };
+      for (const row of phoneRes.rows) {
+        const r: any = row;
+        const dbPhoneClean = String(r.phone || '').replace(/\D/g, '');
+        const dbLast10 = dbPhoneClean.length >= 10 ? dbPhoneClean.slice(-10) : dbPhoneClean;
+        if (
+          dbPhoneClean === cleanPhone ||
+          (last10 && dbLast10 && (last10 === dbLast10 || cleanPhone.endsWith(dbLast10) || dbPhoneClean.endsWith(last10)))
+        ) {
+          return {
+            id: Number(r.id),
+            name: String(r.name || ''),
+            phone: String(r.phone || ''),
+            pin: String(r.pin || ''),
+            is_active: Number(r.is_active || 1),
+            role: String(r.role || 'TECNICO'),
+            notes: r.notes ? String(r.notes) : null,
+            created_at: String(r.created_at || ''),
+            updated_at: String(r.updated_at || ''),
+          };
+        }
       }
 
       return null;

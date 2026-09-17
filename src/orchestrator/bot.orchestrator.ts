@@ -402,15 +402,15 @@ export class BotOrchestrator {
       return;
     }
 
-    // E. Comando de activación de técnico (ej: "ACTIVAR 4317B5", "ACTIVAR 4317B5 3456-Juan Perez", "activar cliente c24b0 3000 Juan Perez 600 megas")
+    // E. Comando de activación de técnico (ej: "ACTIVAR 4317B5", "ACTIVAR 4317B5 3456-Juan Perez", "Activación de cliente:d08b6 nombre 12345-nuevo el rincón 40 megas")
     const esComandoActivacion = buttonId === 'BTN_ACTIVAR_MODEM' ||
-      /(?:activar|alta|aprovisionar|registrar)\s+(?:modem|onu|equipo|serie)?\s*[a-zA-Z0-9]{4,16}/i.test(rawText) ||
-      lowerMsg.startsWith('activar ') ||
-      lowerMsg.startsWith('alta ') ||
-      lowerMsg.startsWith('aprovisionar ') ||
-      lowerMsg === 'activar modem' ||
-      lowerMsg === 'activar onu' ||
-      lowerMsg === 'activar';
+      /^(?:activar|activaci[oó]n|alta|aprovisionar|registrar)\b/i.test(lowerMsg) ||
+      /(?:activar|activaci[oó]n|alta|aprovisionar|registrar)\s*(?:de\s+)?(?:cliente|modem|onu|equipo|serie)?[:\s]*/i.test(rawText) ||
+      lowerMsg.startsWith('activar') ||
+      lowerMsg.startsWith('activaci') ||
+      lowerMsg.startsWith('alta') ||
+      lowerMsg.startsWith('aprovisionar') ||
+      lowerMsg.startsWith('registrar');
 
     if (esComandoActivacion) {
       await this.procesarSolicitudActivacionTecnico(phone, rawText, session, targetJid);
@@ -3296,32 +3296,34 @@ export class BotOrchestrator {
     hasAllData: boolean;
   } {
     let text = rawText
-      .replace(/^activar\s+cliente\s*/i, '')
-      .replace(/^activar\s+onu\s*/i, '')
-      .replace(/^activar\s+modem\s*/i, '')
-      .replace(/^activar\s*/i, '')
-      .replace(/^alta\s+cliente\s*/i, '')
-      .replace(/^alta\s*/i, '')
+      .replace(/^(?:activar|activaci[oó]n|alta|aprovisionar|registrar)\s*(?:de\s+)?(?:cliente|modem|onu|equipo|serie)?\s*[:=\s]*/i, '')
       .trim();
 
     let snSuffix = '';
     let plan = '40M';
     let zone = 'Actopan'; // Obligatorio por defecto
 
-    // 1. Extraer Plan si existe explícitamente (ej: 40M, 50M, 100MB, 600 megas, etc.)
-    const planMatch = text.match(/(?:^|\s)(\d{1,4}\s*(?:M|MEGAS|MB|MEGA))\b/i);
+    // 1. Extraer PIN si viene explícito
+    const pinMatch = text.match(/\b(?:pin|clave|pass)\s*[:=\s]*(\d{4,8})\b/i);
+    if (pinMatch) {
+      text = text.replace(pinMatch[0], ' ').trim();
+    }
+
+    // 2. Extraer Plan (ej: 40 megas, 600M, 100MB, etc.)
+    const planMatch = text.match(/(?:^|\s)(?:(?:plan|paquete|velocidad)\s*[:=]?\s*)?(\d{1,4}\s*(?:M|MEGAS|MB|MEGA|GIGAS|GB))\b/i);
     if (planMatch && planMatch[1]) {
-      const rawPlan = planMatch[1].toUpperCase().replace(/\s+/g, '');
-      plan = rawPlan.endsWith('M') || rawPlan.endsWith('MB') ? rawPlan : `${rawPlan}M`;
+      const megasNumMatch = planMatch[1].match(/\d+/);
+      const megasNum = megasNumMatch ? megasNumMatch[0] : '40';
+      plan = `${megasNum}M`;
       text = text.replace(planMatch[0], ' ').trim();
     }
 
-    // 2. Extraer Zona mediante catálogo oficial de SmartOLT
+    // 3. Extraer Zona mediante catálogo oficial de SmartOLT (soporta 'el rincón', 'zona rincon', etc.)
     for (const item of this.SMARTOLT_ZONES) {
       let matched = false;
       for (const alias of item.aliases) {
         const escaped = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const regex = new RegExp(`(?:^|\\s)(${escaped})(?:\\s|$)`, 'i');
+        const regex = new RegExp('(?:^|\\s)(?:zona\\s*[:=]?\\s*)?(?:el\\s+|la\\s+|los\\s+|las\\s+)?(' + escaped + ')(?:\\s|$)', 'i');
         const match = text.match(regex);
         if (match) {
           zone = item.name;
@@ -3333,16 +3335,22 @@ export class BotOrchestrator {
       if (matched) break;
     }
 
-    // 3. Extraer SN: buscar token alfanumérico de 4 a 16 caracteres (ej: c24b0, 4317B5, ZTEGC4317B5, HWTC117C24B0)
-    const snMatch = text.match(/\b([A-Za-z0-9]{4,16})\b/);
-    if (snMatch && (snMatch[1].length === 5 || snMatch[1].length === 6 || snMatch[1].startsWith('ZTE') || snMatch[1].startsWith('HWTC') || /[A-Za-z]/.test(snMatch[1]))) {
-      snSuffix = snMatch[1].toUpperCase();
-      text = text.replace(snMatch[0], ' ').trim();
+    // 4. Extraer SN explícito o token alfanumérico
+    const explicitSn = text.match(/\b(?:sn|serie|onu|modem|mac)\s*[:=\s]*([A-Za-z0-9]{4,16})\b/i);
+    if (explicitSn) {
+      snSuffix = explicitSn[1].toUpperCase();
+      text = text.replace(explicitSn[0], ' ').trim();
     } else {
-      const sixDigitMatch = text.match(/\b([0-9]{5,6})\b/);
-      if (sixDigitMatch) {
-        snSuffix = sixDigitMatch[1];
-        text = text.replace(sixDigitMatch[0], ' ').trim();
+      const snMatch = text.match(/\b([A-Za-z0-9]{4,16})\b/);
+      if (snMatch && (snMatch[1].length === 5 || snMatch[1].length === 6 || snMatch[1].startsWith('ZTE') || snMatch[1].startsWith('HWTC') || /[A-Za-z]/.test(snMatch[1]))) {
+        snSuffix = snMatch[1].toUpperCase();
+        text = text.replace(snMatch[0], ' ').trim();
+      } else {
+        const sixDigitMatch = text.match(/\b([0-9]{5,6})\b/);
+        if (sixDigitMatch) {
+          snSuffix = sixDigitMatch[1];
+          text = text.replace(sixDigitMatch[0], ' ').trim();
+        }
       }
     }
 
@@ -3354,8 +3362,14 @@ export class BotOrchestrator {
       }
     }
 
-    // 4. El resto es el Folio y Nombre Completo del cliente
-    let name = text.replace(/\s+/g, ' ').trim();
+    // 5. Limpiar etiquetas de nombre, cliente, folio, zona, plan
+    text = text
+      .replace(/\b(?:nombre|cliente|folio|zona|plan|paquete|velocidad)\s*[:=\s]*/gi, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    // 6. El resto es el Folio y Nombre Completo del cliente
+    let name = text;
     if (name) {
       const folioPrefixMatch = name.match(/^(\d{1,6})\s*[-_.\s]+\s*(.+)$/i);
       const folioSuffixMatch = name.match(/^(.+)\s*[-_.\s]+\s*(\d{1,6})$/i);
@@ -3369,7 +3383,7 @@ export class BotOrchestrator {
     }
 
     const effectiveSuffix = snSuffix.length > 6 ? snSuffix.slice(-6) : snSuffix;
-    const hasAllData = Boolean(effectiveSuffix && name && name.length >= 3);
+    const hasAllData = Boolean(effectiveSuffix && name && name.length >= 2);
 
     return {
       snSuffix: effectiveSuffix,
@@ -3392,8 +3406,8 @@ export class BotOrchestrator {
         return { autorizado: true, tech: null };
       }
 
-      // Buscar si incluyeron un PIN de 5 dígitos en el texto
-      const pinMatch = (rawText || '').match(/\b(\d{5})\b/);
+      // Buscar si incluyeron un PIN numérico en el texto (4 a 8 dígitos)
+      const pinMatch = (rawText || '').match(/\b(\d{4,8})\b/);
       const pin = pinMatch ? pinMatch[1] : undefined;
 
       const tech = await TursoService.isAuthorizedTechnician(phone, pin);
@@ -3418,7 +3432,7 @@ export class BotOrchestrator {
     if (!auth.autorizado) {
       await this.enviarYLoguear(
         phone,
-        `⚠️ *Acceso Restringido - Área Técnica*\n\nTu número (*${phone}*) no está registrado como técnico autorizado para cambiar paquetes o activar equipos.\n\n👉 Solicita tu registro y tu *PIN de 5 dígitos* al administrador en el panel de control.`,
+        `⚠️ *Acceso Restringido - Área Técnica*\n\nTu número (*${phone}*) no está registrado como técnico autorizado para cambiar paquetes o activar equipos.\n\n👉 Solicita tu registro o proporciona tu *PIN de seguridad* al administrador en el panel de control.`,
         'CAMBIO_PAQUETE_TECNICO',
         'NO_AUTORIZADO',
         targetJid
@@ -3549,7 +3563,7 @@ ${techInfo}───────────────────────
     if (!auth.autorizado) {
       await this.enviarYLoguear(
         phone,
-        `⚠️ *Acceso Restringido - Área Técnica*\n\nTu número (*${phone}*) no está registrado como técnico autorizado para activar equipos en SmartOLT.\n\n👉 Solicita tu alta y tu *PIN de 5 dígitos* al administrador en el panel de control.`,
+        `⚠️ *Acceso Restringido - Área Técnica*\n\nTu número (*${phone}*) no está registrado como técnico autorizado para activar equipos en SmartOLT.\n\n👉 Solicita tu alta o proporciona tu *PIN de seguridad* al administrador en el panel de control.`,
         'ACTIVACION_TECNICO',
         'NO_AUTORIZADO',
         targetJid
