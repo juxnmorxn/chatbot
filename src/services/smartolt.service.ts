@@ -515,11 +515,13 @@ export class SmartOLTService {
       form.append('onu_type', String(payload.onu_type || 'HG8145X6-10'));
       form.append('name', String(payload.name));
       
-      // Modo de Operación WAN: Routing con IP estática
+      // Modo de Operación WAN: Routing con IP estática y acceso remoto habilitado
       form.append('mode', 'Routing');
       form.append('onu_mode', 'Routing');
-      form.append('wan_mode', 'Static IP');
+      form.append('wan_mode', 'Static');
       form.append('wan_ip_mode', 'Static IP');
+      form.append('wan_remote_access', 'enabled_from_everywhere');
+      form.append('remote_access', 'enabled_from_everywhere');
       
       // VLAN y Configuración IP / Máscara / Gateway / DNS
       form.append('vlan', String(payload.vlan));
