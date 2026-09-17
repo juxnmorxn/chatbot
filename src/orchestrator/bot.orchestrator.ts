@@ -3792,14 +3792,21 @@ ${techInfo}───────────────────────
 
     if (result.success) {
       const planDisplay = (payload.download_speed_profile_name || '40MB').replace(/MB-DOWN|MB/i, ' Megas');
-      const successMsg = `🎉 *¡MÓDEM ACTIVADO CON ÉXITO!*
+      const successMsg = `🎉 *¡MÓDEM AUTORIZADO CON ÉXITO!*
 ──────────────────────────────
 • *Cliente:* *${payload.name}*
 • *Zona:* *${payload.zone || 'Actopan'}*
 • *Paquete:* *${planDisplay}*
 • *Serie (SN):* *${payload.sn}*
 ──────────────────────────────
-✅ Módem aprovisionado y navegando en la red.`;
+📡 *PARÁMETROS DE RED / CONECTIVIDAD:*
+• *VLAN:* *${payload.vlan}*
+• *IP Asignada:* *${payload.ip_address}*
+• *Máscara:* *${payload.netmask || '255.255.255.0'}*
+• *Gateway:* *${payload.gateway || '172.19.2.254'}*
+• *DNS:* *8.8.8.8 / 8.8.4.4*
+──────────────────────────────
+✅ Módem aprovisionado en la OLT con su VLAN y Perfil de Velocidad.`;
 
       await this.enviarYLoguear(
         phone,
