@@ -192,9 +192,7 @@ export class BotOrchestrator {
     const account = SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', '012 180 0152433212 90');
     const beneficiary = SettingsService.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', this.getIspName());
     const notes = SettingsService.get('PAYMENT_NOTES', 'PAYMENT_NOTES', '');
-    const mpUrl = SettingsService.get('PAYMENT_MERCADOPAGO_URL', 'MERCADOPAGO_URL') ||
-                  SettingsService.get('PAYMENT_PORTAL_URL', 'PAYMENT_PORTAL_URL') ||
-                  'https://wisphub.net/micuenta/';
+    const mpUrl = SettingsService.get('PAYMENT_MERCADOPAGO_URL', 'MERCADOPAGO_URL', '');
     const clientName = this.formatDisplayName(session?.client_name) || 'tu nombre completo';
 
     let txt = `\n💳 *Opciones de Pago - ${this.getIspName()}*\n\n`;
@@ -754,9 +752,7 @@ export class BotOrchestrator {
             });
           }
 
-          const mpUrl = SettingsService.get('PAYMENT_MERCADOPAGO_URL', 'MERCADOPAGO_URL') ||
-                        SettingsService.get('PAYMENT_PORTAL_URL', 'PAYMENT_PORTAL_URL') ||
-                        'https://wisphub.net/micuenta/';
+          const mpUrl = SettingsService.get('PAYMENT_MERCADOPAGO_URL', 'MERCADOPAGO_URL', '');
           const bank = SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK', 'BBVA Bancomer');
           const account = SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', '012 180 0152433212 90');
           const beneficiary = SettingsService.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', this.getIspName());
@@ -1146,9 +1142,7 @@ export class BotOrchestrator {
           });
         }
 
-        const mpUrl = SettingsService.get('PAYMENT_MERCADOPAGO_URL', 'MERCADOPAGO_URL') ||
-                      SettingsService.get('PAYMENT_PORTAL_URL', 'PAYMENT_PORTAL_URL') ||
-                      'https://wisphub.net/micuenta/';
+        const mpUrl = SettingsService.get('PAYMENT_MERCADOPAGO_URL', 'MERCADOPAGO_URL', '');
         const bank = SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK', 'BBVA Bancomer');
         const account = SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', '012 180 0152433212 90');
         const beneficiary = SettingsService.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', this.getIspName());
@@ -2415,9 +2409,7 @@ export class BotOrchestrator {
 
       if (estadoFinanciero.suspendido || estadoFinanciero.totalDeuda > 0) {
         logger.info(`Intento de reinicio bloqueado: Cliente ${phone} (${session?.client_name}) suspendido/adeudo en WispHub.`);
-        const mpUrl = SettingsService.get('PAYMENT_MERCADOPAGO_URL', 'MERCADOPAGO_URL') ||
-                      SettingsService.get('PAYMENT_PORTAL_URL', 'PAYMENT_PORTAL_URL') ||
-                      'https://wisphub.net/micuenta/';
+        const mpUrl = SettingsService.get('PAYMENT_MERCADOPAGO_URL', 'MERCADOPAGO_URL', '');
         const bank = SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK', 'BBVA Bancomer');
         const account = SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', '012 180 0152433212 90');
         const beneficiary = SettingsService.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', this.getIspName());
@@ -2532,9 +2524,7 @@ export class BotOrchestrator {
     }
 
     // Si está suspendido o registra adeudo sin facturas listadas
-    const mpUrl = SettingsService.get('PAYMENT_MERCADOPAGO_URL', 'MERCADOPAGO_URL') ||
-                  SettingsService.get('PAYMENT_PORTAL_URL', 'PAYMENT_PORTAL_URL') ||
-                  'https://wisphub.net/micuenta/';
+    const mpUrl = SettingsService.get('PAYMENT_MERCADOPAGO_URL', 'MERCADOPAGO_URL', '');
     const bank = SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK', 'BBVA Bancomer');
     const account = SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', '012 180 0152433212 90');
     const beneficiary = SettingsService.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', this.getIspName());
