@@ -11,6 +11,35 @@ import { cleanPersonName, computeNameMatchScore } from '../utils/fuzzy-matcher';
 
 const logger = new Logger('BotOrchestrator');
 
+/**
+ * Limpia y formatea el nombre del cliente para mostrarlo cálido, humano y sin códigos o prefijos de contrato:
+ * - Elimina prefijos numéricos como "696-", "0696-", "1234 - ", etc.
+ * - Si soloPrimerNombre = true, toma el nombre de pila principal (ej. "Maria del Pilar" o "Carlos") evitando apellidos largos.
+ */
+export function formatDisplayName(rawName?: string | null, soloPrimerNombre: boolean = false): string {
+  if (!rawName) return '';
+  let clean = rawName.replace(/^[\d\s\-#_.]+/i, '').trim();
+  if (!clean) return rawName.trim();
+
+  if (soloPrimerNombre) {
+    const parts = clean.split(/\s+/).filter(Boolean);
+    if (parts.length <= 2) {
+      return parts.join(' ');
+    }
+    const firstLower = parts[0].toLowerCase();
+    const secondLower = parts[1].toLowerCase();
+    if (['maria', 'maría', 'juan', 'jose', 'josé', 'ana', 'luis', 'carlos'].includes(firstLower) && parts.length >= 2) {
+      if (['del', 'de', 'la'].includes(secondLower) && parts.length >= 3) {
+        return `${parts[0]} ${parts[1]} ${parts[2]}`; // ej. Maria del Pilar
+      }
+      return `${parts[0]} ${parts[1]}`; // ej. Juan Carlos
+    }
+    return parts[0];
+  }
+
+  return clean;
+}
+
 export interface IncomingMessageEvent {
   phone: string;
   remoteJid?: string;
@@ -127,12 +156,42 @@ export class BotOrchestrator {
   /**
    * Genera el texto con los datos bancarios oficiales configurados en el panel
    */
+  /**
+   * Limpia y formatea el nombre del cliente para mostrarlo de forma humana, cálida y natural
+   * (Elimina prefijos numéricos como '696-', '0696-', contratos, puntos finales y deja solo nombres de pila o nombres limpios).
+   */
+  private static formatDisplayName(rawName?: string | null, soloPrimerNombre: boolean = false): string {
+    if (!rawName) return '';
+    let name = rawName
+      .replace(/^0*\d+[\s\-_:]+/g, '') // Elimina prefijos numéricos como "696-", "0696-", "1144 - "
+      .replace(/\s*\(.*?\)/g, '')
+      .replace(/[.\-_]+$/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (!name) return '';
+
+    // Si solo queremos el primer nombre o nombres de pila (ej. "Maria del Pilar" de "Maria del Pilar Perez Mendoza")
+    if (soloPrimerNombre) {
+      const parts = name.split(' ');
+      if (parts.length >= 2 && ['maria', 'ma.', 'ma', 'jose', 'juan'].includes(parts[0].toLowerCase())) {
+        if (parts.length >= 3 && ['del', 'de', 'la'].includes(parts[1].toLowerCase())) {
+          return `${parts[0]} ${parts[1]} ${parts[2]}`;
+        }
+        return `${parts[0]} ${parts[1]}`;
+      }
+      return parts[0];
+    }
+
+    return name;
+  }
+
   private static getFichaBancaria(session: Session | null): string {
     const bank = SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK', '');
     const account = SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', '');
     const beneficiary = SettingsService.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', '');
     const notes = SettingsService.get('PAYMENT_NOTES', 'PAYMENT_NOTES', '');
-    const clientName = session?.client_name || 'tu nombre completo';
+    const clientName = this.formatDisplayName(session?.client_name) || 'tu nombre completo';
 
     let txt = `\n💳 *Datos de Pago y Transferencia Bancaria - ${this.getIspName()}*\n\n`;
     if (bank) txt += `• *Banco:* ${bank}\n`;
@@ -349,6 +408,12 @@ export class BotOrchestrator {
       return;
     }
 
+    // Si el cliente está respondiendo si desea ser canalizado con un asesor humano (ej. cobertura en patio)
+    if (session?.step === 'ESPERANDO_CANALIZACION_ASESOR') {
+      await this.procesarRespuestaCanalizacionAsesor(phone, rawText, session, targetJid);
+      return;
+    }
+
     // Si el cliente está enviando su ubicación o domicilio para visita técnica
     if (session?.step === 'ESPERANDO_UBICACION_TECNICO') {
       await this.procesarUbicacionTecnico(phone, rawText, event, session, targetJid);
@@ -548,7 +613,7 @@ export class BotOrchestrator {
         if (clasif.intencion === 'SALUDO' || clasif.intencion === 'DESCONOCIDO') {
           await this.enviarYLoguear(
             phone,
-            `¡Hola! 👋 Bienvenido al centro de atención y soporte técnico de *${this.getIspName()}*.\n\nPara poder ubicar tu módem en nuestro sistema y verificar tu señal en tiempo real, ¿podrías indicarme tu *Nombre completo* tal como aparece en tu servicio?`,
+            `¡Hola! 👋 Bienvenido al centro de atención y soporte de *${this.getIspName()}*.\n\nPara poder ayudarte y revisar tu conexión a detalle, ¿me indicas tu *Nombre completo* (con apellidos) o tu número de contrato?`,
             'SALUDO',
             'SOLICITAR_IDENTIFICACION',
             targetJid
@@ -561,7 +626,7 @@ export class BotOrchestrator {
         const queja = clasif.resumen_queja ? ` sobre: _"${clasif.resumen_queja}"_` : '';
         await this.enviarYLoguear(
           phone,
-          `Entendido tu reporte${queja}. Veo que presentas problemas con tu conexión.\n\nPara poder revisar los niveles de luz y señal de tu módem en nuestra central, ¿me indicas tu *Nombre completo* o número de contrato?`,
+          `Entendido tu reporte${queja}. Para poder revisar tu servicio a detalle y ver qué sucede, ¿me indicas tu *Nombre completo* (con apellidos) o número de contrato?`,
           'FALLA_INTERNET',
           'SOLICITAR_NOMBRE_PARA_DIAGNOSTICO',
           targetJid
@@ -976,7 +1041,8 @@ export class BotOrchestrator {
       return;
     }
 
-    const nombre = session.client_name ? ` *${session.client_name}*` : '';
+    const nombreLimpio = formatDisplayName(session.client_name, true);
+    const nombre = nombreLimpio ? ` *${nombreLimpio}*` : '';
     const detalleQueja = c.resumen_queja || 'Falla o lentitud de internet';
     let meta: any = {};
     try { meta = JSON.parse(session.metadata || '{}'); } catch {}
@@ -1001,8 +1067,8 @@ export class BotOrchestrator {
 
         await this.enviarYLoguear(
           phone,
-          `Hola${nombre}, revisé tu servicio en nuestro sistema y confirmamos que tu cuenta se encuentra al corriente y sin ningún adeudo pendiente. 👍\n\n` +
-          `Detectamos que tu línea estaba pendiente de sincronización en el servidor, por lo que acabamos de enviar la señal de activación a tu módem. En aproximadamente 1 a 2 minutos quedará restablecida tu navegación con normalidad.`,
+          `Hola${nombre}, revisé tu servicio y confirmamos que tu cuenta se encuentra al corriente y sin ningún adeudo pendiente. 👍\n\n` +
+          `Detectamos que tu línea estaba pendiente de sincronización, por lo que acabamos de enviar la señal de activación a tu módem. En aproximadamente 1 a 2 minutos quedará restablecida tu navegación con normalidad.`,
           'FALLA_INTERNET',
           'AUTO_ACTIVACION_PAGADO',
           targetJid
@@ -1022,7 +1088,7 @@ export class BotOrchestrator {
           : `tu servicio se encuentra suspendido por corte o inactividad`;
 
         const mensajeMoroso =
-          `Hola${nombre}, revisé tu servicio en el sistema y detectamos que ${montoTexto}.\n\n` +
+          `Hola${nombre}, revisé tu servicio y detectamos que ${montoTexto}.\n\n` +
           `Para reactivar tu navegación de inmediato, por favor realiza tu pago a:\n` +
           `💳 *${bank}* | CLABE: *${account}*\n` +
           `Beneficiario: *${beneficiary}*\n` +
@@ -1237,9 +1303,9 @@ export class BotOrchestrator {
 
     // CASO C: LÍNEA EN LÍNEA (ONLINE) O ESTADO NORMAL - DIAGNÓSTICO ESCALONADO CON TRIAGE
     const mensajeTriage =
-      `Hola${nombre}, revisé tu línea aquí en el sistema y tu módem aparece conectado y con señal en nuestra central.\n\n` +
-      `Para ayudarte a resolverlo de la forma más rápida y precisa:\n` +
-      `¿La lentitud o problema te pasa en *todos tus aparatos (celulares, pantallas, computadoras)* o *solo en uno en específico*?`;
+      `Hola${nombre}, revisé tu línea y tu módem aparece conectado y con señal estable.\n\n` +
+      `Para ayudarte a resolverlo de la forma más rápida:\n` +
+      `¿El problema te pasa en *todos tus aparatos (celulares, pantallas, computadoras)* o *solo en uno en específico*?`;
 
     await TursoService.upsertSession({
       phone,
@@ -1255,8 +1321,8 @@ export class BotOrchestrator {
   }
 
   /**
-   * Triage de falla técnica: Determina si el problema es en un solo equipo o generalizado.
-   * Evita reinicios innecesarios si solo es un celular o pantalla individual.
+   * Triage de falla técnica: Determina si el problema es en un solo equipo, cobertura en patio/zonas lejanas, o generalizado.
+   * Evita reinicios innecesarios si solo es un celular o cobertura en áreas retiradas.
    */
   private static async procesarTriageDispositivos(
     phone: string,
@@ -1274,7 +1340,8 @@ export class BotOrchestrator {
       if (esConsultaPago) {
         await this.flujoConsultarSaldo(phone, sesionReset, targetJid);
       } else {
-        const nombre = session?.client_name ? ` *${session.client_name}*` : '';
+        const nombreLimpio = formatDisplayName(session?.client_name, true);
+        const nombre = nombreLimpio ? ` *${nombreLimpio}*` : '';
         await this.enviarYLoguear(phone, `¡Hola${nombre}! 👋 ¿En qué te podemos ayudar?`, 'SALUDO', 'SALUDO_CORDIAL', targetJid);
       }
       return;
@@ -1282,27 +1349,38 @@ export class BotOrchestrator {
 
     let meta: any = {};
     try { meta = JSON.parse(session?.metadata || '{}'); } catch {}
-    const nombre = session?.client_name ? ` *${session.client_name}*` : '';
+    const nombreLimpio = formatDisplayName(session?.client_name, true);
+    const nombre = nombreLimpio ? ` *${nombreLimpio}*` : '';
     const onuId = session?.onu_id || meta.onuIdParaReinicio;
 
-    const esUnSoloAparato = /\b(uno|solo\s*uno|un\s*solo|en\s*uno|un\s*celular|mi\s*cel|mi\s*tel[eé]fono|la\s*tele|la\s*pantalla|mi\s*lap|mi\s*compu|un\s*dispositivo|mi\s*pantalla|mi\s*computadora)\b/i.test(lower);
-    const sonTodosLosAparatos = /\b(todo|todos|todas|en\s*todos|la\s*casa|ninguno|no\s*agarra\s*nada|ningun|en\s*ninguno|general|ambos|los\s*dos|los\s*3|los\s*tres)\b/i.test(lower);
+    const esZonaAlejada = /\b(patio|jard[ií]n|terraza|afuera|cochera|arriba|planta\s*alta|segundo\s*piso|fondo|lejos|rec[aá]mara|cuarto\s*de\s*atr[aá]s)\b/i.test(lower) ||
+      lower.includes('patio') || lower.includes('afuera') || lower.includes('jardin') || lower.includes('terraza') || lower.includes('cochera');
+
+    const esUnSoloAparato = /\b(uno|solo\s*uno|un\s*solo|en\s*uno|un\s*celular|mi\s*cel|mi\s*tel[eé]fono|la\s*tele|la\s*pantalla|mi\s*lap|mi\s*compu|un\s*dispositivo|mi\s*pantalla|mi\s*computadora)\b/i.test(lower) ||
+      lower.includes('telefono') || lower.includes('teléfono') || lower.includes('celular') || lower.includes('solo en mi') || lower.includes('solamente') || esZonaAlejada;
+
+    const sonTodosLosAparatos = (/\b(todo|todos|todas|en\s*todos|la\s*casa|ninguno|no\s*agarra\s*nada|ningun|en\s*ninguno|general|ambos|los\s*dos|los\s*3|los\s*tres)\b/i.test(lower) && !lower.includes('solo en')) && !esZonaAlejada;
 
     if (esUnSoloAparato && !sonTodosLosAparatos) {
-      // Rama 1: Solo un aparato individual
-      const mensajeUnDispositivo =
-        `Entendido${nombre}. Como el detalle se presenta en un solo dispositivo, tu módem y la fibra óptica están funcionando bien hacia tu domicilio.\n\n` +
-        `Por favor realiza estos 2 pasos rápidos:\n` +
-        `1️⃣ *Apaga el Wi-Fi* en ese aparato durante 10 segundos y vuelve a encenderlo.\n` +
-        `2️⃣ Acércate a unos pasos del módem para comprobar si la señal mejora.\n\n` +
-        `¿Notaste mejoría tras hacer la prueba? *(Responde Sí o No)*`;
+      // Rama 1: Solo un aparato individual o zona distante (cobertura natural Wi-Fi)
+      const mensajeUnDispositivo = esZonaAlejada
+        ? `Entendido${nombre}. Cuando la señal disminuye o se corta principalmente al estar en zonas retiradas (como el patio o terraza), tu servicio de fibra principal está llegando bien a tu domicilio.\n\n` +
+          `Te sugiero realizar estos 2 pasos sencillos:\n` +
+          `1️⃣ Acércate un poco más hacia donde está ubicado el módem para verificar si la navegación es fluida.\n` +
+          `2️⃣ Desconecta el Wi-Fi en tu teléfono por 10 segundos y vuelve a conectarlo para renovar la conexión.\n\n` +
+          `¿Notaste mejoría al acercarte o reconectar tu equipo? *(Responde Sí o No)*`
+        : `Entendido${nombre}. Como el detalle se presenta en un solo dispositivo, tu servicio y módem están funcionando bien hacia tu domicilio.\n\n` +
+          `Por favor realiza estos 2 pasos rápidos:\n` +
+          `1️⃣ Apaga el Wi-Fi en ese aparato durante 10 segundos y vuelve a encenderlo.\n` +
+          `2️⃣ Acércate a unos pasos del módem para comprobar si la señal mejora.\n\n` +
+          `¿Notaste mejoría tras hacer la prueba? *(Responde Sí o No)*`;
 
       await TursoService.upsertSession({
         phone,
         step: 'DIAGNOSTICO_COMPROBAR_UN_DISPOSITIVO',
         metadata: JSON.stringify({
           ...meta,
-          triageAlcance: 'UN_DISPOSITIVO',
+          triageAlcance: esZonaAlejada ? 'ZONA_ALEJADA' : 'UN_DISPOSITIVO',
         }),
       });
 
@@ -1354,7 +1432,8 @@ export class BotOrchestrator {
 
     let meta: any = {};
     try { meta = JSON.parse(session?.metadata || '{}'); } catch {}
-    const nombre = session?.client_name ? ` *${session.client_name}*` : '';
+    const nombreLimpio = formatDisplayName(session?.client_name, true);
+    const nombre = nombreLimpio ? ` *${nombreLimpio}*` : '';
     const onuId = session?.onu_id || meta.onuIdParaReinicio;
 
     if (esPositivo) {
@@ -1369,7 +1448,27 @@ export class BotOrchestrator {
       return;
     }
 
-    // Si aún no funciona en el dispositivo individual, procedemos a reiniciar el módem
+    // Si el caso era zona alejada (patio / terraza / distancia Wi-Fi) y aún no mejora al estar en esa zona:
+    if (meta.triageAlcance === 'ZONA_ALEJADA') {
+      const mensajeZonaAlejada =
+        `Entendido${nombre}. Cuando hay mayor distancia o muros hacia el patio o exteriores, la cobertura Wi-Fi del módem disminuye naturalmente.\n\n` +
+        `Si deseas que un asesor de nuestro equipo te oriente sobre soluciones para optimizar la cobertura en esas áreas de tu domicilio, con gusto te comunico. 😊\n\n` +
+        `¿Deseas que te canalice con un asesor? *(Responde Sí o No)*`;
+
+      await TursoService.upsertSession({
+        phone,
+        step: 'ESPERANDO_CANALIZACION_ASESOR',
+        metadata: JSON.stringify({
+          ...meta,
+          resumenFalla: 'Baja cobertura Wi-Fi en patio o zona lejana',
+        }),
+      });
+
+      await this.enviarYLoguear(phone, mensajeZonaAlejada, 'FALLA_INTERNET', 'ORIENTACION_COBERTURA_DISTANCIA', targetJid);
+      return;
+    }
+
+    // Si aún no funciona en el dispositivo individual estándar, procedemos a reiniciar el módem
     if (onuId) {
       SmartOLTService.rebootONU(onuId).then(res => {
         logger.info(`Reinicio de ONU ${onuId} tras fallo en prueba individual para ${phone}: ${res.message}`);
@@ -1379,7 +1478,7 @@ export class BotOrchestrator {
     }
 
     const mensajeReinicioEscalonado =
-      `Enterado${nombre}. Enviaremos un reinicio completo a tu módem para renovar su enlace.\n\n` +
+      `Enterado${nombre}. Enviaremos un reinicio a tu módem para refrescar su conexión.\n\n` +
       `⏳ Tomará un par de minutos. Por favor pruébalo en cuanto vuelvan a fijarse las luces verdes.\n\n` +
       `¿Lograste navegar correctamente? *(Responde "Ya quedó" o "Sigue igual")*`;
 
@@ -1393,6 +1492,35 @@ export class BotOrchestrator {
     });
 
     await this.enviarYLoguear(phone, mensajeReinicioEscalonado, 'FALLA_INTERNET', 'REINICIO_ESCALONADO_INDIVIDUAL', targetJid);
+  }
+
+  /**
+   * Procesa la respuesta si el usuario desea ser canalizado con un asesor humano
+   */
+  private static async procesarRespuestaCanalizacionAsesor(
+    phone: string,
+    rawText: string,
+    session: Session | null,
+    targetJid?: string
+  ): Promise<void> {
+    const lower = rawText.toLowerCase().trim();
+    const esAfirmativo = /\b(si|sí|por\s*favor|claro|de\s*acuerdo|ok|asesor|comunicame|comunícame|quiero)\b/i.test(lower);
+
+    if (esAfirmativo) {
+      await this.flujoHablarAsesor(phone, session, targetJid);
+      return;
+    }
+
+    const nombreLimpio = formatDisplayName(session?.client_name, true);
+    const nombre = nombreLimpio ? ` *${nombreLimpio}*` : '';
+    await this.enviarYLoguear(
+      phone,
+      `¡Enterado${nombre}! Si requieres apoyo con cualquier otra consulta, aquí seguimos a tus órdenes. ¡Que tengas un excelente día! 😊`,
+      'ATENCION_CLIENTES',
+      'CANALIZACION_DECLINADA',
+      targetJid
+    );
+    await this.marcarConsultaFinalizada(phone, session);
   }
 
   /**
@@ -2819,7 +2947,7 @@ export class BotOrchestrator {
       meta = { ...sessionAnteriorMeta, ...meta };
     }
 
-    const nombre = session.client_name || 'Cliente';
+    const nombreLimpio = formatDisplayName(session.client_name, true) || 'Cliente';
     const planTexto = meta.speed_profile ? `\n📦 *Plan:* ${meta.speed_profile}` : '';
     const zonaTexto = meta.address || meta.zone ? `\n📍 *Ubicación:* ${meta.address || meta.zone}` : '';
 
@@ -2830,11 +2958,11 @@ export class BotOrchestrator {
 
     // Si el usuario reportó un problema o intención antes de identificarse (ej. "esta lento mi internet", "cuanto debo", etc.)
     if (initialIntent && !['SALUDO', 'IDENTIFICAR_CLIENTE', 'DESCONOCIDO'].includes(initialIntent)) {
-      logger.info(`[Auto-Continuación] Cliente ${phone} (${nombre}) identificado. Continuando con reporte previo: "${initialIntent}" ("${initialQuery}")`);
+      logger.info(`[Auto-Continuación] Cliente ${phone} (${session.client_name}) identificado. Continuando con reporte previo: "${initialIntent}" ("${initialQuery}")`);
 
       await this.enviarYLoguear(
         phone,
-        `¡Perfecto, te he ubicado en nuestro sistema! ✅\nBienvenido(a) *${nombre}*.${planTexto}${zonaTexto}\n\nCon respecto a tu reporte sobre *"${quejaTexto || 'tu conexión'}"*, ya estoy revisando tu servicio en tiempo real en nuestra central...`,
+        `¡Hola, *${nombreLimpio}*! Un gusto saludarte. 😊${planTexto}${zonaTexto}\n\nCon respecto a tu reporte sobre *"${quejaTexto || 'tu conexión'}"*, ya estoy revisando tu servicio...`,
         'IDENTIFICAR_CLIENTE',
         'VINCULADO_Y_CONTINUANDO_REPORTE',
         targetJid
@@ -2853,7 +2981,7 @@ export class BotOrchestrator {
     // Si el usuario no tenía reporte previo (solo saludó o se identificó)
     await this.enviarYLoguear(
       phone,
-      `¡Perfecto, te he ubicado en nuestro sistema! ✅\nBienvenido(a) *${nombre}*.${planTexto}${zonaTexto}\n\nCuéntame, ¿cuál es el detalle o falla que presentas con tu servicio de internet?`,
+      `¡Hola, *${nombreLimpio}*! Un gusto saludarte. 😊${planTexto}${zonaTexto}\n\n¿En qué podemos apoyarte el día de hoy con tu servicio?`,
       'IDENTIFICAR_CLIENTE',
       'VINCULADO_ESPERANDO_PROBLEMA',
       targetJid
@@ -2886,8 +3014,9 @@ export class BotOrchestrator {
    * Saludo general del bot sin botones forzados
    */
   static async enviarMenuPrincipal(phone: string, clientName?: string | null): Promise<void> {
-    const saludo = clientName ? `¡Hola, *${clientName}*! 👋` : `¡Hola! 👋`;
-    const texto = `${saludo} Bienvenido al centro de atención y soporte técnico de *${this.getIspName()}*.\n\n¿En qué podemos ayudarte el día de hoy? Cuéntame tu duda o si presentas alguna falla con tu internet.`;
+    const nombreLimpio = formatDisplayName(clientName, true);
+    const saludo = nombreLimpio ? `¡Hola, *${nombreLimpio}*! 👋` : `¡Hola! 👋`;
+    const texto = `${saludo} Bienvenido al centro de atención y soporte de *${this.getIspName()}*.\n\n¿En qué podemos ayudarte el día de hoy? Cuéntame tu duda o si presentas alguna falla con tu internet.`;
 
     await this.enviarYLoguear(phone, texto, 'SALUDO', 'SALUDO_ENVIADO');
     await TursoService.updateStep(phone, 'ESPERANDO_PROBLEMA');
