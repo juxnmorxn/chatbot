@@ -734,6 +734,18 @@ export class BotOrchestrator {
         });
 
         if (estadoFinanciero.suspendido || estadoFinanciero.totalDeuda > 0) {
+          const facturas = estadoFinanciero.facturas || [];
+          let detalleFacturas = '';
+          if (facturas.length > 0) {
+            detalleFacturas = '\n📋 *Detalle de tu(s) recibo(s) pendiente(s):*\n';
+            facturas.forEach((f, idx) => {
+              detalleFacturas += `• *Recibo #${idx + 1}:* Folio ${f.folio} | *$${f.monto.toFixed(2)} MXN* (Vence: ${f.fecha_vencimiento})\n`;
+              if (f.link_pago) {
+                detalleFacturas += `  👉 *Pagar en línea (Mercado Pago):* ${f.link_pago}\n`;
+              }
+            });
+          }
+
           const bank = SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK', 'BBVA');
           const account = SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', '012 180 0000000000 00');
           const beneficiary = SettingsService.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', this.getIspName());
@@ -743,11 +755,12 @@ export class BotOrchestrator {
 
           const mensajeMoroso =
             `¡Hola, *${session.client_name}*! 👋\n\n` +
-            `Revisé tu cuenta en nuestro sistema y detectamos que ${montoTexto}.\n\n` +
-            `Para reactivar tu servicio y navegar con normalidad, por favor realiza tu abono a:\n` +
-            `💳 *${bank}* | CLABE: *${account}*\n` +
-            `Beneficiario: *${beneficiary}*\n` +
-            `Concepto / Referencia: *${session.client_name || phone}*\n\n` +
+            `Revisé tu cuenta en nuestro sistema y detectamos que ${montoTexto}.\n` +
+            `${detalleFacturas}\n` +
+            `💳 *También puedes pagar por Transferencia Bancaria:*\n` +
+            `• Banco: *${bank}* | CLABE: *${account}*\n` +
+            `• Beneficiario: *${beneficiary}*\n` +
+            `• Concepto / Referencia: *${session.client_name || phone}*\n\n` +
             `📸 En cuanto realices tu pago, envía la *foto o captura de tu comprobante* y escribe tu *Nombre completo* por este chat para reactivarte de inmediato.`;
 
           await this.enviarYLoguear(phone, mensajeMoroso, 'CONSULTAR_SALDO', 'AVISO_SUSPENSION_SALUDO', targetJid);
@@ -1103,6 +1116,18 @@ export class BotOrchestrator {
       if (estadoFinanciero.suspendido || estadoFinanciero.totalDeuda > 0) {
         logger.info(`Cliente ${phone} (${session.client_name}) presenta suspensión o adeudo en WispHub: Deuda=$${estadoFinanciero.totalDeuda} (${estadoFinanciero.motivo || 'Suspendido'})`);
 
+        const facturas = estadoFinanciero.facturas || [];
+        let detalleFacturas = '';
+        if (facturas.length > 0) {
+          detalleFacturas = '\n📋 *Detalle de tu(s) recibo(s) pendiente(s):*\n';
+          facturas.forEach((f, idx) => {
+            detalleFacturas += `• *Recibo #${idx + 1}:* Folio ${f.folio} | *$${f.monto.toFixed(2)} MXN* (Vence: ${f.fecha_vencimiento})\n`;
+            if (f.link_pago) {
+              detalleFacturas += `  👉 *Pagar en línea con Mercado Pago:* ${f.link_pago}\n`;
+            }
+          });
+        }
+
         const bank = SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK', 'BBVA');
         const account = SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', '012 180 0000000000 00');
         const beneficiary = SettingsService.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', this.getIspName());
@@ -1111,11 +1136,12 @@ export class BotOrchestrator {
           : `tu servicio se encuentra suspendido por corte o inactividad`;
 
         const mensajeMoroso =
-          `Hola${nombre}, revisé tu servicio y detectamos que ${montoTexto}.\n\n` +
-          `Para reactivar tu navegación de inmediato, por favor realiza tu pago a:\n` +
-          `💳 *${bank}* | CLABE: *${account}*\n` +
-          `Beneficiario: *${beneficiary}*\n` +
-          `Concepto / Referencia: *${session.client_name || phone}*\n\n` +
+          `Hola${nombre}, revisé tu servicio y detectamos que ${montoTexto}.\n` +
+          `${detalleFacturas}\n` +
+          `💳 *También puedes pagar por Transferencia Bancaria:*\n` +
+          `• Banco: *${bank}* | CLABE: *${account}*\n` +
+          `• Beneficiario: *${beneficiary}*\n` +
+          `• Concepto / Referencia: *${session.client_name || phone}*\n\n` +
           `📸 En cuanto realices tu abono, por favor envía la *foto o captura de tu comprobante* y escribe tu *Nombre completo* aquí en el chat para reactivarte de inmediato.`;
 
         await this.enviarYLoguear(phone, mensajeMoroso, 'CONSULTAR_SALDO', 'AVISO_MOROSIDAD_SILENCIOSA', targetJid);
@@ -2612,7 +2638,18 @@ export class BotOrchestrator {
     }
 
     // Si viene acompañada de una queja o intención técnica/financiera, guardarla en metadata para auto-continuar tras identificarse
-    if (clasificacion.intencion && !['SALUDO', 'IDENTIFICAR_CLIENTE', 'DESCONOCIDO'].includes(clasificacion.intencion)) {
+    const lowerRaw = rawInput.toLowerCase();
+    const esReporteFalla = lowerRaw.includes('no tengo internet') || lowerRaw.includes('sin internet') || lowerRaw.includes('no hay internet') || lowerRaw.includes('falla') || lowerRaw.includes('lento') || lowerRaw.includes('lentitud') || lowerRaw.includes('no sirve') || lowerRaw.includes('no funciona');
+    const esConsultaSaldo = lowerRaw.includes('saldo') || lowerRaw.includes('debo') || lowerRaw.includes('pagar') || lowerRaw.includes('factura') || lowerRaw.includes('recibo') || lowerRaw.includes('pago');
+
+    if (esReporteFalla) {
+      metaPre.initialQuery = rawInput;
+      metaPre.initialIntent = 'FALLA_INTERNET';
+      metaPre.resumen_queja = 'Falla o corte de internet reportado por el cliente';
+    } else if (esConsultaSaldo) {
+      metaPre.initialQuery = rawInput;
+      metaPre.initialIntent = 'CONSULTAR_SALDO';
+    } else if (clasificacion.intencion && !['SALUDO', 'IDENTIFICAR_CLIENTE', 'DESCONOCIDO'].includes(clasificacion.intencion)) {
       metaPre.initialQuery = rawInput;
       metaPre.initialIntent = clasificacion.intencion;
       metaPre.initialClasif = clasificacion;
@@ -3067,7 +3104,7 @@ export class BotOrchestrator {
     // Si el usuario no tenía reporte previo (solo saludó o se identificó)
     await this.enviarYLoguear(
       phone,
-      `¡Hola, *${nombreLimpio}*! Un gusto saludarte. 😊${planTexto}${zonaTexto}\n\n¿En qué podemos apoyarte el día de hoy con tu servicio?`,
+      `¡Hola, *${nombreLimpio}*! 👋 Bienvenido al centro de atención y soporte de *${this.getIspName()}*.\n\n¿En qué podemos apoyarte el día de hoy con tu servicio?`,
       'IDENTIFICAR_CLIENTE',
       'VINCULADO_ESPERANDO_PROBLEMA',
       targetJid
