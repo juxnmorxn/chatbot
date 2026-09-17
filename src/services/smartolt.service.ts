@@ -450,11 +450,11 @@ export class SmartOLTService {
         ip_address: payload.ip_address,
         netmask: payload.netmask || '255.255.255.0',
         gateway: payload.gateway,
-        line_profile: payload.line_profile || 'PRIO mapping',
+        line_profile: payload.line_profile || 'VLAN',
         download_speed_profile_name: payload.download_speed_profile_name || '40MB-DOWN',
         upload_speed_profile_name: payload.upload_speed_profile_name || '40MB-UP',
         address: payload.address || '',
-        zone: payload.zone || '',
+        zone: payload.zone || 'Actopan',
         comment: payload.comment || 'Activado vía Bot WhatsApp CloudWare',
       };
 

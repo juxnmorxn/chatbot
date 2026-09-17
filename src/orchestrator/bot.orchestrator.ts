@@ -318,7 +318,19 @@ export class BotOrchestrator {
     }
 
     // 2.0 ACTIVACIÓN DE ONUS (TÉCNICOS DE CAMPO):
-    // A. Confirmación de activación pendiente (SÍ / NO / Botones)
+    // A. Esperando Nombre y Folio del cliente
+    if (session?.step === 'ACTIVACION_ESPERANDO_NOMBRE') {
+      await this.procesarNombreActivacionTecnico(phone, rawText, session, targetJid);
+      return;
+    }
+
+    // B. Esperando Zona / Región de instalación
+    if (session?.step === 'ACTIVACION_ESPERANDO_ZONA') {
+      await this.procesarZonaActivacionTecnico(phone, rawText, buttonId, session, targetJid);
+      return;
+    }
+
+    // C. Confirmación de activación pendiente (SÍ / NO / Botones)
     if (session?.step === 'PENDIENTE_CONFIRMACION_ACTIVACION_ONU') {
       const esConfirmacion = buttonId === 'BTN_CONFIRMAR_ACTIVACION' ||
         /^(si|sí|confirmar|confirmo|adelante|autorizar|dale|ok|1|activar)\b/i.test(lowerMsg);
@@ -335,7 +347,7 @@ export class BotOrchestrator {
       }
     }
 
-    // B. Comando de activación de técnico (ej: "ACTIVAR 4317B5", "ACTIVAR 4317B5 40M Juan Perez", "ALTA ONU 4317B5")
+    // D. Comando de activación de técnico (ej: "ACTIVAR 4317B5", "ACTIVAR 4317B5 3456-Juan Perez", "ALTA ONU 4317B5")
     const esComandoActivacion = buttonId === 'BTN_ACTIVAR_MODEM' ||
       /(?:activar|alta|aprovisionar|registrar)\s+(?:modem|onu|equipo|serie)?\s*[a-zA-Z0-9]{4,16}/i.test(rawText) ||
       lowerMsg.startsWith('activar ') ||
@@ -356,6 +368,9 @@ export class BotOrchestrator {
     const lastInteractionMs = session?.last_interaction ? new Date(session.last_interaction).getTime() : 0;
     const minutosInactividad = lastInteractionMs > 0 ? (Date.now() - lastInteractionMs) / (1000 * 60) : 9999;
     const pasosTemporales = [
+      'ACTIVACION_ESPERANDO_NOMBRE',
+      'ACTIVACION_ESPERANDO_ZONA',
+      'PENDIENTE_CONFIRMACION_ACTIVACION_ONU',
       'DIAGNOSTICO_TRIAGE_DISPOSITIVOS',
       'DIAGNOSTICO_COMPROBAR_UN_DISPOSITIVO',
       'DIAGNOSTICO_POST_REINICIO',
@@ -3071,11 +3086,13 @@ export class BotOrchestrator {
 
   /**
    * Procesa la solicitud de activación/autorización de ONU para técnicos de campo
-   * Flujo: Técnico envía los últimos 6 dígitos del SN (+ plan y nombre opcionales)
-   * -> El bot busca la ONU sin configurar en SmartOLT
-   * -> Asigna automáticamente IP libre según la OLT y VLAN
-   * -> Muestra la ficha resumen completa al técnico
-   * -> Solicita confirmación explícita (SÍ / NO) antes de aplicar cambios en SmartOLT
+   * Flujo guiado:
+   * 1. Técnico envía los últimos 6 dígitos del SN (ej: "ACTIVAR 4317B5")
+   * 2. Si no viene el nombre con folio, el bot lo solicita (ej: "3456-Juan Perez")
+   * 3. Se solicita la región/zona (por defecto "Actopan" obligatorio)
+   * 4. Se asigna IP y VLAN en modo VLAN (no prio)
+   * 5. Se muestra la ficha de confirmación completa
+   * 6. Con "SÍ" se ejecuta la autorización en SmartOLT
    */
   private static async procesarSolicitudActivacionTecnico(
     phone: string,
@@ -3084,7 +3101,6 @@ export class BotOrchestrator {
     targetJid: string
   ): Promise<void> {
     const cleanText = rawText.trim();
-    // Extraer sufijo SN: últimos 6 dígitos/caracteres (o entre 4 y 16 alfanuméricos)
     const match = cleanText.match(/(?:activar|alta|aprovisionar|registrar)\s+(?:modem|onu|equipo|serie)?\s*([a-zA-Z0-9]{4,16})/i);
 
     let snSuffix = '';
@@ -3102,7 +3118,7 @@ export class BotOrchestrator {
     if (!snSuffix) {
       await this.enviarYLoguear(
         phone,
-        `🛠️ *Activación Automática de Módems (Técnicos de Campo)*\n\nPor favor envía el comando con los *últimos 6 dígitos del SN* del módem:\n\n👉 *ACTIVAR [6 DÍGITOS SN] [PLAN opcional] [NOMBRE opcional]*\n\n_Ejemplos:_\n• *ACTIVAR 4317B5*\n• *ACTIVAR 4317B5 40M Juan Perez*\n• *ACTIVAR 4317B5 50MB Maria Lopez*\n\nEl sistema buscará la ONU en la OLT, calculará y asignará la IP libre automáticamente y te mostrará los datos para que confirmes.`,
+        `🛠️ *Activación Automática de Módems (Técnicos de Campo)*\n\nPor favor envía el comando con los *últimos 6 dígitos del SN* del módem:\n\n👉 *ACTIVAR [6 DÍGITOS SN]*\n_Ejemplo:_ *ACTIVAR 4317B5*\n\nEl sistema buscará el módem en SmartOLT, te solicitará el *Folio y Nombre del cliente* (ej. \`3456-Juan Perez\`), la *región* (Actopan por defecto) y asignará la IP libre automáticamente en modo VLAN.`,
         'ACTIVACION_TECNICO',
         'AYUDA_ACTIVACION',
         targetJid
@@ -3110,7 +3126,7 @@ export class BotOrchestrator {
       return;
     }
 
-    // Tomar los últimos 6 dígitos si enviaron serie completo o más de 6 caracteres
+    // Tomar los últimos 6 dígitos
     const effectiveSuffix = snSuffix.length > 6 ? snSuffix.slice(-6) : snSuffix;
 
     await this.enviarYLoguear(
@@ -3135,36 +3151,190 @@ export class BotOrchestrator {
       return;
     }
 
-    // 2. Extraer parámetros opcionales de plan y nombre si el técnico los envió
-    let plan = '40M';
-    let clientName = `Cliente Nuevo (${unconfigured.sn})`;
-
-    if (remainingText) {
-      const planMatch = remainingText.match(/(\d+\s*(?:M|MEGAS|MB)?)/i);
-      if (planMatch) {
-        plan = planMatch[1].toUpperCase();
-        remainingText = remainingText.replace(planMatch[0], '').trim();
-      }
-      if (remainingText.length > 2) {
-        clientName = cleanPersonName(remainingText);
-      }
-    }
-
-    const profiles = getSmartOltSpeedProfiles(plan);
-
-    // 3. Determinar OLT y Asignar IP y VLAN
     const oltId = String(unconfigured.olt_id);
     const isSanAgustin = oltId === '2' || (unconfigured.olt_name || '').toLowerCase().includes('san agustin');
-    const targetOltId = isSanAgustin ? '2' : '3';
     const targetOltName = isSanAgustin ? 'OLT-SanAgustin' : 'OLT5800-Actopan';
+    const signalText = unconfigured.onu_signal_1490 || unconfigured.onu_signal || 'Detectado';
 
-    // Para Actopan (OLT 3), las VLANs son 510 a 610. IpamService buscará la primera IP disponible en el pool.
-    // Para San Agustín (OLT 2), la VLAN es 800.
-    const defaultVlan = isSanAgustin ? '800' : '510';
+    let metaObj: any = {};
+    try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
+    metaObj.pendingOnu = unconfigured;
+    metaObj.pendingSnSuffix = effectiveSuffix;
+    metaObj.pendingOltName = targetOltName;
+
+    // 2. Si el mensaje inicial ya traía el nombre con folio (ej: "ACTIVAR 4317B5 3456-Juan Perez")
+    if (remainingText && remainingText.length >= 3) {
+      await TursoService.upsertSession({
+        phone,
+        step: 'ACTIVACION_ESPERANDO_NOMBRE',
+        metadata: JSON.stringify(metaObj),
+      });
+      await this.procesarNombreActivacionTecnico(phone, remainingText, session, targetJid);
+      return;
+    }
+
+    // Si solo enviaron el SN, solicitar el Nombre con Folio del cliente
+    await TursoService.upsertSession({
+      phone,
+      step: 'ACTIVACION_ESPERANDO_NOMBRE',
+      metadata: JSON.stringify(metaObj),
+    });
+
+    const msgPedirNombre = `✅ *Módem detectado en SmartOLT:*
+• *Número de Serie:* *${unconfigured.sn}* (Terminación: \`${effectiveSuffix}\`)
+• *OLT:* ${targetOltName} (Tarjeta ${unconfigured.board} / PON ${unconfigured.port})
+• *Nivel de Señal Óptica:* ${signalText}
+
+📝 *Por favor escribe el Folio y Nombre Completo del cliente:*
+_Formato obligatorio:_ *FOLIO-NOMBRE COMPLETO*
+_Ejemplo:_ *3456-Juan Perez Martinez* (o *3456-Juan Perez 40M*)`;
+
+    await this.enviarYLoguear(
+      phone,
+      msgPedirNombre,
+      'ACTIVACION_TECNICO',
+      'ESPERANDO_NOMBRE_FOLIO',
+      targetJid
+    );
+  }
+
+  /**
+   * Procesa el Nombre y Folio proporcionado por el técnico
+   */
+  private static async procesarNombreActivacionTecnico(
+    phone: string,
+    rawText: string,
+    session: Session | null,
+    targetJid: string
+  ): Promise<void> {
+    let metaObj: any = {};
+    try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
+    const unconfigured = metaObj.pendingOnu;
+
+    if (!unconfigured) {
+      await this.enviarYLoguear(
+        phone,
+        `⚠️ La sesión de activación expiró. Por favor envía de nuevo *ACTIVAR [6 DÍGITOS SN]*.`,
+        'ACTIVACION_TECNICO',
+        'SESION_EXPIRADA',
+        targetJid
+      );
+      await TursoService.updateStep(phone, 'CONVERSACIONAL');
+      return;
+    }
+
+    let text = rawText.trim();
+
+    // Extraer plan si viene incluido (ej: 40M, 50MB, etc.)
+    let plan = '40M';
+    const planMatch = text.match(/(?:^|\s)(\d+\s*(?:M|MEGAS|MB)?)(?:\s|$)/i);
+    if (planMatch) {
+      plan = planMatch[1].toUpperCase();
+      text = text.replace(planMatch[0], ' ').trim();
+    }
+
+    // Normalizar formato "FOLIO-NOMBRE COMPLETO"
+    let formattedName = '';
+    const folioPrefixMatch = text.match(/^(\d{1,6})\s*[-_.\s]+\s*(.+)$/i);
+    const folioSuffixMatch = text.match(/^(.+)\s*[-_.\s]+\s*(\d{1,6})$/i);
+
+    if (folioPrefixMatch) {
+      formattedName = `${folioPrefixMatch[1]}-${folioPrefixMatch[2].trim()}`;
+    } else if (folioSuffixMatch) {
+      formattedName = `${folioSuffixMatch[2]}-${folioSuffixMatch[1].trim()}`;
+    } else {
+      // Si no pusieron guión pero empieza con número o nombre
+      formattedName = text.trim();
+    }
+
+    metaObj.pendingName = formattedName;
+    metaObj.pendingPlan = plan;
+
+    await TursoService.upsertSession({
+      phone,
+      step: 'ACTIVACION_ESPERANDO_ZONA',
+      metadata: JSON.stringify(metaObj),
+    });
+
+    const msgPedirZona = `📍 *Zona / Región de Instalación:*
+
+• *Cliente / Folio:* *${formattedName}*
+• *Plan Seleccionado:* *${plan}*
+
+Por favor indica la zona o región de la instalación (ej. *Actopan*, *San Agustín*, etc.).
+👉 _Si es en Actopan o presionas continuar, se asignará *Actopan* por defecto obligatorio._`;
+
+    await this.enviarYLoguear(
+      phone,
+      msgPedirZona,
+      'ACTIVACION_TECNICO',
+      'ESPERANDO_ZONA',
+      targetJid,
+      [
+        { id: 'BTN_ZONA_ACTOPAN', title: '📍 Actopan (Por Defecto)' },
+        { id: 'BTN_ZONA_SAN_AGUSTIN', title: '📍 San Agustín' },
+      ]
+    );
+  }
+
+  /**
+   * Procesa la Zona/Región de instalación, asigna IP/VLAN en modo VLAN y genera la confirmación
+   */
+  private static async procesarZonaActivacionTecnico(
+    phone: string,
+    rawText: string,
+    buttonId: string | undefined,
+    session: Session | null,
+    targetJid: string
+  ): Promise<void> {
+    let metaObj: any = {};
+    try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
+    const unconfigured = metaObj.pendingOnu;
+    const clientName = metaObj.pendingName || `Cliente Nuevo (${unconfigured?.sn || ''})`;
+    const plan = metaObj.pendingPlan || '40M';
+
+    if (!unconfigured) {
+      await this.enviarYLoguear(
+        phone,
+        `⚠️ La sesión de activación expiró. Por favor envía de nuevo *ACTIVAR [6 DÍGITOS SN]*.`,
+        'ACTIVACION_TECNICO',
+        'SESION_EXPIRADA',
+        targetJid
+      );
+      await TursoService.updateStep(phone, 'CONVERSACIONAL');
+      return;
+    }
+
+    const lower = (rawText || '').toLowerCase().trim();
+
+    // Determinar Zona (Por defecto "Actopan" obligatorio si no se especifica otra)
+    let zone = 'Actopan';
+    let targetOltId = '3';
+    let defaultVlan = '510';
+
+    if (buttonId === 'BTN_ZONA_SAN_AGUSTIN' || lower.includes('san agustin') || lower.includes('san agustín')) {
+      zone = 'San Agustín';
+      targetOltId = '2';
+      defaultVlan = '800';
+    } else if (buttonId === 'BTN_ZONA_ACTOPAN' || lower === 'actopan' || lower === 'ok' || lower === 'si' || lower === '1' || lower === 'continuar' || lower === 'default' || !lower) {
+      zone = 'Actopan';
+      targetOltId = '3';
+      defaultVlan = '510';
+    } else {
+      // Zona personalizada dentro de Actopan (ej: Chicavasco, Daxtha, Pozo Grande, etc.)
+      zone = rawText.trim();
+      targetOltId = '3';
+      defaultVlan = '510';
+    }
+
+    const targetOltName = targetOltId === '2' ? 'OLT-SanAgustin' : 'OLT5800-Actopan';
+    const profiles = getSmartOltSpeedProfiles(plan);
+
+    // Calcular siguiente IP libre en la OLT y VLAN
     let nextIp = await IpamService.getNextAvailableIp(defaultVlan, targetOltId);
 
-    // Si la primera VLAN estuviera llena en Actopan, buscar en las demás VLANs 520..610
-    if (!nextIp && !isSanAgustin) {
+    // Si la primera VLAN de Actopan estuviera llena, buscar en 520..610
+    if (!nextIp && targetOltId === '3') {
       for (const v of ['520', '530', '540', '550', '560', '570', '580', '590', '600', '610']) {
         nextIp = await IpamService.getNextAvailableIp(v, '3');
         if (nextIp) break;
@@ -3182,7 +3352,7 @@ export class BotOrchestrator {
       return;
     }
 
-    // 4. Preparar payload de autorización
+    // Preparar payload con modo VLAN (no prio)
     const payload: AuthorizeOnuPayload = {
       olt_id: targetOltId,
       board: unconfigured.board,
@@ -3195,19 +3365,18 @@ export class BotOrchestrator {
       ip_address: nextIp.ip,
       netmask: nextIp.netmask,
       gateway: nextIp.gateway,
-      line_profile: 'PRIO mapping',
+      line_profile: 'VLAN', // Modo VLAN obligatorio
       download_speed_profile_name: profiles.down,
       upload_speed_profile_name: profiles.up,
+      zone: zone,
       comment: `Activado vía Bot WhatsApp por técnico (${phone})`,
     };
 
-    // Guardar en sesión para esperar confirmación del técnico
-    let metaObj: any = {};
-    try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
     metaObj.pendingActivation = payload;
     metaObj.pendingActivationDetails = {
-      snSuffix: effectiveSuffix,
+      snSuffix: metaObj.pendingSnSuffix || (unconfigured.sn.length > 6 ? unconfigured.sn.slice(-6) : unconfigured.sn),
       oltName: targetOltName,
+      zone,
       signal: unconfigured.onu_signal_1490 || unconfigured.onu_signal || 'Detectada',
       model: unconfigured.onu_type_name || unconfigured.onu_type || 'ZTE-F660',
     };
@@ -3219,10 +3388,16 @@ export class BotOrchestrator {
     });
 
     const signalText = unconfigured.onu_signal_1490 || unconfigured.onu_signal || 'Detectado';
+    const effectiveSuffix = metaObj.pendingSnSuffix || (unconfigured.sn.length > 6 ? unconfigured.sn.slice(-6) : unconfigured.sn);
+
     const cardMsg = `📋 *DATOS DE APROVISIONAMIENTO (PRE-ACTIVACIÓN)*
 ──────────────────────────────
-• *Número de Serie:* *${unconfigured.sn}*
+• *Número de Serie (SN):* *${unconfigured.sn}*
 • *Terminación (6 Dígitos):* \`${effectiveSuffix}\`
+• *Cliente / Folio:* *${clientName}*
+• *Zona / Región:* *${zone}*
+• *Modo ONU:* Routing
+• *Perfil de Línea:* *VLAN*
 • *Modelo ONU:* ${unconfigured.onu_type_name || unconfigured.onu_type || 'ZTE-F660'}
 • *OLT:* ${targetOltName} (Tarjeta ${unconfigured.board} / PON ${unconfigured.port})
 • *Nivel de Señal Óptica:* ${signalText}
@@ -3231,7 +3406,6 @@ export class BotOrchestrator {
 • *Puerta de Enlace (GW):* ${nextIp.gateway}
 • *Máscara:* ${nextIp.netmask}
 • *Perfil de Velocidad:* ${profiles.down} / ${profiles.up}
-• *Nombre Asignado:* ${clientName}
 ──────────────────────────────
 ⚠️ *¿Confirmas la autorización y activación de este módem en SmartOLT?*
 
@@ -3267,6 +3441,9 @@ export class BotOrchestrator {
     if (!confirmar || !payload) {
       metaObj.pendingActivation = null;
       metaObj.pendingActivationDetails = null;
+      metaObj.pendingOnu = null;
+      metaObj.pendingName = null;
+      metaObj.pendingPlan = null;
       await TursoService.upsertSession({
         phone,
         step: 'CONVERSACIONAL',
@@ -3285,7 +3462,7 @@ export class BotOrchestrator {
 
     await this.enviarYLoguear(
       phone,
-      `⏳ Aprovisionando y autorizando módem *${payload.sn}* en SmartOLT... Por favor espera un momento.`,
+      `⏳ Aprovisionando y autorizando módem *${payload.sn}* en SmartOLT (Modo VLAN)... Por favor espera un momento.`,
       'ACTIVACION_TECNICO',
       'EJECUTANDO_AUTORIZACION',
       targetJid
@@ -3295,6 +3472,9 @@ export class BotOrchestrator {
 
     metaObj.pendingActivation = null;
     metaObj.pendingActivationDetails = null;
+    metaObj.pendingOnu = null;
+    metaObj.pendingName = null;
+    metaObj.pendingPlan = null;
     await TursoService.upsertSession({
       phone,
       step: 'CONVERSACIONAL',
@@ -3305,12 +3485,14 @@ export class BotOrchestrator {
       const successMsg = `🎉 *¡MÓDEM AUTORIZADO Y ACTIVADO CON ÉXITO!*
 ──────────────────────────────
 • *Número de Serie:* *${payload.sn}*
+• *Cliente / Folio:* *${payload.name}*
+• *Zona:* *${payload.zone || 'Actopan'}*
 • *IP WAN Configurada:* *${payload.ip_address}*
 • *Gateway:* ${payload.gateway}
 • *VLAN:* *VLAN ${payload.vlan}*
+• *Perfil de Línea:* VLAN
 • *Perfil de Velocidad:* ${payload.download_speed_profile_name}
 • *Modo:* Routing (DHCP / PPPoE listo)
-• *Nombre:* ${payload.name}
 • *ID SmartOLT:* ${result.onu_id || payload.sn}
 ──────────────────────────────
 ✅ El equipo ya está sincronizado y navegando en la red de CloudWare.`;
