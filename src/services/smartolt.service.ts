@@ -514,11 +514,24 @@ export class SmartOLTService {
       form.append('sn', String(payload.sn));
       form.append('onu_type', String(payload.onu_type || 'HG8145X6-10'));
       form.append('name', String(payload.name));
-      form.append('onu_mode', String(payload.onu_mode || 'Routing'));
+      
+      // Modo de Operación WAN: Routing con IP estática
+      form.append('mode', 'Routing');
+      form.append('onu_mode', 'Routing');
+      form.append('wan_mode', 'Static IP');
+      form.append('wan_ip_mode', 'Static IP');
+      
+      // VLAN y Configuración IP / Máscara / Gateway / DNS
       form.append('vlan', String(payload.vlan));
       form.append('ip_address', String(payload.ip_address));
+      form.append('subnet_mask', String(payload.netmask || '255.255.255.0'));
       form.append('netmask', String(payload.netmask || '255.255.255.0'));
-      form.append('gateway', String(payload.gateway));
+      form.append('default_gateway', String(payload.gateway || '172.19.2.254'));
+      form.append('gateway', String(payload.gateway || '172.19.2.254'));
+      form.append('dns1', '8.8.8.8');
+      form.append('dns2', '8.8.4.4');
+      
+      // Perfiles de velocidad y VLAN
       form.append('line_profile', String(payload.line_profile || 'VLAN'));
       form.append('download_speed_profile_name', String(payload.download_speed_profile_name || '40MB-DOWN'));
       form.append('upload_speed_profile_name', String(payload.upload_speed_profile_name || '40MB-UP'));
