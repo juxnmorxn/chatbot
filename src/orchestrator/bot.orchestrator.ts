@@ -1301,11 +1301,21 @@ export class BotOrchestrator {
       return;
     }
 
+    const esSinInternet = c.sin_internet_total ||
+      detalleQueja.toLowerCase().includes('no tengo internet') ||
+      detalleQueja.toLowerCase().includes('sin internet') ||
+      detalleQueja.toLowerCase().includes('sin señal') ||
+      detalleQueja.toLowerCase().includes('no da internet') ||
+      detalleQueja.toLowerCase().includes('no navega');
+
     // CASO C: LÍNEA EN LÍNEA (ONLINE) O ESTADO NORMAL - DIAGNÓSTICO ESCALONADO CON TRIAGE
-    const mensajeTriage =
-      `Hola${nombre}, revisé tu línea y tu módem aparece conectado y con señal estable.\n\n` +
-      `Para ayudarte a resolverlo de la forma más rápida:\n` +
-      `¿El problema te pasa en *todos tus aparatos (celulares, pantallas, computadoras)* o *solo en uno en específico*?`;
+    const mensajeTriage = esSinInternet
+      ? `Hola${nombre}, revisé tu línea y tu módem aparece encendido y recibiendo señal física correctamente en tu domicilio.\n\n` +
+        `Para ayudarte a resolverlo de inmediato:\n` +
+        `¿La falta de internet te ocurre en *todos tus aparatos (celulares, pantallas, computadoras)* o *solo en uno en específico*?`
+      : `Hola${nombre}, revisé tu línea y tu módem aparece conectado y con señal estable.\n\n` +
+        `Para ayudarte a resolverlo de la forma más rápida:\n` +
+        `¿El problema te pasa en *todos tus aparatos (celulares, pantallas, computadoras)* o *solo en uno en específico*?`;
 
     await TursoService.upsertSession({
       phone,
@@ -1314,6 +1324,9 @@ export class BotOrchestrator {
         ...meta,
         resumenFalla: detalleQueja,
         onuIdParaReinicio: onuId,
+        tipoFalla: esSinInternet ? 'SIN_INTERNET' : 'LENTITUD',
+        sinInternetTotal: esSinInternet,
+        reportaLentitud: c.reporta_lentitud,
       }),
     });
 
@@ -1584,9 +1597,17 @@ export class BotOrchestrator {
 
     const notaHorario = outOfHours ? '\n\n⏰ *Nota:* Tu reporte quedó registrado en el sistema y un técnico lo revisará mañana a primera hora con tu número de reporte.' : '';
 
+    const esSinInternet = meta.tipoFalla === 'SIN_INTERNET' ||
+      meta.sinInternetTotal === true ||
+      (meta.resumenFalla && (meta.resumenFalla.toLowerCase().includes('no tengo internet') || meta.resumenFalla.toLowerCase().includes('sin internet')));
+
+    const solicitudEvidencia = esSinInternet
+      ? `📸 Por favor mándanos una *foto de las luces de tu módem* para que el equipo técnico revise el estado de los focos y te dé solución lo antes posible.`
+      : `📸 Por favor mándanos una *foto de las luces de tu módem* o una captura de tu prueba de velocidad (*Speedtest*) para adjuntarla a tu reporte técnico.`;
+
     const mensajeTicket =
-      `Enterado${nombre}. Como la falla continúa tras el reinicio, ya te generé tu reporte formal *#${ticket.folio}* para que el equipo de soporte técnico revise tu configuración en cabecera.${notaHorario}\n\n` +
-      `📸 Por favor mándanos una *foto de las luces de tu módem* o una captura de tu prueba de velocidad (*Speedtest*) para adjuntarla de inmediato a tu folio técnico.`;
+      `Enterado${nombre}. Como el detalle continúa tras el reinicio, ya te generé tu reporte formal *#${ticket.folio}* para que el equipo de soporte técnico revise tu servicio.${notaHorario}\n\n` +
+      `${solicitudEvidencia}`;
 
     await TursoService.upsertSession({
       phone,
@@ -2958,15 +2979,7 @@ export class BotOrchestrator {
 
     // Si el usuario reportó un problema o intención antes de identificarse (ej. "esta lento mi internet", "cuanto debo", etc.)
     if (initialIntent && !['SALUDO', 'IDENTIFICAR_CLIENTE', 'DESCONOCIDO'].includes(initialIntent)) {
-      logger.info(`[Auto-Continuación] Cliente ${phone} (${session.client_name}) identificado. Continuando con reporte previo: "${initialIntent}" ("${initialQuery}")`);
-
-      await this.enviarYLoguear(
-        phone,
-        `¡Hola, *${nombreLimpio}*! Un gusto saludarte. 😊${planTexto}${zonaTexto}\n\nCon respecto a tu reporte sobre *"${quejaTexto || 'tu conexión'}"*, ya estoy revisando tu servicio...`,
-        'IDENTIFICAR_CLIENTE',
-        'VINCULADO_Y_CONTINUANDO_REPORTE',
-        targetJid
-      );
+      logger.info(`[Auto-Continuación] Cliente ${phone} (${session.client_name}) identificado. Continuando de inmediato con el reporte: "${initialIntent}" ("${initialQuery}")`);
 
       const clasifAEjecutar = initialClasif || {
         intencion: initialIntent,

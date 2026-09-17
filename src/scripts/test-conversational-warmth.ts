@@ -20,7 +20,7 @@ async function testConversationalTone() {
     'Oye solo me falla el wifi en mi telefono cuando salgo al patio, me van a regalar un extensor o qué hago?',
     [],
     {
-      nombre: 'Maria del Pilar',
+      clientName: 'Maria del Pilar',
       planInternet: 'Pakete Basic 40M',
       velocidadMegas: '40',
       precioPlan: '250.00',

@@ -26,6 +26,7 @@ export interface GroqClassificationResult {
   foco_rojo: boolean;
   equipo_apagado: boolean;
   reporta_lentitud: boolean;
+  sin_internet_total: boolean;
   red_wifi_no_visible: boolean;
   bloqueo_paginas_apps: boolean;
   ya_reinicio: boolean;
@@ -353,6 +354,7 @@ EXTRACCIÓN DE BANDERAS Y DETALLES:
 - "foco_rojo": true si menciona foco rojo, luz roja, led rojo, LOS parpadeando o luz de alarma en el módem/ONU; false si no.
 - "equipo_apagado": true si dice que el módem no prende, se fue la luz en la casa, o no encienden las luces del equipo; false si no.
 - "reporta_lentitud": true si dice que el internet está lento, intermitente, sube y baja o hay lag; false si no.
+- "sin_internet_total": true si dice que NO TIENE INTERNET, no da internet, sin internet, se cayó el internet, no navega nada o corte total; false si no.
 - "red_wifi_no_visible": true si indica que no le aparece el nombre de su red Wi-Fi, no sale su red en el celular, no encuentra la red, se le borró el internet o no prende el foco de WLAN/Wi-Fi; false si no.
 - "bloqueo_paginas_apps": true si indica que no le abren ciertas páginas web, no cargan aplicaciones específicas (ej. banco, Netflix, YouTube, Facebook), solo entra a WhatsApp, le sale pantalla de aviso/bloqueo de portal cautivo, o problemas de acceso a ciertos sitios; false si no.
 - "ya_reinicio": true si el usuario aclara que ya lo desconectó, ya lo reinició o ya lo apagó y prendió; false si no.
@@ -386,12 +388,13 @@ Contexto actual del cliente:
       // Normalizaciones y validaciones por seguridad
       let finalIntent: BotIntent = parsed.intencion || 'DESCONOCIDO';
       const reportaLentitud = Boolean(parsed.reporta_lentitud);
+      const sinInternetTotal = Boolean(parsed.sin_internet_total);
       const focoRojo = Boolean(parsed.foco_rojo);
       const equipoApagado = Boolean(parsed.equipo_apagado);
       const redWifiNoVisible = Boolean(parsed.red_wifi_no_visible);
       const bloqueoPaginas = Boolean(parsed.bloqueo_paginas_apps);
 
-      if ((reportaLentitud || focoRojo || equipoApagado || redWifiNoVisible || bloqueoPaginas) && (finalIntent === 'DESCONOCIDO' || finalIntent === 'IDENTIFICAR_CLIENTE' || finalIntent === 'SALUDO')) {
+      if ((reportaLentitud || sinInternetTotal || focoRojo || equipoApagado || redWifiNoVisible || bloqueoPaginas) && (finalIntent === 'DESCONOCIDO' || finalIntent === 'IDENTIFICAR_CLIENTE' || finalIntent === 'SALUDO')) {
         finalIntent = 'FALLA_INTERNET';
       }
 
@@ -400,6 +403,7 @@ Contexto actual del cliente:
         foco_rojo: focoRojo,
         equipo_apagado: equipoApagado,
         reporta_lentitud: reportaLentitud,
+        sin_internet_total: sinInternetTotal,
         red_wifi_no_visible: redWifiNoVisible,
         bloqueo_paginas_apps: bloqueoPaginas,
         ya_reinicio: Boolean(parsed.ya_reinicio),
@@ -447,6 +451,7 @@ Contexto actual del cliente:
       foco_rojo: lower.includes('foco rojo') || lower.includes('luz roja') || lower.includes('los'),
       equipo_apagado: lower.includes('apagado') || lower.includes('no prende') || lower.includes('sin luz'),
       reporta_lentitud: lower.includes('lento') || lower.includes('lentitud') || lower.includes('intermitente'),
+      sin_internet_total: lower.includes('no tengo internet') || lower.includes('sin internet') || lower.includes('no da internet') || lower.includes('sin conexion') || lower.includes('sin conexión'),
       red_wifi_no_visible: lower.includes('no aparece') || lower.includes('no sale mi') || lower.includes('no veo mi red') || lower.includes('se borro') || lower.includes('wlan'),
       bloqueo_paginas_apps: lower.includes('no abre') || lower.includes('no abren') || lower.includes('ciertas paginas') || lower.includes('algunas paginas') || lower.includes('portal cautivo') || lower.includes('bloquea'),
       ya_reinicio: lower.includes('ya reinicie') || lower.includes('ya lo apague'),
