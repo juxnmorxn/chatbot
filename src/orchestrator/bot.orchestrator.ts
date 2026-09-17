@@ -1603,7 +1603,7 @@ export class BotOrchestrator {
 
     const solicitudEvidencia = esSinInternet
       ? `📸 Por favor mándanos una *foto de las luces de tu módem* para que el equipo técnico revise el estado de los focos y te dé solución lo antes posible.`
-      : `📸 Por favor mándanos una *foto de las luces de tu módem* o una captura de tu prueba de velocidad (*Speedtest*) para adjuntarla a tu reporte técnico.`;
+      : `📸 Por favor mándanos una *foto de las luces de tu módem* o una captura de tu prueba de velocidad realizada desde:\n👉 https://www.speedtest.net\npara adjuntarla de inmediato a tu reporte técnico.`;
 
     const mensajeTicket =
       `Enterado${nombre}. Como el detalle continúa tras el reinicio, ya te generé tu reporte formal *#${ticket.folio}* para que el equipo de soporte técnico revise tu servicio.${notaHorario}\n\n` +
@@ -1790,11 +1790,19 @@ export class BotOrchestrator {
       ).catch(() => {});
     }
 
-    const notaHorario = outOfHours ? '\n\n⏰ *Nota:* Tu reporte quedó registrado en el sistema y un técnico lo revisará mañana a primera hora con tu número de reporte.' : '';
+    const notaHorario = outOfHours ? '\n\n⏰ *Nota:* Tu reporte quedó registrado y un técnico lo revisará a primera hora con tu número de reporte.' : '';
+
+    const esSinInternetTurno1 = meta.tipoFalla === 'SIN_INTERNET' ||
+      meta.sinInternetTotal === true ||
+      (meta.resumenFalla && (meta.resumenFalla.toLowerCase().includes('no tengo internet') || meta.resumenFalla.toLowerCase().includes('sin internet')));
+
+    const solicitudTurno2 = esSinInternetTurno1
+      ? `📸 Por favor mándanos una *foto de las luces de tu módem* para que el personal técnico revise el estado de los focos.`
+      : `📸 Por favor mándanos una *foto de las luces de tu módem* o captura de prueba de velocidad realizada desde:\n👉 https://www.speedtest.net`;
 
     const mensajeTurno2 =
-      `Enterado. Si después del reinicio sigue igual, por favor mándanos una foto de las luces de tu módem o captura de Speedtest.${notaHorario}\n\n` +
-      `Ya te generé tu reporte *#${ticket.folio}* para que el personal técnico haga los ajustes necesarios en el sistema.`;
+      `Enterado. Como el detalle persiste, ya te generé tu reporte *#${ticket.folio}* para que nuestro equipo técnico lo revise.${notaHorario}\n\n` +
+      `${solicitudTurno2}`;
 
     await TursoService.upsertSession({
       phone,
@@ -2438,7 +2446,8 @@ export class BotOrchestrator {
     }
 
     const clienteCtx = await this.obtenerContextoClienteCompleto(phone, session);
-    const nombre = session.client_name ? ` *${session.client_name}*` : '';
+    const nombreLimpio = formatDisplayName(session.client_name, true);
+    const nombre = nombreLimpio ? ` *${nombreLimpio}*` : '';
     const plan = clienteCtx.planInternet || 'Plan Fibra Óptica';
     const megas = clienteCtx.velocidadMegas ? `*${clienteCtx.velocidadMegas} Mbps* (Megas de descarga)` : 'Velocidad contratada';
     const precio = clienteCtx.precioPlan ? `*$${clienteCtx.precioPlan} MXN*` : 'Tarifa contratada';
@@ -2451,7 +2460,10 @@ export class BotOrchestrator {
       `• *Plan contratado:* *${plan}*\n` +
       `• *Velocidad:* ${megas}\n` +
       `• *Mensualidad:* ${precio}${ip}${estado}\n\n` +
-      `💡 Si requieres realizar un cambio de paquete, aumento de velocidad o tienes dudas técnicas, con gusto te apoyamos. ¿En qué más podemos ayudarte hoy?`;
+      `🚀 *¿Deseas medir tu velocidad actual?*\n` +
+      `Puedes realizar tu test aquí: 👉 https://www.speedtest.net\n` +
+      `_(Para un resultado más exacto, te sugerimos hacer la prueba cerca de tu módem o conectado por cable)._\n\n` +
+      `💡 Si requieres realizar un cambio de paquete, aumento de velocidad o tienes dudas, con gusto te apoyamos. ¿En qué más podemos ayudarte hoy?`;
 
     await this.enviarYLoguear(phone, mensajePlan, 'CONSULTAR_PLAN', 'DETALLE_PLAN_ENVIADO', targetJid);
     await TursoService.updateStep(phone, 'CONVERSACIONAL');
