@@ -29,6 +29,55 @@ export interface SmartOltSyncResult {
   message: string;
 }
 
+export interface UnconfiguredOnu {
+  olt_id: string | number;
+  olt_name?: string;
+  board: string | number;
+  port: string | number;
+  sn: string;
+  onu_type?: string;
+  onu_type_name?: string;
+  onu_signal?: string;
+  onu_signal_1490?: string;
+}
+
+export interface AuthorizeOnuPayload {
+  olt_id: string | number;
+  board: string | number;
+  port: string | number;
+  sn: string;
+  onu_type?: string;
+  name: string;
+  onu_mode?: string;
+  vlan: string;
+  ip_address: string;
+  netmask?: string;
+  gateway: string;
+  line_profile?: string;
+  download_speed_profile_name?: string;
+  upload_speed_profile_name?: string;
+  address?: string;
+  zone?: string;
+  comment?: string;
+}
+
+export interface AuthorizeOnuResult {
+  success: boolean;
+  message: string;
+  onu_id?: string;
+  details?: any;
+}
+
+export function getSmartOltSpeedProfiles(plan?: string): { down: string; up: string } {
+  const p = (plan || '').toUpperCase();
+  const match = p.match(/(\d+)\s*(?:M|MEGAS|MB)?/);
+  const mb = match ? match[1] : '40';
+  return {
+    down: `${mb}MB-DOWN`,
+    up: `${mb}MB-UP`,
+  };
+}
+
 export class SmartOLTService {
   private static api: AxiosInstance | null = null;
   private static lastUrl: string = '';
@@ -299,6 +348,153 @@ export class SmartOLTService {
       return {
         success: false,
         message: 'No se pudo completar el reinicio remoto en la OLT.',
+      };
+    }
+  }
+
+  /**
+   * Obtiene la lista de ONUs sin autorizar / sin configurar en SmartOLT
+   */
+  static async getUnconfiguredOnus(oltId?: string): Promise<UnconfiguredOnu[]> {
+    const apiKey = this.getApiKey();
+    if (!apiKey || apiKey.includes('tu_token')) {
+      logger.warn('Modo DEV / Sin API Key: Retornando lista vacía o simulada de unconfigured ONUs.');
+      return [];
+    }
+
+    try {
+      const api = this.getApi();
+      const params = oltId ? { olt_id: oltId } : undefined;
+      const response = await api.get('/onu/unconfigured_onus', { params });
+      const data = response.data;
+
+      const rawOnus = Array.isArray(data)
+        ? data
+        : data?.onus || data?.response || data?.unconfigured_onus || [];
+
+      return rawOnus.map((item: any) => ({
+        olt_id: item.olt_id || item.olt || '',
+        olt_name: item.olt_name || (String(item.olt_id) === '2' ? 'OLT-SanAgustin' : 'OLT5800-Actopan'),
+        board: item.board || item.slot || '0',
+        port: item.port || item.pon || '0',
+        sn: String(item.sn || item.serial_number || item.onu_sn || '').trim().toUpperCase(),
+        onu_type: item.onu_type || item.onu_type_name || item.model || 'ZTE-F660',
+        onu_type_name: item.onu_type_name || item.onu_type || item.model || '',
+        onu_signal: item.onu_signal || item.signal || item.rx_power || '',
+        onu_signal_1490: item.onu_signal_1490 || item.onu_signal_value || '',
+      }));
+    } catch (error: any) {
+      logger.error('Error al obtener ONUs sin configurar en SmartOLT:', error?.response?.data || error?.message || error);
+      return [];
+    }
+  }
+
+  /**
+   * Busca una ONU sin configurar por los últimos caracteres de su SN (ej: últimos 6 dígitos)
+   */
+  static async findUnconfiguredOnuBySnSuffix(suffix: string): Promise<UnconfiguredOnu | null> {
+    const cleanSuffix = suffix.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+    if (cleanSuffix.length < 4) {
+      logger.warn(`Sufijo SN '${suffix}' demasiado corto para búsqueda segura.`);
+      return null;
+    }
+
+    try {
+      const unconfigured = await this.getUnconfiguredOnus();
+      logger.info(`Buscando ONU con sufijo '${cleanSuffix}' entre ${unconfigured.length} ONUs no configuradas...`);
+
+      // 1. Coincidencia exacta por terminación
+      const matchExact = unconfigured.find((o) => o.sn.toUpperCase().endsWith(cleanSuffix));
+      if (matchExact) return matchExact;
+
+      // 2. Coincidencia por contener el sufijo (si el técnico pasó parte intermedia o completa)
+      const matchContains = unconfigured.find((o) => o.sn.toUpperCase().includes(cleanSuffix));
+      if (matchContains) return matchContains;
+
+      return null;
+    } catch (error: any) {
+      logger.error('Error al buscar ONU sin configurar por sufijo:', error?.message || error);
+      return null;
+    }
+  }
+
+  /**
+   * Ejecuta la autorización y aprovisionamiento automático de la ONU en SmartOLT
+   */
+  static async authorizeOnu(payload: AuthorizeOnuPayload): Promise<AuthorizeOnuResult> {
+    logger.info(`Iniciando autorización en SmartOLT para SN: ${payload.sn}, OLT: ${payload.olt_id}, VLAN: ${payload.vlan}, IP: ${payload.ip_address}`);
+    const apiKey = this.getApiKey();
+
+    if (!apiKey || apiKey.includes('tu_token')) {
+      logger.info('Modo DEV: Autorización simulada exitosa.');
+      return {
+        success: true,
+        message: `ONU ${payload.sn} autorizada exitosamente en modo simulación. IP asignada: ${payload.ip_address}, VLAN: ${payload.vlan}`,
+        onu_id: `SIM-${payload.sn}`,
+        details: payload,
+      };
+    }
+
+    try {
+      const api = this.getApi();
+
+      const bodyData = {
+        olt_id: payload.olt_id,
+        board: payload.board,
+        port: payload.port,
+        sn: payload.sn,
+        onu_type: payload.onu_type || 'ZTE-F660',
+        name: payload.name,
+        onu_mode: payload.onu_mode || 'Routing',
+        vlan: payload.vlan,
+        ip_address: payload.ip_address,
+        netmask: payload.netmask || '255.255.255.0',
+        gateway: payload.gateway,
+        line_profile: payload.line_profile || 'PRIO mapping',
+        download_speed_profile_name: payload.download_speed_profile_name || '40MB-DOWN',
+        upload_speed_profile_name: payload.upload_speed_profile_name || '40MB-UP',
+        address: payload.address || '',
+        zone: payload.zone || '',
+        comment: payload.comment || 'Activado vía Bot WhatsApp CloudWare',
+      };
+
+      const response = await api.post('/onu/authorize_onu', bodyData);
+      const resData = response.data;
+      logger.info('Respuesta de autorización SmartOLT:', JSON.stringify(resData));
+
+      if (resData?.status === true || response.status === 200 || resData?.response === 'success') {
+        // Forzar sincronización no bloqueante o registrar en Turso
+        TursoService.saveSmartOltOnus([
+          {
+            unique_external_id: resData?.unique_external_id || resData?.onu_id || payload.sn,
+            sn: payload.sn,
+            name: payload.name,
+            speed_profile: payload.download_speed_profile_name || '40MB',
+            ip_address: payload.ip_address,
+            raw_data: JSON.stringify(bodyData),
+            updated_at: new Date().toISOString(),
+          },
+        ]).catch(() => {});
+
+        return {
+          success: true,
+          message: resData?.message || `Módem ${payload.sn} autorizado correctamente en SmartOLT.`,
+          onu_id: resData?.unique_external_id || resData?.onu_id || payload.sn,
+          details: resData,
+        };
+      } else {
+        return {
+          success: false,
+          message: resData?.message || resData?.error || 'SmartOLT rechazó la solicitud de autorización.',
+          details: resData,
+        };
+      }
+    } catch (error: any) {
+      logger.error('Error al autorizar ONU en SmartOLT:', error?.response?.data || error?.message || error);
+      const errMsg = error?.response?.data?.message || error?.response?.data?.error || error?.message || 'Fallo de conexión';
+      return {
+        success: false,
+        message: `Error en SmartOLT: ${errMsg}`,
       };
     }
   }

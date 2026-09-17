@@ -38,6 +38,12 @@ router.post('/api/wisphub/sync', AdminController.syncWisphub);
 router.get('/api/wisphub/stats', AdminController.getWisphubStats);
 router.get('/api/audit/ip-cross', AdminController.getAuditIpCross);
 
+// IPAM y Gestión de Pools / VLANs / Activación de ONUs
+router.get('/api/ipam/pools', AdminController.getIpamPools);
+router.get('/api/ipam/available', AdminController.getIpamAvailable);
+router.get('/api/smartolt/unconfigured', AdminController.getSmartOltUnconfigured);
+router.post('/api/smartolt/authorize', AdminController.authorizeSmartOltOnu);
+
 // Mesa de Tickets de Soporte
 router.get('/api/tickets', AdminController.getTickets);
 router.patch('/api/tickets/:folio/status', AdminController.updateTicketStatus);

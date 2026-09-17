@@ -1,7 +1,8 @@
 import { TursoService, Session } from '../services/turso.service';
 import { GroqService, GroqClassificationResult, GroqImageAnalysisResult } from '../services/groq.service';
 import { WispHubService, WispHubCliente } from '../services/wisphub.service';
-import { SmartOLTService, SmartOltStatusResult } from '../services/smartolt.service';
+import { SmartOLTService, SmartOltStatusResult, getSmartOltSpeedProfiles, AuthorizeOnuPayload } from '../services/smartolt.service';
+import { IpamService } from '../services/ipam.service';
 import { EvolutionService, BotButton } from '../services/evolution.service';
 import { config } from '../config/env';
 import { SettingsService } from '../services/settings.service';
@@ -298,7 +299,7 @@ export class BotOrchestrator {
       return;
     }
 
-    if (rawText.toUpperCase() === 'ACTIVAR') {
+    if (rawText.toUpperCase() === 'ACTIVAR' && session?.opt_out === 1) {
       await TursoService.setOptOut(phone, false);
       await this.enviarYLoguear(
         phone,
@@ -313,6 +314,39 @@ export class BotOrchestrator {
     // Si está en lista de exclusión y no envió 'ACTIVAR', no molestamos
     if (session?.opt_out === 1) {
       logger.info(`El usuario ${phone} tiene opt_out activo. Ignorando mensaje saliente.`);
+      return;
+    }
+
+    // 2.0 ACTIVACIÓN DE ONUS (TÉCNICOS DE CAMPO):
+    // A. Confirmación de activación pendiente (SÍ / NO / Botones)
+    if (session?.step === 'PENDIENTE_CONFIRMACION_ACTIVACION_ONU') {
+      const esConfirmacion = buttonId === 'BTN_CONFIRMAR_ACTIVACION' ||
+        /^(si|sí|confirmar|confirmo|adelante|autorizar|dale|ok|1|activar)\b/i.test(lowerMsg);
+      const esCancelacion = buttonId === 'BTN_CANCELAR_ACTIVACION' ||
+        /^(no|cancelar|cancelo|rechazar|abortar|corregir|0)\b/i.test(lowerMsg);
+
+      if (esConfirmacion) {
+        await this.procesarConfirmacionActivacionOnu(phone, session, targetJid, true);
+        return;
+      }
+      if (esCancelacion) {
+        await this.procesarConfirmacionActivacionOnu(phone, session, targetJid, false);
+        return;
+      }
+    }
+
+    // B. Comando de activación de técnico (ej: "ACTIVAR 4317B5", "ACTIVAR 4317B5 40M Juan Perez", "ALTA ONU 4317B5")
+    const esComandoActivacion = buttonId === 'BTN_ACTIVAR_MODEM' ||
+      /(?:activar|alta|aprovisionar|registrar)\s+(?:modem|onu|equipo|serie)?\s*[a-zA-Z0-9]{4,16}/i.test(rawText) ||
+      lowerMsg.startsWith('activar ') ||
+      lowerMsg.startsWith('alta ') ||
+      lowerMsg.startsWith('aprovisionar ') ||
+      lowerMsg === 'activar modem' ||
+      lowerMsg === 'activar onu' ||
+      lowerMsg === 'activar';
+
+    if (esComandoActivacion) {
+      await this.procesarSolicitudActivacionTecnico(phone, rawText, session, targetJid);
       return;
     }
 
@@ -3032,6 +3066,270 @@ export class BotOrchestrator {
       logger.info(`Consulta marcada como finalizada para ${phone}`);
     } catch (err: any) {
       logger.warn(`Error al marcar consulta finalizada para ${phone}:`, err?.message || err);
+    }
+  }
+
+  /**
+   * Procesa la solicitud de activación/autorización de ONU para técnicos de campo
+   * Flujo: Técnico envía los últimos 6 dígitos del SN (+ plan y nombre opcionales)
+   * -> El bot busca la ONU sin configurar en SmartOLT
+   * -> Asigna automáticamente IP libre según la OLT y VLAN
+   * -> Muestra la ficha resumen completa al técnico
+   * -> Solicita confirmación explícita (SÍ / NO) antes de aplicar cambios en SmartOLT
+   */
+  private static async procesarSolicitudActivacionTecnico(
+    phone: string,
+    rawText: string,
+    session: Session | null,
+    targetJid: string
+  ): Promise<void> {
+    const cleanText = rawText.trim();
+    // Extraer sufijo SN: últimos 6 dígitos/caracteres (o entre 4 y 16 alfanuméricos)
+    const match = cleanText.match(/(?:activar|alta|aprovisionar|registrar)\s+(?:modem|onu|equipo|serie)?\s*([a-zA-Z0-9]{4,16})/i);
+
+    let snSuffix = '';
+    let remainingText = '';
+    if (match && match[1]) {
+      snSuffix = match[1].trim().toUpperCase();
+      remainingText = cleanText.substring(match.index! + match[0].length).trim();
+    } else {
+      const directCodeMatch = cleanText.match(/^([a-zA-Z0-9]{4,16})$/);
+      if (directCodeMatch) {
+        snSuffix = directCodeMatch[1].toUpperCase();
+      }
+    }
+
+    if (!snSuffix) {
+      await this.enviarYLoguear(
+        phone,
+        `🛠️ *Activación Automática de Módems (Técnicos de Campo)*\n\nPor favor envía el comando con los *últimos 6 dígitos del SN* del módem:\n\n👉 *ACTIVAR [6 DÍGITOS SN] [PLAN opcional] [NOMBRE opcional]*\n\n_Ejemplos:_\n• *ACTIVAR 4317B5*\n• *ACTIVAR 4317B5 40M Juan Perez*\n• *ACTIVAR 4317B5 50MB Maria Lopez*\n\nEl sistema buscará la ONU en la OLT, calculará y asignará la IP libre automáticamente y te mostrará los datos para que confirmes.`,
+        'ACTIVACION_TECNICO',
+        'AYUDA_ACTIVACION',
+        targetJid
+      );
+      return;
+    }
+
+    // Tomar los últimos 6 dígitos si enviaron serie completo o más de 6 caracteres
+    const effectiveSuffix = snSuffix.length > 6 ? snSuffix.slice(-6) : snSuffix;
+
+    await this.enviarYLoguear(
+      phone,
+      `🔍 Buscando módem con terminación *${effectiveSuffix}* en SmartOLT...`,
+      'ACTIVACION_TECNICO',
+      'BUSCANDO_ONU',
+      targetJid
+    );
+
+    // 1. Buscar la ONU en SmartOLT
+    const unconfigured = await SmartOLTService.findUnconfiguredOnuBySnSuffix(effectiveSuffix);
+
+    if (!unconfigured) {
+      await this.enviarYLoguear(
+        phone,
+        `❌ *Módem no encontrado en SmartOLT*\n\nNo se localizó ninguna ONU sin configurar con terminación *${effectiveSuffix}*.\n\n💡 *Por favor verifica:*\n1. Que la fibra óptica esté conectada y la luz PON del módem esté encendida/sincronizando.\n2. Que el equipo haya sincronizado en la OLT.\n3. Que los 6 dígitos del SN sean correctos (ej: *${effectiveSuffix}*).`,
+        'ACTIVACION_TECNICO',
+        'ONU_NO_ENCONTRADA',
+        targetJid
+      );
+      return;
+    }
+
+    // 2. Extraer parámetros opcionales de plan y nombre si el técnico los envió
+    let plan = '40M';
+    let clientName = `Cliente Nuevo (${unconfigured.sn})`;
+
+    if (remainingText) {
+      const planMatch = remainingText.match(/(\d+\s*(?:M|MEGAS|MB)?)/i);
+      if (planMatch) {
+        plan = planMatch[1].toUpperCase();
+        remainingText = remainingText.replace(planMatch[0], '').trim();
+      }
+      if (remainingText.length > 2) {
+        clientName = cleanPersonName(remainingText);
+      }
+    }
+
+    const profiles = getSmartOltSpeedProfiles(plan);
+
+    // 3. Determinar OLT y Asignar IP y VLAN
+    const oltId = String(unconfigured.olt_id);
+    const isSanAgustin = oltId === '2' || (unconfigured.olt_name || '').toLowerCase().includes('san agustin');
+    const targetOltId = isSanAgustin ? '2' : '3';
+    const targetOltName = isSanAgustin ? 'OLT-SanAgustin' : 'OLT5800-Actopan';
+
+    // Para Actopan (OLT 3), las VLANs son 510 a 610. IpamService buscará la primera IP disponible en el pool.
+    // Para San Agustín (OLT 2), la VLAN es 800.
+    const defaultVlan = isSanAgustin ? '800' : '510';
+    let nextIp = await IpamService.getNextAvailableIp(defaultVlan, targetOltId);
+
+    // Si la primera VLAN estuviera llena en Actopan, buscar en las demás VLANs 520..610
+    if (!nextIp && !isSanAgustin) {
+      for (const v of ['520', '530', '540', '550', '560', '570', '580', '590', '600', '610']) {
+        nextIp = await IpamService.getNextAvailableIp(v, '3');
+        if (nextIp) break;
+      }
+    }
+
+    if (!nextIp) {
+      await this.enviarYLoguear(
+        phone,
+        `⚠️ *Atención:* No se encontraron direcciones IP libres disponibles en el pool de la OLT *${targetOltName}*. Por favor contacta al administrador de red.`,
+        'ACTIVACION_TECNICO',
+        'SIN_IPS_DISPONIBLES',
+        targetJid
+      );
+      return;
+    }
+
+    // 4. Preparar payload de autorización
+    const payload: AuthorizeOnuPayload = {
+      olt_id: targetOltId,
+      board: unconfigured.board,
+      port: unconfigured.port,
+      sn: unconfigured.sn,
+      onu_type: unconfigured.onu_type || 'ZTE-F660',
+      name: clientName,
+      onu_mode: 'Routing',
+      vlan: nextIp.vlan,
+      ip_address: nextIp.ip,
+      netmask: nextIp.netmask,
+      gateway: nextIp.gateway,
+      line_profile: 'PRIO mapping',
+      download_speed_profile_name: profiles.down,
+      upload_speed_profile_name: profiles.up,
+      comment: `Activado vía Bot WhatsApp por técnico (${phone})`,
+    };
+
+    // Guardar en sesión para esperar confirmación del técnico
+    let metaObj: any = {};
+    try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
+    metaObj.pendingActivation = payload;
+    metaObj.pendingActivationDetails = {
+      snSuffix: effectiveSuffix,
+      oltName: targetOltName,
+      signal: unconfigured.onu_signal_1490 || unconfigured.onu_signal || 'Detectada',
+      model: unconfigured.onu_type_name || unconfigured.onu_type || 'ZTE-F660',
+    };
+
+    await TursoService.upsertSession({
+      phone,
+      step: 'PENDIENTE_CONFIRMACION_ACTIVACION_ONU',
+      metadata: JSON.stringify(metaObj),
+    });
+
+    const signalText = unconfigured.onu_signal_1490 || unconfigured.onu_signal || 'Detectado';
+    const cardMsg = `📋 *DATOS DE APROVISIONAMIENTO (PRE-ACTIVACIÓN)*
+──────────────────────────────
+• *Número de Serie:* *${unconfigured.sn}*
+• *Terminación (6 Dígitos):* \`${effectiveSuffix}\`
+• *Modelo ONU:* ${unconfigured.onu_type_name || unconfigured.onu_type || 'ZTE-F660'}
+• *OLT:* ${targetOltName} (Tarjeta ${unconfigured.board} / PON ${unconfigured.port})
+• *Nivel de Señal Óptica:* ${signalText}
+• *VLAN Asignada:* *VLAN ${nextIp.vlan}* (${targetOltName})
+• *IP Asignada Automáticamente:* *${nextIp.ip}*
+• *Puerta de Enlace (GW):* ${nextIp.gateway}
+• *Máscara:* ${nextIp.netmask}
+• *Perfil de Velocidad:* ${profiles.down} / ${profiles.up}
+• *Nombre Asignado:* ${clientName}
+──────────────────────────────
+⚠️ *¿Confirmas la autorización y activación de este módem en SmartOLT?*
+
+👉 Responde *SÍ* o *CONFIRMAR* para autorizar.
+👉 Responde *NO* o *CANCELAR* para abortar.`;
+
+    await this.enviarYLoguear(
+      phone,
+      cardMsg,
+      'ACTIVACION_TECNICO',
+      'ESPERANDO_CONFIRMACION',
+      targetJid,
+      [
+        { id: 'BTN_CONFIRMAR_ACTIVACION', title: '✅ SÍ, Autorizar Módem' },
+        { id: 'BTN_CANCELAR_ACTIVACION', title: '❌ Cancelar' },
+      ]
+    );
+  }
+
+  /**
+   * Procesa la confirmación explícita (SÍ / NO) de la activación de la ONU
+   */
+  private static async procesarConfirmacionActivacionOnu(
+    phone: string,
+    session: Session | null,
+    targetJid: string,
+    confirmar: boolean
+  ): Promise<void> {
+    let metaObj: any = {};
+    try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
+    const payload: AuthorizeOnuPayload = metaObj.pendingActivation;
+
+    if (!confirmar || !payload) {
+      metaObj.pendingActivation = null;
+      metaObj.pendingActivationDetails = null;
+      await TursoService.upsertSession({
+        phone,
+        step: 'CONVERSACIONAL',
+        metadata: JSON.stringify(metaObj),
+      });
+
+      await this.enviarYLoguear(
+        phone,
+        `❌ *Activación cancelada.* No se realizaron modificaciones en la OLT. Si deseas activar otro equipo, vuelve a enviar *ACTIVAR [6 DÍGITOS SN]*.`,
+        'ACTIVACION_TECNICO',
+        'ACTIVACION_CANCELADA',
+        targetJid
+      );
+      return;
+    }
+
+    await this.enviarYLoguear(
+      phone,
+      `⏳ Aprovisionando y autorizando módem *${payload.sn}* en SmartOLT... Por favor espera un momento.`,
+      'ACTIVACION_TECNICO',
+      'EJECUTANDO_AUTORIZACION',
+      targetJid
+    );
+
+    const result = await SmartOLTService.authorizeOnu(payload);
+
+    metaObj.pendingActivation = null;
+    metaObj.pendingActivationDetails = null;
+    await TursoService.upsertSession({
+      phone,
+      step: 'CONVERSACIONAL',
+      metadata: JSON.stringify(metaObj),
+    });
+
+    if (result.success) {
+      const successMsg = `🎉 *¡MÓDEM AUTORIZADO Y ACTIVADO CON ÉXITO!*
+──────────────────────────────
+• *Número de Serie:* *${payload.sn}*
+• *IP WAN Configurada:* *${payload.ip_address}*
+• *Gateway:* ${payload.gateway}
+• *VLAN:* *VLAN ${payload.vlan}*
+• *Perfil de Velocidad:* ${payload.download_speed_profile_name}
+• *Modo:* Routing (DHCP / PPPoE listo)
+• *Nombre:* ${payload.name}
+• *ID SmartOLT:* ${result.onu_id || payload.sn}
+──────────────────────────────
+✅ El equipo ya está sincronizado y navegando en la red de CloudWare.`;
+
+      await this.enviarYLoguear(
+        phone,
+        successMsg,
+        'ACTIVACION_TECNICO',
+        'ACTIVACION_EXITOSA',
+        targetJid
+      );
+    } else {
+      await this.enviarYLoguear(
+        phone,
+        `❌ *Error al autorizar en SmartOLT:*\n\n${result.message}\n\nPor favor verifica el estado de la OLT o intenta nuevamente.`,
+        'ACTIVACION_TECNICO',
+        'ERROR_AUTORIZACION',
+        targetJid
+      );
     }
   }
 

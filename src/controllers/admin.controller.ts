@@ -5,6 +5,7 @@ import { getTursoClient } from '../database/turso';
 import { GroqService } from '../services/groq.service';
 import { WispHubService } from '../services/wisphub.service';
 import { SmartOLTService } from '../services/smartolt.service';
+import { IpamService } from '../services/ipam.service';
 import { BotOrchestrator } from '../orchestrator/bot.orchestrator';
 import axios from 'axios';
 import { config } from '../config/env';
@@ -393,6 +394,67 @@ export class AdminController {
       res.json({ success: true, ...result });
     } catch (error: any) {
       logger.error('Error al auditar cruce de IPs:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Obtiene el resumen de pools y ocupación por VLAN (IPAM)
+   */
+  static async getIpamPools(_req: Request, res: Response): Promise<void> {
+    try {
+      const pools = await IpamService.getPoolSummary();
+      res.json({ success: true, pools });
+    } catch (error: any) {
+      logger.error('Error al obtener resumen de pools IPAM:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Obtiene el listado de IPs disponibles calculadas en tiempo real
+   */
+  static async getIpamAvailable(req: Request, res: Response): Promise<void> {
+    try {
+      const vlan = req.query.vlan as string | undefined;
+      const olt = req.query.olt as string | undefined;
+      const available = await IpamService.getAvailableIps(vlan, olt);
+      res.json({ success: true, count: available.length, available });
+    } catch (error: any) {
+      logger.error('Error al obtener IPs disponibles IPAM:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Obtiene la lista de ONUs sin configurar en SmartOLT
+   */
+  static async getSmartOltUnconfigured(req: Request, res: Response): Promise<void> {
+    try {
+      const oltId = req.query.olt_id as string | undefined;
+      const unconfigured = await SmartOLTService.getUnconfiguredOnus(oltId);
+      res.json({ success: true, count: unconfigured.length, unconfigured });
+    } catch (error: any) {
+      logger.error('Error al obtener ONUs sin configurar:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Autoriza una ONU en SmartOLT
+   */
+  static async authorizeSmartOltOnu(req: Request, res: Response): Promise<void> {
+    try {
+      const payload = req.body;
+      if (!payload || !payload.sn || !payload.olt_id || !payload.vlan || !payload.ip_address) {
+        res.status(400).json({ success: false, error: 'Faltan campos requeridos (sn, olt_id, vlan, ip_address)' });
+        return;
+      }
+
+      const result = await SmartOLTService.authorizeOnu(payload);
+      res.json(result);
+    } catch (error: any) {
+      logger.error('Error al autorizar ONU en SmartOLT:', error?.message || error);
       res.status(500).json({ success: false, error: error?.message || error });
     }
   }

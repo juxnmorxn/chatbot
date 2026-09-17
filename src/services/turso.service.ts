@@ -879,6 +879,64 @@ export class TursoService {
   }
 
   /**
+   * Obtiene todas las ONUs registradas en SmartOLT desde Turso DB
+   */
+  static async getAllSmartOltOnus(): Promise<SmartOltOnuRecord[]> {
+    try {
+      const client = getTursoClient();
+      const res = await client.execute('SELECT * FROM smartolt_onus');
+      return res.rows.map((row) => ({
+        unique_external_id: String(row.unique_external_id || ''),
+        sn: String(row.sn || ''),
+        name: String(row.name || ''),
+        name_normalized: row.name_normalized ? String(row.name_normalized) : undefined,
+        phone: row.phone ? String(row.phone) : undefined,
+        address: row.address ? String(row.address) : undefined,
+        zone_name: row.zone_name ? String(row.zone_name) : undefined,
+        speed_profile: row.speed_profile ? String(row.speed_profile) : undefined,
+        olt_name: row.olt_name ? String(row.olt_name) : undefined,
+        ip_address: row.ip_address ? String(row.ip_address) : undefined,
+        raw_data: row.raw_data ? String(row.raw_data) : undefined,
+        updated_at: row.updated_at ? String(row.updated_at) : undefined,
+      }));
+    } catch (error: any) {
+      logger.error('Error al obtener todas las ONUs de SmartOLT desde Turso:', error?.message || error);
+      return [];
+    }
+  }
+
+  /**
+   * Obtiene todos los clientes registrados en WispHub desde Turso DB
+   */
+  static async getAllWispHubClientes(): Promise<WisphubClientRecord[]> {
+    try {
+      const client = getTursoClient();
+      const res = await client.execute('SELECT * FROM wisphub_clients');
+      return res.rows.map((row) => ({
+        id_servicio: row.id_servicio as number | string,
+        nombre: String(row.nombre || ''),
+        nombre_normalized: row.nombre_normalized ? String(row.nombre_normalized) : undefined,
+        servicio: row.servicio ? String(row.servicio) : undefined,
+        ip: row.ip ? String(row.ip) : undefined,
+        estado: row.estado ? String(row.estado) : undefined,
+        estado_facturas: row.estado_facturas ? String(row.estado_facturas) : undefined,
+        precio_plan: row.precio_plan as string | number,
+        saldo: row.saldo as string | number,
+        plan_internet: row.plan_internet ? String(row.plan_internet) : undefined,
+        router: row.router ? String(row.router) : undefined,
+        sn_onu: row.sn_onu ? String(row.sn_onu) : undefined,
+        telefono: row.telefono ? String(row.telefono) : undefined,
+        direccion: row.direccion ? String(row.direccion) : undefined,
+        raw_data: row.raw_data ? String(row.raw_data) : undefined,
+        updated_at: row.updated_at ? String(row.updated_at) : undefined,
+      }));
+    } catch (error: any) {
+      logger.error('Error al obtener todos los clientes de WispHub desde Turso:', error?.message || error);
+      return [];
+    }
+  }
+
+  /**
    * Realiza el cruce de datos entre SmartOLT y WispHub (detección de discrepancias de IP)
    * 100% solo lectura. Cruza por número de folio/contrato (ej: 2861) y por nombre normalizado.
    */

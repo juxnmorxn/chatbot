@@ -395,6 +395,7 @@ export function getAdminDashboardHtml(): string {
     <div class="nav-tabs">
       <button class="nav-tab active" onclick="switchTab('apis', this)">🔑 Conexión y Pagos</button>
       <button class="nav-tab" onclick="switchTab('audit', this)" style="border: 1px solid rgba(239, 68, 68, 0.4); background: rgba(239, 68, 68, 0.08); color: #fca5a5;">🔍 Auditoría IPs (SmartOLT vs WispHub)</button>
+      <button class="nav-tab" onclick="switchTab('ipam', this)" style="border: 1px solid rgba(16, 185, 129, 0.4); background: rgba(16, 185, 129, 0.08); color: #6ee7b7;">🌐 Pool de IPs y VLANs (IPAM)</button>
       <button class="nav-tab" onclick="switchTab('whatsapp', this)">📲 Vincular WhatsApp</button>
       <button class="nav-tab" onclick="switchTab('tickets', this)">🎫 Mesa de Tickets</button>
       <button class="nav-tab" onclick="switchTab('sessions', this)">👥 Sesiones en Turso</button>
@@ -697,6 +698,152 @@ export function getAdminDashboardHtml(): string {
       </div>
     </div>
 
+    <!-- TAB: IPAM & VLANs Pool -->
+    <div id="tab-ipam" class="tab-pane">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">🌐 Gestión de Direcciones IP y VLANs (IPAM)</div>
+            <p style="color: var(--text-muted); font-size: 13px; margin-top: 4px;">
+              Monitoreo y cálculo en tiempo real de IPs disponibles para aprovisionamiento de módems en SmartOLT y WispHub.
+            </p>
+          </div>
+          <button class="btn btn-secondary btn-test" onclick="loadIpamData()" style="color: #6ee7b7; border-color: rgba(16,185,129,0.4);">
+            🔄 Actualizar IPAM
+          </button>
+        </div>
+
+        <!-- Global IPAM Stat Cards -->
+        <div class="stat-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 24px;">
+          <div class="stat-card" style="border-left: 4px solid #10b981; background: rgba(16, 185, 129, 0.08); padding: 14px; border-radius: 10px; border: 1px solid rgba(16,185,129,0.2);">
+            <div style="font-size: 11px; color: #6ee7b7; font-weight: 600; text-transform: uppercase;">🟢 IPs Disponibles</div>
+            <div id="statIpamAvailable" style="font-size: 28px; font-weight: 700; color: #34d399; margin: 4px 0;">-</div>
+            <div style="font-size: 11px; color: var(--text-muted);">Listas para asignar</div>
+          </div>
+
+          <div class="stat-card" style="border-left: 4px solid #6366f1; background: rgba(99, 102, 241, 0.08); padding: 14px; border-radius: 10px; border: 1px solid rgba(99,102,241,0.2);">
+            <div style="font-size: 11px; color: #a5b4fc; font-weight: 600; text-transform: uppercase;">📡 IPs Ocupadas</div>
+            <div id="statIpamUsed" style="font-size: 28px; font-weight: 700; color: #818cf8; margin: 4px 0;">-</div>
+            <div style="font-size: 11px; color: var(--text-muted);">SmartOLT / WispHub</div>
+          </div>
+
+          <div class="stat-card" style="border-left: 4px solid #06b6d4; background: rgba(6, 182, 212, 0.08); padding: 14px; border-radius: 10px; border: 1px solid rgba(6,182,212,0.2);">
+            <div style="font-size: 11px; color: #67e8f9; font-weight: 600; text-transform: uppercase;">📊 Capacidad Total</div>
+            <div id="statIpamTotal" style="font-size: 28px; font-weight: 700; color: #22d3ee; margin: 4px 0;">-</div>
+            <div style="font-size: 11px; color: var(--text-muted);">12 Subredes /24</div>
+          </div>
+
+          <div class="stat-card" style="border-left: 4px solid #f59e0b; background: rgba(245, 158, 11, 0.08); padding: 14px; border-radius: 10px; border: 1px solid rgba(245,158,11,0.2);">
+            <div style="font-size: 11px; color: #fcd34d; font-weight: 600; text-transform: uppercase;">📈 Ocupación Global</div>
+            <div id="statIpamPercent" style="font-size: 28px; font-weight: 700; color: #fbbf24; margin: 4px 0;">-%</div>
+            <div style="font-size: 11px; color: var(--text-muted);">Promedio de red</div>
+          </div>
+        </div>
+
+        <!-- Section: VLAN Pools Breakdown -->
+        <h3 style="font-size: 16px; margin-bottom: 12px; color: var(--text-main); display: flex; align-items: center; gap: 8px;">
+          <span>⚡ Subredes y Capacidad por VLAN</span>
+        </h3>
+        <div id="ipamPoolsContainer" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin-bottom: 24px;">
+          <div style="color: var(--text-muted); font-size: 13px;">⏳ Cargando subredes...</div>
+        </div>
+
+        <!-- Section: Available IPs Explorer -->
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 14px;">
+          <h3 style="font-size: 16px; color: var(--text-main); display: flex; align-items: center; gap: 8px;">
+            <span>🔍 Explorador de IPs Disponibles</span>
+          </h3>
+
+          <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+            <select id="ipamVlanSelect" onchange="filterIpamAvailable()" style="background: rgba(255,255,255,0.06); color: var(--text-main); border: 1px solid var(--card-border); border-radius: 8px; padding: 6px 12px; font-size: 13px;">
+              <option value="">Todas las VLANs</option>
+              <option value="510">VLAN 510 (172.19.1.0/24 - Actopan)</option>
+              <option value="520">VLAN 520 (172.19.2.0/24 - Actopan)</option>
+              <option value="530">VLAN 530 (172.19.3.0/24 - Actopan)</option>
+              <option value="540">VLAN 540 (172.19.4.0/24 - Actopan)</option>
+              <option value="550">VLAN 550 (172.19.5.0/24 - Actopan)</option>
+              <option value="560">VLAN 560 (172.19.6.0/24 - Actopan)</option>
+              <option value="570">VLAN 570 (172.19.7.0/24 - Actopan)</option>
+              <option value="580">VLAN 580 (172.19.8.0/24 - Actopan)</option>
+              <option value="590">VLAN 590 (172.19.9.0/24 - Actopan)</option>
+              <option value="600">VLAN 600 (172.19.10.0/24 - Actopan)</option>
+              <option value="610">VLAN 610 (172.19.11.0/24 - Actopan)</option>
+              <option value="800">VLAN 800 (172.16.80.0/24 - San Agustín)</option>
+            </select>
+
+            <input type="text" id="ipamSearchInput" placeholder="Buscar IP (ej: 172.19.1.20)..." oninput="filterIpamAvailable()" style="background: rgba(255,255,255,0.06); color: var(--text-main); border: 1px solid var(--card-border); border-radius: 8px; padding: 6px 12px; font-size: 13px; min-width: 180px;">
+          </div>
+        </div>
+
+        <div class="table-container" style="border: 1px solid var(--card-border); border-radius: 10px; background: rgba(0,0,0,0.2); max-height: 400px; overflow-y: auto;">
+          <table>
+            <thead>
+              <tr style="background: rgba(255,255,255,0.02); position: sticky; top: 0; backdrop-filter: blur(10px); z-index: 2;">
+                <th style="width: 50px;">#</th>
+                <th style="color: #34d399;">🌐 Dirección IP Libre</th>
+                <th>VLAN</th>
+                <th>Gateway</th>
+                <th>Segmento</th>
+                <th>OLT Destino</th>
+                <th>Estado</th>
+                <th style="text-align: right;">Acción</th>
+              </tr>
+            </thead>
+            <tbody id="ipamTableBody">
+              <tr>
+                <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 30px;">
+                  ⏳ Cargando listado de IPs disponibles...
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div id="ipamCountInfo" style="margin-top: 10px; font-size: 12px; color: var(--text-muted);">
+          Mostrando 0 IPs libres
+        </div>
+
+        <!-- Section: Unconfigured ONUs in SmartOLT -->
+        <div style="margin-top: 28px; border-top: 1px solid var(--card-border); padding-top: 20px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <div>
+              <h3 style="font-size: 16px; color: var(--text-main); display: flex; align-items: center; gap: 8px;">
+                <span>📡 ONUs Sin Configurar en SmartOLT (Auto-Activación)</span>
+              </h3>
+              <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+                Módems detectados en las OLTs listos para ser activados por los técnicos vía WhatsApp usando los <strong>últimos 6 dígitos del SN</strong>.
+              </p>
+            </div>
+            <button class="btn btn-secondary btn-test" onclick="loadUnconfiguredOnus()" style="font-size: 12px;">
+              🔄 Refrescar ONUs
+            </button>
+          </div>
+
+          <div class="table-container" style="border: 1px solid var(--card-border); border-radius: 10px; background: rgba(0,0,0,0.2);">
+            <table>
+              <thead>
+                <tr style="background: rgba(255,255,255,0.02);">
+                  <th>Serie Completo</th>
+                  <th style="color: #38bdf8;">Últimos 6 Dígitos</th>
+                  <th>OLT</th>
+                  <th>Tarjeta / PON</th>
+                  <th>Modelo</th>
+                  <th>Potencia RX (1490)</th>
+                  <th>Estatus</th>
+                </tr>
+              </thead>
+              <tbody id="unconfiguredTableBody">
+                <tr>
+                  <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 24px;">
+                    Haz clic en "Refrescar ONUs" o cambia de pestaña para consultar SmartOLT en vivo.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- TAB: Vincular WhatsApp -->
     <div id="tab-whatsapp" class="tab-pane">
       <div class="card" style="max-width: 680px; margin: 0 auto; text-align: center;">
@@ -943,6 +1090,9 @@ export function getAdminDashboardHtml(): string {
         if (tabId === 'audit') {
           loadAuditData(1);
           loadWisphubStats();
+        }
+        if (tabId === 'ipam') {
+          loadIpamData();
         }
         if (tabId === 'whatsapp') loadWhatsAppStatus();
         if (tabId === 'tickets') loadTickets();
@@ -1599,6 +1749,153 @@ export function getAdminDashboardHtml(): string {
       } finally {
         if (btnTab1) { btnTab1.disabled = false; btnTab1.innerText = '🔄 Sincronizar con Turso DB'; }
         if (btnAudit) { btnAudit.disabled = false; btnAudit.innerText = '📥 Sincronizar WispHub'; }
+      }
+    }
+
+    let allIpamAvailable = [];
+
+    async function loadIpamData() {
+      await Promise.all([loadIpamPools(), loadIpamAvailable(), loadUnconfiguredOnus()]);
+    }
+
+    async function loadIpamPools() {
+      const container = document.getElementById('ipamPoolsContainer');
+      try {
+        const res = await fetch('/api/ipam/pools');
+        const data = await res.json();
+        if (data.success && data.pools) {
+          let totalUsable = 0;
+          let totalUsed = 0;
+          let totalAvailable = 0;
+
+          container.innerHTML = data.pools.map(p => {
+            totalUsable += p.totalUsable;
+            totalUsed += p.usedCount;
+            totalAvailable += p.availableCount;
+
+            const isSanAgustin = p.vlan === '800';
+            const badgeColor = isSanAgustin ? '#c084fc' : '#38bdf8';
+            const barColor = p.usagePercent > 80 ? '#ef4444' : p.usagePercent > 50 ? '#f59e0b' : '#10b981';
+
+            return '<div style="background: rgba(0,0,0,0.3); border: 1px solid var(--card-border); border-radius: 10px; padding: 14px; position: relative; overflow: hidden;">' +
+              '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">' +
+                '<span style="font-weight: 700; font-size: 14px; color: ' + badgeColor + ';">VLAN ' + p.vlan + '</span>' +
+                '<span style="font-size: 11px; font-family: var(--font-mono); color: var(--text-muted);">' + p.segment + '</span>' +
+              '</div>' +
+              '<div style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">' + p.oltName + ' | GW: ' + p.gateway + '</div>' +
+              '<div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px;">' +
+                '<span style="color: #34d399; font-weight: 600;">' + p.availableCount + ' libres</span>' +
+                '<span style="color: var(--text-muted);">' + p.usedCount + ' / ' + p.totalUsable + ' (' + p.usagePercent + '%)</span>' +
+              '</div>' +
+              '<div style="width: 100%; height: 6px; background: rgba(255,255,255,0.08); border-radius: 999px; overflow: hidden;">' +
+                '<div style="width: ' + p.usagePercent + '%; height: 100%; background: ' + barColor + '; border-radius: 999px;"></div>' +
+              '</div>' +
+            '</div>';
+          }).join('');
+
+          const globalPercent = totalUsable > 0 ? Math.round((totalUsed / totalUsable) * 100) : 0;
+          document.getElementById('statIpamAvailable').innerText = totalAvailable;
+          document.getElementById('statIpamUsed').innerText = totalUsed;
+          document.getElementById('statIpamTotal').innerText = totalUsable;
+          document.getElementById('statIpamPercent').innerText = globalPercent + '%';
+        }
+      } catch (err) {
+        if (container) container.innerHTML = '<div style="color: #f87171;">Error al cargar pools de IPAM</div>';
+      }
+    }
+
+    async function loadIpamAvailable() {
+      const tbody = document.getElementById('ipamTableBody');
+      try {
+        const res = await fetch('/api/ipam/available');
+        const data = await res.json();
+        if (data.success && data.available) {
+          allIpamAvailable = data.available;
+          renderIpamTable(allIpamAvailable);
+        }
+      } catch (err) {
+        if (tbody) tbody.innerHTML = '<tr><td colspan="8" style="color: #f87171; text-align: center;">Error al cargar IPs disponibles</td></tr>';
+      }
+    }
+
+    function filterIpamAvailable() {
+      const vlanFilter = document.getElementById('ipamVlanSelect')?.value || '';
+      const search = (document.getElementById('ipamSearchInput')?.value || '').toLowerCase().trim();
+
+      const filtered = allIpamAvailable.filter(item => {
+        const matchVlan = !vlanFilter || item.vlan === vlanFilter;
+        const matchSearch = !search || item.ip.toLowerCase().includes(search) || item.vlan.includes(search) || item.gateway.includes(search);
+        return matchVlan && matchSearch;
+      });
+
+      renderIpamTable(filtered);
+    }
+
+    function renderIpamTable(items) {
+      const tbody = document.getElementById('ipamTableBody');
+      const countInfo = document.getElementById('ipamCountInfo');
+      if (!tbody) return;
+
+      if (countInfo) countInfo.innerText = 'Mostrando ' + items.length + ' IPs libres';
+
+      if (items.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 24px;">No se encontraron IPs disponibles para este filtro.</td></tr>';
+        return;
+      }
+
+      const displayItems = items.slice(0, 150);
+      tbody.innerHTML = displayItems.map((item, idx) => {
+        return '<tr>' +
+          '<td style="color: var(--text-muted); font-family: var(--font-mono);">' + (idx + 1) + '</td>' +
+          '<td style="font-family: var(--font-mono); font-weight: 700; color: #34d399; font-size: 14px;">' + item.ip + '</td>' +
+          '<td><span class="pill pill-blue">VLAN ' + item.vlan + '</span></td>' +
+          '<td style="font-family: var(--font-mono); color: var(--text-muted); font-size: 12px;">' + item.gateway + '</td>' +
+          '<td style="font-family: var(--font-mono); color: var(--text-muted); font-size: 12px;">' + item.segment + '</td>' +
+          '<td style="font-size: 12px;">' + item.olt + '</td>' +
+          '<td><span class="pill pill-green">🟢 Disponible</span></td>' +
+          '<td style="text-align: right;">' +
+            '<button class="btn btn-secondary btn-test" onclick="copyIpToClipboard(&quot;' + item.ip + '&quot;)" style="padding: 4px 10px; font-size: 11px;">📋 Copiar IP</button>' +
+          '</td>' +
+        '</tr>';
+      }).join('');
+    }
+
+    function copyIpToClipboard(text) {
+      navigator.clipboard.writeText(text).then(() => {
+        showToast('📋 IP ' + text + ' copiada al portapapeles');
+      }).catch(() => {
+        showToast('IP: ' + text);
+      });
+    }
+
+    async function loadUnconfiguredOnus() {
+      const tbody = document.getElementById('unconfiguredTableBody');
+      if (!tbody) return;
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 20px;">⏳ Consultando SmartOLT en tiempo real...</td></tr>';
+      try {
+        const res = await fetch('/api/smartolt/unconfigured');
+        const data = await res.json();
+        if (data.success && data.unconfigured) {
+          if (data.unconfigured.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #34d399; padding: 20px;">✅ No hay ONUs pendientes por autorizar en este momento.</td></tr>';
+            return;
+          }
+
+          tbody.innerHTML = data.unconfigured.map(onu => {
+            const snSuffix = onu.sn.length >= 6 ? onu.sn.slice(-6) : onu.sn;
+            return '<tr>' +
+              '<td style="font-family: var(--font-mono); font-weight: 600;">' + onu.sn + '</td>' +
+              '<td style="font-family: var(--font-mono); font-weight: 700; color: #38bdf8; font-size: 14px;">' + snSuffix + '</td>' +
+              '<td>' + (onu.olt_name || onu.olt_id) + '</td>' +
+              '<td style="font-family: var(--font-mono); font-size: 12px;">Tarjeta ' + onu.board + ' / PON ' + onu.port + '</td>' +
+              '<td>' + (onu.onu_type_name || onu.onu_type || '-') + '</td>' +
+              '<td style="color: #34d399; font-family: var(--font-mono);">' + (onu.onu_signal_1490 || onu.onu_signal || 'Detectada') + '</td>' +
+              '<td><span class="pill pill-amber">Pendiente</span></td>' +
+            '</tr>';
+          }).join('');
+        }
+      } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="7" style="color: #f87171; text-align: center;">Error al consultar ONUs sin configurar</td></tr>';
       }
     }
 
