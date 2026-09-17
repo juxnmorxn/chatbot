@@ -68,13 +68,50 @@ export interface AuthorizeOnuResult {
   details?: any;
 }
 
-export function getSmartOltSpeedProfiles(plan?: string): { down: string; up: string } {
+export interface SpeedProfileItem {
+  id: string;
+  name: string;
+  speed: string;
+  direction: 'download' | 'upload';
+  type: string;
+}
+
+export function getSmartOltSpeedProfiles(
+  plan?: string,
+  catalog?: SpeedProfileItem[]
+): { down: string; up: string } {
   const p = (plan || '').toUpperCase();
-  const match = p.match(/(\d+)\s*(?:M|MEGAS|MB)?/);
-  const mb = match ? match[1] : '40';
+  const match = p.match(/(\d+)/);
+  const requestedMb = match ? parseInt(match[1], 10) : 40;
+
+  if (catalog && catalog.length > 0) {
+    // Buscar perfil de descarga que coincida con la velocidad en MB
+    const downProfiles = catalog.filter(c => c.direction === 'download');
+    const upProfiles = catalog.filter(c => c.direction === 'upload');
+
+    // 1. Coincidencia exacta por nombre (ej: "60MB-DOWN", "500MB-Down", "50M")
+    const matchDown = downProfiles.find(c => {
+      const numMatch = c.name.match(/(\d+)/);
+      return numMatch && parseInt(numMatch[1], 10) === requestedMb;
+    });
+
+    const matchUp = upProfiles.find(c => {
+      const numMatch = c.name.match(/(\d+)/);
+      return numMatch && parseInt(numMatch[1], 10) === requestedMb;
+    });
+
+    if (matchDown && matchUp) {
+      return { down: matchDown.name, up: matchUp.name };
+    }
+    if (matchDown) {
+      return { down: matchDown.name, up: matchDown.name.replace(/down/i, 'Up') };
+    }
+  }
+
+  // Fallback estándar
   return {
-    down: `${mb}MB-DOWN`,
-    up: `${mb}MB-UP`,
+    down: `${requestedMb}MB-DOWN`,
+    up: `${requestedMb}MB-UP`,
   };
 }
 
@@ -82,6 +119,11 @@ export class SmartOLTService {
   private static api: AxiosInstance | null = null;
   private static lastUrl: string = '';
   private static lastKey: string = '';
+
+  // Caché de catálogo de perfiles de velocidad oficial de SmartOLT (TTL 30 minutos)
+  private static speedProfilesCatalog: SpeedProfileItem[] = [];
+  private static lastSpeedProfilesFetch: number = 0;
+  private static readonly SPEED_PROFILES_TTL_MS = 30 * 60 * 1000;
 
   // Caché de estado en tiempo real (TTL 3 minutos) para no agotar el límite de 300 calls/hora
   private static statusCache: Map<string, { result: SmartOltStatusResult; timestamp: number }> = new Map();
@@ -500,13 +542,36 @@ export class SmartOLTService {
   }
 
   /**
+   * Obtiene y almacena en caché el catálogo oficial de perfiles de velocidad configurados en SmartOLT
+   */
+  static async getSpeedProfilesCatalog(): Promise<SpeedProfileItem[]> {
+    const now = Date.now();
+    if (this.speedProfilesCatalog.length > 0 && (now - this.lastSpeedProfilesFetch) < this.SPEED_PROFILES_TTL_MS) {
+      return this.speedProfilesCatalog;
+    }
+    try {
+      const api = this.getApi();
+      const res = await api.get('/system/get_speed_profiles');
+      if (res.data?.response && Array.isArray(res.data.response)) {
+        this.speedProfilesCatalog = res.data.response;
+        this.lastSpeedProfilesFetch = now;
+        logger.info(`Catálogo SmartOLT cargado: ${this.speedProfilesCatalog.length} perfiles de velocidad.`);
+      }
+    } catch (err: any) {
+      logger.warn('No se pudo descargar catálogo de perfiles de SmartOLT:', err?.message || err);
+    }
+    return this.speedProfilesCatalog;
+  }
+
+  /**
    * Actualiza el perfil de velocidad (Paquete) de una ONU en SmartOLT en tiempo real
    */
   static async updateSpeedProfile(
     idOrSn: string,
     plan: string
   ): Promise<{ success: boolean; message: string; downProfile: string; upProfile: string; onuRecord?: SmartOltOnuRecord | null }> {
-    const profiles = getSmartOltSpeedProfiles(plan);
+    const catalog = await this.getSpeedProfilesCatalog();
+    const profiles = getSmartOltSpeedProfiles(plan, catalog);
     logger.info(`Actualizando perfil de velocidad para ONU ${idOrSn} a ${profiles.down} / ${profiles.up}`);
 
     // 1. Buscar registro en Turso DB para tener datos completos del cliente
@@ -544,23 +609,26 @@ export class SmartOLTService {
     try {
       const api = this.getApi();
       const bodyData = {
-        onu_external_id: externalId,
         download_speed_profile_name: profiles.down,
         upload_speed_profile_name: profiles.up,
       };
 
+      // Endpoint oficial de SmartOLT: POST /onu/update_onu_speed_profiles/{{onu_external_id}}
       let response;
       try {
-        response = await api.post('/onu/update_onu_speed_profiles', bodyData);
+        response = await api.post(`/onu/update_onu_speed_profiles/${encodeURIComponent(externalId)}`, bodyData);
       } catch (err: any) {
-        // Reintentar con endpoint alternativo si el principal difiere por versión
-        response = await api.post('/onu/set_speed_profiles', bodyData);
+        // Fallback con cuerpo si el path difiere
+        response = await api.post('/onu/update_onu_speed_profiles', {
+          onu_external_id: externalId,
+          ...bodyData
+        });
       }
 
       const resData = response.data;
       logger.info('Respuesta cambio de paquete SmartOLT:', JSON.stringify(resData));
 
-      if (resData?.status === true || response.status === 200 || resData?.response === 'success') {
+      if (resData?.status === true || response.status === 200 || resData?.response_code === 'success' || resData?.response === 'success') {
         if (onuRecord) {
           TursoService.saveSmartOltOnus([
             {
@@ -573,7 +641,7 @@ export class SmartOLTService {
 
         return {
           success: true,
-          message: resData?.message || `Perfil de velocidad actualizado exitosamente a ${profiles.down}.`,
+          message: resData?.response || resData?.message || `Perfil de velocidad actualizado exitosamente a ${profiles.down}.`,
           downProfile: profiles.down,
           upProfile: profiles.up,
           onuRecord,
