@@ -613,6 +613,11 @@ export function getAdminDashboardHtml(): string {
               <input type="text" id="paymentBeneficiary" placeholder="Ej: CloudWare Telecomunicaciones S.A.">
             </div>
 
+            <div class="form-group">
+              <label>Instrucciones Adicionales de Cobro</label>
+              <input type="text" id="paymentNotes" placeholder="Ej: Acepta OXXO y transferencias 24/7">
+            </div>
+
             <div class="form-group" style="grid-column: 1 / -1;">
               <label>🔑 Mercado Pago - Access Token (Cobro Dinámico Automático)</label>
               <input type="password" id="mercadopagoAccessToken" class="mono" placeholder="Ej: APP_USR-xxxxxxxxxxxx o TEST-xxxxxxxxxxxx">
@@ -1458,26 +1463,28 @@ export function getAdminDashboardHtml(): string {
         const data = await res.json();
         if (data.success && data.settings) {
           const s = data.settings;
-          document.getElementById('evolutionUrl').value = s.evolutionUrl || '';
-          document.getElementById('evolutionApiKey').value = s.evolutionApiKey || '';
-          document.getElementById('evolutionInstanceName').value = s.evolutionInstanceName || '';
-          document.getElementById('groqApiKey').value = s.groqApiKey || '';
-          document.getElementById('groqModel').value = s.groqModel || 'openai/gpt-oss-20b';
-          document.getElementById('wisphubUrl').value = s.wisphubUrl || '';
-          document.getElementById('wisphubApiKey').value = s.wisphubApiKey || '';
-          document.getElementById('smartoltUrl').value = s.smartoltUrl || '';
-          document.getElementById('smartoltApiKey').value = s.smartoltApiKey || '';
-          document.getElementById('ispName').value = s.ispName || '';
-          document.getElementById('soporteHumanoPhone').value = s.soporteHumanoPhone || '';
-          document.getElementById('paymentBank').value = s.paymentBank || '';
-          document.getElementById('paymentAccount').value = s.paymentAccount || '';
-          document.getElementById('paymentBeneficiary').value = s.paymentBeneficiary || '';
-          document.getElementById('paymentNotes').value = s.paymentNotes || '';
-          document.getElementById('paymentMercadopagoUrl').value = s.paymentMercadopagoUrl || '';
-          document.getElementById('mercadopagoAccessToken').value = s.mercadopagoAccessToken || '';
-          document.getElementById('workHoursStart').value = s.workHoursStart || '09:00';
-          document.getElementById('workHoursEnd').value = s.workHoursEnd || '18:00';
-          document.getElementById('headerIspName').innerText = s.ispName || 'CloudWareMx';
+          const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+          setVal('evolutionUrl', s.evolutionUrl);
+          setVal('evolutionApiKey', s.evolutionApiKey);
+          setVal('evolutionInstanceName', s.evolutionInstanceName);
+          setVal('groqApiKey', s.groqApiKey);
+          setVal('groqModel', s.groqModel || 'openai/gpt-oss-20b');
+          setVal('wisphubUrl', s.wisphubUrl);
+          setVal('wisphubApiKey', s.wisphubApiKey);
+          setVal('smartoltUrl', s.smartoltUrl);
+          setVal('smartoltApiKey', s.smartoltApiKey);
+          setVal('ispName', s.ispName);
+          setVal('soporteHumanoPhone', s.soporteHumanoPhone);
+          setVal('paymentBank', s.paymentBank);
+          setVal('paymentAccount', s.paymentAccount);
+          setVal('paymentBeneficiary', s.paymentBeneficiary);
+          setVal('paymentNotes', s.paymentNotes);
+          setVal('paymentMercadopagoUrl', s.paymentMercadopagoUrl);
+          setVal('mercadopagoAccessToken', s.mercadopagoAccessToken);
+          setVal('workHoursStart', s.workHoursStart || '09:00');
+          setVal('workHoursEnd', s.workHoursEnd || '18:00');
+          const headerEl = document.getElementById('headerIspName');
+          if (headerEl) headerEl.innerText = s.ispName || 'CloudWareMx';
         }
       } catch (err) {
         console.error('Error cargando settings:', err);
@@ -1485,26 +1492,27 @@ export function getAdminDashboardHtml(): string {
     }
 
     async function saveSettings() {
+      const getVal = (id) => { const el = document.getElementById(id); return el ? el.value : ''; };
       const payload = {
-        EVOLUTION_URL: document.getElementById('evolutionUrl').value,
-        EVOLUTION_API_KEY: document.getElementById('evolutionApiKey').value,
-        INSTANCE_NAME: document.getElementById('evolutionInstanceName').value,
-        GROQ_API_KEY: document.getElementById('groqApiKey').value,
-        GROQ_MODEL: document.getElementById('groqModel').value,
-        WISPHUB_API_URL: document.getElementById('wisphubUrl').value,
-        WISPHUB_API_KEY: document.getElementById('wisphubApiKey').value,
-        SMARTOLT_API_URL: document.getElementById('smartoltUrl').value,
-        SMARTOLT_API_KEY: document.getElementById('smartoltApiKey').value,
-        ISP_NAME: document.getElementById('ispName').value,
-        SOPORTE_HUMANO_PHONE: document.getElementById('soporteHumanoPhone').value,
-        PAYMENT_BANK: document.getElementById('paymentBank').value,
-        PAYMENT_ACCOUNT: document.getElementById('paymentAccount').value,
-        PAYMENT_BENEFICIARY: document.getElementById('paymentBeneficiary').value,
-        PAYMENT_NOTES: document.getElementById('paymentNotes').value,
-        PAYMENT_MERCADOPAGO_URL: document.getElementById('paymentMercadopagoUrl').value,
-        MERCADOPAGO_ACCESS_TOKEN: document.getElementById('mercadopagoAccessToken').value,
-        WORK_HOURS_START: document.getElementById('workHoursStart').value,
-        WORK_HOURS_END: document.getElementById('workHoursEnd').value,
+        EVOLUTION_URL: getVal('evolutionUrl'),
+        EVOLUTION_API_KEY: getVal('evolutionApiKey'),
+        INSTANCE_NAME: getVal('evolutionInstanceName'),
+        GROQ_API_KEY: getVal('groqApiKey'),
+        GROQ_MODEL: getVal('groqModel'),
+        WISPHUB_API_URL: getVal('wisphubUrl'),
+        WISPHUB_API_KEY: getVal('wisphubApiKey'),
+        SMARTOLT_API_URL: getVal('smartoltUrl'),
+        SMARTOLT_API_KEY: getVal('smartoltApiKey'),
+        ISP_NAME: getVal('ispName'),
+        SOPORTE_HUMANO_PHONE: getVal('soporteHumanoPhone'),
+        PAYMENT_BANK: getVal('paymentBank'),
+        PAYMENT_ACCOUNT: getVal('paymentAccount'),
+        PAYMENT_BENEFICIARY: getVal('paymentBeneficiary'),
+        PAYMENT_NOTES: getVal('paymentNotes'),
+        PAYMENT_MERCADOPAGO_URL: getVal('paymentMercadopagoUrl'),
+        MERCADOPAGO_ACCESS_TOKEN: getVal('mercadopagoAccessToken'),
+        WORK_HOURS_START: getVal('workHoursStart'),
+        WORK_HOURS_END: getVal('workHoursEnd'),
       };
 
       try {
