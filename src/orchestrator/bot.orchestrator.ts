@@ -2,6 +2,7 @@ import { TursoService, Session } from '../services/turso.service';
 import { GroqService, GroqClassificationResult, GroqImageAnalysisResult } from '../services/groq.service';
 import { WispHubService, WispHubCliente } from '../services/wisphub.service';
 import { SmartOLTService, SmartOltStatusResult, getSmartOltSpeedProfiles, AuthorizeOnuPayload } from '../services/smartolt.service';
+import { MercadoPagoService } from '../services/mercadopago.service';
 import { IpamService } from '../services/ipam.service';
 import { EvolutionService, BotButton } from '../services/evolution.service';
 import { config } from '../config/env';
@@ -216,6 +217,45 @@ export class BotOrchestrator {
     txt += `\nUna vez realizada tu transferencia o pago, por favor envía la *foto o captura de pantalla de tu comprobante* y escribe tu *Nombre completo* aquí en el chat para validarlo y aplicarlo de inmediato en el sistema. ¡Muchas gracias!`;
 
     return txt;
+  }
+
+  /**
+   * Obtiene o genera dinámicamente un enlace de cobro de Mercado Pago con el monto y contrato exacto
+   */
+  private static async obtenerLinkMercadoPago(params: {
+    clientName?: string | null;
+    clientId?: string | number | null;
+    phone: string;
+    monto: number;
+    folioFactura?: string | number | null;
+  }): Promise<string | null> {
+    const { clientName, clientId, phone, monto, folioFactura } = params;
+
+    // 1. Si hay un Access Token de Mercado Pago configurado, crear preferencia dinámica
+    try {
+      let contratoId = '';
+      const matchContrato = (clientName || '').match(/^0*(\d+)/);
+      if (matchContrato) contratoId = matchContrato[1];
+
+      const dynamicLink = await MercadoPagoService.crearPreferenciaPago({
+        clienteNombre: clientName || 'Cliente',
+        clienteId: clientId,
+        contratoId: contratoId || clientId,
+        phone,
+        monto: monto > 0 ? monto : 250,
+        folioFactura: folioFactura || null,
+      });
+
+      if (dynamicLink) {
+        return dynamicLink;
+      }
+    } catch (err: any) {
+      logger.warn('No se pudo generar preferencia dinámica en Mercado Pago:', err?.message || err);
+    }
+
+    // 2. Si no se pudo generar dinámicamente, usar link fijo configurado en Settings (si existe)
+    const fixedLink = SettingsService.get('PAYMENT_MERCADOPAGO_URL', 'MERCADOPAGO_URL', '').trim();
+    return fixedLink || null;
   }
 
   /**
@@ -752,7 +792,13 @@ export class BotOrchestrator {
             });
           }
 
-          const mpUrl = SettingsService.get('PAYMENT_MERCADOPAGO_URL', 'MERCADOPAGO_URL', '');
+          const mpUrl = await this.obtenerLinkMercadoPago({
+            clientName: session.client_name,
+            clientId: session.client_id,
+            phone,
+            monto: estadoFinanciero.totalDeuda > 0 ? estadoFinanciero.totalDeuda : 250,
+            folioFactura: facturas[0]?.folio || null,
+          });
           const bank = SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK', 'BBVA Bancomer');
           const account = SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', '012 180 0152433212 90');
           const beneficiary = SettingsService.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', this.getIspName());
@@ -1142,7 +1188,13 @@ export class BotOrchestrator {
           });
         }
 
-        const mpUrl = SettingsService.get('PAYMENT_MERCADOPAGO_URL', 'MERCADOPAGO_URL', '');
+        const mpUrl = await this.obtenerLinkMercadoPago({
+          clientName: session.client_name,
+          clientId: session.client_id,
+          phone,
+          monto: estadoFinanciero.totalDeuda > 0 ? estadoFinanciero.totalDeuda : 250,
+          folioFactura: facturas[0]?.folio || null,
+        });
         const bank = SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK', 'BBVA Bancomer');
         const account = SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', '012 180 0152433212 90');
         const beneficiary = SettingsService.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', this.getIspName());
@@ -2409,7 +2461,13 @@ export class BotOrchestrator {
 
       if (estadoFinanciero.suspendido || estadoFinanciero.totalDeuda > 0) {
         logger.info(`Intento de reinicio bloqueado: Cliente ${phone} (${session?.client_name}) suspendido/adeudo en WispHub.`);
-        const mpUrl = SettingsService.get('PAYMENT_MERCADOPAGO_URL', 'MERCADOPAGO_URL', '');
+        const mpUrl = await this.obtenerLinkMercadoPago({
+          clientName: session?.client_name,
+          clientId: session?.client_id,
+          phone,
+          monto: estadoFinanciero.totalDeuda > 0 ? estadoFinanciero.totalDeuda : 250,
+          folioFactura: null,
+        });
         const bank = SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK', 'BBVA Bancomer');
         const account = SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', '012 180 0152433212 90');
         const beneficiary = SettingsService.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', this.getIspName());
@@ -2524,7 +2582,13 @@ export class BotOrchestrator {
     }
 
     // Si está suspendido o registra adeudo sin facturas listadas
-    const mpUrl = SettingsService.get('PAYMENT_MERCADOPAGO_URL', 'MERCADOPAGO_URL', '');
+    const mpUrl = await this.obtenerLinkMercadoPago({
+      clientName: session.client_name,
+      clientId: session.client_id,
+      phone,
+      monto: estadoFinanciero.totalDeuda > 0 ? estadoFinanciero.totalDeuda : 250,
+      folioFactura: facturas[0]?.folio || null,
+    });
     const bank = SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK', 'BBVA Bancomer');
     const account = SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', '012 180 0152433212 90');
     const beneficiary = SettingsService.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', this.getIspName());

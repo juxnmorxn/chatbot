@@ -76,4 +76,8 @@ router.get('/health', HealthController.check);
 router.post('/webhook', WebhookController.handleWebhook);
 router.post('/api/webhook', WebhookController.handleWebhook);
 
+// Webhooks de Mercado Pago (Notificaciones de Pago en Vivo)
+router.post('/webhook/mercadopago', WebhookController.handleMercadoPagoWebhook);
+router.get('/webhook/mercadopago', WebhookController.handleMercadoPagoWebhook);
+
 export default router;

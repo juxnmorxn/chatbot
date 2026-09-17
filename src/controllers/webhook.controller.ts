@@ -5,6 +5,8 @@ import { SettingsService } from '../services/settings.service';
 import { EvolutionService } from '../services/evolution.service';
 import { GroqService } from '../services/groq.service';
 import { TursoService } from '../services/turso.service';
+import { MercadoPagoService } from '../services/mercadopago.service';
+import { WispHubService } from '../services/wisphub.service';
 import { Logger } from '../utils/logger';
 import { LidRegistry } from '../utils/lid-registry';
 
@@ -404,5 +406,79 @@ export class WebhookController {
 
     return {};
   }
+
+  /**
+   * Webhook de Mercado Pago para procesar pagos en tiempo real
+   */
+  static async handleMercadoPagoWebhook(req: Request, res: Response): Promise<void> {
+    // Responder inmediatamente 200 OK a Mercado Pago
+    res.status(200).send('OK');
+
+    try {
+      const body = req.body || {};
+      const query = req.query || {};
+      const paymentId = body.data?.id || query['data.id'] || query.id || body.id;
+      const type = body.type || query.type || body.topic || query.topic;
+
+      logger.info(`[MercadoPago Webhook] Notificación recibida: type=${type}, action=${body.action}, paymentId=${paymentId}`);
+
+      if ((type === 'payment' || body.action?.includes('payment') || query.topic === 'payment') && paymentId) {
+        const payment = await MercadoPagoService.obtenerDetallePago(paymentId);
+        if (!payment) return;
+
+        logger.info(`[MercadoPago Webhook] Pago ${paymentId}: status=${payment.status}, amount=$${payment.transaction_amount}, ref=${payment.external_reference}`);
+
+        if (payment.status === 'approved') {
+          // Parse external_reference (WISPHUB:{clienteId}:{contratoId}:{phone}:{folioFactura})
+          const externalRef = payment.external_reference || '';
+          const parts = externalRef.split(':');
+
+          const wisphubId = parts[1] || '';
+          const contratoId = parts[2] || '';
+          let phone = parts[3] || '';
+          const folioFactura = parts[4] || '';
+
+          if (!phone && payment.payer?.phone?.number) {
+            phone = payment.payer.phone.number;
+          }
+
+          const monto = payment.transaction_amount || 0;
+          const payerName = payment.payer?.first_name || payment.payer?.name || 'Cliente';
+
+          logger.info(`[MercadoPago Webhook] ¡Pago APROBADO de $${monto} MXN! Cliente ID: ${wisphubId}, Contrato: ${contratoId}, Tel: ${phone}`);
+
+          // 1. Reactivar en WispHub si estaba suspendido
+          if (wisphubId && wisphubId !== '0') {
+            try {
+              await WispHubService.activarCliente(wisphubId);
+              logger.info(`[MercadoPago Webhook] Cliente WispHub ID ${wisphubId} reactivado exitosamente.`);
+            } catch (err: any) {
+              logger.warn(`[MercadoPago Webhook] Error reactivando cliente en WispHub:`, err?.message || err);
+            }
+          }
+
+          // 2. Enviar WhatsApp de confirmación inmediata al cliente si tenemos su teléfono
+          if (phone) {
+            const cleanPhone = phone.replace(/\D/g, '');
+            const targetJid = LidRegistry.getLid(cleanPhone) || (cleanPhone.includes('@') ? cleanPhone : `${cleanPhone}@s.whatsapp.net`);
+
+            const ispName = SettingsService.get('ISP_NAME', 'ISP_NAME', 'CloudWareMx');
+            const mensajeExito =
+              `🎉 *¡Tu pago ha sido aprobado con éxito!*\n\n` +
+              `Estimado(a) *${payerName}*, confirmamos la recepción de tu pago por *$${monto.toFixed(2)} MXN* a través de *Mercado Pago*.\n\n` +
+              `✅ Tu servicio de internet ha sido verificado y reactivado automáticamente en el sistema.\n` +
+              `¡Gracias por tu pago puntual con *${ispName}*! 🚀`;
+
+            await EvolutionService.enviarTexto(targetJid, mensajeExito);
+            await TursoService.logMessage(cleanPhone, 'OUT', mensajeExito, 'REPORTAR_PAGO', 'PAGO_MERCADOPAGO_APROBADO');
+            await TursoService.updateStep(cleanPhone, 'INICIO');
+          }
+        }
+      }
+    } catch (err: any) {
+      logger.error('Error procesando webhook de Mercado Pago:', err?.message || err);
+    }
+  }
 }
+
 

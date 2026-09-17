@@ -614,9 +614,15 @@ export function getAdminDashboardHtml(): string {
             </div>
 
             <div class="form-group" style="grid-column: 1 / -1;">
-              <label>🛒 Enlace de Pago en Línea / Mercado Pago / Portal WispHub</label>
-              <input type="text" id="paymentMercadopagoUrl" placeholder="Ej: https://wisphub.io/portal-cliente/ o link de Mercado Pago">
-              <small style="color: var(--text-muted); font-size: 11px;">Este link se enviará automáticamente a los clientes con recibos o saldo pendiente para que paguen en línea con acreditación inmediata.</small>
+              <label>🔑 Mercado Pago - Access Token (Cobro Dinámico Automático)</label>
+              <input type="password" id="mercadopagoAccessToken" class="mono" placeholder="Ej: APP_USR-xxxxxxxxxxxx o TEST-xxxxxxxxxxxx">
+              <small style="color: var(--text-muted); font-size: 11px;">Al colocar tu Access Token de Mercado Pago, el bot generará automáticamente un <b>link de pago único con el monto y contrato exacto</b> de cada cliente, y reactivará su servicio en cuanto pague.</small>
+            </div>
+
+            <div class="form-group" style="grid-column: 1 / -1;">
+              <label>🛒 Enlace Fijo de Cobro / Mercado Pago Link (Opcional si no usas Access Token)</label>
+              <input type="text" id="paymentMercadopagoUrl" placeholder="Ej: https://mpago.la/tu-link o https://link.mercadopago.com.mx/...">
+              <small style="color: var(--text-muted); font-size: 11px;">Si no colocas Access Token, puedes poner aquí un link fijo de cobro de Mercado Pago.</small>
             </div>
           </div>
 
@@ -1468,6 +1474,7 @@ export function getAdminDashboardHtml(): string {
           document.getElementById('paymentBeneficiary').value = s.paymentBeneficiary || '';
           document.getElementById('paymentNotes').value = s.paymentNotes || '';
           document.getElementById('paymentMercadopagoUrl').value = s.paymentMercadopagoUrl || '';
+          document.getElementById('mercadopagoAccessToken').value = s.mercadopagoAccessToken || '';
           document.getElementById('workHoursStart').value = s.workHoursStart || '09:00';
           document.getElementById('workHoursEnd').value = s.workHoursEnd || '18:00';
           document.getElementById('headerIspName').innerText = s.ispName || 'CloudWareMx';
@@ -1495,6 +1502,7 @@ export function getAdminDashboardHtml(): string {
         PAYMENT_BENEFICIARY: document.getElementById('paymentBeneficiary').value,
         PAYMENT_NOTES: document.getElementById('paymentNotes').value,
         PAYMENT_MERCADOPAGO_URL: document.getElementById('paymentMercadopagoUrl').value,
+        MERCADOPAGO_ACCESS_TOKEN: document.getElementById('mercadopagoAccessToken').value,
         WORK_HOURS_START: document.getElementById('workHoursStart').value,
         WORK_HOURS_END: document.getElementById('workHoursEnd').value,
       };

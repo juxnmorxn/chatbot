@@ -66,6 +66,28 @@ export class WispHubService {
   }
 
   /**
+   * Reactiva/despausa un cliente en WispHub tras confirmación de pago
+   */
+  static async activarCliente(clienteId: string | number): Promise<boolean> {
+    const idClean = String(clienteId).replace(/\D/g, '') || String(clienteId);
+    logger.info(`Solicitando activación/reconexión en WispHub para cliente ID: ${idClean}...`);
+    const apiKey = this.getApiKey();
+    if (!apiKey || apiKey.includes('tu_token')) return false;
+
+    try {
+      const api = this.getApi();
+      const res = await api.post('/clientes/activar/', {
+        clientes: [Number(idClean) || idClean],
+      });
+      logger.info(`WispHub POST /clientes/activar/ exitoso para ID ${idClean}:`, res.data);
+      return true;
+    } catch (error: any) {
+      logger.error(`Error al activar cliente ${idClean} en WispHub:`, error?.response?.data || error?.message || error);
+      return false;
+    }
+  }
+
+  /**
    * Busca cliente por número telefónico (comparando últimos 10 dígitos)
    */
   /**

@@ -28,6 +28,8 @@ export interface AppSettings {
   paymentBeneficiary?: string;
   paymentNotes?: string;
   paymentMercadopagoUrl?: string;
+  mercadopagoAccessToken?: string;
+  mercadopagoPublicKey?: string;
   // Horario Laboral de Oficina
   workHoursStart?: string;
   workHoursEnd?: string;
@@ -134,6 +136,8 @@ export class SettingsService {
       paymentBeneficiary: this.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', ''),
       paymentNotes: this.get('PAYMENT_NOTES', 'PAYMENT_NOTES', ''),
       paymentMercadopagoUrl: this.get('PAYMENT_MERCADOPAGO_URL', 'MERCADOPAGO_URL', ''),
+      mercadopagoAccessToken: this.get('MERCADOPAGO_ACCESS_TOKEN', 'MERCADOPAGO_ACCESS_TOKEN', ''),
+      mercadopagoPublicKey: this.get('MERCADOPAGO_PUBLIC_KEY', 'MERCADOPAGO_PUBLIC_KEY', ''),
       workHoursStart: this.get('WORK_HOURS_START', 'WORK_HOURS_START', '09:00'),
       workHoursEnd: this.get('WORK_HOURS_END', 'WORK_HOURS_END', '18:00'),
     };
