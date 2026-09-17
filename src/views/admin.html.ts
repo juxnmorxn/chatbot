@@ -613,9 +613,10 @@ export function getAdminDashboardHtml(): string {
               <input type="text" id="paymentBeneficiary" placeholder="Ej: CloudWare Telecomunicaciones S.A.">
             </div>
 
-            <div class="form-group">
-              <label>Instrucciones Adicionales de Pago</label>
-              <input type="text" id="paymentNotes" placeholder="Ej: Transferencia SPEI o depósito en tiendas OXXO">
+            <div class="form-group" style="grid-column: 1 / -1;">
+              <label>🛒 Enlace de Pago en Línea / Mercado Pago / Portal WispHub</label>
+              <input type="text" id="paymentMercadopagoUrl" placeholder="Ej: https://wisphub.io/portal-cliente/ o link de Mercado Pago">
+              <small style="color: var(--text-muted); font-size: 11px;">Este link se enviará automáticamente a los clientes con recibos o saldo pendiente para que paguen en línea con acreditación inmediata.</small>
             </div>
           </div>
 
@@ -1466,6 +1467,7 @@ export function getAdminDashboardHtml(): string {
           document.getElementById('paymentAccount').value = s.paymentAccount || '';
           document.getElementById('paymentBeneficiary').value = s.paymentBeneficiary || '';
           document.getElementById('paymentNotes').value = s.paymentNotes || '';
+          document.getElementById('paymentMercadopagoUrl').value = s.paymentMercadopagoUrl || '';
           document.getElementById('workHoursStart').value = s.workHoursStart || '09:00';
           document.getElementById('workHoursEnd').value = s.workHoursEnd || '18:00';
           document.getElementById('headerIspName').innerText = s.ispName || 'CloudWareMx';
@@ -1492,6 +1494,7 @@ export function getAdminDashboardHtml(): string {
         PAYMENT_ACCOUNT: document.getElementById('paymentAccount').value,
         PAYMENT_BENEFICIARY: document.getElementById('paymentBeneficiary').value,
         PAYMENT_NOTES: document.getElementById('paymentNotes').value,
+        PAYMENT_MERCADOPAGO_URL: document.getElementById('paymentMercadopagoUrl').value,
         WORK_HOURS_START: document.getElementById('workHoursStart').value,
         WORK_HOURS_END: document.getElementById('workHoursEnd').value,
       };

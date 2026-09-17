@@ -188,13 +188,21 @@ export class BotOrchestrator {
   }
 
   private static getFichaBancaria(session: Session | null): string {
-    const bank = SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK', '');
-    const account = SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', '');
-    const beneficiary = SettingsService.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', '');
+    const bank = SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK', 'BBVA Bancomer');
+    const account = SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', '012 180 0152433212 90');
+    const beneficiary = SettingsService.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', this.getIspName());
     const notes = SettingsService.get('PAYMENT_NOTES', 'PAYMENT_NOTES', '');
+    const mpUrl = SettingsService.get('PAYMENT_MERCADOPAGO_URL', 'MERCADOPAGO_URL') ||
+                  SettingsService.get('PAYMENT_PORTAL_URL', 'PAYMENT_PORTAL_URL') ||
+                  'https://wisphub.io/portal-cliente/';
     const clientName = this.formatDisplayName(session?.client_name) || 'tu nombre completo';
 
-    let txt = `\n💳 *Datos de Pago y Transferencia Bancaria - ${this.getIspName()}*\n\n`;
+    let txt = `\n💳 *Opciones de Pago - ${this.getIspName()}*\n\n`;
+    if (mpUrl) {
+      txt += `🛒 *Pagar en línea con Mercado Pago / Tarjeta (Acreditación inmediata):*\n👉 ${mpUrl}\n\n`;
+    }
+
+    txt += `🏦 *También puedes pagar por Transferencia Bancaria:*\n`;
     if (bank) txt += `• *Banco:* ${bank}\n`;
     if (account) txt += `• *Número de Cuenta / CLABE:* ${account}\n`;
     if (beneficiary) txt += `• *Titular / Beneficiario:* ${beneficiary}\n`;
@@ -205,7 +213,7 @@ export class BotOrchestrator {
     }
 
     txt += `\n📌 *CONCEPTO O MOTIVO DE PAGO:*`;
-    txt += `\n👉 Por favor coloca tu nombre: *${clientName}*\n`;
+    txt += `\n👉 Por favor coloca tu nombre o contrato: *${session?.client_name || clientName}*\n`;
     txt += `\n📸 *Importante al enviar tu comprobante:*`;
     txt += `\nUna vez realizada tu transferencia o pago, por favor envía la *foto o captura de pantalla de tu comprobante* y escribe tu *Nombre completo* aquí en el chat para validarlo y aplicarlo de inmediato en el sistema. ¡Muchas gracias!`;
 
@@ -499,7 +507,7 @@ export class BotOrchestrator {
     // Si el usuario nos indica su nombre explícitamente (ej. "me llamo Ricardo", "soy Carlos"), guardarlo en la sesión
     const matchNombre = rawText.match(/^(?:me llamo|mi nombre es|soy)\s+([a-zA-ZáéíóúÁÉÍÓÚñÑ\s]{2,35})$/i);
     if (matchNombre && matchNombre[1]) {
-      await this.procesarIdentificacion(phone, matchNombre[1].trim(), session, targetJid);
+      await this.procesarIdentificacion(phone, rawText, session, targetJid);
       return;
     }
 
@@ -513,7 +521,7 @@ export class BotOrchestrator {
       lowerMsg.includes('mis servicios')
     ) {
       const nombreABuscar = session?.client_name || phone;
-      await this.procesarIdentificacion(phone, nombreABuscar, session, targetJid);
+      await this.procesarIdentificacion(phone, rawText, session, targetJid);
       return;
     }
 
@@ -663,7 +671,7 @@ export class BotOrchestrator {
         });
 
         if (clasif.nombre_mencionado) {
-          await this.procesarIdentificacion(phone, clasif.nombre_mencionado, session, targetJid);
+          await this.procesarIdentificacion(phone, rawText, session, targetJid);
           return;
         }
 
@@ -741,22 +749,32 @@ export class BotOrchestrator {
             facturas.forEach((f, idx) => {
               detalleFacturas += `• *Recibo #${idx + 1}:* Folio ${f.folio} | *$${f.monto.toFixed(2)} MXN* (Vence: ${f.fecha_vencimiento})\n`;
               if (f.link_pago) {
-                detalleFacturas += `  👉 *Pagar en línea (Mercado Pago):* ${f.link_pago}\n`;
+                detalleFacturas += `  👉 *Pagar con Mercado Pago:* ${f.link_pago}\n`;
               }
             });
           }
 
-          const bank = SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK', 'BBVA');
-          const account = SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', '012 180 0000000000 00');
+          const mpUrl = SettingsService.get('PAYMENT_MERCADOPAGO_URL', 'MERCADOPAGO_URL') ||
+                        SettingsService.get('PAYMENT_PORTAL_URL', 'PAYMENT_PORTAL_URL') ||
+                        'https://wisphub.io/portal-cliente/';
+          const bank = SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK', 'BBVA Bancomer');
+          const account = SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', '012 180 0152433212 90');
           const beneficiary = SettingsService.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', this.getIspName());
           const montoTexto = estadoFinanciero.totalDeuda > 0
             ? `un saldo/recibo pendiente por *$${estadoFinanciero.totalDeuda.toFixed(2)} MXN*`
             : `tu servicio se encuentra suspendido por corte o inactividad`;
 
+          let onlinePaySection = '';
+          if (mpUrl) {
+            onlinePaySection = `\n🛒 *Pagar en línea con Mercado Pago / Tarjeta (Acreditación inmediata):*\n👉 ${mpUrl}\n`;
+          }
+
+          const nombreCliente = formatDisplayName(session.client_name, true) || 'Cliente';
           const mensajeMoroso =
-            `¡Hola, *${session.client_name}*! 👋\n\n` +
+            `¡Hola, *${nombreCliente}*! 👋\n\n` +
             `Revisé tu cuenta en nuestro sistema y detectamos que ${montoTexto}.\n` +
-            `${detalleFacturas}\n` +
+            `${detalleFacturas}` +
+            `${onlinePaySection}\n` +
             `💳 *También puedes pagar por Transferencia Bancaria:*\n` +
             `• Banco: *${bank}* | CLABE: *${account}*\n` +
             `• Beneficiario: *${beneficiary}*\n` +
@@ -1128,16 +1146,25 @@ export class BotOrchestrator {
           });
         }
 
-        const bank = SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK', 'BBVA');
-        const account = SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', '012 180 0000000000 00');
+        const mpUrl = SettingsService.get('PAYMENT_MERCADOPAGO_URL', 'MERCADOPAGO_URL') ||
+                      SettingsService.get('PAYMENT_PORTAL_URL', 'PAYMENT_PORTAL_URL') ||
+                      'https://wisphub.io/portal-cliente/';
+        const bank = SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK', 'BBVA Bancomer');
+        const account = SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', '012 180 0152433212 90');
         const beneficiary = SettingsService.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', this.getIspName());
         const montoTexto = estadoFinanciero.totalDeuda > 0
           ? `registras un recibo pendiente por *$${estadoFinanciero.totalDeuda.toFixed(2)} MXN*`
           : `tu servicio se encuentra suspendido por corte o inactividad`;
 
+        let onlinePaySection = '';
+        if (mpUrl) {
+          onlinePaySection = `\n🛒 *Pagar en línea con Mercado Pago / Tarjeta (Acreditación inmediata):*\n👉 ${mpUrl}\n`;
+        }
+
         const mensajeMoroso =
           `Hola${nombre}, revisé tu servicio y detectamos que ${montoTexto}.\n` +
-          `${detalleFacturas}\n` +
+          `${detalleFacturas}` +
+          `${onlinePaySection}\n` +
           `💳 *También puedes pagar por Transferencia Bancaria:*\n` +
           `• Banco: *${bank}* | CLABE: *${account}*\n` +
           `• Beneficiario: *${beneficiary}*\n` +
@@ -2388,18 +2415,27 @@ export class BotOrchestrator {
 
       if (estadoFinanciero.suspendido || estadoFinanciero.totalDeuda > 0) {
         logger.info(`Intento de reinicio bloqueado: Cliente ${phone} (${session?.client_name}) suspendido/adeudo en WispHub.`);
-        const bank = SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK', 'BBVA');
-        const account = SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', '012 180 0000000000 00');
+        const mpUrl = SettingsService.get('PAYMENT_MERCADOPAGO_URL', 'MERCADOPAGO_URL') ||
+                      SettingsService.get('PAYMENT_PORTAL_URL', 'PAYMENT_PORTAL_URL') ||
+                      'https://wisphub.io/portal-cliente/';
+        const bank = SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK', 'BBVA Bancomer');
+        const account = SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', '012 180 0152433212 90');
         const beneficiary = SettingsService.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', this.getIspName());
         const montoTexto = estadoFinanciero.totalDeuda > 0
           ? `registras un saldo pendiente por *$${estadoFinanciero.totalDeuda.toFixed(2)} MXN*`
           : `tu servicio se encuentra suspendido en el sistema`;
 
-        const msj = `Hola${nombre}, revisé tu línea antes de proceder con el reinicio y detectamos que ${montoTexto}.\n\n` +
-          `Para reactivar tu señal y navegar con normalidad, por favor realiza tu pago a:\n` +
-          `💳 *${bank}* | CLABE: *${account}*\n` +
-          `Beneficiario: *${beneficiary}*\n` +
-          `Concepto: *${session?.client_name || phone}*\n\n` +
+        let onlinePaySection = '';
+        if (mpUrl) {
+          onlinePaySection = `\n🛒 *Pagar en línea con Mercado Pago / Tarjeta (Acreditación inmediata):*\n👉 ${mpUrl}\n`;
+        }
+
+        const msj = `Hola${nombre}, revisé tu línea antes de proceder con el reinicio y detectamos que ${montoTexto}.\n` +
+          `${onlinePaySection}\n` +
+          `💳 *También puedes pagar por Transferencia Bancaria:*\n` +
+          `• Banco: *${bank}* | CLABE: *${account}*\n` +
+          `• Beneficiario: *${beneficiary}*\n` +
+          `• Concepto / Referencia: *${session?.client_name || phone}*\n\n` +
           `📸 En cuanto realices tu pago, por favor envía la *foto o captura de tu comprobante* y escribe tu *Nombre completo* en este chat para reactivar tu servicio.`;
 
         await this.enviarYLoguear(phone, msj, 'CONSULTAR_SALDO', 'REINICIO_BLOQUEADO_POR_SUSPENSION', targetJid);
@@ -2483,7 +2519,7 @@ export class BotOrchestrator {
         totalAdeudo += f.monto;
         textoFacturas += `*Recibo #${idx + 1}*\n• Folio: ${f.folio}\n• Monto: *$${f.monto.toFixed(2)} MXN*\n• Vence: ${f.fecha_vencimiento}\n`;
         if (f.link_pago) {
-          textoFacturas += `• Pagar en línea: ${f.link_pago}\n`;
+          textoFacturas += `• 👉 *Pagar con Mercado Pago:* ${f.link_pago}\n`;
         }
         textoFacturas += `\n`;
       });
@@ -2496,20 +2532,30 @@ export class BotOrchestrator {
     }
 
     // Si está suspendido o registra adeudo sin facturas listadas
-    const bank = SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK', 'BBVA');
-    const account = SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', '012 180 0000000000 00');
+    const mpUrl = SettingsService.get('PAYMENT_MERCADOPAGO_URL', 'MERCADOPAGO_URL') ||
+                  SettingsService.get('PAYMENT_PORTAL_URL', 'PAYMENT_PORTAL_URL') ||
+                  'https://wisphub.io/portal-cliente/';
+    const bank = SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK', 'BBVA Bancomer');
+    const account = SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', '012 180 0152433212 90');
     const beneficiary = SettingsService.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', this.getIspName());
     const montoTexto = estadoFinanciero.totalDeuda > 0
       ? `un saldo/recibo pendiente por *$${estadoFinanciero.totalDeuda.toFixed(2)} MXN*`
       : `tu servicio se encuentra suspendido en el sistema`;
 
+    let onlinePaySection = '';
+    if (mpUrl) {
+      onlinePaySection = `\n🛒 *Pagar en línea con Mercado Pago / Tarjeta (Acreditación inmediata):*\n👉 ${mpUrl}\n`;
+    }
+
+    const nombreCliente = formatDisplayName(session.client_name, true) || 'Cliente';
     const mensajeMoroso =
-      `¡Hola, *${session.client_name}*! 👋\n\n` +
-      `Revisé tu cuenta en nuestro sistema y detectamos que ${montoTexto}.\n\n` +
-      `Para reactivar tu servicio y navegar con normalidad, por favor realiza tu abono a:\n` +
-      `💳 *${bank}* | CLABE: *${account}*\n` +
-      `Beneficiario: *${beneficiary}*\n` +
-      `Concepto / Referencia: *${session.client_name || phone}*\n\n` +
+      `¡Hola, *${nombreCliente}*! 👋\n\n` +
+      `Revisé tu cuenta en nuestro sistema y detectamos que ${montoTexto}.\n` +
+      `${onlinePaySection}\n` +
+      `💳 *También puedes pagar por Transferencia Bancaria:*\n` +
+      `• Banco: *${bank}* | CLABE: *${account}*\n` +
+      `• Beneficiario: *${beneficiary}*\n` +
+      `• Concepto / Referencia: *${session.client_name || phone}*\n\n` +
       `📸 En cuanto realices tu pago, envía la *foto o captura de tu comprobante* y escribe tu *Nombre completo* por este chat para reactivarte de inmediato.`;
 
     await this.enviarYLoguear(phone, mensajeMoroso, 'CONSULTAR_SALDO', 'AVISO_SUSPENDIDO_SALDO', targetJid);

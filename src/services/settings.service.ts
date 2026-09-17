@@ -27,6 +27,7 @@ export interface AppSettings {
   paymentAccount?: string;
   paymentBeneficiary?: string;
   paymentNotes?: string;
+  paymentMercadopagoUrl?: string;
   // Horario Laboral de Oficina
   workHoursStart?: string;
   workHoursEnd?: string;
@@ -132,6 +133,7 @@ export class SettingsService {
       paymentAccount: this.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', ''),
       paymentBeneficiary: this.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', ''),
       paymentNotes: this.get('PAYMENT_NOTES', 'PAYMENT_NOTES', ''),
+      paymentMercadopagoUrl: this.get('PAYMENT_MERCADOPAGO_URL', 'MERCADOPAGO_URL', 'https://wisphub.io/portal-cliente/'),
       workHoursStart: this.get('WORK_HOURS_START', 'WORK_HOURS_START', '09:00'),
       workHoursEnd: this.get('WORK_HOURS_END', 'WORK_HOURS_END', '18:00'),
     };
