@@ -3085,6 +3085,57 @@ export class BotOrchestrator {
   }
 
   /**
+   * Catálogo oficial de Zonas registradas en SmartOLT (con alias para reconocimiento flexible)
+   */
+  private static readonly SMARTOLT_ZONES: { name: string; aliases: string[] }[] = [
+    { name: 'San Agustin Tlaxiaca', aliases: ['san agustin tlaxiaca', 'san agustin', 'san agustín', 'tlaxiaca'] },
+    { name: 'San Diego canguihu\'ndo', aliases: ['san diego canguihu\'ndo', 'san diego canguihundo', 'canguihundo', 'canguihu\'ndo'] },
+    { name: 'San Jose Tepenene', aliases: ['san jose tepenene', 'san jose', 'tepenene'] },
+    { name: 'Col. Tierra y Libertad', aliases: ['col. tierra y libertad', 'colonia tierra y libertad', 'tierra y libertad'] },
+    { name: 'Col. Eulalio Angeles', aliases: ['col. eulalio angeles', 'colonia eulalio angeles', 'eulalio angeles'] },
+    { name: 'Col. La Estacion', aliases: ['col. la estacion', 'colonia la estacion', 'la estacion', 'la estación'] },
+    { name: 'Col. Aviacion', aliases: ['col. aviacion', 'colonia aviacion', 'aviacion', 'aviación'] },
+    { name: 'Fracc. Nuevo Actopan', aliases: ['fracc. nuevo actopan', 'fraccionamiento nuevo actopan', 'nuevo actopan'] },
+    { name: '20 de Noviembre', aliases: ['20 de noviembre', 'veinte de noviembre', '20 nov'] },
+    { name: 'Dos cerritos', aliases: ['dos cerritos', '2 cerritos', 'cerritos'] },
+    { name: 'El Cerrito', aliases: ['el cerrito', 'cerrito'] },
+    { name: 'El Arenal', aliases: ['el arenal', 'arenal'] },
+    { name: 'El Meje', aliases: ['el meje', 'meje'] },
+    { name: 'El Nogal', aliases: ['el nogal', 'nogal'] },
+    { name: 'El Porvenir', aliases: ['el porvenir', 'porvenir'] },
+    { name: 'Canada Chica', aliases: ['canada chica', 'cañada chica'] },
+    { name: 'La Estancia', aliases: ['la estancia', 'estancia'] },
+    { name: 'La Guadalupe', aliases: ['la guadalupe', 'guadalupe'] },
+    { name: 'La Loma', aliases: ['la loma', 'loma'] },
+    { name: 'La Pena', aliases: ['la pena', 'la peña', 'pena', 'peña'] },
+    { name: 'La 27', aliases: ['la 27', 'la veintisiete'] },
+    { name: 'Los Olivos', aliases: ['los olivos', 'olivos'] },
+    { name: 'Pozo Grande', aliases: ['pozo grande', 'pozo'] },
+    { name: 'Parque Urbano', aliases: ['parque urbano', 'parque'] },
+    { name: 'Unidad deportiva', aliases: ['unidad deportiva', 'deportiva'] },
+    { name: 'Jesus Luz Meneses', aliases: ['jesus luz meneses', 'luz meneses'] },
+    { name: 'Guzman Mayer', aliases: ['guzman mayer', 'mayer'] },
+    { name: 'Fundicion baja', aliases: ['fundicion baja', 'fundición baja'] },
+    { name: 'Fray Francisco', aliases: ['fray francisco', 'fray'] },
+    { name: 'Sta. Monica', aliases: ['sta. monica', 'santa monica', 'santa mónica', 'sta monica'] },
+    { name: 'Troncal 1-Rinkon', aliases: ['troncal 1-rinkon', 'troncal rinkon', 'troncal rincon'] },
+    { name: 'Rincon', aliases: ['rincon', 'rincón', 'rinkon'] },
+    { name: 'zaragoza- santiago', aliases: ['zaragoza- santiago', 'zaragoza santiago', 'zaragoza', 'santiago'] },
+    { name: 'Bothibaji', aliases: ['bothibaji', 'bothi'] },
+    { name: 'Boxaxni', aliases: ['boxaxni'] },
+    { name: 'Boxtha', aliases: ['boxtha'] },
+    { name: 'Chicavasco', aliases: ['chicavasco'] },
+    { name: 'Cossiohayan', aliases: ['cossiohayan', 'cossio'] },
+    { name: 'Dajiedhi', aliases: ['dajiedhi'] },
+    { name: 'Daxtha', aliases: ['daxtha'] },
+    { name: 'Huaxtho', aliases: ['huaxtho', 'huaxto'] },
+    { name: 'Jiadi', aliases: ['jiadi'] },
+    { name: 'Palomo', aliases: ['palomo'] },
+    { name: 'Xideje', aliases: ['xideje'] },
+    { name: 'Actopan', aliases: ['actopan', 'centro actopan', 'actopan centro'] },
+  ];
+
+  /**
    * Parsea los datos del comando de un solo mensaje para activación de clientes:
    * Formato: "activar cliente [6 dígitos SN] [Folio-Nombre] [Plan] [Zona]"
    */
@@ -3108,31 +3159,38 @@ export class BotOrchestrator {
     let plan = '40M';
     let zone = 'Actopan'; // Obligatorio por defecto
 
-    // 1. Extraer Plan si existe explícitamente (ej: 40M, 50M, 100MB, 50 Megas, etc.)
-    const planMatch = text.match(/(?:^|\s)(\d{1,3}\s*(?:M|MEGAS|MB|MEGA))\b/i);
+    // 1. Extraer Plan si existe explícitamente (ej: 40M, 50M, 100MB, 600 megas, etc.)
+    const planMatch = text.match(/(?:^|\s)(\d{1,4}\s*(?:M|MEGAS|MB|MEGA))\b/i);
     if (planMatch && planMatch[1]) {
       const rawPlan = planMatch[1].toUpperCase().replace(/\s+/g, '');
       plan = rawPlan.endsWith('M') || rawPlan.endsWith('MB') ? rawPlan : `${rawPlan}M`;
       text = text.replace(planMatch[0], ' ').trim();
     }
 
-    // 2. Extraer Zona si existe (San Agustín, Actopan o personalizada)
-    if (/\b(san\s*agust[ií]n)\b/i.test(text)) {
-      zone = 'San Agustín';
-      text = text.replace(/\b(san\s*agust[ií]n)\b/gi, ' ').trim();
-    } else if (/\b(actopan)\b/i.test(text)) {
-      zone = 'Actopan';
-      text = text.replace(/\b(actopan)\b/gi, ' ').trim();
+    // 2. Extraer Zona mediante catálogo oficial de SmartOLT
+    for (const item of this.SMARTOLT_ZONES) {
+      let matched = false;
+      for (const alias of item.aliases) {
+        const escaped = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regex = new RegExp(`(?:^|\\s)(${escaped})(?:\\s|$)`, 'i');
+        const match = text.match(regex);
+        if (match) {
+          zone = item.name;
+          text = text.replace(match[0], ' ').trim();
+          matched = true;
+          break;
+        }
+      }
+      if (matched) break;
     }
 
-    // 3. Extraer SN: buscar token alfanumérico de 5 a 16 caracteres (ej: 4317B5, ZTEGC4317B5)
-    // Puede venir al inicio "4317B5 3456-Juan Perez" o con letras
-    const snMatch = text.match(/\b([A-Za-z0-9]{5,16})\b/);
-    if (snMatch && (snMatch[1].length === 6 || snMatch[1].startsWith('ZTE') || snMatch[1].startsWith('HWTC') || /[A-Za-z]/.test(snMatch[1]))) {
+    // 3. Extraer SN: buscar token alfanumérico de 4 a 16 caracteres (ej: c24b0, 4317B5, ZTEGC4317B5, HWTC117C24B0)
+    const snMatch = text.match(/\b([A-Za-z0-9]{4,16})\b/);
+    if (snMatch && (snMatch[1].length === 5 || snMatch[1].length === 6 || snMatch[1].startsWith('ZTE') || snMatch[1].startsWith('HWTC') || /[A-Za-z]/.test(snMatch[1]))) {
       snSuffix = snMatch[1].toUpperCase();
       text = text.replace(snMatch[0], ' ').trim();
     } else {
-      const sixDigitMatch = text.match(/\b([0-9]{6})\b/);
+      const sixDigitMatch = text.match(/\b([0-9]{5,6})\b/);
       if (sixDigitMatch) {
         snSuffix = sixDigitMatch[1];
         text = text.replace(sixDigitMatch[0], ' ').trim();
@@ -3189,7 +3247,7 @@ export class BotOrchestrator {
     if (!parsed.snSuffix || !parsed.hasAllData) {
       await this.enviarYLoguear(
         phone,
-        `🛠️ *Activación de Cliente en SmartOLT (Un Solo Mensaje)*\n\nPara activar el módem, envía el comando *activar cliente* con todos los datos juntos en un solo mensaje:\n\n👉 *activar cliente [6 dígitos SN] [Folio-Nombre] [Plan] [Zona]*\n\n_Ejemplos para copiar y rellenar:_\n• \`activar cliente 4317B5 3456-Juan Perez Martinez 40M Actopan\`\n• \`activar cliente 4317B5 3456-Juan Perez Martinez 50M San Agustin\`\n• \`activar cliente 4317B5 3456-Juan Perez Martinez\` _(Plan 40M y Zona Actopan por defecto)_`,
+        `🛠️ *Activación de Cliente en SmartOLT (Un Solo Mensaje)*\n\nPara activar el módem, envía el comando *activar cliente* con los datos básicos:\n\n👉 *activar cliente [6 dígitos SN] [Folio-Nombre] [Plan] [Zona]*\n\n_Ejemplos para copiar y rellenar:_\n• \`activar cliente 4317B5 3456-Juan Perez Martinez 40M Actopan\`\n• \`activar cliente c24b0 3000-Juan de Dios Morán Pérez 600 megas cerritos\`\n• \`activar cliente 4317B5 3456-Juan Perez Martinez\` _(Plan 40M y Zona Actopan por defecto)_`,
         'ACTIVACION_TECNICO',
         'AYUDA_ACTIVACION_UN_MENSAJE',
         targetJid
@@ -3211,7 +3269,7 @@ export class BotOrchestrator {
     if (!unconfigured) {
       await this.enviarYLoguear(
         phone,
-        `❌ *Módem no encontrado en SmartOLT*\n\nNo se localizó ninguna ONU sin configurar con terminación *${parsed.snSuffix}*.\n\n💡 *Por favor verifica:*\n1. Que la fibra óptica esté conectada y la luz PON del módem esté encendida/sincronizando.\n2. Que el equipo haya sincronizado en la OLT.\n3. Que los 6 dígitos del SN sean correctos (ej: *${parsed.snSuffix}*).`,
+        `❌ *Módem no encontrado en SmartOLT*\n\nNo se localizó ninguna ONU sin configurar con terminación *${parsed.snSuffix}*.\n\n💡 *Por favor verifica:*\n1. Que la fibra óptica esté conectada y la luz PON del módem esté encendida/sincronizando.\n2. Que el equipo haya sincronizado en la OLT.\n3. Que los dígitos del SN sean correctos (ej: *${parsed.snSuffix}*).`,
         'ACTIVACION_TECNICO',
         'ONU_NO_ENCONTRADA',
         targetJid
@@ -3224,7 +3282,7 @@ export class BotOrchestrator {
       String(unconfigured.olt_id) === '2' ||
       (unconfigured.olt_name || '').toLowerCase().includes('san agustin');
 
-    const targetZone = isSanAgustin ? 'San Agustín' : (parsed.zone || 'Actopan');
+    const targetZone = isSanAgustin ? 'San Agustin Tlaxiaca' : (parsed.zone || 'Actopan');
     const targetOltId = isSanAgustin ? '2' : '3';
     const targetOltName = isSanAgustin ? 'OLT-SanAgustin' : 'OLT5800-Actopan';
     const defaultVlan = isSanAgustin ? '800' : '510';
@@ -3291,27 +3349,20 @@ export class BotOrchestrator {
     });
 
     const signalText = unconfigured.onu_signal_1490 || unconfigured.onu_signal || 'Detectado';
+    const planDisplay = parsed.plan.replace(/MB|M/i, ' Megas');
 
-    const cardMsg = `📋 *RESUMEN DE ACTIVACIÓN (PRE-CONFIRMACIÓN)*
+    // Ficha simple y directa para el técnico (solo lo básico esencial)
+    const cardMsg = `📋 *RESUMEN DE ACTIVACIÓN*
 ──────────────────────────────
-• *Número de Serie (SN):* *${unconfigured.sn}*
-• *Terminación (6 Dígitos):* \`${parsed.snSuffix}\`
 • *Cliente / Folio:* *${parsed.name}*
-• *Zona / Región:* *${targetZone}*
-• *Modo:* Routing
-• *Perfil de Línea:* *VLAN*
-• *Modelo ONU:* ${unconfigured.onu_type_name || unconfigured.onu_type || 'ZTE-F660'}
-• *OLT:* ${targetOltName} (Tarjeta ${unconfigured.board} / PON ${unconfigured.port})
-• *Nivel de Señal Óptica:* ${signalText}
-• *VLAN Asignada:* *VLAN ${nextIp.vlan}* (${targetOltName})
-• *IP WAN Asignada:* *${nextIp.ip}*
-• *Puerta de Enlace (GW):* ${nextIp.gateway}
-• *Máscara:* ${nextIp.netmask}
-• *Perfil de Velocidad:* ${profiles.down} / ${profiles.up}
+• *Zona:* *${targetZone}*
+• *Paquete:* *${planDisplay}*
+• *Serie (SN):* *${unconfigured.sn}*
+• *Nivel Óptico:* *${signalText}*
 ──────────────────────────────
-⚠️ *¿Confirmas la autorización y activación de este módem en SmartOLT?*
+⚠️ *¿Confirmas la activación de este módem en SmartOLT?*
 
-👉 Responde *SÍ* o *CONFIRMAR* para autorizar.
+👉 Responde *SÍ* o *CONFIRMAR* para activar.
 👉 Responde *NO* o *CANCELAR* para abortar.`;
 
     await this.enviarYLoguear(
@@ -3321,7 +3372,7 @@ export class BotOrchestrator {
       'ESPERANDO_CONFIRMACION',
       targetJid,
       [
-        { id: 'BTN_CONFIRMAR_ACTIVACION', title: '✅ SÍ, Autorizar Módem' },
+        { id: 'BTN_CONFIRMAR_ACTIVACION', title: '✅ SÍ, Activar Módem' },
         { id: 'BTN_CANCELAR_ACTIVACION', title: '❌ Cancelar' },
       ]
     );
@@ -3389,7 +3440,7 @@ export class BotOrchestrator {
 
     await this.enviarYLoguear(
       phone,
-      `⏳ Aprovisionando y autorizando módem *${payload.sn}* en SmartOLT (Modo VLAN)... Por favor espera un momento.`,
+      `⏳ Aprovisionando y autorizando módem *${payload.sn}* en SmartOLT... Por favor espera un momento.`,
       'ACTIVACION_TECNICO',
       'EJECUTANDO_AUTORIZACION',
       targetJid
@@ -3409,20 +3460,15 @@ export class BotOrchestrator {
     });
 
     if (result.success) {
-      const successMsg = `🎉 *¡MÓDEM AUTORIZADO Y ACTIVADO CON ÉXITO!*
+      const planDisplay = (payload.download_speed_profile_name || '40MB').replace(/MB-DOWN|MB/i, ' Megas');
+      const successMsg = `🎉 *¡MÓDEM ACTIVADO CON ÉXITO!*
 ──────────────────────────────
-• *Número de Serie:* *${payload.sn}*
-• *Cliente / Folio:* *${payload.name}*
+• *Cliente:* *${payload.name}*
 • *Zona:* *${payload.zone || 'Actopan'}*
-• *IP WAN Configurada:* *${payload.ip_address}*
-• *Gateway:* ${payload.gateway}
-• *VLAN:* *VLAN ${payload.vlan}*
-• *Perfil de Línea:* VLAN
-• *Perfil de Velocidad:* ${payload.download_speed_profile_name}
-• *Modo:* Routing (DHCP / PPPoE listo)
-• *ID SmartOLT:* ${result.onu_id || payload.sn}
+• *Paquete:* *${planDisplay}*
+• *Serie (SN):* *${payload.sn}*
 ──────────────────────────────
-✅ El equipo ya está sincronizado y navegando en la red de CloudWare.`;
+✅ Módem aprovisionado y navegando en la red.`;
 
       await this.enviarYLoguear(
         phone,
