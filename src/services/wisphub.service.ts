@@ -457,8 +457,6 @@ export class WispHubService {
     }
 
     const estado = (clienteEncontrado?.estado || '').toLowerCase().trim();
-    const facturasPagadas = liveData ? liveData.facturas_pagadas === true : false;
-    
     // Estados de suspensión o corte en WispHub:
     const esSuspendido = estado === 'suspendido' ||
       estado === 'cortado' ||
@@ -470,34 +468,22 @@ export class WispHubService {
       estado === 'desconectado' ||
       estado.includes('susp');
 
-    // Facturas impagas o morosidad real explícita:
-    const tieneFacturaPendiente = facturas.length > 0 || (liveData && liveData.facturas_pagadas === false && totalDeuda > 0) || totalDeuda > 0;
-
-    // Distinción de casos:
-    // CASO A: El cliente está en WispHub como Suspendido pero sus facturas están pagadas (facturas_pagadas === true o totalDeuda === 0 y sin facturas pendientes).
-    // => Ya pagó su mensualidad pero quedó desincronizado o pendiente de activación en WispHub/MikroTik.
-    const yaPagoPeroNoActivo = esSuspendido && (facturasPagadas || (!tieneFacturaPendiente && totalDeuda === 0));
-
-    // CASO B: El cliente tiene recibos pendientes o facturas no pagadas con deuda.
-    // => Suspendido o moroso por falta de pago.
-    const esMorosoReal = esSuspendido && !yaPagoPeroNoActivo;
-
-    // Si es moroso pero totalDeuda es 0, asignar el precio del plan contratado
-    if (esMorosoReal && totalDeuda === 0) {
+    // Si está suspendido en WispHub y totalDeuda es 0 (por falta de factura emitida), se asigna el precio de su plan
+    if (esSuspendido && totalDeuda === 0) {
       const precioPlan = Number(clienteEncontrado?.precio_plan || 0);
       totalDeuda = precioPlan > 0 ? precioPlan : 0;
     }
 
-    const motivo = esMorosoReal
+    const motivo = esSuspendido
       ? (totalDeuda > 0 ? `Factura o saldo pendiente ($${totalDeuda.toFixed(2)} MXN)` : 'Servicio suspendido en WispHub')
-      : (yaPagoPeroNoActivo ? 'Cuenta al corriente pero servicio pendiente de reconexión/activación' : undefined);
+      : undefined;
 
-    logger.info(`[WispHub Live Result] Cliente="${clienteEncontrado?.nombre || 'N/A'}" Estado="${clienteEncontrado?.estado || 'Desconocido'}" SuspendidoReal=${esMorosoReal} YaPagoPeroNoActivo=${yaPagoPeroNoActivo} Deuda=$${totalDeuda}`);
+    logger.info(`[WispHub Live Result] Cliente="${clienteEncontrado?.nombre || 'N/A'}" Estado="${clienteEncontrado?.estado || 'Desconocido'}" Suspendido=${esSuspendido} Deuda=$${totalDeuda}`);
 
     return {
-      suspendido: esMorosoReal,
-      yaPagoPeroNoActivo,
-      totalDeuda: esMorosoReal ? totalDeuda : 0,
+      suspendido: esSuspendido,
+      yaPagoPeroNoActivo: false,
+      totalDeuda: esSuspendido ? totalDeuda : 0,
       facturas,
       cliente: clienteEncontrado,
       motivo,

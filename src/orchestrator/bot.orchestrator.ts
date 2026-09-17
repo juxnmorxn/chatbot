@@ -733,23 +733,6 @@ export class BotOrchestrator {
           ip: meta.ip,
         });
 
-        if (estadoFinanciero.yaPagoPeroNoActivo && (estadoFinanciero.cliente?.id || session?.client_id)) {
-          const idClienteWisp = estadoFinanciero.cliente?.id || session?.client_id;
-          logger.info(`Cliente ${phone} (${session?.client_name}) ya pagó pero estaba inactivo. Reactivando automáticamente en WispHub (ID: ${idClienteWisp})...`);
-          await WispHubService.activarServicioCliente(idClienteWisp!);
-
-          await this.enviarYLoguear(
-            phone,
-            `¡Hola, *${session.client_name}*! 👋 Revisé tu servicio en nuestro sistema y confirmamos que tu cuenta se encuentra al corriente y sin ningún adeudo pendiente. 👍\n\n` +
-            `Detectamos que tu línea estaba pendiente de sincronización en el servidor, por lo que acabamos de mandar la señal de activación a tu módem. En aproximadamente 1 a 2 minutos quedará restablecida tu navegación con normalidad.`,
-            'SALUDO',
-            'AUTO_ACTIVACION_PAGADO_SALUDO',
-            targetJid
-          );
-          await TursoService.updateStep(phone, 'CONVERSACIONAL');
-          return;
-        }
-
         if (estadoFinanciero.suspendido || estadoFinanciero.totalDeuda > 0) {
           const bank = SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK', 'BBVA');
           const account = SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', '012 180 0000000000 00');
@@ -1116,24 +1099,6 @@ export class BotOrchestrator {
         sn: meta.sn,
         ip: meta.ip,
       });
-
-      // CASO ESPECIAL: El cliente ya pagó y está al corriente, pero su servicio quedó inactivo o desincronizado en WispHub
-      if (estadoFinanciero.yaPagoPeroNoActivo && (estadoFinanciero.cliente?.id || session.client_id)) {
-        const idClienteWisp = estadoFinanciero.cliente?.id || session.client_id;
-        logger.info(`Cliente ${phone} (${session.client_name}) ya pagó pero estaba inactivo. Reactivando automáticamente en WispHub (ID: ${idClienteWisp})...`);
-        await WispHubService.activarServicioCliente(idClienteWisp!);
-
-        await this.enviarYLoguear(
-          phone,
-          `Hola${nombre}, revisé tu servicio y confirmamos que tu cuenta se encuentra al corriente y sin ningún adeudo pendiente. 👍\n\n` +
-          `Detectamos que tu línea estaba pendiente de sincronización, por lo que acabamos de enviar la señal de activación a tu módem. En aproximadamente 1 a 2 minutos quedará restablecida tu navegación con normalidad.`,
-          'FALLA_INTERNET',
-          'AUTO_ACTIVACION_PAGADO',
-          targetJid
-        );
-        await TursoService.updateStep(phone, 'CONVERSACIONAL');
-        return;
-      }
 
       if (estadoFinanciero.suspendido || estadoFinanciero.totalDeuda > 0) {
         logger.info(`Cliente ${phone} (${session.client_name}) presenta suspensión o adeudo en WispHub: Deuda=$${estadoFinanciero.totalDeuda} (${estadoFinanciero.motivo || 'Suspendido'})`);
@@ -2395,12 +2360,6 @@ export class BotOrchestrator {
         ip: meta.ip,
       });
 
-      if (estadoFinanciero.yaPagoPeroNoActivo && (estadoFinanciero.cliente?.id || session?.client_id)) {
-        const idClienteWisp = estadoFinanciero.cliente?.id || session?.client_id;
-        logger.info(`Reinicio de módem: Cliente ${phone} ya pagó pero estaba inactivo. Reactivando en WispHub ID ${idClienteWisp}...`);
-        await WispHubService.activarServicioCliente(idClienteWisp!);
-      }
-
       if (estadoFinanciero.suspendido || estadoFinanciero.totalDeuda > 0) {
         logger.info(`Intento de reinicio bloqueado: Cliente ${phone} (${session?.client_name}) suspendido/adeudo en WispHub.`);
         const bank = SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK', 'BBVA');
@@ -2473,27 +2432,11 @@ export class BotOrchestrator {
       ip: meta.ip,
     });
 
-    if (estadoFinanciero.yaPagoPeroNoActivo && (estadoFinanciero.cliente?.id || session?.client_id)) {
-      const idClienteWisp = estadoFinanciero.cliente?.id || session?.client_id;
-      logger.info(`Consulta saldo: Cliente ${phone} ya pagó pero estaba inactivo. Reactivando automáticamente en WispHub ID ${idClienteWisp}...`);
-      await WispHubService.activarServicioCliente(idClienteWisp!);
-
-      await this.enviarYLoguear(
-        phone,
-        `🎉 *¡Tu cuenta está al corriente!*\n\nEstimado(a) *${session?.client_name || 'Cliente'}*, confirmamos que no tienes facturas pendientes de pago. 👍\n\n` +
-        `Detectamos que tu línea estaba pendiente de reactivación en el servidor, por lo que acabamos de mandar la señal de reconexión a tu módem. En 1 a 2 minutos podrás navegar con normalidad.`,
-        'CONSULTAR_SALDO',
-        'AUTO_ACTIVACION_PAGADO_SALDO',
-        targetJid
-      );
-      return;
-    }
-
     const facturas = estadoFinanciero.facturas.length > 0
       ? estadoFinanciero.facturas
       : (session?.client_id ? await WispHubService.obtenerFacturasPendientes(session.client_id) : []);
 
-    if (facturas.length === 0 && estadoFinanciero.totalDeuda === 0) {
+    if (!estadoFinanciero.suspendido && facturas.length === 0 && estadoFinanciero.totalDeuda === 0) {
       const ficha = this.getFichaBancaria(session);
       await this.enviarYLoguear(
         phone,
@@ -2505,22 +2448,46 @@ export class BotOrchestrator {
       return;
     }
 
-    let textoFacturas = `📋 *Estado de Cuenta - ${this.getIspName()}*\nCliente: *${session.client_name}*\n\n`;
-    let totalAdeudo = 0;
+    // Si tiene facturas pendientes emitidas en WispHub
+    if (facturas.length > 0) {
+      let textoFacturas = `📋 *Estado de Cuenta - ${this.getIspName()}*\nCliente: *${session.client_name}*\n\n`;
+      let totalAdeudo = 0;
 
-    facturas.forEach((f, idx) => {
-      totalAdeudo += f.monto;
-      textoFacturas += `*Recibo #${idx + 1}*\n• Folio: ${f.folio}\n• Monto: *$${f.monto.toFixed(2)} MXN*\n• Vence: ${f.fecha_vencimiento}\n`;
-      if (f.link_pago) {
-        textoFacturas += `• Pagar en línea: ${f.link_pago}\n`;
-      }
-      textoFacturas += `\n`;
-    });
+      facturas.forEach((f, idx) => {
+        totalAdeudo += f.monto;
+        textoFacturas += `*Recibo #${idx + 1}*\n• Folio: ${f.folio}\n• Monto: *$${f.monto.toFixed(2)} MXN*\n• Vence: ${f.fecha_vencimiento}\n`;
+        if (f.link_pago) {
+          textoFacturas += `• Pagar en línea: ${f.link_pago}\n`;
+        }
+        textoFacturas += `\n`;
+      });
 
-    textoFacturas += `💰 *Total a pagar: $${totalAdeudo.toFixed(2)} MXN*\n`;
-    textoFacturas += this.getFichaBancaria(session);
+      textoFacturas += `💰 *Total a pagar: $${totalAdeudo.toFixed(2)} MXN*\n`;
+      textoFacturas += this.getFichaBancaria(session);
 
-    await this.enviarYLoguear(phone, textoFacturas, 'CONSULTAR_SALDO', 'FACTURAS_PENDIENTES_ENVIADAS', targetJid);
+      await this.enviarYLoguear(phone, textoFacturas, 'CONSULTAR_SALDO', 'FACTURAS_PENDIENTES_ENVIADAS', targetJid);
+      return;
+    }
+
+    // Si está suspendido o registra adeudo sin facturas listadas
+    const bank = SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK', 'BBVA');
+    const account = SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', '012 180 0000000000 00');
+    const beneficiary = SettingsService.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', this.getIspName());
+    const montoTexto = estadoFinanciero.totalDeuda > 0
+      ? `un saldo/recibo pendiente por *$${estadoFinanciero.totalDeuda.toFixed(2)} MXN*`
+      : `tu servicio se encuentra suspendido en el sistema`;
+
+    const mensajeMoroso =
+      `¡Hola, *${session.client_name}*! 👋\n\n` +
+      `Revisé tu cuenta en nuestro sistema y detectamos que ${montoTexto}.\n\n` +
+      `Para reactivar tu servicio y navegar con normalidad, por favor realiza tu abono a:\n` +
+      `💳 *${bank}* | CLABE: *${account}*\n` +
+      `Beneficiario: *${beneficiary}*\n` +
+      `Concepto / Referencia: *${session.client_name || phone}*\n\n` +
+      `📸 En cuanto realices tu pago, envía la *foto o captura de tu comprobante* y escribe tu *Nombre completo* por este chat para reactivarte de inmediato.`;
+
+    await this.enviarYLoguear(phone, mensajeMoroso, 'CONSULTAR_SALDO', 'AVISO_SUSPENDIDO_SALDO', targetJid);
+    await TursoService.updateStep(phone, 'ESPERANDO_COMPROBANTE');
   }
 
   /**
@@ -3308,7 +3275,7 @@ export class BotOrchestrator {
     phone: string,
     rawText: string,
     session: Session | null,
-    targetJid: string
+    targetJid?: string
   ): Promise<void> {
     const auth = await this.verificarAutorizacionTecnico(phone, rawText);
     if (!auth.autorizado) {
@@ -3439,7 +3406,7 @@ ${techInfo}───────────────────────
     phone: string,
     rawText: string,
     session: Session | null,
-    targetJid: string
+    targetJid?: string
   ): Promise<void> {
     const auth = await this.verificarAutorizacionTecnico(phone, rawText);
     if (!auth.autorizado) {
@@ -3597,7 +3564,7 @@ ${techInfo}───────────────────────
     phone: string,
     rawText: string,
     session: Session | null,
-    targetJid: string
+    targetJid?: string
   ): Promise<void> {
     await this.procesarSolicitudActivacionTecnico(phone, rawText, session, targetJid);
   }
@@ -3610,7 +3577,7 @@ ${techInfo}───────────────────────
     rawText: string,
     buttonId: string | undefined,
     session: Session | null,
-    targetJid: string
+    targetJid?: string
   ): Promise<void> {
     await this.procesarSolicitudActivacionTecnico(phone, rawText, session, targetJid);
   }
@@ -3621,8 +3588,8 @@ ${techInfo}───────────────────────
   private static async procesarConfirmacionActivacionOnu(
     phone: string,
     session: Session | null,
-    targetJid: string,
-    confirmar: boolean
+    targetJid: string | undefined,
+    confirmar: boolean = true
   ): Promise<void> {
     let metaObj: any = {};
     try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
