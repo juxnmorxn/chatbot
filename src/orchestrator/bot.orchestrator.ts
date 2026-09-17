@@ -3085,14 +3085,97 @@ export class BotOrchestrator {
   }
 
   /**
-   * Procesa la solicitud de activación/autorización de ONU para técnicos de campo
-   * Flujo guiado:
-   * 1. Técnico envía los últimos 6 dígitos del SN (ej: "ACTIVAR 4317B5")
-   * 2. Si no viene el nombre con folio, el bot lo solicita (ej: "3456-Juan Perez")
-   * 3. Se solicita la región/zona (por defecto "Actopan" obligatorio)
-   * 4. Se asigna IP y VLAN en modo VLAN (no prio)
-   * 5. Se muestra la ficha de confirmación completa
-   * 6. Con "SÍ" se ejecuta la autorización en SmartOLT
+   * Parsea los datos del comando de un solo mensaje para activación de clientes:
+   * Formato: "activar cliente [6 dígitos SN] [Folio-Nombre] [Plan] [Zona]"
+   */
+  private static parseActivationMessage(rawText: string): {
+    snSuffix: string;
+    name: string;
+    plan: string;
+    zone: string;
+    hasAllData: boolean;
+  } {
+    let text = rawText
+      .replace(/^activar\s+cliente\s*/i, '')
+      .replace(/^activar\s+onu\s*/i, '')
+      .replace(/^activar\s+modem\s*/i, '')
+      .replace(/^activar\s*/i, '')
+      .replace(/^alta\s+cliente\s*/i, '')
+      .replace(/^alta\s*/i, '')
+      .trim();
+
+    let snSuffix = '';
+    let plan = '40M';
+    let zone = 'Actopan'; // Obligatorio por defecto
+
+    // 1. Extraer Plan si existe explícitamente (ej: 40M, 50M, 100MB, 50 Megas, etc.)
+    const planMatch = text.match(/(?:^|\s)(\d{1,3}\s*(?:M|MEGAS|MB|MEGA))\b/i);
+    if (planMatch && planMatch[1]) {
+      const rawPlan = planMatch[1].toUpperCase().replace(/\s+/g, '');
+      plan = rawPlan.endsWith('M') || rawPlan.endsWith('MB') ? rawPlan : `${rawPlan}M`;
+      text = text.replace(planMatch[0], ' ').trim();
+    }
+
+    // 2. Extraer Zona si existe (San Agustín, Actopan o personalizada)
+    if (/\b(san\s*agust[ií]n)\b/i.test(text)) {
+      zone = 'San Agustín';
+      text = text.replace(/\b(san\s*agust[ií]n)\b/gi, ' ').trim();
+    } else if (/\b(actopan)\b/i.test(text)) {
+      zone = 'Actopan';
+      text = text.replace(/\b(actopan)\b/gi, ' ').trim();
+    }
+
+    // 3. Extraer SN: buscar token alfanumérico de 5 a 16 caracteres (ej: 4317B5, ZTEGC4317B5)
+    // Puede venir al inicio "4317B5 3456-Juan Perez" o con letras
+    const snMatch = text.match(/\b([A-Za-z0-9]{5,16})\b/);
+    if (snMatch && (snMatch[1].length === 6 || snMatch[1].startsWith('ZTE') || snMatch[1].startsWith('HWTC') || /[A-Za-z]/.test(snMatch[1]))) {
+      snSuffix = snMatch[1].toUpperCase();
+      text = text.replace(snMatch[0], ' ').trim();
+    } else {
+      const sixDigitMatch = text.match(/\b([0-9]{6})\b/);
+      if (sixDigitMatch) {
+        snSuffix = sixDigitMatch[1];
+        text = text.replace(sixDigitMatch[0], ' ').trim();
+      }
+    }
+
+    if (!snSuffix) {
+      const firstTokenMatch = text.match(/^([A-Za-z0-9]{4,16})\b/);
+      if (firstTokenMatch) {
+        snSuffix = firstTokenMatch[1].toUpperCase();
+        text = text.replace(firstTokenMatch[0], ' ').trim();
+      }
+    }
+
+    // 4. El resto es el Folio y Nombre Completo del cliente
+    let name = text.replace(/\s+/g, ' ').trim();
+    if (name) {
+      const folioPrefixMatch = name.match(/^(\d{1,6})\s*[-_.\s]+\s*(.+)$/i);
+      const folioSuffixMatch = name.match(/^(.+)\s*[-_.\s]+\s*(\d{1,6})$/i);
+      if (folioPrefixMatch) {
+        name = `${folioPrefixMatch[1]}-${cleanPersonName(folioPrefixMatch[2])}`;
+      } else if (folioSuffixMatch) {
+        name = `${folioSuffixMatch[2]}-${cleanPersonName(folioSuffixMatch[1])}`;
+      } else {
+        name = cleanPersonName(name);
+      }
+    }
+
+    const effectiveSuffix = snSuffix.length > 6 ? snSuffix.slice(-6) : snSuffix;
+    const hasAllData = Boolean(effectiveSuffix && name && name.length >= 3);
+
+    return {
+      snSuffix: effectiveSuffix,
+      name,
+      plan,
+      zone,
+      hasAllData,
+    };
+  }
+
+  /**
+   * Procesa la solicitud de activación/autorización de ONU para técnicos de campo en un solo mensaje
+   * Comando: "activar cliente [6 dígitos SN] [Folio-Nombre] [Plan] [Zona]"
    */
   private static async procesarSolicitudActivacionTecnico(
     phone: string,
@@ -3100,50 +3183,35 @@ export class BotOrchestrator {
     session: Session | null,
     targetJid: string
   ): Promise<void> {
-    const cleanText = rawText.trim();
-    const match = cleanText.match(/(?:activar|alta|aprovisionar|registrar)\s+(?:modem|onu|equipo|serie)?\s*([a-zA-Z0-9]{4,16})/i);
+    const parsed = this.parseActivationMessage(rawText);
 
-    let snSuffix = '';
-    let remainingText = '';
-    if (match && match[1]) {
-      snSuffix = match[1].trim().toUpperCase();
-      remainingText = cleanText.substring(match.index! + match[0].length).trim();
-    } else {
-      const directCodeMatch = cleanText.match(/^([a-zA-Z0-9]{4,16})$/);
-      if (directCodeMatch) {
-        snSuffix = directCodeMatch[1].toUpperCase();
-      }
-    }
-
-    if (!snSuffix) {
+    // Si el mensaje viene vacío o solo enviaron "activar cliente" sin los datos
+    if (!parsed.snSuffix || !parsed.hasAllData) {
       await this.enviarYLoguear(
         phone,
-        `🛠️ *Activación Automática de Módems (Técnicos de Campo)*\n\nPor favor envía el comando con los *últimos 6 dígitos del SN* del módem:\n\n👉 *ACTIVAR [6 DÍGITOS SN]*\n_Ejemplo:_ *ACTIVAR 4317B5*\n\nEl sistema buscará el módem en SmartOLT, te solicitará el *Folio y Nombre del cliente* (ej. \`3456-Juan Perez\`), la *región* (Actopan por defecto) y asignará la IP libre automáticamente en modo VLAN.`,
+        `🛠️ *Activación de Cliente en SmartOLT (Un Solo Mensaje)*\n\nPara activar el módem, envía el comando *activar cliente* con todos los datos juntos en un solo mensaje:\n\n👉 *activar cliente [6 dígitos SN] [Folio-Nombre] [Plan] [Zona]*\n\n_Ejemplos para copiar y rellenar:_\n• \`activar cliente 4317B5 3456-Juan Perez Martinez 40M Actopan\`\n• \`activar cliente 4317B5 3456-Juan Perez Martinez 50M San Agustin\`\n• \`activar cliente 4317B5 3456-Juan Perez Martinez\` _(Plan 40M y Zona Actopan por defecto)_`,
         'ACTIVACION_TECNICO',
-        'AYUDA_ACTIVACION',
+        'AYUDA_ACTIVACION_UN_MENSAJE',
         targetJid
       );
       return;
     }
 
-    // Tomar los últimos 6 dígitos
-    const effectiveSuffix = snSuffix.length > 6 ? snSuffix.slice(-6) : snSuffix;
-
     await this.enviarYLoguear(
       phone,
-      `🔍 Buscando módem con terminación *${effectiveSuffix}* en SmartOLT...`,
+      `🔍 Buscando módem con terminación *${parsed.snSuffix}* en SmartOLT...`,
       'ACTIVACION_TECNICO',
       'BUSCANDO_ONU',
       targetJid
     );
 
     // 1. Buscar la ONU en SmartOLT
-    const unconfigured = await SmartOLTService.findUnconfiguredOnuBySnSuffix(effectiveSuffix);
+    const unconfigured = await SmartOLTService.findUnconfiguredOnuBySnSuffix(parsed.snSuffix);
 
     if (!unconfigured) {
       await this.enviarYLoguear(
         phone,
-        `❌ *Módem no encontrado en SmartOLT*\n\nNo se localizó ninguna ONU sin configurar con terminación *${effectiveSuffix}*.\n\n💡 *Por favor verifica:*\n1. Que la fibra óptica esté conectada y la luz PON del módem esté encendida/sincronizando.\n2. Que el equipo haya sincronizado en la OLT.\n3. Que los 6 dígitos del SN sean correctos (ej: *${effectiveSuffix}*).`,
+        `❌ *Módem no encontrado en SmartOLT*\n\nNo se localizó ninguna ONU sin configurar con terminación *${parsed.snSuffix}*.\n\n💡 *Por favor verifica:*\n1. Que la fibra óptica esté conectada y la luz PON del módem esté encendida/sincronizando.\n2. Que el equipo haya sincronizado en la OLT.\n3. Que los 6 dígitos del SN sean correctos (ej: *${parsed.snSuffix}*).`,
         'ACTIVACION_TECNICO',
         'ONU_NO_ENCONTRADA',
         targetJid
@@ -3151,186 +3219,19 @@ export class BotOrchestrator {
       return;
     }
 
-    const oltId = String(unconfigured.olt_id);
-    const isSanAgustin = oltId === '2' || (unconfigured.olt_name || '').toLowerCase().includes('san agustin');
+    // 2. Determinar OLT y Zona (por defecto Actopan obligatorio)
+    const isSanAgustin = parsed.zone.toLowerCase().includes('san agustin') ||
+      String(unconfigured.olt_id) === '2' ||
+      (unconfigured.olt_name || '').toLowerCase().includes('san agustin');
+
+    const targetZone = isSanAgustin ? 'San Agustín' : (parsed.zone || 'Actopan');
+    const targetOltId = isSanAgustin ? '2' : '3';
     const targetOltName = isSanAgustin ? 'OLT-SanAgustin' : 'OLT5800-Actopan';
-    const signalText = unconfigured.onu_signal_1490 || unconfigured.onu_signal || 'Detectado';
+    const defaultVlan = isSanAgustin ? '800' : '510';
 
-    let metaObj: any = {};
-    try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
-    metaObj.pendingOnu = unconfigured;
-    metaObj.pendingSnSuffix = effectiveSuffix;
-    metaObj.pendingOltName = targetOltName;
+    const profiles = getSmartOltSpeedProfiles(parsed.plan);
 
-    // 2. Si el mensaje inicial ya traía el nombre con folio (ej: "ACTIVAR 4317B5 3456-Juan Perez")
-    if (remainingText && remainingText.length >= 3) {
-      await TursoService.upsertSession({
-        phone,
-        step: 'ACTIVACION_ESPERANDO_NOMBRE',
-        metadata: JSON.stringify(metaObj),
-      });
-      await this.procesarNombreActivacionTecnico(phone, remainingText, session, targetJid);
-      return;
-    }
-
-    // Si solo enviaron el SN, solicitar el Nombre con Folio del cliente
-    await TursoService.upsertSession({
-      phone,
-      step: 'ACTIVACION_ESPERANDO_NOMBRE',
-      metadata: JSON.stringify(metaObj),
-    });
-
-    const msgPedirNombre = `✅ *Módem detectado en SmartOLT:*
-• *Número de Serie:* *${unconfigured.sn}* (Terminación: \`${effectiveSuffix}\`)
-• *OLT:* ${targetOltName} (Tarjeta ${unconfigured.board} / PON ${unconfigured.port})
-• *Nivel de Señal Óptica:* ${signalText}
-
-📝 *Por favor escribe el Folio y Nombre Completo del cliente:*
-_Formato obligatorio:_ *FOLIO-NOMBRE COMPLETO*
-_Ejemplo:_ *3456-Juan Perez Martinez* (o *3456-Juan Perez 40M*)`;
-
-    await this.enviarYLoguear(
-      phone,
-      msgPedirNombre,
-      'ACTIVACION_TECNICO',
-      'ESPERANDO_NOMBRE_FOLIO',
-      targetJid
-    );
-  }
-
-  /**
-   * Procesa el Nombre y Folio proporcionado por el técnico
-   */
-  private static async procesarNombreActivacionTecnico(
-    phone: string,
-    rawText: string,
-    session: Session | null,
-    targetJid: string
-  ): Promise<void> {
-    let metaObj: any = {};
-    try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
-    const unconfigured = metaObj.pendingOnu;
-
-    if (!unconfigured) {
-      await this.enviarYLoguear(
-        phone,
-        `⚠️ La sesión de activación expiró. Por favor envía de nuevo *ACTIVAR [6 DÍGITOS SN]*.`,
-        'ACTIVACION_TECNICO',
-        'SESION_EXPIRADA',
-        targetJid
-      );
-      await TursoService.updateStep(phone, 'CONVERSACIONAL');
-      return;
-    }
-
-    let text = rawText.trim();
-
-    // Extraer plan si viene incluido (ej: 40M, 50MB, etc.)
-    let plan = '40M';
-    const planMatch = text.match(/(?:^|\s)(\d+\s*(?:M|MEGAS|MB)?)(?:\s|$)/i);
-    if (planMatch) {
-      plan = planMatch[1].toUpperCase();
-      text = text.replace(planMatch[0], ' ').trim();
-    }
-
-    // Normalizar formato "FOLIO-NOMBRE COMPLETO"
-    let formattedName = '';
-    const folioPrefixMatch = text.match(/^(\d{1,6})\s*[-_.\s]+\s*(.+)$/i);
-    const folioSuffixMatch = text.match(/^(.+)\s*[-_.\s]+\s*(\d{1,6})$/i);
-
-    if (folioPrefixMatch) {
-      formattedName = `${folioPrefixMatch[1]}-${folioPrefixMatch[2].trim()}`;
-    } else if (folioSuffixMatch) {
-      formattedName = `${folioSuffixMatch[2]}-${folioSuffixMatch[1].trim()}`;
-    } else {
-      // Si no pusieron guión pero empieza con número o nombre
-      formattedName = text.trim();
-    }
-
-    metaObj.pendingName = formattedName;
-    metaObj.pendingPlan = plan;
-
-    await TursoService.upsertSession({
-      phone,
-      step: 'ACTIVACION_ESPERANDO_ZONA',
-      metadata: JSON.stringify(metaObj),
-    });
-
-    const msgPedirZona = `📍 *Zona / Región de Instalación:*
-
-• *Cliente / Folio:* *${formattedName}*
-• *Plan Seleccionado:* *${plan}*
-
-Por favor indica la zona o región de la instalación (ej. *Actopan*, *San Agustín*, etc.).
-👉 _Si es en Actopan o presionas continuar, se asignará *Actopan* por defecto obligatorio._`;
-
-    await this.enviarYLoguear(
-      phone,
-      msgPedirZona,
-      'ACTIVACION_TECNICO',
-      'ESPERANDO_ZONA',
-      targetJid,
-      [
-        { id: 'BTN_ZONA_ACTOPAN', title: '📍 Actopan (Por Defecto)' },
-        { id: 'BTN_ZONA_SAN_AGUSTIN', title: '📍 San Agustín' },
-      ]
-    );
-  }
-
-  /**
-   * Procesa la Zona/Región de instalación, asigna IP/VLAN en modo VLAN y genera la confirmación
-   */
-  private static async procesarZonaActivacionTecnico(
-    phone: string,
-    rawText: string,
-    buttonId: string | undefined,
-    session: Session | null,
-    targetJid: string
-  ): Promise<void> {
-    let metaObj: any = {};
-    try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
-    const unconfigured = metaObj.pendingOnu;
-    const clientName = metaObj.pendingName || `Cliente Nuevo (${unconfigured?.sn || ''})`;
-    const plan = metaObj.pendingPlan || '40M';
-
-    if (!unconfigured) {
-      await this.enviarYLoguear(
-        phone,
-        `⚠️ La sesión de activación expiró. Por favor envía de nuevo *ACTIVAR [6 DÍGITOS SN]*.`,
-        'ACTIVACION_TECNICO',
-        'SESION_EXPIRADA',
-        targetJid
-      );
-      await TursoService.updateStep(phone, 'CONVERSACIONAL');
-      return;
-    }
-
-    const lower = (rawText || '').toLowerCase().trim();
-
-    // Determinar Zona (Por defecto "Actopan" obligatorio si no se especifica otra)
-    let zone = 'Actopan';
-    let targetOltId = '3';
-    let defaultVlan = '510';
-
-    if (buttonId === 'BTN_ZONA_SAN_AGUSTIN' || lower.includes('san agustin') || lower.includes('san agustín')) {
-      zone = 'San Agustín';
-      targetOltId = '2';
-      defaultVlan = '800';
-    } else if (buttonId === 'BTN_ZONA_ACTOPAN' || lower === 'actopan' || lower === 'ok' || lower === 'si' || lower === '1' || lower === 'continuar' || lower === 'default' || !lower) {
-      zone = 'Actopan';
-      targetOltId = '3';
-      defaultVlan = '510';
-    } else {
-      // Zona personalizada dentro de Actopan (ej: Chicavasco, Daxtha, Pozo Grande, etc.)
-      zone = rawText.trim();
-      targetOltId = '3';
-      defaultVlan = '510';
-    }
-
-    const targetOltName = targetOltId === '2' ? 'OLT-SanAgustin' : 'OLT5800-Actopan';
-    const profiles = getSmartOltSpeedProfiles(plan);
-
-    // Calcular siguiente IP libre en la OLT y VLAN
+    // 3. Asignar IP libre en el pool IPAM
     let nextIp = await IpamService.getNextAvailableIp(defaultVlan, targetOltId);
 
     // Si la primera VLAN de Actopan estuviera llena, buscar en 520..610
@@ -3352,14 +3253,14 @@ Por favor indica la zona o región de la instalación (ej. *Actopan*, *San Agust
       return;
     }
 
-    // Preparar payload con modo VLAN (no prio)
+    // 4. Preparar payload de autorización con modo VLAN (no prio)
     const payload: AuthorizeOnuPayload = {
       olt_id: targetOltId,
       board: unconfigured.board,
       port: unconfigured.port,
       sn: unconfigured.sn,
       onu_type: unconfigured.onu_type || 'ZTE-F660',
-      name: clientName,
+      name: parsed.name,
       onu_mode: 'Routing',
       vlan: nextIp.vlan,
       ip_address: nextIp.ip,
@@ -3368,15 +3269,17 @@ Por favor indica la zona o región de la instalación (ej. *Actopan*, *San Agust
       line_profile: 'VLAN', // Modo VLAN obligatorio
       download_speed_profile_name: profiles.down,
       upload_speed_profile_name: profiles.up,
-      zone: zone,
+      zone: targetZone,
       comment: `Activado vía Bot WhatsApp por técnico (${phone})`,
     };
 
+    let metaObj: any = {};
+    try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
     metaObj.pendingActivation = payload;
     metaObj.pendingActivationDetails = {
-      snSuffix: metaObj.pendingSnSuffix || (unconfigured.sn.length > 6 ? unconfigured.sn.slice(-6) : unconfigured.sn),
+      snSuffix: parsed.snSuffix,
       oltName: targetOltName,
-      zone,
+      zone: targetZone,
       signal: unconfigured.onu_signal_1490 || unconfigured.onu_signal || 'Detectada',
       model: unconfigured.onu_type_name || unconfigured.onu_type || 'ZTE-F660',
     };
@@ -3388,21 +3291,20 @@ Por favor indica la zona o región de la instalación (ej. *Actopan*, *San Agust
     });
 
     const signalText = unconfigured.onu_signal_1490 || unconfigured.onu_signal || 'Detectado';
-    const effectiveSuffix = metaObj.pendingSnSuffix || (unconfigured.sn.length > 6 ? unconfigured.sn.slice(-6) : unconfigured.sn);
 
-    const cardMsg = `📋 *DATOS DE APROVISIONAMIENTO (PRE-ACTIVACIÓN)*
+    const cardMsg = `📋 *RESUMEN DE ACTIVACIÓN (PRE-CONFIRMACIÓN)*
 ──────────────────────────────
 • *Número de Serie (SN):* *${unconfigured.sn}*
-• *Terminación (6 Dígitos):* \`${effectiveSuffix}\`
-• *Cliente / Folio:* *${clientName}*
-• *Zona / Región:* *${zone}*
-• *Modo ONU:* Routing
+• *Terminación (6 Dígitos):* \`${parsed.snSuffix}\`
+• *Cliente / Folio:* *${parsed.name}*
+• *Zona / Región:* *${targetZone}*
+• *Modo:* Routing
 • *Perfil de Línea:* *VLAN*
 • *Modelo ONU:* ${unconfigured.onu_type_name || unconfigured.onu_type || 'ZTE-F660'}
 • *OLT:* ${targetOltName} (Tarjeta ${unconfigured.board} / PON ${unconfigured.port})
 • *Nivel de Señal Óptica:* ${signalText}
 • *VLAN Asignada:* *VLAN ${nextIp.vlan}* (${targetOltName})
-• *IP Asignada Automáticamente:* *${nextIp.ip}*
+• *IP WAN Asignada:* *${nextIp.ip}*
 • *Puerta de Enlace (GW):* ${nextIp.gateway}
 • *Máscara:* ${nextIp.netmask}
 • *Perfil de Velocidad:* ${profiles.down} / ${profiles.up}
@@ -3423,6 +3325,31 @@ Por favor indica la zona o región de la instalación (ej. *Actopan*, *San Agust
         { id: 'BTN_CANCELAR_ACTIVACION', title: '❌ Cancelar' },
       ]
     );
+  }
+
+  /**
+   * Procesa el Nombre y Folio proporcionado por el técnico
+   */
+  private static async procesarNombreActivacionTecnico(
+    phone: string,
+    rawText: string,
+    session: Session | null,
+    targetJid: string
+  ): Promise<void> {
+    await this.procesarSolicitudActivacionTecnico(phone, rawText, session, targetJid);
+  }
+
+  /**
+   * Procesa la Zona/Región de instalación, asigna IP/VLAN en modo VLAN y genera la confirmación
+   */
+  private static async procesarZonaActivacionTecnico(
+    phone: string,
+    rawText: string,
+    buttonId: string | undefined,
+    session: Session | null,
+    targetJid: string
+  ): Promise<void> {
+    await this.procesarSolicitudActivacionTecnico(phone, rawText, session, targetJid);
   }
 
   /**
@@ -3452,7 +3379,7 @@ Por favor indica la zona o región de la instalación (ej. *Actopan*, *San Agust
 
       await this.enviarYLoguear(
         phone,
-        `❌ *Activación cancelada.* No se realizaron modificaciones en la OLT. Si deseas activar otro equipo, vuelve a enviar *ACTIVAR [6 DÍGITOS SN]*.`,
+        `❌ *Activación cancelada.* No se realizaron modificaciones en la OLT. Para activar otro equipo, envía *activar cliente [6 dígitos SN] [Folio-Nombre]*.`,
         'ACTIVACION_TECNICO',
         'ACTIVACION_CANCELADA',
         targetJid
