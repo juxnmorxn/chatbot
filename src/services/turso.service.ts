@@ -1629,17 +1629,19 @@ export class TursoService {
   /**
    * Alterna el estado activo/inactivo de un técnico
    */
-  static async toggleTechnicianActive(id: number): Promise<boolean> {
+  static async toggleTechnicianActive(id: number): Promise<{ success: boolean; is_active: number }> {
     try {
       const client = getTursoClient();
-      const res = await client.execute({
+      await client.execute({
         sql: `UPDATE technicians SET is_active = CASE WHEN is_active = 1 THEN 0 ELSE 1 END, updated_at = ? WHERE id = ?`,
         args: [new Date().toISOString(), id],
       });
-      return (res.rowsAffected || 0) > 0;
+      const check = await client.execute({ sql: 'SELECT is_active FROM technicians WHERE id = ?', args: [id] });
+      const current = check.rows.length > 0 ? Number(check.rows[0].is_active) : 0;
+      return { success: check.rows.length > 0, is_active: current };
     } catch (error: any) {
       logger.error(`Error al cambiar estado de técnico ${id}:`, error?.message || error);
-      return false;
+      return { success: false, is_active: 0 };
     }
   }
 

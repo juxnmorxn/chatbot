@@ -569,9 +569,13 @@ export class AdminController {
         return;
       }
 
-      const ok = await TursoService.toggleTechnicianActive(id);
-      if (ok) {
-        res.json({ success: true, message: 'Estado del técnico modificado exitosamente.' });
+      const result = await TursoService.toggleTechnicianActive(id);
+      if (result.success) {
+        res.json({
+          success: true,
+          is_active: result.is_active,
+          message: result.is_active === 1 ? 'Técnico activado exitosamente.' : 'Técnico desactivado exitosamente.'
+        });
       } else {
         res.status(404).json({ success: false, error: 'Técnico no encontrado' });
       }

@@ -347,9 +347,58 @@ export function getAdminDashboardHtml(): string {
     }
     .pill-green { background: rgba(16, 185, 129, 0.2); color: #34d399; }
     .pill-red { background: rgba(239, 68, 68, 0.2); color: #f87171; }
-    .pill-blue { background: rgba(99, 102, 241, 0.2); color: #818cf8; }
-    .pill-amber { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
-    .pill-purple { background: rgba(168, 85, 247, 0.2); color: #c084fc; }
+    /* Modern iOS Toggle Switch */
+    .switch {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+      position: absolute;
+    }
+
+    .slider {
+      position: relative;
+      width: 38px;
+      height: 22px;
+      background-color: rgba(239, 68, 68, 0.4);
+      border: 1px solid rgba(239, 68, 68, 0.6);
+      border-radius: 22px;
+      transition: all 0.25s ease;
+      display: inline-block;
+      flex-shrink: 0;
+    }
+
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 16px;
+      width: 16px;
+      left: 2px;
+      bottom: 2px;
+      background-color: #f9fafb;
+      border-radius: 50%;
+      transition: all 0.25s ease;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+    }
+
+    input:checked + .slider {
+      background-color: #10b981;
+      border-color: #059669;
+      box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
+    }
+
+    input:checked + .slider:before {
+      transform: translateX(16px);
+      background-color: #ffffff;
+    }
 
     /* Toast */
     #toast {
@@ -2028,9 +2077,69 @@ export function getAdminDashboardHtml(): string {
     }
 
     // ==========================================
-    // MÓDULO DE GESTIÓN DE TÉCNICOS Y PINS
+    // MÓDULO DE GESTIÓN DE TÉCNICOS Y PINS (TIEMPO REAL)
     // ==========================================
     let allTechnicians = [];
+
+    function updateTechniciansKpi() {
+      const total = allTechnicians.length;
+      const active = allTechnicians.filter(t => t.is_active === 1).length;
+      const elTotal = document.getElementById('statTotalTechs');
+      const elActive = document.getElementById('statActiveTechs');
+      if (elTotal) elTotal.innerText = total;
+      if (elActive) elActive.innerText = active;
+    }
+
+    function renderTechniciansTable() {
+      const tbody = document.getElementById('techniciansTableBody');
+      if (!tbody) return;
+
+      updateTechniciansKpi();
+
+      if (allTechnicians.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 30px;">' +
+          'No hay técnicos registrados aún.<br>' +
+          '<button class="btn btn-primary" onclick="openTechnicianModal()" style="margin-top: 10px; font-size: 12px;">➕ Registrar Primer Técnico</button>' +
+        '</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = allTechnicians.map(t => {
+        const dateStr = t.created_at ? new Date(t.created_at).toLocaleDateString('es-MX', { year: 'numeric', month: 'short', day: 'numeric' }) : '-';
+        const isActive = t.is_active === 1;
+
+        const cleanPhone = t.phone.replace(/\D/g, '');
+        const waLink = '<a href="https://wa.me/' + cleanPhone + '" target="_blank" style="color: #60a5fa; text-decoration: none; font-family: var(--font-mono); font-weight: 600;">' + t.phone + ' ↗</a>';
+
+        const pinDisplay = '<span style="font-family: var(--font-mono); font-size: 15px; font-weight: 700; color: #fbbf24; background: rgba(245, 158, 11, 0.12); padding: 2px 8px; border-radius: 6px; letter-spacing: 2px;">' + t.pin + '</span> ' +
+          '<button type="button" onclick="copyPinToClipboard(&quot;' + t.pin + '&quot;)" style="background: transparent; border: none; cursor: pointer; font-size: 13px; color: var(--text-muted);" title="Copiar PIN">📋</button>';
+
+        const notesText = t.notes ? '<br><small style="color: var(--text-muted);">' + t.notes + '</small>' : '';
+
+        // Switch interactivo en tiempo real estilo iOS
+        const switchHtml = '<label class="switch" title="Clic para activar o desactivar en tiempo real">' +
+          '<input type="checkbox" ' + (isActive ? 'checked' : '') + ' onchange="toggleTechnicianRealtime(' + t.id + ', this)">' +
+          '<span class="slider"></span>' +
+          '<span id="techStatusText-' + t.id + '" style="font-size: 12px; font-weight: 600; color: ' + (isActive ? '#34d399' : '#f87171') + ';">' +
+            (isActive ? 'Activo' : 'Inactivo') +
+          '</span>' +
+        '</label>';
+
+        return '<tr id="techRow-' + t.id + '">' +
+          '<td style="color: var(--text-muted); font-family: var(--font-mono);">' + t.id + '</td>' +
+          '<td style="font-weight: 700; color: #f9fafb;">' + t.name + notesText + '</td>' +
+          '<td>' + waLink + '</td>' +
+          '<td>' + pinDisplay + '</td>' +
+          '<td>' + switchHtml + '</td>' +
+          '<td><span class="pill pill-blue">' + (t.role || 'TECNICO') + '</span></td>' +
+          '<td style="font-size: 12px; color: var(--text-muted);">' + dateStr + '</td>' +
+          '<td style="text-align: right; white-space: nowrap;">' +
+            '<button class="btn btn-secondary btn-test" onclick="editTechnicianAction(' + t.id + ')" style="padding: 4px 8px; font-size: 11px; margin-right: 4px;">✏️ Editar</button>' +
+            '<button class="btn btn-secondary btn-test" onclick="deleteTechnicianAction(' + t.id + ', &quot;' + t.name + '&quot;)" style="padding: 4px 8px; font-size: 11px; color: #f87171;">🗑️</button>' +
+          '</td>' +
+        '</tr>';
+      }).join('');
+    }
 
     async function loadTechnicians() {
       const tbody = document.getElementById('techniciansTableBody');
@@ -2043,53 +2152,55 @@ export function getAdminDashboardHtml(): string {
 
         if (data.success && data.technicians) {
           allTechnicians = data.technicians;
-
-          const total = allTechnicians.length;
-          const active = allTechnicians.filter(t => t.is_active === 1).length;
-          document.getElementById('statTotalTechs').innerText = total;
-          document.getElementById('statActiveTechs').innerText = active;
-
-          if (allTechnicians.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 30px;">' +
-              'No hay técnicos registrados aún.<br>' +
-              '<button class="btn btn-primary" onclick="openTechnicianModal()" style="margin-top: 10px; font-size: 12px;">➕ Registrar Primer Técnico</button>' +
-            '</td></tr>';
-            return;
-          }
-
-          tbody.innerHTML = allTechnicians.map(t => {
-            const dateStr = t.created_at ? new Date(t.created_at).toLocaleDateString('es-MX', { year: 'numeric', month: 'short', day: 'numeric' }) : '-';
-            const isActive = t.is_active === 1;
-            const statusBadge = isActive
-              ? '<span class="pill pill-green">🟢 Activo</span>'
-              : '<span class="pill pill-red">🔴 Inactivo</span>';
-
-            const cleanPhone = t.phone.replace(/\D/g, '');
-            const waLink = '<a href="https://wa.me/' + cleanPhone + '" target="_blank" style="color: #60a5fa; text-decoration: none; font-family: var(--font-mono); font-weight: 600;">' + t.phone + ' ↗</a>';
-
-            const pinDisplay = '<span style="font-family: var(--font-mono); font-size: 15px; font-weight: 700; color: #fbbf24; background: rgba(245, 158, 11, 0.12); padding: 2px 8px; border-radius: 6px; letter-spacing: 2px;">' + t.pin + '</span> ' +
-              '<button type="button" onclick="copyPinToClipboard(&quot;' + t.pin + '&quot;)" style="background: transparent; border: none; cursor: pointer; font-size: 13px; color: var(--text-muted);" title="Copiar PIN">📋</button>';
-
-            const notesText = t.notes ? '<br><small style="color: var(--text-muted);">' + t.notes + '</small>' : '';
-
-            return '<tr>' +
-              '<td style="color: var(--text-muted); font-family: var(--font-mono);">' + t.id + '</td>' +
-              '<td style="font-weight: 700; color: #f9fafb;">' + t.name + notesText + '</td>' +
-              '<td>' + waLink + '</td>' +
-              '<td>' + pinDisplay + '</td>' +
-              '<td>' + statusBadge + '</td>' +
-              '<td><span class="pill pill-blue">' + (t.role || 'TECNICO') + '</span></td>' +
-              '<td style="font-size: 12px; color: var(--text-muted);">' + dateStr + '</td>' +
-              '<td style="text-align: right; white-space: nowrap;">' +
-                '<button class="btn btn-secondary btn-test" onclick="editTechnicianAction(' + t.id + ')" style="padding: 4px 8px; font-size: 11px; margin-right: 4px;">✏️ Editar</button>' +
-                '<button class="btn btn-secondary btn-test" onclick="toggleTechnicianStatus(' + t.id + ')" style="padding: 4px 8px; font-size: 11px; margin-right: 4px;">' + (isActive ? '⏸️ Desactivar' : '▶️ Activar') + '</button>' +
-                '<button class="btn btn-secondary btn-test" onclick="deleteTechnicianAction(' + t.id + ', &quot;' + t.name + '&quot;)" style="padding: 4px 8px; font-size: 11px; color: #f87171;">🗑️</button>' +
-              '</td>' +
-            '</tr>';
-          }).join('');
+          renderTechniciansTable();
         }
       } catch (err) {
         tbody.innerHTML = '<tr><td colspan="8" style="color: #f87171; text-align: center; padding: 24px;">❌ Error al cargar técnicos desde Turso DB</td></tr>';
+      }
+    }
+
+    async function toggleTechnicianRealtime(id, inputElem) {
+      const isChecked = inputElem.checked;
+      const statusText = document.getElementById('techStatusText-' + id);
+      const tech = allTechnicians.find(t => t.id === id);
+
+      // 1. Actualización instantánea en pantalla (Zero lag)
+      if (statusText) {
+        statusText.innerText = isChecked ? 'Activo' : 'Inactivo';
+        statusText.style.color = isChecked ? '#34d399' : '#f87171';
+      }
+      if (tech) {
+        tech.is_active = isChecked ? 1 : 0;
+      }
+      updateTechniciansKpi();
+
+      // 2. Guardar en Turso DB en segundo plano
+      try {
+        const res = await fetch('/api/technicians/' + id + '/toggle', { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+          showToast(isChecked ? '🟢 Técnico "' + (tech?.name || '') + '" activado en Turso' : '⏸️ Técnico "' + (tech?.name || '') + '" desactivado');
+        } else {
+          // Revertir si hubo error
+          inputElem.checked = !isChecked;
+          if (statusText) {
+            statusText.innerText = !isChecked ? 'Activo' : 'Inactivo';
+            statusText.style.color = !isChecked ? '#34d399' : '#f87171';
+          }
+          if (tech) tech.is_active = !isChecked ? 1 : 0;
+          updateTechniciansKpi();
+          showToast('❌ Error: ' + data.error, true);
+        }
+      } catch (err) {
+        // Revertir
+        inputElem.checked = !isChecked;
+        if (statusText) {
+          statusText.innerText = !isChecked ? 'Activo' : 'Inactivo';
+          statusText.style.color = !isChecked ? '#34d399' : '#f87171';
+        }
+        if (tech) tech.is_active = !isChecked ? 1 : 0;
+        updateTechniciansKpi();
+        showToast('❌ Error de conexión al servidor', true);
       }
     }
 
@@ -2185,7 +2296,8 @@ export function getAdminDashboardHtml(): string {
         if (data.success) {
           showToast('✅ ' + (data.message || 'Técnico guardado exitosamente'));
           closeTechnicianModal();
-          loadTechnicians();
+          // Actualización en caliente
+          await loadTechnicians();
         } else {
           showToast('❌ Error: ' + (data.error || 'No se pudo guardar'), true);
         }
@@ -2197,30 +2309,21 @@ export function getAdminDashboardHtml(): string {
       }
     }
 
-    async function toggleTechnicianStatus(id) {
-      try {
-        const res = await fetch('/api/technicians/' + id + '/toggle', { method: 'POST' });
-        const data = await res.json();
-        if (data.success) {
-          showToast('✅ Estado del técnico actualizado');
-          loadTechnicians();
-        } else {
-          showToast('Error: ' + data.error, true);
-        }
-      } catch (err) {
-        showToast('Error al cambiar estado', true);
-      }
-    }
-
     async function deleteTechnicianAction(id, name) {
       if (!confirm('¿Estás seguro de que deseas eliminar al técnico "' + name + '" del sistema?')) return;
       try {
+        // Eliminar fila inmediatamente de pantalla
+        const row = document.getElementById('techRow-' + id);
+        if (row) row.style.opacity = '0.3';
+
         const res = await fetch('/api/technicians/' + id, { method: 'DELETE' });
         const data = await res.json();
         if (data.success) {
+          allTechnicians = allTechnicians.filter(t => t.id !== id);
+          renderTechniciansTable();
           showToast('✅ Técnico eliminado');
-          loadTechnicians();
         } else {
+          if (row) row.style.opacity = '1';
           showToast('Error: ' + data.error, true);
         }
       } catch (err) {
