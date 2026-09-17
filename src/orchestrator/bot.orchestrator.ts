@@ -3643,11 +3643,12 @@ ${techInfo}───────────────────────
 
     // 4. Preparar payload de autorización con modo VLAN (no prio)
     const payload: AuthorizeOnuPayload = {
-      olt_id: targetOltId,
+      olt_id: unconfigured.olt_id || targetOltId,
+      pon_type: unconfigured.pon_type || 'gpon',
       board: unconfigured.board,
       port: unconfigured.port,
       sn: unconfigured.sn,
-      onu_type: unconfigured.onu_type || 'ZTE-F660',
+      onu_type: unconfigured.onu_type_name || unconfigured.onu_type || 'HG8145X6-10',
       name: parsed.name,
       onu_mode: 'Routing',
       vlan: nextIp.vlan,

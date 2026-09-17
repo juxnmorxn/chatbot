@@ -32,6 +32,7 @@ export interface SmartOltSyncResult {
 export interface UnconfiguredOnu {
   olt_id: string | number;
   olt_name?: string;
+  pon_type?: string;
   board: string | number;
   port: string | number;
   sn: string;
@@ -43,6 +44,7 @@ export interface UnconfiguredOnu {
 
 export interface AuthorizeOnuPayload {
   olt_id: string | number;
+  pon_type?: string;
   board: string | number;
   port: string | number;
   sn: string;
@@ -73,7 +75,6 @@ export interface SpeedProfileItem {
   name: string;
   speed: string;
   direction: 'download' | 'upload';
-  type: string;
 }
 
 export function getSmartOltSpeedProfiles(
@@ -145,9 +146,8 @@ export class SmartOLTService {
         baseURL: url,
         headers: {
           'X-Token': apiKey,
-          'Content-Type': 'application/json',
         },
-        timeout: 12000,
+        timeout: 15000,
       });
     }
     return this.api;
@@ -200,61 +200,58 @@ export class SmartOLTService {
       const response = await api.get('/onu/get_all_onus_details');
       const data = response.data;
 
-      // SmartOLT responde típicamente con { status: true, onus: [...] } o directamente el array
-      const rawOnus = Array.isArray(data) ? data : (data?.onus || data?.response || []);
-
-      if (!Array.isArray(rawOnus) || rawOnus.length === 0) {
-        this.lastSyncTimestamp = Date.now();
+      if (data?.status === false && data?.error) {
+        logger.error('SmartOLT respondió con error en sincronización:', data.error);
         return {
-          success: true,
+          success: false,
           count: 0,
-          message: 'SmartOLT respondió correctamente pero no se encontraron ONUs registradas.',
+          message: `Error de SmartOLT: ${data.error}`,
         };
       }
 
-      logger.info(`Recibidas ${rawOnus.length} ONUs de SmartOLT. Normalizando y guardando en Turso DB...`);
+      const rawOnus = Array.isArray(data)
+        ? data
+        : data?.onus || data?.response || data?.details || [];
 
-      const records: SmartOltOnuRecord[] = rawOnus.map((onu: any) => {
-        // En SmartOLT el nombre del cliente suele venir en name, description o comment
-        const clientName = String(onu.name || onu.description || onu.client || onu.comment || '').trim();
-        const sn = String(onu.sn || onu.serial_number || '').trim();
-        const id = String(onu.unique_external_id || onu.id || sn || `ONU-${Math.random()}`);
+      logger.info(`Se recibieron ${rawOnus.length} ONUs desde la API de SmartOLT.`);
 
+      if (rawOnus.length === 0) {
         return {
-          unique_external_id: id,
-          sn,
-          name: clientName,
-          phone: onu.phone || onu.telefono || '',
-          address: onu.address || onu.direccion || '',
-          zone_name: onu.zone_name || onu.zone || '',
-          speed_profile: onu.speed_profile_name || onu.speed_profile || onu.plan || '',
-          olt_name: onu.olt_name || onu.olt || '',
-          ip_address: String(onu.ip_address || onu.ip || onu.ipv4_address || onu.wan_ip || '').trim(),
-          raw_data: JSON.stringify({
-            board: onu.board,
-            slot: onu.slot,
-            port: onu.port,
-            onu: onu.onu,
-            vlan: onu.vlan,
-            mode: onu.mode,
-          }),
+          success: true,
+          count: 0,
+          message: 'SmartOLT respondió exitosamente pero no se encontraron ONUs.',
         };
-      });
+      }
 
-      const totalSaved = await TursoService.saveSmartOltOnus(records);
+      const transformed: SmartOltOnuRecord[] = rawOnus.map((item: any) => ({
+        unique_external_id: item.unique_external_id || item.external_id || item.sn || item.onu_id || '',
+        sn: String(item.sn || item.serial_number || item.onu_sn || '').trim().toUpperCase(),
+        name: item.name || item.onu_name || item.client_name || '',
+        speed_profile: item.download_speed_profile_name || item.speed_profile || item.plan || '',
+        ip_address: item.ip_address || item.ip || null,
+        zone_name: item.zone || item.zone_name || item.location || 'Actopan',
+        onu_type_name: item.onu_type_name || item.model || item.type || '',
+        raw_data: JSON.stringify(item),
+        updated_at: new Date().toISOString(),
+      }));
+
+      await TursoService.saveSmartOltOnus(transformed);
+
       this.lastSyncTimestamp = Date.now();
+      logger.info(`✅ Sincronización completada exitosamente: ${transformed.length} ONUs guardadas en Turso DB.`);
 
       return {
         success: true,
-        count: totalSaved,
-        message: `Sincronización completada exitosamente: ${totalSaved} clientes/ONUs guardados en Turso DB.`,
+        count: transformed.length,
+        message: `Sincronización exitosa: ${transformed.length} ONUs sincronizadas con Turso DB.`,
       };
     } catch (error: any) {
       logger.error('Error al sincronizar ONUs con SmartOLT:', error?.response?.data || error?.message || error);
+      const errMsg = error?.response?.data?.message || error?.response?.data?.error || error?.message || 'Error de conexión con SmartOLT';
       return {
         success: false,
         count: 0,
-        message: `Error al contactar SmartOLT: ${error?.response?.data?.message || error?.message || 'Fallo de conexión'}`,
+        message: `Fallo al sincronizar: ${errMsg}`,
       };
     } finally {
       this.isSyncing = false;
@@ -265,15 +262,15 @@ export class SmartOLTService {
    * Consulta el estado físico y óptico de la ONU en la OLT con caché de 3 minutos
    */
   static async obtenerEstadoONU(onuId: string): Promise<SmartOltStatusResult> {
-    // 1. Revisar caché local para no saturar las 300 llamadas/hora
+    const cleanId = onuId.trim();
     const now = Date.now();
-    const cached = this.statusCache.get(onuId);
+    const cached = this.statusCache.get(cleanId);
     if (cached && (now - cached.timestamp) < this.STATUS_CACHE_TTL_MS) {
-      logger.info(`Retornando estado de ONU ${onuId} desde caché en memoria (${Math.round((now - cached.timestamp)/1000)}s)`);
+      logger.info(`Retornando estado de ONU ${cleanId} desde caché en memoria (${Math.round((now - cached.timestamp)/1000)}s)`);
       return { ...cached.result, fromCache: true };
     }
 
-    logger.info(`Consultando estado físico en vivo en SmartOLT para ONU: ${onuId}`);
+    logger.info(`Consultando estado físico en vivo en SmartOLT para ONU: ${cleanId}`);
     const apiKey = this.getApiKey();
 
     if (!apiKey || apiKey.includes('tu_token')) {
@@ -290,14 +287,18 @@ export class SmartOLTService {
 
     try {
       const api = this.getApi();
-      const response = await api.get(`/onu/get_onu_status/${onuId}`);
+      let onuRecord = await TursoService.getOnuById(cleanId);
+      if (!onuRecord && cleanId.length < 12) {
+        const matches = await TursoService.searchOnusFuzzy(cleanId, 1);
+        if (matches.length > 0) onuRecord = matches[0];
+      }
+
+      const externalId = onuRecord?.unique_external_id || cleanId;
+      const response = await api.get(`/onu/get_onu_status/${encodeURIComponent(externalId)}`);
       const data = response.data;
-      logger.info(`Respuesta SmartOLT get_onu_status para ${onuId}:`, JSON.stringify(data));
+      logger.info(`Respuesta SmartOLT get_onu_status para ${cleanId}:`, JSON.stringify(data));
 
-      // Importante: data.status es booleano (true/false) de éxito HTTP en SmartOLT.
-      // El estado del módem está en data.onu_status (ej. "Online", "LOS", "Power fail", "Offline").
       const onuStatus = String(data?.onu_status || (typeof data?.status === 'string' ? data.status : '')).toLowerCase();
-
       let result: SmartOltStatusResult;
 
       if (onuStatus.includes('los') || onuStatus.includes('loss of signal') || onuStatus.includes('fiber broken')) {
@@ -306,6 +307,7 @@ export class SmartOLTService {
           rawStatus: data?.onu_status || 'LOS',
           opticalPowerDbm: null,
           descripcion: 'Corte de señal óptica (Fibra rota o desconectada de la caja)',
+          sn: onuRecord?.sn || cleanId,
         };
       } else if (onuStatus.includes('power fail') || onuStatus.includes('dying gasp') || onuStatus.includes('power down')) {
         result = {
@@ -313,14 +315,13 @@ export class SmartOLTService {
           rawStatus: data?.onu_status || 'Power fail',
           opticalPowerDbm: null,
           descripcion: 'Pérdida de energía eléctrica en el domicilio (Equipo apagado)',
+          sn: onuRecord?.sn || cleanId,
         };
       } else if (onuStatus.includes('online') || onuStatus.includes('up') || onuStatus.includes('working')) {
-        // Consultar niveles de señal óptica reales en SmartOLT
         let opticalPower: number | null = null;
         let signalQuality = '';
         try {
-          const sigRes = await api.get(`/onu/get_onu_signal/${onuId}`);
-          logger.info(`Respuesta SmartOLT get_onu_signal para ${onuId}:`, JSON.stringify(sigRes.data));
+          const sigRes = await api.get(`/onu/get_onu_signal/${encodeURIComponent(externalId)}`);
           const sigData = sigRes.data;
           signalQuality = sigData?.onu_signal || '';
           const rawSignal = sigData?.onu_signal_1490 || sigData?.onu_signal_value || '';
@@ -329,7 +330,7 @@ export class SmartOLTService {
             opticalPower = parseFloat(matchDbm[1]);
           }
         } catch (sigErr: any) {
-          logger.warn(`No se pudo obtener señal óptica detallada para ${onuId}:`, sigErr?.message || sigErr);
+          logger.warn(`No se pudo obtener señal óptica detallada para ${cleanId}:`, sigErr?.message || sigErr);
         }
 
         const signalText = opticalPower !== null ? `${opticalPower} dBm (${signalQuality || 'Óptimo'})` : 'Óptimo';
@@ -339,6 +340,7 @@ export class SmartOLTService {
           opticalPowerDbm: opticalPower,
           uptime: data?.last_status_change ? `Desde ${data.last_status_change}` : (data?.uptime || ''),
           descripcion: `Equipo en línea. Nivel de señal óptica: ${signalText}`,
+          sn: onuRecord?.sn || cleanId,
         };
       } else {
         result = {
@@ -346,11 +348,11 @@ export class SmartOLTService {
           rawStatus: data?.onu_status || 'Offline',
           opticalPowerDbm: null,
           descripcion: 'Equipo desconectado o fuera de línea.',
+          sn: onuRecord?.sn || cleanId,
         };
       }
 
-      // Guardar en la caché en memoria de 3 minutos
-      this.statusCache.set(onuId, { result, timestamp: Date.now() });
+      this.statusCache.set(cleanId, { result, timestamp: Date.now() });
       return { ...result, fromCache: false };
     } catch (error: any) {
       logger.error('Error al consultar estado de ONU en SmartOLT:', error?.response?.data || error?.message || error);
@@ -361,6 +363,10 @@ export class SmartOLTService {
         fromCache: false,
       };
     }
+  }
+
+  static async getOnuStatus(snOrExternalId: string): Promise<SmartOltStatusResult> {
+    return this.obtenerEstadoONU(snOrExternalId);
   }
 
   /**
@@ -379,19 +385,37 @@ export class SmartOLTService {
     }
 
     try {
+      let onuRecord = await TursoService.getOnuById(onuId);
+      const externalId = onuRecord?.unique_external_id || onuId;
+
       const api = this.getApi();
-      const response = await api.post(`/onu/reboot/${onuId}`);
-      return {
-        success: response.data?.status === true || response.status === 200,
-        message: response.data?.message || 'Orden de reinicio enviada correctamente a la OLT.',
-      };
+      const form = new FormData();
+      form.append('onu_external_id', externalId);
+      const response = await api.post(`/onu/reboot_onu/${encodeURIComponent(externalId)}`, form);
+      const resData = response.data;
+
+      if (resData?.status === true || response.status === 200 || resData?.response === 'success') {
+        return {
+          success: true,
+          message: resData?.message || 'Orden de reinicio enviada correctamente a la OLT.',
+        };
+      } else {
+        return {
+          success: false,
+          message: resData?.message || resData?.error || 'SmartOLT rechazó la solicitud de reinicio.',
+        };
+      }
     } catch (error: any) {
-      logger.error('Error al reiniciar ONU en SmartOLT:', error?.response?.data || error?.message || error);
+      logger.error(`Error al reiniciar ONU ${onuId} en SmartOLT:`, error?.response?.data || error?.message || error);
       return {
         success: false,
         message: 'No se pudo completar el reinicio remoto en la OLT.',
       };
     }
+  }
+
+  static async rebootOnu(snOrExternalId: string): Promise<{ success: boolean; message: string }> {
+    return this.rebootONU(snOrExternalId);
   }
 
   /**
@@ -417,10 +441,11 @@ export class SmartOLTService {
       return rawOnus.map((item: any) => ({
         olt_id: item.olt_id || item.olt || '',
         olt_name: item.olt_name || (String(item.olt_id) === '2' ? 'OLT-SanAgustin' : 'OLT5800-Actopan'),
+        pon_type: item.pon_type || 'gpon',
         board: item.board || item.slot || '0',
         port: item.port || item.pon || '0',
         sn: String(item.sn || item.serial_number || item.onu_sn || '').trim().toUpperCase(),
-        onu_type: item.onu_type || item.onu_type_name || item.model || 'ZTE-F660',
+        onu_type: item.onu_type_name || item.onu_type || item.model || 'HG8145X6-10',
         onu_type_name: item.onu_type_name || item.onu_type || item.model || '',
         onu_signal: item.onu_signal || item.signal || item.rx_power || '',
         onu_signal_1490: item.onu_signal_1490 || item.onu_signal_value || '',
@@ -480,32 +505,33 @@ export class SmartOLTService {
     try {
       const api = this.getApi();
 
-      const bodyData = {
-        olt_id: payload.olt_id,
-        board: payload.board,
-        port: payload.port,
-        sn: payload.sn,
-        onu_type: payload.onu_type || 'ZTE-F660',
-        name: payload.name,
-        onu_mode: payload.onu_mode || 'Routing',
-        vlan: payload.vlan,
-        ip_address: payload.ip_address,
-        netmask: payload.netmask || '255.255.255.0',
-        gateway: payload.gateway,
-        line_profile: payload.line_profile || 'VLAN',
-        download_speed_profile_name: payload.download_speed_profile_name || '40MB-DOWN',
-        upload_speed_profile_name: payload.upload_speed_profile_name || '40MB-UP',
-        address: payload.address || '',
-        zone: payload.zone || 'Actopan',
-        comment: payload.comment || 'Activado vía Bot WhatsApp CloudWare',
-      };
+      // SmartOLT API requiere multipart/form-data (FormData)
+      const form = new FormData();
+      form.append('olt_id', String(payload.olt_id));
+      form.append('pon_type', payload.pon_type || 'gpon');
+      form.append('board', String(payload.board));
+      form.append('port', String(payload.port));
+      form.append('sn', String(payload.sn));
+      form.append('onu_type', String(payload.onu_type || 'HG8145X6-10'));
+      form.append('name', String(payload.name));
+      form.append('onu_mode', String(payload.onu_mode || 'Routing'));
+      form.append('vlan', String(payload.vlan));
+      form.append('ip_address', String(payload.ip_address));
+      form.append('netmask', String(payload.netmask || '255.255.255.0'));
+      form.append('gateway', String(payload.gateway));
+      form.append('line_profile', String(payload.line_profile || 'VLAN'));
+      form.append('download_speed_profile_name', String(payload.download_speed_profile_name || '40MB-DOWN'));
+      form.append('upload_speed_profile_name', String(payload.upload_speed_profile_name || '40MB-UP'));
+      if (payload.address) form.append('address', String(payload.address));
+      if (payload.zone) form.append('zone', String(payload.zone));
+      if (payload.comment) form.append('comment', String(payload.comment));
 
-      const response = await api.post('/onu/authorize_onu', bodyData);
+      const response = await api.post('/onu/authorize_onu', form);
       const resData = response.data;
       logger.info('Respuesta de autorización SmartOLT:', JSON.stringify(resData));
 
-      if (resData?.status === true || response.status === 200 || resData?.response === 'success') {
-        // Forzar sincronización no bloqueante o registrar en Turso
+      if (resData?.status === true || response.status === 200 || resData?.response_code === 'success' || resData?.response === 'success' || (typeof resData?.response === 'string' && resData.response.toLowerCase().includes('saved'))) {
+        // Forzar registro en Turso DB
         TursoService.saveSmartOltOnus([
           {
             unique_external_id: resData?.unique_external_id || resData?.onu_id || payload.sn,
@@ -513,14 +539,15 @@ export class SmartOLTService {
             name: payload.name,
             speed_profile: payload.download_speed_profile_name || '40MB',
             ip_address: payload.ip_address,
-            raw_data: JSON.stringify(bodyData),
+            zone_name: payload.zone || 'Actopan',
+            raw_data: JSON.stringify(payload),
             updated_at: new Date().toISOString(),
           },
         ]).catch(() => {});
 
         return {
           success: true,
-          message: resData?.message || `Módem ${payload.sn} autorizado correctamente en SmartOLT.`,
+          message: resData?.message || resData?.response || `Módem ${payload.sn} autorizado correctamente en SmartOLT.`,
           onu_id: resData?.unique_external_id || resData?.onu_id || payload.sn,
           details: resData,
         };
@@ -608,21 +635,21 @@ export class SmartOLTService {
 
     try {
       const api = this.getApi();
-      const bodyData = {
-        download_speed_profile_name: profiles.down,
-        upload_speed_profile_name: profiles.up,
-      };
+      const form = new FormData();
+      form.append('download_speed_profile_name', profiles.down);
+      form.append('upload_speed_profile_name', profiles.up);
 
       // Endpoint oficial de SmartOLT: POST /onu/update_onu_speed_profiles/{{onu_external_id}}
       let response;
       try {
-        response = await api.post(`/onu/update_onu_speed_profiles/${encodeURIComponent(externalId)}`, bodyData);
+        response = await api.post(`/onu/update_onu_speed_profiles/${encodeURIComponent(externalId)}`, form);
       } catch (err: any) {
         // Fallback con cuerpo si el path difiere
-        response = await api.post('/onu/update_onu_speed_profiles', {
-          onu_external_id: externalId,
-          ...bodyData
-        });
+        const fallbackForm = new FormData();
+        fallbackForm.append('onu_external_id', externalId);
+        fallbackForm.append('download_speed_profile_name', profiles.down);
+        fallbackForm.append('upload_speed_profile_name', profiles.up);
+        response = await api.post('/onu/update_onu_speed_profiles', fallbackForm);
       }
 
       const resData = response.data;
