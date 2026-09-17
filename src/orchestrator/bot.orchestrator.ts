@@ -1626,45 +1626,17 @@ export class BotOrchestrator {
       return;
     }
 
-    // Si sigue igual o con falla persistente -> Generar Ticket formal
-    const outOfHours = this.isFueraDeHorario();
-    const isMedia = event.isMedia === true;
-    const hasSpeedtest = isMedia || lower.includes('speed') || lower.includes('test') || lower.includes('mbps');
-
-    const ticket = await TursoService.createTicket({
-      phone,
-      client_name: session?.client_name,
-      onu_id: session?.onu_id,
-      issue_summary: meta.resumenFalla || rawText || 'Falla persistente tras reinicio de módem',
-      checks_performed: `Triage completado. Módem reiniciado en central. Cliente reporta persistencia: "${rawText || (isMedia ? '[Foto/Captura]' : 'N/A')}"`,
-      has_photo: isMedia ? 1 : 0,
-      has_speedtest: hasSpeedtest ? 1 : 0,
-      all_devices: meta.triageAlcance === 'TODOS_DISPOSITIVOS' ? 1 : 0,
-      status: 'ABIERTO',
-      is_out_of_hours: outOfHours ? 1 : 0,
-    });
-
-    if (session?.client_id) {
-      await WispHubService.crearTicketSoporte(
-        session.client_id,
-        `Soporte Falla - ${ticket.folio}`,
-        `Reporte persistente tras reinicio remoto. Folio local: ${ticket.folio}. Diagnóstico: ${ticket.checks_performed}`,
-        'Media'
-      ).catch(() => {});
-    }
-
-    const notaHorario = outOfHours ? '\n\n⏰ *Nota:* Tu reporte quedó registrado en el sistema y un técnico lo revisará mañana a primera hora con tu número de reporte.' : '';
-
+    // Si sigue igual o con falla persistente -> Solicitar evidencia (Speedtest o foto de luces) antes de generar ticket
     const esSinInternet = meta.tipoFalla === 'SIN_INTERNET' ||
       meta.sinInternetTotal === true ||
       (meta.resumenFalla && (meta.resumenFalla.toLowerCase().includes('no tengo internet') || meta.resumenFalla.toLowerCase().includes('sin internet')));
 
     const solicitudEvidencia = esSinInternet
-      ? `📸 Por favor mándanos una *foto de las luces de tu módem* para que el equipo técnico revise el estado de los focos y te dé solución lo antes posible.`
-      : `📸 Por favor mándanos una *foto de las luces de tu módem* o una captura de tu prueba de velocidad realizada desde:\n👉 https://www.speedtest.net\npara adjuntarla de inmediato a tu reporte técnico.`;
+      ? `📸 Por favor compártenos una *foto clara de las luces de tu módem* para comprobar si hay alguna alerta física o corte de señal.`
+      : `📸 Por favor ayúdanos con una *captura de tu prueba de velocidad* realizada desde:\n👉 https://www.speedtest.net\n(o una foto de las luces de tu módem) para analizar el rendimiento exacto de tu línea.`;
 
-    const mensajeTicket =
-      `Enterado${nombre}. Como el detalle continúa tras el reinicio, ya te generé tu reporte formal *#${ticket.folio}* para que el equipo de soporte técnico revise tu servicio.${notaHorario}\n\n` +
+    const mensajeEvidencia =
+      `Enterado${nombre}. Para poder determinar el origen exacto del detalle y canalizarlo con la solución adecuada:\n\n` +
       `${solicitudEvidencia}`;
 
     await TursoService.upsertSession({
@@ -1672,11 +1644,12 @@ export class BotOrchestrator {
       step: 'COMPROBACION_EVIDENCIA',
       metadata: JSON.stringify({
         ...meta,
-        ticketFolio: ticket.folio,
+        resumenFalla: meta.resumenFalla || rawText || 'Falla persistente tras reinicio de módem',
+        persistenciaReinicio: true,
       }),
     });
 
-    await this.enviarYLoguear(phone, mensajeTicket, 'FALLA_INTERNET', `TICKET_GENERADO_POST_REINICIO_${ticket.folio}`, targetJid);
+    await this.enviarYLoguear(phone, mensajeEvidencia, 'FALLA_INTERNET', 'SOLICITUD_EVIDENCIA_POST_REINICIO', targetJid);
   }
 
   /**
@@ -1820,36 +1793,6 @@ export class BotOrchestrator {
     let meta: any = {};
     try { meta = JSON.parse(session?.metadata || '{}'); } catch {}
 
-    const isMedia = event.isMedia === true;
-    const hasSpeedtest = isMedia || lower.includes('speed') || lower.includes('test') || lower.includes('mbps');
-    const allDevices = lower.includes('todo') || lower.includes('todos') || lower.includes('todas');
-    const outOfHours = this.isFueraDeHorario();
-
-    // Crear el ticket en Turso DB
-    const ticket = await TursoService.createTicket({
-      phone,
-      client_name: session?.client_name,
-      onu_id: session?.onu_id,
-      issue_summary: meta.resumenFalla || rawText || 'Reporte de lentitud / falla de internet',
-      checks_performed: `Módem reiniciado en central. Cable de fibra protegido. Cliente indicó: "${rawText || (isMedia ? '[Foto/Captura]' : 'N/A')}"`,
-      has_photo: isMedia ? 1 : 0,
-      has_speedtest: hasSpeedtest ? 1 : 0,
-      all_devices: allDevices ? 1 : 0,
-      status: 'ABIERTO',
-      is_out_of_hours: outOfHours ? 1 : 0,
-    });
-
-    if (session?.client_id) {
-      await WispHubService.crearTicketSoporte(
-        session.client_id,
-        `Soporte Técnico - ${ticket.folio}`,
-        `Reporte: ${ticket.issue_summary}. Comprobaciones: ${ticket.checks_performed}`,
-        'Media'
-      ).catch(() => {});
-    }
-
-    const notaHorario = outOfHours ? '\n\n⏰ *Nota:* Tu reporte quedó registrado y un técnico lo revisará a primera hora con tu número de reporte.' : '';
-
     const esSinInternetTurno1 = meta.tipoFalla === 'SIN_INTERNET' ||
       meta.sinInternetTotal === true ||
       (meta.resumenFalla && (meta.resumenFalla.toLowerCase().includes('no tengo internet') || meta.resumenFalla.toLowerCase().includes('sin internet')));
@@ -1859,7 +1802,7 @@ export class BotOrchestrator {
       : `📸 Por favor mándanos una *foto de las luces de tu módem* o captura de prueba de velocidad realizada desde:\n👉 https://www.speedtest.net`;
 
     const mensajeTurno2 =
-      `Enterado. Como el detalle persiste, ya te generé tu reporte *#${ticket.folio}* para que nuestro equipo técnico lo revise.${notaHorario}\n\n` +
+      `Enterado. Para determinar con exactitud el estado de tu enlace y darte la mejor solución:\n\n` +
       `${solicitudTurno2}`;
 
     await TursoService.upsertSession({
@@ -1867,15 +1810,17 @@ export class BotOrchestrator {
       step: 'COMPROBACION_EVIDENCIA',
       metadata: JSON.stringify({
         ...meta,
-        ticketFolio: ticket.folio,
+        resumenFalla: meta.resumenFalla || rawText || 'Reporte de lentitud / falla de internet',
+        detalleTriage: rawText,
       }),
     });
 
-    await this.enviarYLoguear(phone, mensajeTurno2, 'FALLA_INTERNET', `TICKET_CREADO_${ticket.folio}`, targetJid);
+    await this.enviarYLoguear(phone, mensajeTurno2, 'FALLA_INTERNET', 'SOLICITUD_EVIDENCIA_TURNO_2', targetJid);
   }
 
   /**
-   * Recibe la foto del módem o captura de Speedtest y la vincula al ticket
+   * Recibe la foto del módem, captura de Speedtest o texto confirmando persistencia
+   * y genera o actualiza el ticket de soporte si el problema no pudo resolverse.
    */
   private static async procesarEvidenciaTicket(
     phone: string,
@@ -1887,6 +1832,23 @@ export class BotOrchestrator {
     const lower = rawText.toLowerCase().trim();
     const esConsultaPago = /\b(pagar|pago|saldo|debo|cuanto\s*debo|cuando\s*me\s*toca|factura|recibo|cuenta|tarjeta|transferencia|clabe|banco|mensualidad|costo)\b/i.test(lower);
     const esSaludo = /^(hola|buen\s*(dia|día)|buenas\s*(tardes|noches)?|saludos|que\s*tal|hey|hi)\b/i.test(lower);
+    const esPositivo = /\b(si|sí|ya|quedo|quedó|listo|excelente|funciona|bien|muchas\s*gracias|gracias|perfecto|ya\s*sirve|ya\s*funciona)\b/i.test(lower) &&
+      !/\b(no|no\s*quedo|no\s*quedó|sigue\s*igual|sigue\s*mal|nada|no\s*funciona|no\s*sirve)\b/i.test(lower);
+
+    // Si el usuario reporta que ya quedó bien
+    if (esPositivo) {
+      const nombreLimpio = formatDisplayName(session?.client_name, true);
+      const nombre = nombreLimpio ? ` *${nombreLimpio}*` : '';
+      await this.enviarYLoguear(
+        phone,
+        `¡Excelente noticia${nombre}! 🎉 Me alegra mucho que tu servicio esté funcionando correctamente. En *${this.getIspName()}* estamos a tus órdenes. ¡Que tengas un excelente día!`,
+        'FALLA_INTERNET',
+        'RESOLUCION_CONFIRMADA_CLIENTE',
+        targetJid
+      );
+      await this.marcarConsultaFinalizada(phone, session);
+      return;
+    }
 
     // Si NO es imagen ni archivo y el usuario pregunta otra cosa distinta a la evidencia:
     if (!event.isMedia && (esConsultaPago || esSaludo)) {
@@ -1906,6 +1868,8 @@ export class BotOrchestrator {
     const folio = meta.ticketFolio;
     const isMedia = event.isMedia === true;
     const evidencia = isMedia ? 'Foto o captura de pantalla enviada por el cliente' : rawText;
+    const outOfHours = this.isFueraDeHorario();
+    const notaHorario = outOfHours ? '\n\n⏰ *Nota:* Tu reporte quedó registrado en el sistema y un técnico lo revisará a primera hora.' : '';
 
     if (folio) {
       await TursoService.updateTicketStatus(
@@ -1913,15 +1877,49 @@ export class BotOrchestrator {
         'ABIERTO',
         `Evidencia recibida: "${evidencia}"`
       );
-    }
 
-    await this.enviarYLoguear(
-      phone,
-      `¡Recibido! Ya adjunté la evidencia a tu reporte *#${folio || ''}*. El equipo técnico ya cuenta con todos los datos para realizar los ajustes. ¡Muchas gracias!`,
-      'FALLA_INTERNET',
-      `EVIDENCIA_ADJUNTADA_${folio}`,
-      targetJid
-    );
+      await this.enviarYLoguear(
+        phone,
+        `¡Recibido! Ya adjunté tus comentarios a tu reporte *#${folio}*. El equipo técnico ya cuenta con todos los datos para darte seguimiento.${notaHorario}`,
+        'FALLA_INTERNET',
+        `EVIDENCIA_ADJUNTADA_${folio}`,
+        targetJid
+      );
+    } else {
+      // Como el usuario confirmó persistencia o no pudo enviar imagen, creamos el ticket AHORA al final
+      const ticket = await TursoService.createTicket({
+        phone,
+        client_name: session?.client_name,
+        onu_id: session?.onu_id,
+        issue_summary: meta.resumenFalla || rawText || 'Falla persistente de internet',
+        checks_performed: `Triage y reinicio completados. Cliente reportó: "${rawText || (isMedia ? '[Foto/Captura]' : 'N/A')}"`,
+        has_photo: isMedia ? 1 : 0,
+        has_speedtest: 0,
+        all_devices: meta.triageAlcance === 'TODOS_DISPOSITIVOS' ? 1 : 0,
+        status: 'ABIERTO',
+        is_out_of_hours: outOfHours ? 1 : 0,
+      });
+
+      if (session?.client_id) {
+        await WispHubService.crearTicketSoporte(
+          session.client_id,
+          `Soporte Falla - ${ticket.folio}`,
+          `Reporte persistente sin solución automática. Diagnóstico: ${ticket.checks_performed}. Folio: ${ticket.folio}`,
+          'Media'
+        ).catch(() => {});
+      }
+
+      const nombreLimpio = formatDisplayName(session?.client_name, true);
+      const nombre = nombreLimpio ? ` *${nombreLimpio}*` : '';
+
+      await this.enviarYLoguear(
+        phone,
+        `Enterado${nombre}. Hemos generado tu reporte formal de soporte técnico *#${ticket.folio}* para que nuestro equipo técnico revise tu línea a detalle y te dé solución.${notaHorario}\n\n¡Muchas gracias por tu reporte!`,
+        'FALLA_INTERNET',
+        `TICKET_CREADO_FINAL_${ticket.folio}`,
+        targetJid
+      );
+    }
 
     await this.marcarConsultaFinalizada(phone, session);
   }
@@ -2040,14 +2038,19 @@ export class BotOrchestrator {
         }
 
         // Sin ticket previo pero velocidad óptima
+        const extraHolgura = bajadaNum && planMegasNum && bajadaNum > planMegasNum
+          ? ` (incluso estás recibiendo un poco más de megas por la holgura del enlace)`
+          : '';
         const msj =
           `¡Recibí tu prueba de velocidad de Speedtest! 📊\n\n` +
-          `• *Descarga:* ${bajada}\n` +
-          `• *Subida:* ${subida}${ping ? `\n• *Ping:* ${ping}` : ''}${planTexto}\n\n` +
-          `✅ *¡Excelente noticia!* Tu velocidad de *${bajada}* se encuentra entregando el *100% de tu paquete contratado* (*${planContratado}* de ${planMegasNum || '40'} Mbps).\n\n` +
-          `📡 Tu servicio de internet se encuentra funcionando en óptimas condiciones. ¡Muchas gracias por realizar la prueba!`;
+          `• *Descarga (Download):* ${bajada}\n` +
+          `• *Subida (Upload):* ${subida}${ping ? `\n• *Ping:* ${ping}` : ''}${planTexto}\n\n` +
+          `✅ *¡Excelente noticia!* Tu velocidad de *${bajada}* está entregando el *100% de tu paquete contratado* (*${planContratado || 'Plan Fibra'}* de ${planMegasNum || '40'} Mbps)${extraHolgura}.\n\n` +
+          `📡 Tu línea de fibra óptica y tu conexión en la central están operando en óptimas condiciones.\n\n` +
+          `💡 *Recomendación:* Si notas lentitud en algún dispositivo o aplicación en particular, puede deberse a la distancia o saturación Wi-Fi de ese equipo. Te sugerimos acercarte al módem o reconectar el Wi-Fi de tu dispositivo.\n\n` +
+          `¡Muchas gracias por realizar la comprobación! En *${this.getIspName()}* seguimos a tus órdenes.`;
 
-        await this.enviarYLoguear(phone, msj, 'CONSULTA_GENERAL', 'SPEEDTEST_OPTIMO_SIN_REPORTE', targetJid);
+        await this.enviarYLoguear(phone, msj, 'FALLA_INTERNET', 'SPEEDTEST_OPTIMO_SIN_TICKET', targetJid);
         await this.marcarConsultaFinalizada(phone, session);
         return;
       }
