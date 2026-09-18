@@ -4,41 +4,41 @@ export function getAdminDashboardHtml(): string {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CloudWareMx - Admin SPA Suite</title>
+  <title>CloudWareMx - Admin ISP Control Center</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg-base: #030712;
+      --bg-base: #090d16;
       --bg-surface: rgba(17, 24, 39, 0.75);
-      --bg-surface-elevated: rgba(31, 41, 55, 0.85);
-      --bg-sidebar: rgba(10, 15, 30, 0.92);
-      --card-border: rgba(255, 255, 255, 0.08);
-      --card-border-hover: rgba(99, 102, 241, 0.4);
+      --bg-surface-elevated: rgba(30, 41, 59, 0.8);
+      --bg-sidebar: rgba(11, 15, 25, 0.95);
+      --card-border: rgba(255, 255, 255, 0.07);
+      --card-border-hover: rgba(99, 102, 241, 0.35);
       --primary: #6366f1;
       --primary-hover: #4f46e5;
-      --primary-glow: rgba(99, 102, 241, 0.25);
+      --primary-glow: rgba(99, 102, 241, 0.2);
       --accent-cyan: #06b6d4;
       --accent-green: #10b981;
       --accent-amber: #f59e0b;
       --accent-rose: #f43f5e;
       --accent-purple: #a855f7;
-      --text-main: #f9fafb;
-      --text-muted: #9ca3af;
-      --text-dim: #6b7280;
-      --font-main: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      --font-main: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
       --font-mono: 'JetBrains Mono', monospace;
       --sidebar-width: 260px;
-      --sidebar-collapsed-width: 76px;
+      --sidebar-collapsed-width: 72px;
       --topbar-height: 64px;
       --radius-sm: 8px;
       --radius-md: 14px;
       --radius-lg: 20px;
-      --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.25);
-      --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.4);
+      --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+      --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.45);
       --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.6);
-      --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      --transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     * {
@@ -50,9 +50,9 @@ export function getAdminDashboardHtml(): string {
     body {
       background-color: var(--bg-base);
       background-image: 
-        radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.12) 0px, transparent 50%),
-        radial-gradient(at 100% 100%, rgba(6, 182, 212, 0.08) 0px, transparent 50%),
-        radial-gradient(at 50% 50%, rgba(16, 185, 129, 0.04) 0px, transparent 50%);
+        radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.08) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(6, 182, 212, 0.06) 0px, transparent 50%),
+        radial-gradient(at 50% 50%, rgba(16, 185, 129, 0.03) 0px, transparent 50%);
       color: var(--text-main);
       font-family: var(--font-main);
       min-height: 100vh;
@@ -60,35 +60,41 @@ export function getAdminDashboardHtml(): string {
       display: flex;
     }
 
-    /* Custom Scrollbars */
-    ::-webkit-scrollbar {
-      width: 6px;
-      height: 6px;
-    }
-    ::-webkit-scrollbar-track {
-      background: rgba(0, 0, 0, 0.2);
-    }
-    ::-webkit-scrollbar-thumb {
-      background: rgba(255, 255, 255, 0.15);
-      border-radius: 4px;
-    }
-    ::-webkit-scrollbar-thumb:hover {
-      background: var(--primary);
-    }
+    /* Scrollbars */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.2); }
+    ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.12); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--primary); }
 
-    /* Layout */
+    /* SVG Icons Helper */
+    .svg-icon {
+      width: 18px;
+      height: 18px;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      fill: none;
+      flex-shrink: 0;
+      display: inline-block;
+      vertical-align: middle;
+    }
+    .svg-icon-lg { width: 22px; height: 22px; }
+    .svg-icon-sm { width: 15px; height: 15px; }
+
+    /* App Layout */
     #app-container {
       display: flex;
       width: 100%;
       min-height: 100vh;
     }
 
-    /* Sidebar */
+    /* Sidebar Navigation */
     aside#sidebar {
       width: var(--sidebar-width);
       background: var(--bg-sidebar);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
       border-right: 1px solid var(--card-border);
       display: flex;
       flex-direction: column;
@@ -97,7 +103,7 @@ export function getAdminDashboardHtml(): string {
       bottom: 0;
       left: 0;
       z-index: 100;
-      transition: var(--transition);
+      transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1), transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     aside#sidebar.collapsed {
@@ -124,14 +130,14 @@ export function getAdminDashboardHtml(): string {
     }
 
     .brand-logo {
-      width: 40px;
-      height: 40px;
+      width: 38px;
+      height: 38px;
       border-radius: var(--radius-sm);
       background: linear-gradient(135deg, var(--primary), var(--accent-cyan));
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 20px;
+      color: #fff;
       box-shadow: 0 4px 16px var(--primary-glow);
       flex-shrink: 0;
     }
@@ -139,22 +145,20 @@ export function getAdminDashboardHtml(): string {
     .brand-text {
       display: flex;
       flex-direction: column;
-      transition: var(--transition);
+      transition: opacity 0.2s ease;
     }
 
     .brand-title {
       font-weight: 800;
-      font-size: 16px;
+      font-size: 15px;
       letter-spacing: -0.3px;
-      background: linear-gradient(90deg, #fff, #9ca3af);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
+      color: #fff;
     }
 
     .brand-subtitle {
       font-size: 10px;
       color: var(--accent-cyan);
-      font-weight: 600;
+      font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.8px;
     }
@@ -163,8 +167,9 @@ export function getAdminDashboardHtml(): string {
       display: none;
     }
 
+    /* Persistent Toggle Button (NEVER vanishes) */
     .sidebar-toggle-btn {
-      background: transparent;
+      background: rgba(255, 255, 255, 0.04);
       border: 1px solid var(--card-border);
       color: var(--text-muted);
       width: 28px;
@@ -175,16 +180,28 @@ export function getAdminDashboardHtml(): string {
       align-items: center;
       justify-content: center;
       transition: var(--transition);
+      flex-shrink: 0;
     }
 
     .sidebar-toggle-btn:hover {
-      color: var(--text-main);
-      background: rgba(255, 255, 255, 0.05);
+      color: #fff;
+      background: rgba(255, 255, 255, 0.1);
       border-color: var(--primary);
     }
 
-    #sidebar.collapsed .sidebar-toggle-btn {
+    #sidebar.collapsed .sidebar-header {
+      justify-content: center;
+      padding: 0;
+    }
+
+    #sidebar.collapsed .sidebar-brand {
       display: none;
+    }
+
+    #sidebar.collapsed .sidebar-toggle-btn {
+      margin: 0 auto;
+      width: 36px;
+      height: 36px;
     }
 
     .sidebar-nav {
@@ -192,7 +209,7 @@ export function getAdminDashboardHtml(): string {
       padding: 16px 10px;
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 5px;
       overflow-y: auto;
     }
 
@@ -236,9 +253,9 @@ export function getAdminDashboardHtml(): string {
 
     .nav-item.active {
       color: #fff;
-      background: linear-gradient(90deg, rgba(99, 102, 241, 0.2), rgba(6, 182, 212, 0.1));
-      border-color: rgba(99, 102, 241, 0.4);
-      box-shadow: 0 2px 10px rgba(99, 102, 241, 0.15);
+      background: linear-gradient(90deg, rgba(99, 102, 241, 0.18), rgba(6, 182, 212, 0.08));
+      border-color: rgba(99, 102, 241, 0.35);
+      box-shadow: 0 2px 10px rgba(99, 102, 241, 0.12);
     }
 
     .nav-item.active::before {
@@ -253,8 +270,7 @@ export function getAdminDashboardHtml(): string {
     }
 
     .nav-icon {
-      font-size: 18px;
-      width: 22px;
+      width: 20px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -277,12 +293,6 @@ export function getAdminDashboardHtml(): string {
       background: rgba(244, 63, 94, 0.2);
       color: #fda4af;
       border-color: rgba(244, 63, 94, 0.4);
-      animation: pulse-badge 2s infinite;
-    }
-
-    @keyframes pulse-badge {
-      0%, 100% { transform: scale(1); }
-      50% { transform: scale(1.08); }
     }
 
     #sidebar.collapsed .nav-badge,
@@ -290,8 +300,13 @@ export function getAdminDashboardHtml(): string {
       display: none;
     }
 
+    #sidebar.collapsed .nav-item {
+      justify-content: center;
+      padding: 12px 0;
+    }
+
     .sidebar-footer {
-      padding: 14px;
+      padding: 12px 14px;
       border-top: 1px solid var(--card-border);
       display: flex;
       align-items: center;
@@ -299,15 +314,15 @@ export function getAdminDashboardHtml(): string {
     }
 
     .user-avatar {
-      width: 36px;
-      height: 36px;
+      width: 34px;
+      height: 34px;
       border-radius: 50%;
       background: linear-gradient(135deg, var(--accent-purple), var(--primary));
       display: flex;
       align-items: center;
       justify-content: center;
       font-weight: 700;
-      font-size: 14px;
+      font-size: 13px;
       color: #fff;
       flex-shrink: 0;
     }
@@ -340,11 +355,17 @@ export function getAdminDashboardHtml(): string {
       display: none;
     }
 
+    #sidebar.collapsed .sidebar-footer {
+      flex-direction: column;
+      padding: 12px 0;
+      gap: 10px;
+      justify-content: center;
+    }
+
     .btn-logout {
       background: transparent;
-      border: none;
+      border: 1px solid transparent;
       color: var(--text-dim);
-      font-size: 16px;
       cursor: pointer;
       padding: 6px;
       border-radius: 6px;
@@ -352,11 +373,13 @@ export function getAdminDashboardHtml(): string {
       display: flex;
       align-items: center;
       justify-content: center;
+      flex-shrink: 0;
     }
 
     .btn-logout:hover {
       color: var(--accent-rose);
-      background: rgba(244, 63, 94, 0.1);
+      background: rgba(244, 63, 94, 0.12);
+      border-color: rgba(244, 63, 94, 0.25);
     }
 
     /* Main Content Area */
@@ -366,7 +389,7 @@ export function getAdminDashboardHtml(): string {
       display: flex;
       flex-direction: column;
       min-height: 100vh;
-      transition: var(--transition);
+      transition: margin-left 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     aside#sidebar.collapsed + main#main-content {
@@ -376,9 +399,9 @@ export function getAdminDashboardHtml(): string {
     /* Topbar */
     header.topbar {
       height: var(--topbar-height);
-      background: rgba(10, 15, 30, 0.7);
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
+      background: rgba(11, 15, 25, 0.75);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
       border-bottom: 1px solid var(--card-border);
       position: sticky;
       top: 0;
@@ -400,10 +423,9 @@ export function getAdminDashboardHtml(): string {
       background: transparent;
       border: 1px solid var(--card-border);
       color: var(--text-main);
-      width: 38px;
-      height: 38px;
+      width: 36px;
+      height: 36px;
       border-radius: var(--radius-sm);
-      font-size: 20px;
       cursor: pointer;
       align-items: center;
       justify-content: center;
@@ -416,7 +438,7 @@ export function getAdminDashboardHtml(): string {
     }
 
     .view-title {
-      font-size: 18px;
+      font-size: 17px;
       font-weight: 700;
       letter-spacing: -0.3px;
     }
@@ -462,7 +484,7 @@ export function getAdminDashboardHtml(): string {
       width: 100%;
       margin: 0 auto;
       display: none;
-      animation: fadeInView 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      animation: fadeInView 0.22s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     .view-container.active {
@@ -470,11 +492,11 @@ export function getAdminDashboardHtml(): string {
     }
 
     @keyframes fadeInView {
-      from { opacity: 0; transform: translateY(6px); }
+      from { opacity: 0; transform: translateY(4px); }
       to { opacity: 1; transform: translateY(0); }
     }
 
-    /* UI Cards & Glass Panels */
+    /* Glass Cards */
     .glass-card {
       background: var(--bg-surface);
       backdrop-filter: blur(16px);
@@ -494,14 +516,14 @@ export function getAdminDashboardHtml(): string {
     .grid-metrics {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 18px;
+      gap: 16px;
       margin-bottom: 24px;
     }
 
     .metric-card {
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      gap: 8px;
     }
 
     .metric-header {
@@ -516,13 +538,13 @@ export function getAdminDashboardHtml(): string {
     .metric-icon-box {
       width: 36px;
       height: 36px;
-      border-radius: 10px;
+      border-radius: 8px;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 18px;
-      background: rgba(255, 255, 255, 0.05);
+      background: rgba(255, 255, 255, 0.04);
       border: 1px solid var(--card-border);
+      color: var(--accent-cyan);
     }
 
     .metric-value {
@@ -541,7 +563,7 @@ export function getAdminDashboardHtml(): string {
       gap: 6px;
     }
 
-    /* Buttons & Form Controls */
+    /* Buttons */
     .btn {
       display: inline-flex;
       align-items: center;
@@ -569,23 +591,22 @@ export function getAdminDashboardHtml(): string {
     .btn-primary:hover {
       background: linear-gradient(135deg, #4f46e5, #4338ca);
       transform: translateY(-1px);
-      box-shadow: 0 6px 18px var(--primary-glow);
     }
 
     .btn-secondary {
-      background: rgba(255, 255, 255, 0.06);
+      background: rgba(255, 255, 255, 0.05);
       border-color: var(--card-border);
       color: var(--text-main);
     }
 
     .btn-secondary:hover {
-      background: rgba(255, 255, 255, 0.12);
-      border-color: rgba(255, 255, 255, 0.2);
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.18);
     }
 
     .btn-success {
       background: rgba(16, 185, 129, 0.15);
-      border-color: rgba(16, 185, 129, 0.4);
+      border-color: rgba(16, 185, 129, 0.35);
       color: #34d399;
     }
 
@@ -595,7 +616,7 @@ export function getAdminDashboardHtml(): string {
 
     .btn-danger {
       background: rgba(244, 63, 94, 0.15);
-      border-color: rgba(244, 63, 94, 0.4);
+      border-color: rgba(244, 63, 94, 0.35);
       color: #fda4af;
     }
 
@@ -604,7 +625,7 @@ export function getAdminDashboardHtml(): string {
     }
 
     .btn-sm {
-      padding: 5px 10px;
+      padding: 6px 12px;
       font-size: 12px;
       border-radius: 6px;
     }
@@ -625,11 +646,6 @@ export function getAdminDashboardHtml(): string {
     .form-control:focus {
       border-color: var(--primary);
       box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
-      background: rgba(0, 0, 0, 0.5);
-    }
-
-    select.form-control {
-      cursor: pointer;
     }
 
     .form-group {
@@ -684,7 +700,7 @@ export function getAdminDashboardHtml(): string {
       background: rgba(255, 255, 255, 0.03);
     }
 
-    /* Badges & Status Tags */
+    /* Badges */
     .badge {
       display: inline-flex;
       align-items: center;
@@ -704,9 +720,7 @@ export function getAdminDashboardHtml(): string {
     .badge-info { background: rgba(6, 182, 212, 0.15); color: #67e8f9; border: 1px solid rgba(6, 182, 212, 0.3); }
     .badge-purple { background: rgba(168, 85, 247, 0.15); color: #d8b4fe; border: 1px solid rgba(168, 85, 247, 0.3); }
 
-    /* ==========================================
-       WHATSAPP LIVE CHAT VIEW
-       ========================================== */
+    /* Live Chat View */
     .chat-layout {
       display: grid;
       grid-template-columns: 320px 1fr;
@@ -744,7 +758,6 @@ export function getAdminDashboardHtml(): string {
       border-bottom: 1px solid rgba(255, 255, 255, 0.03);
       cursor: pointer;
       transition: var(--transition);
-      position: relative;
     }
 
     .chat-thread-item:hover {
@@ -757,14 +770,14 @@ export function getAdminDashboardHtml(): string {
     }
 
     .thread-avatar {
-      width: 42px;
-      height: 42px;
+      width: 40px;
+      height: 40px;
       border-radius: 50%;
-      background: linear-gradient(135deg, #374151, #1f2937);
+      background: linear-gradient(135deg, #334155, #1e293b);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 16px;
+      font-size: 14px;
       font-weight: 700;
       color: var(--accent-cyan);
       flex-shrink: 0;
@@ -808,23 +821,17 @@ export function getAdminDashboardHtml(): string {
       text-overflow: ellipsis;
     }
 
-    .thread-status-tag {
-      align-self: flex-start;
-      margin-top: 2px;
-      font-size: 9.5px;
-    }
-
     .chat-main-area {
       display: flex;
       flex-direction: column;
       height: 100%;
-      background: radial-gradient(circle at 50% 50%, rgba(17, 24, 39, 0.6) 0%, rgba(3, 7, 18, 0.9) 100%);
+      background: radial-gradient(circle at 50% 50%, rgba(17, 24, 39, 0.6) 0%, rgba(9, 13, 22, 0.95) 100%);
     }
 
     .chat-header-bar {
       padding: 12px 20px;
       border-bottom: 1px solid var(--card-border);
-      background: rgba(10, 15, 30, 0.6);
+      background: rgba(11, 15, 25, 0.6);
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -863,8 +870,8 @@ export function getAdminDashboardHtml(): string {
 
     .chat-bubble.in {
       align-self: flex-start;
-      background: #1f2937;
-      color: #f3f4f6;
+      background: #1e293b;
+      color: #f1f5f9;
       border-bottom-left-radius: 4px;
       border: 1px solid var(--card-border);
     }
@@ -891,7 +898,7 @@ export function getAdminDashboardHtml(): string {
     .chat-input-bar {
       padding: 14px 20px;
       border-top: 1px solid var(--card-border);
-      background: rgba(10, 15, 30, 0.8);
+      background: rgba(11, 15, 25, 0.85);
       display: flex;
       align-items: flex-end;
       gap: 12px;
@@ -916,9 +923,7 @@ export function getAdminDashboardHtml(): string {
       border-color: var(--primary);
     }
 
-    /* ==========================================
-       KANBAN TICKETS BOARD
-       ========================================== */
+    /* Kanban Tickets Board */
     .kanban-board {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
@@ -1012,9 +1017,7 @@ export function getAdminDashboardHtml(): string {
       margin-top: 4px;
     }
 
-    /* ==========================================
-       TOAST NOTIFICATION QUEUE (NO NATIVE ALERTS)
-       ========================================== */
+    /* Toast Notifications */
     #toast-container {
       position: fixed;
       bottom: 24px;
@@ -1041,7 +1044,7 @@ export function getAdminDashboardHtml(): string {
       align-items: flex-start;
       gap: 12px;
       color: #fff;
-      animation: slideInToast 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      animation: slideInToast 0.25s cubic-bezier(0.4, 0, 0.2, 1);
       position: relative;
       overflow: hidden;
     }
@@ -1052,7 +1055,7 @@ export function getAdminDashboardHtml(): string {
     }
 
     .toast.hide {
-      animation: slideOutToast 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+      animation: slideOutToast 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards;
     }
 
     @keyframes slideOutToast {
@@ -1061,7 +1064,6 @@ export function getAdminDashboardHtml(): string {
     }
 
     .toast-icon {
-      font-size: 18px;
       flex-shrink: 0;
       margin-top: 2px;
     }
@@ -1124,9 +1126,7 @@ export function getAdminDashboardHtml(): string {
     .toast.info .toast-icon { color: var(--accent-cyan); }
     .toast.info .toast-progress { background: var(--accent-cyan); }
 
-    /* ==========================================
-       GLASS MODAL SYSTEM (NO NATIVE ALERTS)
-       ========================================== */
+    /* Modals */
     .modal-backdrop {
       position: fixed;
       top: 0;
@@ -1141,20 +1141,14 @@ export function getAdminDashboardHtml(): string {
       align-items: center;
       justify-content: center;
       padding: 20px;
-      animation: fadeInBackdrop 0.2s ease-out;
     }
 
     .modal-backdrop.show {
       display: flex;
     }
 
-    @keyframes fadeInBackdrop {
-      from { opacity: 0; }
-      to { opacity: 1; }
-    }
-
     .modal-box {
-      background: #111827;
+      background: #0f172a;
       border: 1px solid var(--card-border-hover);
       border-radius: var(--radius-md);
       box-shadow: var(--shadow-lg);
@@ -1163,11 +1157,11 @@ export function getAdminDashboardHtml(): string {
       display: flex;
       flex-direction: column;
       overflow: hidden;
-      animation: scaleUpModal 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      animation: scaleUpModal 0.22s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     @keyframes scaleUpModal {
-      from { opacity: 0; transform: scale(0.95); }
+      from { opacity: 0; transform: scale(0.96); }
       to { opacity: 1; transform: scale(1); }
     }
 
@@ -1208,14 +1202,14 @@ export function getAdminDashboardHtml(): string {
       background: rgba(0, 0, 0, 0.2);
     }
 
-    /* Auth Login Overlay View */
+    /* Auth Login Overlay */
     #login-overlay {
       position: fixed;
       top: 0;
       left: 0;
       right: 0;
       bottom: 0;
-      background: radial-gradient(circle at 50% 50%, #111827 0%, #030712 100%);
+      background: radial-gradient(circle at 50% 50%, #0f172a 0%, #020617 100%);
       z-index: 2000;
       display: flex;
       align-items: center;
@@ -1225,8 +1219,8 @@ export function getAdminDashboardHtml(): string {
 
     .login-box {
       width: 100%;
-      max-width: 400px;
-      background: rgba(17, 24, 39, 0.85);
+      max-width: 390px;
+      background: rgba(15, 23, 42, 0.85);
       backdrop-filter: blur(20px);
       -webkit-backdrop-filter: blur(20px);
       border: 1px solid var(--card-border);
@@ -1249,42 +1243,25 @@ export function getAdminDashboardHtml(): string {
       background: linear-gradient(90deg, transparent, var(--primary), var(--accent-cyan), transparent);
     }
 
-    /* Responsive */
+    /* Responsive adjustments */
     @media (max-width: 1024px) {
-      .kanban-board {
-        grid-template-columns: repeat(2, 1fr);
-      }
+      .kanban-board { grid-template-columns: repeat(2, 1fr); }
     }
 
     @media (max-width: 768px) {
-      aside#sidebar {
-        transform: translateX(-100%);
-      }
-      aside#sidebar.mobile-open {
-        transform: translateX(0);
-        width: 260px;
-      }
-      main#main-content {
-        margin-left: 0 !important;
-      }
-      .mobile-menu-btn {
-        display: flex;
-      }
-      .chat-layout {
-        grid-template-columns: 1fr;
-      }
-      .chat-sidebar {
-        display: none;
-      }
-      .chat-sidebar.mobile-active {
-        display: flex;
-      }
-      .kanban-board {
-        grid-template-columns: 1fr;
-      }
-      .grid-metrics {
-        grid-template-columns: 1fr;
-      }
+      aside#sidebar { transform: translateX(-100%); }
+      aside#sidebar.mobile-open { transform: translateX(0); width: 260px; }
+      main#main-content { margin-left: 0 !important; }
+      .mobile-menu-btn { display: flex; }
+      .chat-layout { grid-template-columns: 1fr; }
+      .chat-sidebar { display: none; }
+      .chat-sidebar.mobile-active { display: flex; }
+      .kanban-board { grid-template-columns: 1fr; }
+      .grid-metrics { grid-template-columns: 1fr 1fr; }
+    }
+
+    @media (max-width: 480px) {
+      .grid-metrics { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -1300,9 +1277,7 @@ export function getAdminDashboardHtml(): string {
         <h3 id="modal-title" class="modal-title">Título</h3>
         <button class="modal-close-btn" onclick="closeModal()">&times;</button>
       </div>
-      <div id="modal-body-content" class="modal-body">
-        <!-- Dynamic Content -->
-      </div>
+      <div id="modal-body-content" class="modal-body"></div>
       <div id="modal-footer-actions" class="modal-footer">
         <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
         <button id="modal-confirm-btn" class="btn btn-primary">Confirmar</button>
@@ -1310,13 +1285,15 @@ export function getAdminDashboardHtml(): string {
     </div>
   </div>
 
-  <!-- Login Overlay View (If unauthenticated) -->
+  <!-- Login Overlay (Shown if unauthenticated) -->
   <div id="login-overlay" style="display: none;">
     <div class="login-box">
       <div style="text-align: center;">
-        <div class="brand-logo" style="margin: 0 auto 12px; width: 52px; height: 52px; font-size: 26px;">⚡</div>
-        <h2 style="font-size: 22px; font-weight: 800; letter-spacing: -0.5px;">CloudWare ISP</h2>
-        <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">Panel Administrativo & Gestión del Bot</p>
+        <div class="brand-logo" style="margin: 0 auto 12px; width: 48px; height: 48px;">
+          <svg class="svg-icon svg-icon-lg" viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"></path></svg>
+        </div>
+        <h2 style="font-size: 20px; font-weight: 800; letter-spacing: -0.5px;">CloudWare ISP</h2>
+        <p style="font-size: 12.5px; color: var(--text-muted); margin-top: 4px;">Acceso al Panel de Administración</p>
       </div>
       <form id="login-form" onsubmit="handleLoginSubmit(event)">
         <div class="form-group">
@@ -1327,68 +1304,89 @@ export function getAdminDashboardHtml(): string {
           <label class="form-label">Contraseña</label>
           <input type="password" id="login-password" class="form-control" placeholder="••••••••" required autocomplete="current-password">
         </div>
-        <button type="submit" id="login-btn-submit" class="btn btn-primary" style="width: 100%; margin-top: 10px; padding: 12px;">
+        <button type="submit" id="login-btn-submit" class="btn btn-primary" style="width: 100%; margin-top: 8px; padding: 11px;">
           Ingresar al Panel
         </button>
       </form>
     </div>
   </div>
 
-  <!-- App Layout Container -->
+  <!-- Main App Layout Container -->
   <div id="app-container">
     
     <!-- Sidebar Navigation -->
     <aside id="sidebar">
       <div class="sidebar-header">
         <a href="#dashboard" class="sidebar-brand" onclick="navigateTo('dashboard')">
-          <div class="brand-logo">⚡</div>
+          <div class="brand-logo">
+            <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"></path></svg>
+          </div>
           <div class="brand-text">
             <span class="brand-title">CloudWareMx</span>
-            <span class="brand-subtitle">ISP Command</span>
+            <span class="brand-subtitle">ISP Control</span>
           </div>
         </a>
-        <button class="sidebar-toggle-btn" onclick="toggleSidebar()" title="Colapsar Sidebar">◀</button>
+        <button class="sidebar-toggle-btn" id="btn-sidebar-toggle" onclick="toggleSidebar()" title="Alternar Sidebar">
+          <svg id="toggle-icon-left" class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"></polyline></svg>
+          <svg id="toggle-icon-right" class="svg-icon svg-icon-sm" style="display: none;" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        </button>
       </div>
 
       <nav class="sidebar-nav">
         <div class="nav-category">Operación</div>
-        <div class="nav-item active" data-view="dashboard" onclick="navigateTo('dashboard')">
-          <span class="nav-icon">📊</span>
+        <div class="nav-item active" data-view="dashboard" onclick="navigateTo('dashboard')" title="Dashboard">
+          <span class="nav-icon">
+            <svg class="svg-icon" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect></svg>
+          </span>
           <span class="nav-text">Dashboard</span>
         </div>
-        <div class="nav-item" data-view="live-chat" onclick="navigateTo('live-chat')">
-          <span class="nav-icon">💬</span>
+        <div class="nav-item" data-view="live-chat" onclick="navigateTo('live-chat')" title="Live WhatsApp">
+          <span class="nav-icon">
+            <svg class="svg-icon" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+          </span>
           <span class="nav-text">Live WhatsApp</span>
           <span id="badge-live-chat" class="nav-badge" style="display: none;">0</span>
         </div>
-        <div class="nav-item" data-view="tickets" onclick="navigateTo('tickets')">
-          <span class="nav-icon">🎫</span>
+        <div class="nav-item" data-view="tickets" onclick="navigateTo('tickets')" title="Mesa de Tickets">
+          <span class="nav-icon">
+            <svg class="svg-icon" viewBox="0 0 24 24"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"></path><path d="M13 5v2"></path><path d="M13 17v2"></path><path d="M13 11v2"></path></svg>
+          </span>
           <span class="nav-text">Mesa de Tickets</span>
           <span id="badge-tickets-open" class="nav-badge alert-badge" style="display: none;">0</span>
         </div>
 
         <div class="nav-category">Red & Gestión</div>
-        <div class="nav-item" data-view="ipam" onclick="navigateTo('ipam')">
-          <span class="nav-icon">🌐</span>
+        <div class="nav-item" data-view="ipam" onclick="navigateTo('ipam')" title="IPAM & Pools">
+          <span class="nav-icon">
+            <svg class="svg-icon" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+          </span>
           <span class="nav-text">IPAM & Pools</span>
           <span id="badge-unconfigured-onus" class="nav-badge" style="display: none;">0</span>
         </div>
-        <div class="nav-item" data-view="audit" onclick="navigateTo('audit')">
-          <span class="nav-icon">⚡</span>
+        <div class="nav-item" data-view="audit" onclick="navigateTo('audit')" title="Auditoría SmartOLT">
+          <span class="nav-icon">
+            <svg class="svg-icon" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg>
+          </span>
           <span class="nav-text">Auditoría SmartOLT</span>
         </div>
-        <div class="nav-item" data-view="technicians" onclick="navigateTo('technicians')">
-          <span class="nav-icon">🔧</span>
+        <div class="nav-item" data-view="technicians" onclick="navigateTo('technicians')" title="Técnicos & PINs">
+          <span class="nav-icon">
+            <svg class="svg-icon" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><polyline points="16 11 18 13 22 9"></polyline></svg>
+          </span>
           <span class="nav-text">Técnicos & PINs</span>
         </div>
 
         <div class="nav-category">Sistema</div>
-        <div class="nav-item" data-view="settings" onclick="navigateTo('settings')">
-          <span class="nav-icon">⚙️</span>
+        <div class="nav-item" data-view="settings" onclick="navigateTo('settings')" title="Configuración">
+          <span class="nav-icon">
+            <svg class="svg-icon" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          </span>
           <span class="nav-text">Configuración</span>
         </div>
-        <div class="nav-item" id="nav-item-users" data-view="users" onclick="navigateTo('users')">
-          <span class="nav-icon">👥</span>
+        <div class="nav-item" id="nav-item-users" data-view="users" onclick="navigateTo('users')" title="Usuarios & Roles">
+          <span class="nav-icon">
+            <svg class="svg-icon" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+          </span>
           <span class="nav-text">Usuarios & Roles</span>
         </div>
       </nav>
@@ -1396,10 +1394,12 @@ export function getAdminDashboardHtml(): string {
       <div class="sidebar-footer">
         <div id="user-avatar-badge" class="user-avatar">AD</div>
         <div class="user-info">
-          <span id="user-display-name" class="user-name">Admin</span>
+          <span id="user-display-name" class="user-name">Administrador</span>
           <span id="user-display-role" class="user-role-badge">Superadmin</span>
         </div>
-        <button class="btn-logout" onclick="handleLogout()" title="Cerrar Sesión">🚪</button>
+        <button class="btn-logout" onclick="handleLogout()" title="Cerrar Sesión">
+          <svg class="svg-icon" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+        </button>
       </div>
     </aside>
 
@@ -1409,7 +1409,9 @@ export function getAdminDashboardHtml(): string {
       <!-- Topbar Header -->
       <header class="topbar">
         <div class="topbar-left">
-          <button class="mobile-menu-btn" onclick="toggleMobileMenu()">☰</button>
+          <button class="mobile-menu-btn" onclick="toggleMobileMenu()">
+            <svg class="svg-icon" viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+          </button>
           <div class="view-title-wrap">
             <h2 id="current-view-title" class="view-title">Resumen General</h2>
           </div>
@@ -1420,7 +1422,8 @@ export function getAdminDashboardHtml(): string {
             <span id="whatsapp-pill-label">WhatsApp Activo</span>
           </div>
           <button class="btn btn-secondary btn-sm" onclick="refreshCurrentView()" title="Actualizar datos">
-            🔄 Actualizar
+            <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"></path></svg>
+            <span>Actualizar</span>
           </button>
         </div>
       </header>
@@ -1430,35 +1433,46 @@ export function getAdminDashboardHtml(): string {
         <div class="grid-metrics">
           <div class="glass-card metric-card">
             <div class="metric-header">
-              <span>ONUs Registradas</span>
-              <div class="metric-icon-box">📡</div>
+              <span>ONUs SmartOLT</span>
+              <div class="metric-icon-box">
+                <svg class="svg-icon" viewBox="0 0 24 24"><path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M1.42 9a16 16 0 0 1 21.16 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg>
+              </div>
             </div>
             <div id="metric-onus" class="metric-value">--</div>
-            <div class="metric-footer">SmartOLT DB Sync</div>
+            <div class="metric-footer">Sincronizadas en Turso DB</div>
           </div>
+          
           <div class="glass-card metric-card">
             <div class="metric-header">
               <span>Clientes WispHub</span>
-              <div class="metric-icon-box">👥</div>
+              <div class="metric-icon-box" style="color: var(--primary);">
+                <svg class="svg-icon" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+              </div>
             </div>
             <div id="metric-wisphub" class="metric-value">--</div>
-            <div class="metric-footer">Base Local Turso</div>
+            <div class="metric-footer">Servicios activos registrados</div>
           </div>
+
           <div class="glass-card metric-card">
             <div class="metric-header">
-              <span>Tickets Abiertos</span>
-              <div class="metric-icon-box" style="color: var(--accent-amber);">🎫</div>
+              <span>Total de Clientes</span>
+              <div class="metric-icon-box" style="color: var(--accent-green);">
+                <svg class="svg-icon" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+              </div>
+            </div>
+            <div id="metric-total-clients" class="metric-value">--</div>
+            <div class="metric-footer">Base de datos unificada</div>
+          </div>
+
+          <div class="glass-card metric-card">
+            <div class="metric-header">
+              <span>Tickets de Soporte</span>
+              <div class="metric-icon-box" style="color: var(--accent-amber);">
+                <svg class="svg-icon" viewBox="0 0 24 24"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"></path></svg>
+              </div>
             </div>
             <div id="metric-tickets" class="metric-value">--</div>
-            <div class="metric-footer">Pendientes de atención</div>
-          </div>
-          <div class="glass-card metric-card">
-            <div class="metric-header">
-              <span>Conflictos IP</span>
-              <div class="metric-icon-box" style="color: var(--accent-rose);">⚠️</div>
-            </div>
-            <div id="metric-mismatch" class="metric-value">--</div>
-            <div class="metric-footer">SmartOLT vs WispHub</div>
+            <div id="metric-tickets-footer" class="metric-footer">Pendientes de atención</div>
           </div>
         </div>
 
@@ -1469,16 +1483,20 @@ export function getAdminDashboardHtml(): string {
             </div>
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px;">
               <button class="btn btn-secondary" onclick="testServiceConnection('turso')">
-                <span>🗄️ Turso DB</span>
+                <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
+                <span>Turso DB</span>
               </button>
               <button class="btn btn-secondary" onclick="testServiceConnection('smartolt')">
-                <span>🌐 SmartOLT</span>
+                <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+                <span>SmartOLT</span>
               </button>
               <button class="btn btn-secondary" onclick="testServiceConnection('wisphub')">
-                <span>⚡ WispHub</span>
+                <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"></path></svg>
+                <span>WispHub</span>
               </button>
               <button class="btn btn-secondary" onclick="testServiceConnection('groq')">
-                <span>🤖 Groq AI</span>
+                <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line><line x1="9" y1="20" x2="9" y2="23"></line><line x1="15" y1="20" x2="15" y2="23"></line><line x1="20" y1="9" x2="23" y2="9"></line><line x1="20" y1="14" x2="23" y2="14"></line><line x1="1" y1="9" x2="4" y2="9"></line><line x1="1" y1="14" x2="4" y2="14"></line></svg>
+                <span>Groq AI</span>
               </button>
             </div>
           </div>
@@ -1489,10 +1507,12 @@ export function getAdminDashboardHtml(): string {
             </div>
             <div style="display: flex; flex-direction: column; gap: 10px;">
               <button class="btn btn-primary" onclick="triggerSmartOltSync(false)">
-                <span>🔄 Sincronizar SmartOLT</span>
+                <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"></path></svg>
+                <span>Sincronizar SmartOLT</span>
               </button>
               <button class="btn btn-secondary" onclick="triggerWisphubSync()">
-                <span>🔄 Sincronizar WispHub</span>
+                <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"></path></svg>
+                <span>Sincronizar WispHub</span>
               </button>
             </div>
           </div>
@@ -1523,17 +1543,13 @@ export function getAdminDashboardHtml(): string {
       <!-- VIEW 2: LIVE WHATSAPP CHAT -->
       <section id="view-live-chat" class="view-container">
         <div class="chat-layout">
-          <!-- Left threads list -->
           <div class="chat-sidebar" id="chat-threads-sidebar">
             <div class="chat-search-header">
               <input type="text" id="chat-filter-input" class="form-control" placeholder="Buscar cliente o número..." oninput="filterChatThreads(this.value)">
             </div>
-            <div id="chat-threads-container" class="chat-threads-list">
-              <!-- Rendered dynamically -->
-            </div>
+            <div id="chat-threads-container" class="chat-threads-list"></div>
           </div>
 
-          <!-- Right conversation pane -->
           <div class="chat-main-area">
             <div id="chat-active-header" class="chat-header-bar" style="display: none;">
               <div class="chat-header-left">
@@ -1547,24 +1563,23 @@ export function getAdminDashboardHtml(): string {
               <div style="display: flex; align-items: center; gap: 10px;">
                 <div id="takeover-status-indicator" class="badge badge-success">🤖 Bot Automático</div>
                 <button id="btn-toggle-takeover" class="btn btn-secondary btn-sm" onclick="toggleCurrentChatTakeover()">
-                  ⏸️ Pausar Bot
+                  Pausar Bot
                 </button>
               </div>
             </div>
 
             <div id="chat-empty-state" style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-dim); gap: 12px;">
-              <span style="font-size: 42px;">💬</span>
-              <p>Selecciona una conversación del panel izquierdo para chatear en tiempo real.</p>
+              <svg class="svg-icon" style="width: 48px; height: 48px; opacity: 0.5;" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+              <p>Selecciona una conversación para chatear en tiempo real.</p>
             </div>
 
-            <div id="chat-messages-wrap" class="chat-messages-container" style="display: none;">
-              <!-- Rendered message bubbles -->
-            </div>
+            <div id="chat-messages-wrap" class="chat-messages-container" style="display: none;"></div>
 
             <div id="chat-input-container" class="chat-input-bar" style="display: none;">
-              <textarea id="chat-text-input" class="chat-input-box" placeholder="Escribe un mensaje... (Enter para enviar, Shift+Enter nueva línea)" rows="1" onkeydown="handleChatInputKeyDown(event)"></textarea>
+              <textarea id="chat-text-input" class="chat-input-box" placeholder="Escribe un mensaje... (Enter para enviar, Shift+Enter para nueva línea)" rows="1" onkeydown="handleChatInputKeyDown(event)"></textarea>
               <button class="btn btn-primary" onclick="sendActiveChatMessage()" style="height: 42px; padding: 0 18px;">
-                <span>Enviar</span> 🚀
+                <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                <span>Enviar</span>
               </button>
             </div>
           </div>
@@ -1576,45 +1591,42 @@ export function getAdminDashboardHtml(): string {
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
           <div>
             <h3 style="font-size: 16px; font-weight: 700;">Tablero de Soporte Técnico</h3>
-            <p style="font-size: 12px; color: var(--text-muted);">Mueve y asigna técnicos a los folios generados por el bot.</p>
+            <p style="font-size: 12px; color: var(--text-muted);">Mueve y asigna técnicos a los folios de servicio.</p>
           </div>
           <button class="btn btn-secondary btn-sm" onclick="loadTicketsData()">
-            🔄 Recargar Tablero
+            <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"></path></svg>
+            <span>Recargar Tablero</span>
           </button>
         </div>
 
         <div class="kanban-board">
-          <!-- Column 1: ABIERTO -->
           <div class="kanban-column">
             <div class="kanban-col-header" style="border-top: 3px solid var(--accent-amber);">
-              <span>🟡 ABIERTOS</span>
+              <span>ABIERTOS</span>
               <span id="badge-count-abierto" class="badge badge-warning">0</span>
             </div>
             <div id="col-tickets-abierto" class="kanban-cards-wrap"></div>
           </div>
 
-          <!-- Column 2: EN PROCESO -->
           <div class="kanban-column">
             <div class="kanban-col-header" style="border-top: 3px solid var(--accent-cyan);">
-              <span>🔵 EN PROCESO</span>
+              <span>EN PROCESO</span>
               <span id="badge-count-proceso" class="badge badge-info">0</span>
             </div>
             <div id="col-tickets-en-proceso" class="kanban-cards-wrap"></div>
           </div>
 
-          <!-- Column 3: VISITA TÉCNICA -->
           <div class="kanban-column">
             <div class="kanban-col-header" style="border-top: 3px solid var(--accent-purple);">
-              <span>🟣 VISITA TÉCNICA</span>
+              <span>VISITA TÉCNICA</span>
               <span id="badge-count-visita" class="badge badge-purple">0</span>
             </div>
             <div id="col-tickets-visita" class="kanban-cards-wrap"></div>
           </div>
 
-          <!-- Column 4: RESUELTO -->
           <div class="kanban-column">
             <div class="kanban-col-header" style="border-top: 3px solid var(--accent-green);">
-              <span>🟢 RESUELTOS</span>
+              <span>RESUELTOS</span>
               <span id="badge-count-resuelto" class="badge badge-success">0</span>
             </div>
             <div id="col-tickets-resuelto" class="kanban-cards-wrap"></div>
@@ -1626,9 +1638,7 @@ export function getAdminDashboardHtml(): string {
       <section id="view-ipam" class="view-container">
         <div class="glass-card" style="margin-bottom: 24px;">
           <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 14px;">Ocupación de Pools por VLAN</h3>
-          <div id="ipam-pools-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
-            <!-- Rendered pools progress -->
-          </div>
+          <div id="ipam-pools-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;"></div>
         </div>
 
         <div class="glass-card">
@@ -1637,7 +1647,10 @@ export function getAdminDashboardHtml(): string {
               <h3 style="font-size: 15px; font-weight: 700;">ONUs Nuevas Sin Configurar en SmartOLT</h3>
               <p style="font-size: 12px; color: var(--text-muted);">Detectadas en el PON para activación y asignación de IP.</p>
             </div>
-            <button class="btn btn-secondary btn-sm" onclick="loadIpamData()">🔄 Refrescar PON</button>
+            <button class="btn btn-secondary btn-sm" onclick="loadIpamData()">
+              <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"></path></svg>
+              <span>Refrescar PON</span>
+            </button>
           </div>
           <div class="table-responsive">
             <table class="data-table">
@@ -1664,8 +1677,8 @@ export function getAdminDashboardHtml(): string {
           <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;">
             <div style="display: flex; gap: 8px; flex-wrap: wrap;" id="audit-filter-buttons">
               <button class="btn btn-secondary btn-sm active" onclick="setAuditFilter('all')">Todos</button>
-              <button class="btn btn-danger btn-sm" onclick="setAuditFilter('MISMATCH')">⚠️ Mismatches</button>
-              <button class="btn btn-success btn-sm" onclick="setAuditFilter('MATCH')">✅ Correctos</button>
+              <button class="btn btn-danger btn-sm" onclick="setAuditFilter('MISMATCH')">Mismatches</button>
+              <button class="btn btn-success btn-sm" onclick="setAuditFilter('MATCH')">Correctos</button>
               <button class="btn btn-secondary btn-sm" onclick="setAuditFilter('ONLY_SMARTOLT')">Solo SmartOLT</button>
               <button class="btn btn-secondary btn-sm" onclick="setAuditFilter('ONLY_WISPHUB')">Solo WispHub</button>
             </div>
@@ -1709,7 +1722,8 @@ export function getAdminDashboardHtml(): string {
             <p style="font-size: 12px; color: var(--text-muted);">Gestiona los PINs de 5 dígitos para consultas y diagnósticos en WhatsApp.</p>
           </div>
           <button class="btn btn-primary" onclick="openNewTechnicianModal()">
-            <span>➕ Nuevo Técnico</span>
+            <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            <span>Nuevo Técnico</span>
           </button>
         </div>
 
@@ -1741,11 +1755,11 @@ export function getAdminDashboardHtml(): string {
           <div class="glass-card">
             <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 14px;">Vinculación de WhatsApp (Evolution API)</h3>
             <div id="evolution-qr-container" style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 220px; background: rgba(0,0,0,0.3); border-radius: var(--radius-sm); margin-bottom: 16px; padding: 16px;">
-              <span style="font-size: 36px; margin-bottom: 8px;">📡</span>
+              <svg class="svg-icon" style="width: 44px; height: 44px; margin-bottom: 8px; color: var(--accent-cyan);" viewBox="0 0 24 24"><path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M1.42 9a16 16 0 0 1 21.16 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg>
               <p id="evolution-status-text" style="font-size: 13px; color: var(--text-muted);">Consultando estado de WhatsApp...</p>
             </div>
             <div style="display: flex; gap: 10px;">
-              <button class="btn btn-secondary btn-sm" style="flex: 1;" onclick="fetchWhatsAppStatus()">🔄 Refrescar QR</button>
+              <button class="btn btn-secondary btn-sm" style="flex: 1;" onclick="fetchWhatsAppStatus()">Refrescar QR</button>
               <button class="btn btn-danger btn-sm" onclick="disconnectWhatsAppSession()">Desvincular</button>
             </div>
           </div>
@@ -1778,9 +1792,9 @@ export function getAdminDashboardHtml(): string {
           <h3 style="font-size: 15px; font-weight: 700; color: var(--accent-rose); margin-bottom: 12px;">Zona de Pruebas & Reset</h3>
           <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">Elimina datos de prueba sin afectar la base de datos de producción.</p>
           <div style="display: flex; gap: 12px; flex-wrap: wrap;">
-            <button class="btn btn-danger btn-sm" onclick="clearSessionsData()">🗑️ Vaciar Sesiones</button>
-            <button class="btn btn-danger btn-sm" onclick="clearLogsData()">🗑️ Vaciar Historial Logs</button>
-            <button class="btn btn-danger btn-sm" onclick="clearTicketsData()">🗑️ Vaciar Tickets</button>
+            <button class="btn btn-danger btn-sm" onclick="clearSessionsData()">Vaciar Sesiones</button>
+            <button class="btn btn-danger btn-sm" onclick="clearLogsData()">Vaciar Historial Logs</button>
+            <button class="btn btn-danger btn-sm" onclick="clearTicketsData()">Vaciar Tickets</button>
           </div>
         </div>
       </section>
@@ -1793,7 +1807,8 @@ export function getAdminDashboardHtml(): string {
             <p style="font-size: 12px; color: var(--text-muted);">Asigna permisos de superadmin, soporte, técnico o facturación.</p>
           </div>
           <button class="btn btn-primary" onclick="openNewAdminUserModal()">
-            <span>➕ Crear Administrador</span>
+            <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            <span>Crear Administrador</span>
           </button>
         </div>
 
@@ -1820,38 +1835,34 @@ export function getAdminDashboardHtml(): string {
     </main>
   </div>
 
-  <!-- SPA Client-Side Application Logic -->
+  <!-- SPA Client Logic -->
   <script>
-    // State Store
     const state = {
       token: localStorage.getItem('cloudware_admin_token') || '',
       user: null,
       currentView: 'dashboard',
       chats: [],
       activeChatPhone: null,
-      activeChatData: null,
       tickets: [],
       audit: { filter: 'all', search: '', page: 1, limit: 30, total: 0 },
       technicians: [],
       adminUsers: [],
-      sseConnected: false,
+      isSidebarCollapsed: false,
     };
 
-    // ==========================================
-    // TOAST NOTIFICATION ENGINE (Zero native alerts)
-    // ==========================================
+    // Toast Engine
     function showToast(title, message, type = 'info', duration = 3500) {
       const container = document.getElementById('toast-container');
       const toast = document.createElement('div');
       toast.className = 'toast ' + type;
 
-      let icon = 'ℹ️';
-      if (type === 'success') icon = '✅';
-      if (type === 'error') icon = '❌';
-      if (type === 'warning') icon = '⚠️';
+      let iconSvg = '<svg class="svg-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>';
+      if (type === 'success') iconSvg = '<svg class="svg-icon" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>';
+      if (type === 'error') iconSvg = '<svg class="svg-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>';
+      if (type === 'warning') iconSvg = '<svg class="svg-icon" viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>';
 
       toast.innerHTML = \`
-        <span class="toast-icon">\${icon}</span>
+        <span class="toast-icon">\${iconSvg}</span>
         <div class="toast-body">
           <div class="toast-title">\${title}</div>
           <div class="toast-message">\${message}</div>
@@ -1861,16 +1872,13 @@ export function getAdminDashboardHtml(): string {
       \`;
 
       container.appendChild(toast);
-
       setTimeout(() => {
         toast.classList.add('hide');
-        setTimeout(() => toast.remove(), 300);
+        setTimeout(() => toast.remove(), 250);
       }, duration);
     }
 
-    // ==========================================
-    // GLASS MODAL ENGINE (Zero native alerts)
-    // ==========================================
+    // Modal Engine
     function openModal(title, htmlContent, onConfirm, confirmText = 'Confirmar', isDanger = false) {
       const modal = document.getElementById('generic-modal');
       document.getElementById('modal-title').innerText = title;
@@ -1893,8 +1901,7 @@ export function getAdminDashboardHtml(): string {
     }
 
     function closeModal() {
-      const modal = document.getElementById('generic-modal');
-      modal.classList.remove('show');
+      document.getElementById('generic-modal').classList.remove('show');
     }
 
     function showConfirmDialog(title, message, onConfirm, isDanger = true) {
@@ -1902,9 +1909,7 @@ export function getAdminDashboardHtml(): string {
       openModal(title, content, onConfirm, 'Sí, Continuar', isDanger);
     }
 
-    // ==========================================
-    // HTTP CLIENT WITH AUTOMATIC AUTH HEADERS
-    // ==========================================
+    // API Fetch wrapper
     async function apiFetch(url, options = {}) {
       const headers = {
         'Content-Type': 'application/json',
@@ -1918,21 +1923,17 @@ export function getAdminDashboardHtml(): string {
       try {
         const res = await fetch(url, { ...options, headers });
         if (res.status === 401) {
-          // Token expired or invalid
           handleLogout();
-          throw new Error('Sesión expirada. Por favor inicie sesión.');
+          throw new Error('Sesión expirada.');
         }
-        const data = await res.json();
-        return data;
+        return await res.json();
       } catch (err) {
         console.error('API Fetch Error:', err);
         throw err;
       }
     }
 
-    // ==========================================
-    // AUTHENTICATION & LOGIN FLOW
-    // ==========================================
+    // Auth session
     async function checkAuthSession() {
       if (!state.token) {
         showLoginModal();
@@ -2013,20 +2014,16 @@ export function getAdminDashboardHtml(): string {
       document.getElementById('user-display-name').innerText = state.user.name || state.user.username;
       document.getElementById('user-display-role').innerText = state.user.role || 'Admin';
 
-      // Hide Users nav item if not superadmin
       const userNav = document.getElementById('nav-item-users');
       if (userNav) {
         userNav.style.display = state.user.role === 'superadmin' ? 'flex' : 'none';
       }
     }
 
-    // ==========================================
-    // NAVIGATION & VIEW SWITCHER (Zero Reloads)
-    // ==========================================
+    // Navigation
     function navigateTo(viewId) {
       state.currentView = viewId;
 
-      // Update Nav active classes
       document.querySelectorAll('.nav-item').forEach(item => {
         if (item.getAttribute('data-view') === viewId) {
           item.classList.add('active');
@@ -2035,7 +2032,6 @@ export function getAdminDashboardHtml(): string {
         }
       });
 
-      // Update View Containers
       document.querySelectorAll('.view-container').forEach(v => {
         v.classList.remove('active');
       });
@@ -2043,7 +2039,6 @@ export function getAdminDashboardHtml(): string {
       const target = document.getElementById('view-' + viewId);
       if (target) target.classList.add('active');
 
-      // Update Topbar Title
       const titles = {
         'dashboard': 'Resumen General',
         'live-chat': 'Live WhatsApp & Human Takeover',
@@ -2055,16 +2050,17 @@ export function getAdminDashboardHtml(): string {
         'users': 'Usuarios & Roles de Acceso',
       };
       document.getElementById('current-view-title').innerText = titles[viewId] || 'Panel';
-
-      // Close mobile menu if open
       document.getElementById('sidebar').classList.remove('mobile-open');
-
-      // Trigger view data refresh
       loadViewData(viewId);
     }
 
     function toggleSidebar() {
-      document.getElementById('sidebar').classList.toggle('collapsed');
+      const sidebar = document.getElementById('sidebar');
+      state.isSidebarCollapsed = !state.isSidebarCollapsed;
+      sidebar.classList.toggle('collapsed', state.isSidebarCollapsed);
+
+      document.getElementById('toggle-icon-left').style.display = state.isSidebarCollapsed ? 'none' : 'block';
+      document.getElementById('toggle-icon-right').style.display = state.isSidebarCollapsed ? 'block' : 'none';
     }
 
     function toggleMobileMenu() {
@@ -2078,42 +2074,23 @@ export function getAdminDashboardHtml(): string {
 
     function loadViewData(viewId) {
       switch (viewId) {
-        case 'dashboard':
-          loadDashboardData();
-          break;
-        case 'live-chat':
-          loadLiveChatData();
-          break;
-        case 'tickets':
-          loadTicketsData();
-          break;
-        case 'ipam':
-          loadIpamData();
-          break;
-        case 'audit':
-          loadAuditData();
-          break;
-        case 'technicians':
-          loadTechniciansData();
-          break;
-        case 'settings':
-          loadSettingsData();
-          break;
-        case 'users':
-          loadAdminUsersData();
-          break;
+        case 'dashboard': loadDashboardData(); break;
+        case 'live-chat': loadLiveChatData(); break;
+        case 'tickets': loadTicketsData(); break;
+        case 'ipam': loadIpamData(); break;
+        case 'audit': loadAuditData(); break;
+        case 'technicians': loadTechniciansData(); break;
+        case 'settings': loadSettingsData(); break;
+        case 'users': loadAdminUsersData(); break;
       }
     }
 
-    // ==========================================
-    // REAL-TIME SSE (Server-Sent Events) ENGINE
-    // ==========================================
+    // SSE Engine
     function initSSEStream() {
       if (window.EventSource) {
         const evtSource = new EventSource('/api/admin/live-stream');
         
         evtSource.addEventListener('connected', () => {
-          state.sseConnected = true;
           document.getElementById('whatsapp-live-pill').style.opacity = '1';
         });
 
@@ -2131,33 +2108,32 @@ export function getAdminDashboardHtml(): string {
           if (state.currentView === 'tickets') loadTicketsData();
           loadDashboardBadgeCounters();
         });
-
-        evtSource.onerror = () => {
-          state.sseConnected = false;
-        };
       }
     }
 
-    // ==========================================
-    // MODULE 1: DASHBOARD
-    // ==========================================
+    // Dashboard Data
     async function loadDashboardData() {
       try {
-        const [smartStats, wisphubStats, ticketStats, logsRes] = await Promise.all([
-          apiFetch('/api/smartolt/stats').catch(() => ({ stats: { total_onus: 0 } })),
-          apiFetch('/api/wisphub/stats').catch(() => ({ stats: { total: 0 } })),
-          apiFetch('/api/tickets/stats').catch(() => ({ stats: { abiertos: 0 } })),
+        const [smartRes, wisphubRes, ticketRes, logsRes] = await Promise.all([
+          apiFetch('/api/smartolt/stats').catch(() => ({ stats: { count: 0, total_onus: 0 } })),
+          apiFetch('/api/wisphub/stats').catch(() => ({ stats: { count: 0, total: 0 } })),
+          apiFetch('/api/tickets/stats').catch(() => ({ stats: { total: 0, abiertos: 0 } })),
           apiFetch('/api/logs?limit=8').catch(() => ({ logs: [] })),
         ]);
 
-        document.getElementById('metric-onus').innerText = (smartStats.stats?.total_onus || 0).toLocaleString();
-        document.getElementById('metric-wisphub').innerText = (wisphubStats.stats?.total || 0).toLocaleString();
-        document.getElementById('metric-tickets').innerText = (ticketStats.stats?.abiertos || 0).toLocaleString();
+        const onusCount = smartRes.stats?.count ?? smartRes.stats?.total_onus ?? 0;
+        const wisphubCount = wisphubRes.stats?.count ?? wisphubRes.stats?.total ?? 0;
+        const totalClients = Math.max(onusCount, wisphubCount) || (onusCount + wisphubCount);
+        const ticketsTotal = ticketRes.stats?.total ?? 0;
+        const ticketsOpen = ticketRes.stats?.abiertos ?? 0;
 
-        const auditRes = await apiFetch('/api/audit/ip-cross?filter=MISMATCH&limit=1').catch(() => ({ total: 0 }));
-        document.getElementById('metric-mismatch').innerText = (auditRes.total || 0).toLocaleString();
+        document.getElementById('metric-onus').innerText = Number(onusCount).toLocaleString();
+        document.getElementById('metric-wisphub').innerText = Number(wisphubCount).toLocaleString();
+        document.getElementById('metric-total-clients').innerText = Number(totalClients).toLocaleString();
+        document.getElementById('metric-tickets').innerText = Number(ticketsTotal).toLocaleString();
+        document.getElementById('metric-tickets-footer').innerText = \`\${ticketsOpen} abiertos / pendientes\`;
 
-        // Render Recent Logs Table
+        // Render Logs
         const tbody = document.getElementById('table-recent-logs-body');
         if (logsRes.logs && logsRes.logs.length > 0) {
           tbody.innerHTML = logsRes.logs.map(l => \`
@@ -2166,7 +2142,7 @@ export function getAdminDashboardHtml(): string {
               <td style="font-family: var(--font-mono); font-weight: 600;">\${l.phone}</td>
               <td>\${l.client_name || '<span style="color: var(--text-dim);">Desconocido</span>'}</td>
               <td><span class="badge \${l.direction === 'IN' ? 'badge-info' : 'badge-purple'}">\${l.direction === 'IN' ? 'Entrante' : 'Saliente'}</span></td>
-              <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">\${escapeHtml(l.message)}</td>
+              <td style="max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">\${escapeHtml(l.message)}</td>
             </tr>
           \`).join('');
         } else {
@@ -2205,7 +2181,7 @@ export function getAdminDashboardHtml(): string {
     }
 
     async function testServiceConnection(service) {
-      showToast('Comprobando...', \`Verificando conexión con \${service.toUpperCase()}...\`, 'info', 2000);
+      showToast('Comprobando', \`Verificando conexión con \${service.toUpperCase()}...\`, 'info', 2000);
       try {
         const res = await apiFetch('/api/test/' + service, { method: 'POST' });
         if (res.success) {
@@ -2248,9 +2224,7 @@ export function getAdminDashboardHtml(): string {
       }
     }
 
-    // ==========================================
-    // MODULE 2: LIVE WHATSAPP CHAT
-    // ==========================================
+    // Live Chat Module
     async function loadLiveChatData(reselect = true) {
       try {
         const res = await apiFetch('/api/admin/chats');
@@ -2285,7 +2259,7 @@ export function getAdminDashboardHtml(): string {
                 <span class="thread-time">\${formatShortTime(c.last_interaction)}</span>
               </div>
               <div class="thread-preview">\${escapeHtml(c.last_message || '')}</div>
-              <span class="badge \${c.is_human_paused ? 'badge-warning' : 'badge-info'} thread-status-tag">
+              <span class="badge \${c.is_human_paused ? 'badge-warning' : 'badge-info'}" style="align-self: flex-start; margin-top: 2px; font-size: 9.5px;">
                 \${c.is_human_paused ? '⏸️ Humano' : '🤖 Bot'}
               </span>
             </div>
@@ -2331,7 +2305,7 @@ export function getAdminDashboardHtml(): string {
     function renderChatMessages(messages) {
       const wrap = document.getElementById('chat-messages-wrap');
       if (!messages || messages.length === 0) {
-        wrap.innerHTML = '<div style="text-align: center; color: var(--text-dim); margin-top: 40px;">No hay mensajes registrados con este cliente.</div>';
+        wrap.innerHTML = '<div style="text-align: center; color: var(--text-dim); margin-top: 40px;">No hay mensajes registrados.</div>';
         return;
       }
 
@@ -2409,12 +2383,12 @@ export function getAdminDashboardHtml(): string {
       if (isPaused) {
         ind.className = 'badge badge-warning';
         ind.innerText = '⏸️ Operador Humano';
-        btn.innerText = '▶️ Reactivar Bot';
+        btn.innerText = 'Reactivar Bot';
         btn.className = 'btn btn-success btn-sm';
       } else {
         ind.className = 'badge badge-success';
         ind.innerText = '🤖 Bot Automático';
-        btn.innerText = '⏸️ Pausar Bot';
+        btn.innerText = 'Pausar Bot';
         btn.className = 'btn btn-secondary btn-sm';
       }
     }
@@ -2444,9 +2418,7 @@ export function getAdminDashboardHtml(): string {
       }
     }
 
-    // ==========================================
-    // MODULE 3: KANBAN TICKETS BOARD
-    // ==========================================
+    // Tickets Kanban Module
     async function loadTicketsData() {
       try {
         const res = await apiFetch('/api/tickets?limit=100');
@@ -2557,9 +2529,7 @@ export function getAdminDashboardHtml(): string {
       }, 'Guardar Cambios');
     }
 
-    // ==========================================
-    // MODULE 4: IPAM & POOLS
-    // ==========================================
+    // IPAM Module
     async function loadIpamData() {
       try {
         const [poolsRes, unconfRes] = await Promise.all([
@@ -2600,7 +2570,7 @@ export function getAdminDashboardHtml(): string {
               <td>\${escapeHtml(o.model || 'ONU')}</td>
               <td>
                 <button class="btn btn-primary btn-sm" onclick="openAuthorizeOnuModal('\${o.sn}', '\${o.olt_id || 1}')">
-                  ⚡ Aprovisionar
+                  Aprovisionar
                 </button>
               </td>
             </tr>
@@ -2642,7 +2612,7 @@ export function getAdminDashboardHtml(): string {
         const ip = document.getElementById('auth-onu-ip').value.trim();
 
         if (!name || !ip) {
-          showToast('Campos requeridos', 'Ingrese nombre e IP', 'warning');
+          showToast('Validación', 'Ingrese nombre e IP', 'warning');
           return false;
         }
 
@@ -2660,9 +2630,7 @@ export function getAdminDashboardHtml(): string {
       }, 'Aprovisionar en SmartOLT');
     }
 
-    // ==========================================
-    // MODULE 5: AUDITORÍA SMARTOLT VS WISPHUB
-    // ==========================================
+    // Audit Module
     async function loadAuditData() {
       try {
         const params = new URLSearchParams({
@@ -2698,7 +2666,7 @@ export function getAdminDashboardHtml(): string {
             \`;
           }).join('');
         } else {
-          tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-dim);">No se encontraron registros con este filtro.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-dim);">No se encontraron registros.</td></tr>';
         }
       } catch (err) {
         console.error('Error loading audit:', err);
@@ -2728,9 +2696,7 @@ export function getAdminDashboardHtml(): string {
       }
     }
 
-    // ==========================================
-    // MODULE 6: TÉCNICOS AUTORIZADOS & PINS
-    // ==========================================
+    // Technicians Module
     async function loadTechniciansData() {
       try {
         const res = await apiFetch('/api/technicians');
@@ -2837,7 +2803,7 @@ export function getAdminDashboardHtml(): string {
     }
 
     function deleteTechnicianItem(id, name) {
-      showConfirmDialog('Eliminar Técnico', \`¿Seguro que deseas eliminar el acceso a \${name}?\`, async () => {
+      showConfirmDialog('Eliminar Técnico', \`¿Deseas eliminar el acceso a \${name}?\`, async () => {
         const res = await apiFetch(\`/api/technicians/\${id}\`, { method: 'DELETE' });
         if (res.success) {
           showToast('Eliminado', 'Técnico eliminado.', 'success');
@@ -2846,9 +2812,7 @@ export function getAdminDashboardHtml(): string {
       });
     }
 
-    // ==========================================
-    // MODULE 7: CONFIGURACIÓN & INTEGRACIONES
-    // ==========================================
+    // Settings Module
     async function loadSettingsData() {
       try {
         const res = await apiFetch('/api/settings');
@@ -2894,9 +2858,9 @@ export function getAdminDashboardHtml(): string {
         const res = await apiFetch('/api/whatsapp/status');
         if (res.state === 'open') {
           container.innerHTML = \`
-            <span style="font-size: 48px; color: var(--accent-green);">✅</span>
-            <h4 style="font-size: 15px; font-weight: 700; margin-top: 8px;">WhatsApp Conectado</h4>
-            <p style="font-size: 12px; color: var(--text-muted);">Instancia activa y recibiendo webhooks.</p>
+            <svg class="svg-icon" style="width: 48px; height: 48px; color: var(--accent-green); margin-bottom: 8px;" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+            <h4 style="font-size: 15px; font-weight: 700;">WhatsApp Conectado</h4>
+            <p style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">Instancia activa y recibiendo mensajes.</p>
           \`;
           document.getElementById('whatsapp-pill-label').innerText = 'WhatsApp Activo';
         } else if (res.qr) {
@@ -2906,7 +2870,7 @@ export function getAdminDashboardHtml(): string {
           \`;
           document.getElementById('whatsapp-pill-label').innerText = 'WhatsApp Desconectado';
         } else {
-          container.innerHTML = '<p style="color: var(--text-muted);">Instancia de WhatsApp desconectada o cargando...</p>';
+          container.innerHTML = '<p style="color: var(--text-muted);">Instancia desconectada o esperando QR...</p>';
         }
       } catch (err) {
         text.innerText = 'No se pudo contactar a Evolution API';
@@ -2914,17 +2878,17 @@ export function getAdminDashboardHtml(): string {
     }
 
     async function disconnectWhatsAppSession() {
-      showConfirmDialog('Desvincular WhatsApp', '¿Deseas cerrar la sesión activa de WhatsApp para regenerar el QR?', async () => {
+      showConfirmDialog('Desvincular WhatsApp', '¿Deseas cerrar la sesión activa de WhatsApp?', async () => {
         const res = await apiFetch('/api/whatsapp/disconnect', { method: 'POST' });
         if (res.success) {
-          showToast('WhatsApp Desvinculado', 'Sesión cerrada exitosamente.', 'info');
+          showToast('Desvinculado', 'Sesión cerrada.', 'info');
           fetchWhatsAppStatus();
         }
       });
     }
 
     function clearSessionsData() {
-      showConfirmDialog('Vaciar Sesiones', '¿Deseas eliminar todas las sesiones de clientes en memoria de Turso?', async () => {
+      showConfirmDialog('Vaciar Sesiones', '¿Deseas eliminar todas las sesiones de clientes en Turso?', async () => {
         const res = await apiFetch('/api/sessions/clear-all', { method: 'DELETE' });
         showToast('Sesiones Vaciadas', res.message, 'success');
         loadDashboardData();
@@ -2932,7 +2896,7 @@ export function getAdminDashboardHtml(): string {
     }
 
     function clearLogsData() {
-      showConfirmDialog('Vaciar Historial', '¿Deseas vaciar todos los logs de conversación de prueba?', async () => {
+      showConfirmDialog('Vaciar Historial', '¿Deseas vaciar todos los logs de conversación?', async () => {
         const res = await apiFetch('/api/logs/clear-all', { method: 'DELETE' });
         showToast('Historial Vaciado', res.message, 'success');
         loadDashboardData();
@@ -2940,16 +2904,14 @@ export function getAdminDashboardHtml(): string {
     }
 
     function clearTicketsData() {
-      showConfirmDialog('Vaciar Tickets', '¿Deseas eliminar todos los tickets de soporte registrados?', async () => {
+      showConfirmDialog('Vaciar Tickets', '¿Deseas eliminar todos los tickets de prueba?', async () => {
         const res = await apiFetch('/api/tickets/clear-all', { method: 'DELETE' });
         showToast('Tickets Vaciados', res.message, 'success');
         loadDashboardData();
       });
     }
 
-    // ==========================================
-    // MODULE 8: USUARIOS & ROLES (RBAC)
-    // ==========================================
+    // Admin Users (RBAC) Module
     async function loadAdminUsersData() {
       try {
         const res = await apiFetch('/api/admin/users');
@@ -3037,18 +2999,16 @@ export function getAdminDashboardHtml(): string {
     }
 
     function deleteAdminUserItem(id, username) {
-      showConfirmDialog('Eliminar Usuario', \`¿Seguro que deseas eliminar al usuario @\${username}?\`, async () => {
+      showConfirmDialog('Eliminar Usuario', \`¿Deseas eliminar al usuario @\${username}?\`, async () => {
         const res = await apiFetch(\`/api/admin/users/\${id}\`, { method: 'DELETE' });
         if (res.success) {
-          showToast('Usuario Eliminado', 'El usuario ha sido retirado.', 'success');
+          showToast('Eliminado', 'Usuario retirado.', 'success');
           loadAdminUsersData();
         }
       });
     }
 
-    // ==========================================
-    // UTILITIES
-    // ==========================================
+    // Utilities
     function escapeHtml(str) {
       if (!str) return '';
       return String(str)
@@ -3069,9 +3029,7 @@ export function getAdminDashboardHtml(): string {
       }
     }
 
-    // ==========================================
-    // INITIALIZATION
-    // ==========================================
+    // Bootstrap
     function initApp() {
       initSSEStream();
       loadViewData(state.currentView);
@@ -3079,7 +3037,6 @@ export function getAdminDashboardHtml(): string {
       setInterval(loadDashboardBadgeCounters, 15000);
     }
 
-    // Bootstrap
     window.addEventListener('DOMContentLoaded', () => {
       checkAuthSession();
     });
