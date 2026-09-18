@@ -483,6 +483,9 @@ export class AdminController {
   static async deleteSession(req: Request, res: Response): Promise<void> {
     try {
       const phone = String(req.params.phone || '');
+      if (phone === 'clear-all') {
+        return AdminController.clearAllSessions(req, res);
+      }
       await TursoService.deleteSession(phone);
       res.json({ success: true, message: `Sesión de ${phone} eliminada exitosamente.` });
     } catch (error: any) {
@@ -521,6 +524,9 @@ export class AdminController {
   static async deleteTicket(req: Request, res: Response): Promise<void> {
     try {
       const folio = String(req.params.folio || '');
+      if (folio === 'clear-all') {
+        return AdminController.clearAllTickets(req, res);
+      }
       const ok = await TursoService.deleteTicket(folio);
       if (ok) {
         AdminController.broadcastSSE('tickets:update', { action: 'delete', folio });
