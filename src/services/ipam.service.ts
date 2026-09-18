@@ -29,12 +29,16 @@ export interface PoolSummaryRecord {
   vlan: string;
   name: string;
   segment: string;
+  subnet?: string;
   gateway: string;
   oltName: string;
   totalUsable: number;
   usedCount: number;
   availableCount: number;
   usagePercent: number;
+  total?: number;
+  used?: number;
+  free?: number;
 }
 
 export class IpamService {
@@ -150,12 +154,16 @@ export class IpamService {
         vlan: conf.vlan,
         name: conf.name,
         segment: conf.segment,
+        subnet: conf.segment,
         gateway: conf.gateway,
         oltName: conf.oltName,
         totalUsable,
         usedCount,
         availableCount,
         usagePercent,
+        total: totalUsable,
+        used: usedCount,
+        free: availableCount,
       });
     }
 

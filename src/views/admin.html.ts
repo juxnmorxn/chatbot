@@ -2646,20 +2646,25 @@ export function getAdminDashboardHtml(): string {
         const grid = document.getElementById('ipam-pools-grid');
         if (poolsRes.pools && poolsRes.pools.length > 0) {
           grid.innerHTML = poolsRes.pools.map(p => {
-            const pct = p.total > 0 ? Math.round((p.used / p.total) * 100) : 0;
+            const used = p.usedCount ?? p.used ?? 0;
+            const total = p.totalUsable ?? p.total ?? 252;
+            const free = p.availableCount ?? p.free ?? Math.max(0, total - used);
+            const pct = p.usagePercent ?? (total > 0 ? Math.round((used / total) * 100) : 0);
+            const subnet = p.segment ?? p.subnet ?? p.name ?? '';
+            const badgeClass = pct > 80 ? 'badge-danger' : (pct > 50 ? 'badge-warning' : 'badge-info');
             return \`
               <div class="glass-card" style="background: rgba(0,0,0,0.3);">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                  <span style="font-weight: 700; font-size: 14px;">VLAN \${p.vlan} (\${p.subnet})</span>
-                  <span class="badge badge-info">\${pct}% Ocupado</span>
+                  <span style="font-weight: 700; font-size: 14px; color: var(--text-main);">VLAN \${p.vlan} (\${escapeHtml(subnet)})</span>
+                  <span class="badge \${badgeClass}">\${pct}% Ocupado</span>
                 </div>
                 <div style="background: rgba(255,255,255,0.08); height: 8px; border-radius: 4px; overflow: hidden; margin-bottom: 8px;">
-                  <div style="background: linear-gradient(90deg, var(--accent-cyan), var(--primary)); width: \${pct}%; height: 100%;"></div>
+                  <div style="background: linear-gradient(90deg, var(--accent-cyan), var(--primary)); width: \${Math.min(100, pct)}%; height: 100%;"></div>
                 </div>
                 <div style="display: flex; justify-content: space-between; font-size: 11.5px; color: var(--text-muted); font-family: var(--font-mono);">
-                  <span>Usadas: \${p.used}</span>
-                  <span>Disponibles: \${p.free}</span>
-                  <span>Total: \${p.total}</span>
+                  <span>Usadas: <strong style="color: var(--text-main);">\${used}</strong></span>
+                  <span>Disponibles: <strong style="color: var(--accent-green);">\${free}</strong></span>
+                  <span>Total: <strong>\${total}</strong></span>
                 </div>
               </div>
             \`;
