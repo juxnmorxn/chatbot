@@ -467,24 +467,123 @@ export class SmartOLTService {
 
   /**
    * Busca una ONU sin configurar por los últimos caracteres de su SN (ej: últimos 6 dígitos)
+   * Incluye coincidencia exacta, normalización de caracteres confusos de OCR (8/B, 0/O, 1/I, 5/S) y distancia de edición.
    */
   static async findUnconfiguredOnuBySnSuffix(suffix: string): Promise<UnconfiguredOnu | null> {
-    const cleanSuffix = suffix.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
-    if (cleanSuffix.length < 4) {
+    let clean = (suffix || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+    if (clean.startsWith('48575443')) {
+      clean = 'HWTC' + clean.substring(8);
+    } else if (clean.startsWith('5A544547')) {
+      clean = 'ZTEG' + clean.substring(8);
+    }
+
+    if (clean.length < 4) {
       logger.warn(`Sufijo SN '${suffix}' demasiado corto para búsqueda segura.`);
       return null;
     }
 
     try {
       const unconfiguredList = await this.getUnconfiguredOnus();
-      logger.info(`Buscando ONU con sufijo '${cleanSuffix}' entre ${unconfiguredList.length} ONUs sin autorizar en SmartOLT.`);
+      logger.info(`Buscando ONU con '${clean}' entre ${unconfiguredList.length} ONUs sin autorizar en SmartOLT.`);
 
-      const found = unconfiguredList.find((onu) => {
-        const cleanSn = (onu.sn || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
-        return cleanSn.endsWith(cleanSuffix) || cleanSn.includes(cleanSuffix);
+      if (unconfiguredList.length === 0) {
+        return null;
+      }
+
+      // 1. Coincidencia exacta (completo, terminación o inclusión)
+      const exactMatch = unconfiguredList.find((onu) => {
+        const onuSn = (onu.sn || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+        return onuSn === clean || onuSn.endsWith(clean) || (clean.length >= 6 && onuSn.includes(clean));
+      });
+      if (exactMatch) {
+        logger.info(`[SmartOLT Match] Coincidencia exacta encontrada: ${exactMatch.sn}`);
+        return exactMatch;
+      }
+
+      // 2. Coincidencia con normalización de caracteres confusos de OCR (B<->8, O<->0, I<->1, S<->5, G<->6, Z<->2)
+      const normalizeVisualConfusions = (str: string) => {
+        return str
+          .replace(/B/g, '8')
+          .replace(/O/g, '0')
+          .replace(/D/g, '0')
+          .replace(/I/g, '1')
+          .replace(/L/g, '1')
+          .replace(/S/g, '5')
+          .replace(/G/g, '6')
+          .replace(/Z/g, '2');
+      };
+
+      const normSearch = normalizeVisualConfusions(clean);
+      const normSearchSuffix = normSearch.length >= 6 ? normSearch.slice(-6) : normSearch;
+
+      const visualMatch = unconfiguredList.find((onu) => {
+        const onuSn = (onu.sn || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+        const normOnu = normalizeVisualConfusions(onuSn);
+        return normOnu === normSearch || normOnu.endsWith(normSearchSuffix) || normOnu.includes(normSearchSuffix);
       });
 
-      return found || null;
+      if (visualMatch) {
+        logger.info(`[SmartOLT Match] Coincidencia visual OCR encontrada (${clean} -> ${visualMatch.sn})`);
+        return visualMatch;
+      }
+
+      // 3. Coincidencia difusa (Levenshtein / Distancia de edición)
+      const levenshtein = (a: string, b: string): number => {
+        const matrix: number[][] = [];
+        for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+        for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+        for (let i = 1; i <= b.length; i++) {
+          for (let j = 1; j <= a.length; j++) {
+            if (b.charAt(i - 1) === a.charAt(j - 1)) {
+              matrix[i][j] = matrix[i - 1][j - 1];
+            } else {
+              matrix[i][j] = Math.min(
+                matrix[i - 1][j - 1] + 1,
+                matrix[i][j - 1] + 1,
+                matrix[i - 1][j] + 1
+              );
+            }
+          }
+        }
+        return matrix[b.length][a.length];
+      };
+
+      const searchSuffix = clean.length >= 6 ? clean.slice(-6) : clean;
+      let bestCandidate: UnconfiguredOnu | null = null;
+      let minDistance = 999;
+
+      for (const onu of unconfiguredList) {
+        const onuSn = (onu.sn || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+        const onuSuffix = onuSn.length >= 6 ? onuSn.slice(-6) : onuSn;
+
+        const distSuffix = levenshtein(searchSuffix, onuSuffix);
+        const distFull = clean.length >= 10 ? levenshtein(clean, onuSn) : 999;
+        const currentMin = Math.min(distSuffix, distFull);
+
+        if (currentMin < minDistance) {
+          minDistance = currentMin;
+          bestCandidate = onu;
+        }
+      }
+
+      // Tolerancia: Distancia <= 2 para 6 caracteres (más de 66% de similitud)
+      if (bestCandidate && minDistance <= 2) {
+        logger.info(`[SmartOLT Match] Coincidencia difusa (distancia ${minDistance}): ${clean} emparejado con ${bestCandidate.sn}`);
+        return bestCandidate;
+      }
+
+      // Si solo hay 1 ONU sin autorizar en la OLT y comparte al menos 3 caracteres
+      if (unconfiguredList.length === 1) {
+        const onlyOnu = unconfiguredList[0];
+        const onlySn = (onlyOnu.sn || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+        const dist = levenshtein(searchSuffix, onlySn.slice(-6));
+        if (dist <= 3) {
+          logger.info(`[SmartOLT Match] Única ONU sin autorizar en OLT seleccionada: ${onlyOnu.sn} (distancia ${dist} con ${clean})`);
+          return onlyOnu;
+        }
+      }
+
+      return null;
     } catch (error: any) {
       logger.error('Error al buscar ONU sin configurar por sufijo:', error?.message || error);
       return null;

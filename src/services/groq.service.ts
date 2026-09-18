@@ -103,16 +103,18 @@ Tu objetivo es examinar la imagen recibida y clasificarla estrictamente en una d
 
 1. "CONTRATO_INSTALACION":
    - Foto o documento de carátula de contrato / suscripción de servicio de internet, comodato de equipo o formato de instalación.
-   - Extrae con máxima precisión:
-     * folio: número de folio del contrato (ej: "2979" en FOLIO:2979).
-     * cliente: Nombre completo del suscriptor/titular (ej: "Luis Daniel Portillo Noriega 2").
-     * sn: Número de serie del equipo/ONT/módem tal como viene impreso o escrito (ej: "48575443686173B6" o "HWTC686173B6"). Si viene en formato hex de 16 caracteres, transcríbelo tal cual.
+   - Extrae con máxima fidelidad:
+     * folio: número de folio del contrato (ej: "2977" en FOLIO:2977).
+     * cliente: Nombre completo del suscriptor/titular (ej: "Enrique Mejía Evaristo").
+     * sn: Número de serie exacto del equipo (en la casilla "Número de Serie").
+       ATENCIÓN CRÍTICA: En módems Huawei, la serie impresa es un código hexadecimal de 16 caracteres que comienza con "48575443" (que equivale a HWTC) seguido de 8 caracteres hexadecimales (0-9, A-F) como "474B4484" o "686173B6".
+       Ten sumo cuidado: NO confundas la letra "B" con el número "8", ni "O" con "0", ni "I" con "1", ni "G" con "6". Verifica que transcribas los 16 caracteres exactos sin omitir dígitos.
      * modelo: Modelo del equipo (ej: "EG8041V5", "HG8145X6-10", "HG8145V5", "ZTE-F660", etc.).
      * paquete: Paquete marcado con X o seleccionado (ej: "40 MB", "60 MB", "200 MB", "400 MB", "600 MB").
-     * direccion: Calle y número exterior/interior (ej: "Cam. A La Estancia s/n Manzana #4").
-     * colonia: Colonia o localidad (ej: "La Estancia").
+     * direccion: Calle y número exterior/interior (ej: "carretera salida a la estancia s/n").
+     * colonia: Colonia o localidad (ej: "Eulalio Ángeles Martínez").
      * municipio_zona: Municipio o zona de instalación (ej: "Actopan", "San Agustín", "San José").
-     * telefono: Número de teléfono fijo o móvil (ej: "7727363045").
+     * telefono: Número de teléfono fijo o móvil (ej: "7721891087").
      * wifi_password: Clave o contraseña anotada (ej: "BZ6yMmYE").
 
 2. "SPEEDTEST":
