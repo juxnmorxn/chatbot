@@ -391,6 +391,76 @@ export class TursoService {
   }
 
   /**
+   * Elimina una ONU de la base de datos local Turso DB liberando de inmediato su IP
+   */
+  static async deleteSmartOltOnu(identifier: string): Promise<boolean> {
+    if (!identifier) return false;
+    try {
+      const client = getTursoClient();
+      const res = await client.execute({
+        sql: `DELETE FROM smartolt_onus WHERE unique_external_id = ? OR sn = ?`,
+        args: [identifier, identifier.toUpperCase()],
+      });
+      const deleted = (res.rowsAffected || 0) > 0;
+      if (deleted) {
+        logger.info(`ONU ${identifier} eliminada de Turso DB. IP liberada para reasignación.`);
+      }
+      return deleted;
+    } catch (error: any) {
+      logger.error(`Error al eliminar ONU ${identifier} en Turso DB:`, error?.message || error);
+      return false;
+    }
+  }
+
+  /**
+   * Elimina de Turso DB todas las ONUs que ya no existen en SmartOLT (Reconciliación y liberación masiva de IPs)
+   * Solo opera si el conjunto de ONUs activas es representativo (>500) para proteger contra respuestas parciales o vacías.
+   */
+  static async pruneSmartOltOnus(activeIds: Set<string>): Promise<number> {
+    if (!activeIds || activeIds.size < 500) {
+      logger.warn(`Pruning omitido: el lote de ONUs activas es demasiado pequeño (${activeIds?.size || 0})`);
+      return 0;
+    }
+    try {
+      const client = getTursoClient();
+      const existingRes = await client.execute(`SELECT unique_external_id FROM smartolt_onus`);
+      const toDelete: string[] = [];
+
+      for (const row of existingRes.rows) {
+        const id = String(row.unique_external_id || '');
+        if (id && !activeIds.has(id)) {
+          toDelete.push(id);
+        }
+      }
+
+      if (toDelete.length === 0) {
+        logger.info('Reconciliación de inventario: No hay ONUs huérfanas o eliminadas.');
+        return 0;
+      }
+
+      logger.info(`Reconciliando inventario: Se detectaron ${toDelete.length} ONUs eliminadas en SmartOLT. Purgando y liberando IPs...`);
+
+      const batchSize = 50;
+      let totalDeleted = 0;
+      for (let i = 0; i < toDelete.length; i += batchSize) {
+        const batch = toDelete.slice(i, i + batchSize);
+        const placeholders = batch.map(() => '?').join(',');
+        await client.execute({
+          sql: `DELETE FROM smartolt_onus WHERE unique_external_id IN (${placeholders})`,
+          args: batch,
+        });
+        totalDeleted += batch.length;
+      }
+
+      logger.info(`✅ Reconciliación completada: ${totalDeleted} ONUs purgadas de Turso DB. IPs liberadas exitosamente.`);
+      return totalDeleted;
+    } catch (error: any) {
+      logger.error('Error al purgar ONUs eliminadas en Turso DB:', error?.message || error);
+      return 0;
+    }
+  }
+
+  /**
    * Guarda o actualiza un lote de clientes provenientes de WispHub en Turso DB
    */
   static async saveWisphubClients(clients: WisphubClientRecord[]): Promise<number> {

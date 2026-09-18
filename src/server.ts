@@ -91,15 +91,16 @@ async function startServer() {
       }
     }, 10000);
 
-    // Ciclo recurrente de SmartOLT cada 6 horas (Evita saturar límites y CPU)
+    // Ciclo recurrente de reconciliación de SmartOLT cada 30 minutos (2 llamadas/hora de las 15 permitidas)
+    // Mantiene Turso sincronizado, purga ONUs eliminadas en la OLT y libera IPs automáticamente
     setInterval(async () => {
       try {
-        logger.info('Ejecutando sincronización de inventario SmartOLT...');
+        logger.info('Ejecutando ciclo de reconciliación de inventario SmartOLT (cada 30 min)...');
         await SmartOLTService.syncAllOnusToTurso(false);
       } catch (err: any) {
-        logger.warn('Error en sincronización de SmartOLT:', err?.message || err);
+        logger.warn('Error en reconciliación periódica de SmartOLT:', err?.message || err);
       }
-    }, 6 * 60 * 60 * 1000);
+    }, 30 * 60 * 1000);
 
     // Ciclo recurrente de WispHub cada 6 horas (Evita saturar CPU en Render)
     setInterval(async () => {

@@ -237,13 +237,17 @@ export class SmartOLTService {
 
       await TursoService.saveSmartOltOnus(transformed);
 
+      // Reconciliación: Purgar de Turso DB las ONUs eliminadas en SmartOLT para liberar sus IPs
+      const activeIds = new Set<string>(transformed.map(t => t.unique_external_id).filter(Boolean));
+      const prunedCount = await TursoService.pruneSmartOltOnus(activeIds);
+
       this.lastSyncTimestamp = Date.now();
-      logger.info(`✅ Sincronización completada exitosamente: ${transformed.length} ONUs guardadas en Turso DB.`);
+      logger.info(`✅ Sincronización completada exitosamente: ${transformed.length} ONUs activas guardadas, ${prunedCount} eliminadas/purgadas.`);
 
       return {
         success: true,
         count: transformed.length,
-        message: `Sincronización exitosa: ${transformed.length} ONUs sincronizadas con Turso DB.`,
+        message: `Sincronización exitosa: ${transformed.length} ONUs sincronizadas con Turso DB${prunedCount > 0 ? ` (${prunedCount} ONUs eliminadas purgadas y sus IPs liberadas)` : ''}.`,
       };
     } catch (error: any) {
       logger.error('Error al sincronizar ONUs con SmartOLT:', error?.response?.data || error?.message || error);
@@ -769,6 +773,39 @@ export class SmartOLTService {
         downProfile: profiles.down,
         upProfile: profiles.up,
         onuRecord,
+      };
+    }
+  }
+
+  /**
+   * Elimina una ONU de SmartOLT y la purga inmediatamente de Turso DB para liberar su IP
+   */
+  static async deleteOnu(onuExternalId: string): Promise<{ success: boolean; message: string }> {
+    if (!onuExternalId) return { success: false, message: 'ID de ONU requerido' };
+    try {
+      const api = this.getApi();
+      const response = await api.post(`/onu/delete/${onuExternalId}`);
+      const resData = response.data;
+
+      if (resData?.status === true || resData?.response_code === 'success' || response.status === 200) {
+        await TursoService.deleteSmartOltOnu(onuExternalId);
+        logger.info(`ONU ${onuExternalId} eliminada de SmartOLT y de Turso DB. IP liberada.`);
+        return {
+          success: true,
+          message: resData?.response || resData?.message || `ONU ${onuExternalId} eliminada correctamente de SmartOLT e IP liberada en el sistema.`,
+        };
+      } else {
+        return {
+          success: false,
+          message: resData?.message || resData?.error || 'SmartOLT rechazó la eliminación de la ONU.',
+        };
+      }
+    } catch (error: any) {
+      logger.error(`Error al eliminar ONU ${onuExternalId} en SmartOLT:`, error?.response?.data || error?.message || error);
+      const errMsg = error?.response?.data?.message || error?.response?.data?.error || error?.message || 'Error de conexión';
+      return {
+        success: false,
+        message: `Error en SmartOLT: ${errMsg}`,
       };
     }
   }
