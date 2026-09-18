@@ -393,16 +393,10 @@ export class BotOrchestrator {
       }
     }
 
-    // D. Comando de cambio de paquete/plan para técnicos (ej: "cambiar paquete 3000 a 600 megas", "cambiar plan c24b0 800 megas")
+    // D. Detección de comandos de técnicos y clientes (Cambio de paquete y Activación)
     const esComandoCambioPaquete = /(?:cambiar|modificar|actualizar|subir|bajar)\s+(?:de\s+)?(?:paquete|plan|velocidad|megas)\b/i.test(rawText) ||
       /^cambiar\s+(?:paquete|plan)\b/i.test(lowerMsg);
 
-    if (esComandoCambioPaquete) {
-      await this.procesarCambioPaqueteTecnico(phone, rawText, session, targetJid);
-      return;
-    }
-
-    // E. Comando de activación de técnico (ej: "ACTIVAR 4317B5", "ACTIVAR 4317B5 3456-Juan Perez", "Activación de cliente:d08b6 nombre 12345-nuevo el rincón 40 megas")
     const esComandoActivacion = buttonId === 'BTN_ACTIVAR_MODEM' ||
       /^(?:activar|activaci[oó]n|alta|aprovisionar|registrar)\b/i.test(lowerMsg) ||
       /(?:activar|activaci[oó]n|alta|aprovisionar|registrar)\s*(?:de\s+)?(?:cliente|modem|onu|equipo|serie)?[:\s]*/i.test(rawText) ||
@@ -412,9 +406,61 @@ export class BotOrchestrator {
       lowerMsg.startsWith('aprovisionar') ||
       lowerMsg.startsWith('registrar');
 
-    if (esComandoActivacion) {
-      await this.procesarSolicitudActivacionTecnico(phone, rawText, session, targetJid);
-      return;
+    // 2.0 CONTROL INTELIGENTE DE COMANDOS TÉCNICOS VS CLIENTES
+    const authTecnico = await this.verificarAutorizacionTecnico(phone, rawText);
+
+    if (authTecnico.autorizado) {
+      // Caso 1: El técnico pregunta por TR-069, SmartOLT o comandos aislados ("activar tr069", "activar smart", "activar ya que se trata")
+      if (this.esConsultaTr069OSmartOLT(rawText)) {
+        await this.enviarGuiaTr069Tecnico(phone, targetJid);
+        return;
+      }
+
+      // Caso 2: El técnico solicita cambio de paquete en caliente en SmartOLT
+      if (esComandoCambioPaquete) {
+        await this.procesarCambioPaqueteTecnico(phone, rawText, session, targetJid);
+        return;
+      }
+
+      // Caso 3: El técnico envía comando de activación
+      if (esComandoActivacion) {
+        await this.procesarSolicitudActivacionTecnico(phone, rawText, session, targetJid);
+        return;
+      }
+    } else {
+      // Remitente NO es técnico registrado:
+      // ¿Es un intento EXPLÍCITO de comando de instalación técnica de campo?
+      // Solo restringir si explícitamente usa botones técnicos, PIN o sintaxis de OLT ("activar cliente SN...")
+      const esIntentoTecnicoExplicito = buttonId === 'BTN_ACTIVAR_MODEM' ||
+        /\b(?:pin|clave)\s*[:=\s]*\d{4,8}\b/i.test(rawText) ||
+        /^(?:activar|alta|aprovisionar)\s+(?:cliente|modem|onu|equipo|serie)\b/i.test(rawText) ||
+        /^(?:activar|alta)\s+[A-Fa-f0-9]{5,16}\b/i.test(rawText);
+
+      if (esIntentoTecnicoExplicito) {
+        await this.enviarYLoguear(
+          phone,
+          `⚠️ *Acceso Restringido - Área Técnica*\n\nTu número (*${phone}*) no está registrado como técnico autorizado para activar equipos en SmartOLT.\n\n👉 Si eres instalador o técnico en campo, solicita tu alta o proporciona tu *PIN de seguridad* al administrador en el panel.`,
+          'ACTIVACION_TECNICO',
+          'NO_AUTORIZADO',
+          targetJid
+        );
+        return;
+      }
+
+      // Si es un cliente residencial solicitando activar su servicio tras pagar ("ya pagué, activen mi servicio", "activar internet")
+      const esSolicitudReactivacionCliente = /(?:activar|activen|reactivar|reconectar|reanudaci[oó]n)\s*(?:mi\s+)?(?:servicio|internet|linea|cuenta|paquete|señal)?/i.test(lowerMsg) ||
+        /(?:ya\s+(?:pagu[eé]|hice\s+el\s+pago|transfer[ií]|deposit[eé]))\b/i.test(lowerMsg);
+
+      if (esSolicitudReactivacionCliente) {
+        await this.procesarSolicitudReactivacionCliente(phone, rawText, session, targetJid);
+        return;
+      }
+
+      // Si es un cliente residencial preguntando por cambiar su paquete ("quiero cambiar de paquete a 100 megas")
+      if (esComandoCambioPaquete) {
+        await this.procesarSolicitudCambioPlanCliente(phone, rawText, session, targetJid);
+        return;
+      }
     }
 
     // 2.1 CADUCIDAD POR INACTIVIDAD DE PASOS TÉCNICOS TEMPORALES (15 minutos):
@@ -3335,30 +3381,33 @@ export class BotOrchestrator {
       if (matched) break;
     }
 
-    // 4. Extraer SN explícito o token alfanumérico
+    // Palabras reservadas del sistema y diccionario que jamás deben ser tomadas como SN
+    const RESERVED_SN_WORDS = new Set([
+      'TR069', 'TR-069', 'SMART', 'SMARTOLT', 'MODEM', 'ROUTER', 'EQUIPO', 'CLIENTE',
+      'ACTOPAN', 'AGUSTIN', 'INTERNET', 'SPEED', 'MEGAS', 'MEGA', 'GIGAS', 'GB', 'MB',
+      'DUAL', 'STACK', 'STATIC', 'ESTATICA', 'DHCP', 'PPPOE', 'OMCI', 'AUTO',
+      'NONE', 'PLAN', 'PAQUETE', 'SERVICIO', 'ZONA', 'FOLIO', 'NOMBRE', 'AYUDA',
+      'PRUEBA', 'NUEVO', 'ALTA', 'TRATA', 'DESPUES', 'LUEGO', 'FAVOR', 'GRACIAS',
+      'BUENOS', 'DIAS', 'TARDES', 'NOCHES', 'ESTE', 'ESTA', 'PUEDE', 'PONER', 'CAMBIAR',
+      'PARA', 'COMO', 'HAGO', 'TIENE', 'QUIERO', 'LINEA', 'CUENTA'
+    ]);
+
+    // 4. Extraer SN explícito o token alfanumérico (evitando palabras reservadas)
     const explicitSn = text.match(/\b(?:sn|serie|onu|modem|mac)\s*[:=\s]*([A-Za-z0-9]{4,16})\b/i);
-    if (explicitSn) {
+    if (explicitSn && !RESERVED_SN_WORDS.has(explicitSn[1].toUpperCase())) {
       snSuffix = explicitSn[1].toUpperCase();
       text = text.replace(explicitSn[0], ' ').trim();
     } else {
-      const snMatch = text.match(/\b([A-Za-z0-9]{4,16})\b/);
-      if (snMatch && (snMatch[1].length === 5 || snMatch[1].length === 6 || snMatch[1].startsWith('ZTE') || snMatch[1].startsWith('HWTC') || /[A-Za-z]/.test(snMatch[1]))) {
-        snSuffix = snMatch[1].toUpperCase();
-        text = text.replace(snMatch[0], ' ').trim();
-      } else {
-        const sixDigitMatch = text.match(/\b([0-9]{5,6})\b/);
-        if (sixDigitMatch) {
-          snSuffix = sixDigitMatch[1];
-          text = text.replace(sixDigitMatch[0], ' ').trim();
+      const allTokens = text.match(/\b([A-Za-z0-9]{4,16})\b/g) || [];
+      for (const token of allTokens) {
+        const upper = token.toUpperCase();
+        if (RESERVED_SN_WORDS.has(upper)) continue;
+        // Priorizar tokens típicos de SN (ZTE..., HWTC..., 5-6 caracteres alfanuméricos hex)
+        if (upper.length === 5 || upper.length === 6 || upper.startsWith('ZTE') || upper.startsWith('HWTC') || (/[0-9]/.test(upper) && /[A-Z]/i.test(upper))) {
+          snSuffix = upper;
+          text = text.replace(new RegExp(`\\b${token}\\b`, 'i'), ' ').trim();
+          break;
         }
-      }
-    }
-
-    if (!snSuffix) {
-      const firstTokenMatch = text.match(/^([A-Za-z0-9]{4,16})\b/);
-      if (firstTokenMatch) {
-        snSuffix = firstTokenMatch[1].toUpperCase();
-        text = text.replace(firstTokenMatch[0], ' ').trim();
       }
     }
 
@@ -3547,6 +3596,104 @@ ${techInfo}───────────────────────
         targetJid
       );
     }
+  }
+
+  /**
+   * Detecta si un técnico está preguntando o enviando comandos sobre TR-069, SmartOLT o configuración sin un SN real
+   */
+  private static esConsultaTr069OSmartOLT(text: string): boolean {
+    const clean = text.toLowerCase();
+    const hasTechTerms = /\b(?:tr069|tr-069|smartolt|dual\s*stack|modo\s*vlan|ip\s*estatica|static\s*ip|mgmt|gestion)\b/i.test(clean) ||
+      clean.includes('activar tr069') ||
+      clean.includes('activar smart') ||
+      clean.includes('activar ya que se trata');
+    const hasRealSn = /\b(?:48575443|zteg|hwtc|[a-f0-9]{12})\b/i.test(clean);
+    return hasTechTerms && !hasRealSn;
+  }
+
+  /**
+   * Envía la guía didáctica explicativa al técnico que pregunta sobre TR-069 o SmartOLT
+   */
+  private static async enviarGuiaTr069Tecnico(phone: string, targetJid?: string): Promise<void> {
+    const guiaMsg = `💡 *Aprovisionamiento Todo-en-Uno en SmartOLT*\n\nHola técnico. En este sistema *no requieres activar TR-069 o la IP por separado*.\n\nTodo se realiza automáticamente en un solo paso al enviar:\n👉 *activar cliente [SN] [Folio-Nombre] [Plan] [Zona]*\n\n_Ejemplo:_ \`activar cliente 8D82B0 2473-Juana Larios 40M Actopan\`\n\nEl bot ejecuta en la OLT y en el módem en menos de 10 segundos:\n1️⃣ Registro en puerto PON con su VLAN de servicio\n2️⃣ Perfil de velocidad configurado\n3️⃣ Management IP en VLAN 99 (o 60)\n4️⃣ Perfil TR-069 'SmartOLT' activado\n5️⃣ WAN Static IP con Dual Stack IPv4/IPv6, Auto y Acceso Remoto habilitado.\n\nEl módem queda navegando sin tocar su web local. 🚀`;
+
+    await this.enviarYLoguear(
+      phone,
+      guiaMsg,
+      'ACTIVACION_TECNICO',
+      'GUIA_TR069_TODO_EN_UNO',
+      targetJid
+    );
+  }
+
+  /**
+   * Atiende a clientes residenciales que solicitan activar su servicio tras pagar
+   */
+  private static async procesarSolicitudReactivacionCliente(
+    phone: string,
+    rawText: string,
+    session: Session | null,
+    targetJid?: string
+  ): Promise<void> {
+    const nombreCliente = this.formatDisplayName(session?.client_name, true) || 'estimado cliente';
+
+    // 1. Intentar consultar estado del cliente en WispHub
+    let clienteWh: any = null;
+    try {
+      clienteWh = await WispHubService.buscarClientePorTelefono(phone);
+    } catch {}
+
+    const saldoPendiente = clienteWh?.saldo ? Number(clienteWh.saldo) : 0;
+    const estadoServicio = (clienteWh?.estado || '').toLowerCase();
+
+    if (estadoServicio === 'activo' && saldoPendiente <= 0) {
+      await this.enviarYLoguear(
+        phone,
+        `¡Hola, *${nombreCliente}*! 👋 Revisamos tu cuenta en el sistema y tu servicio figura como *Activo* y al corriente sin adeudos pendientes.\n\nSi no tienes acceso a internet en este momento:\n1. Verifica que tu módem tenga la luz *PON* en verde fija.\n2. Si la luz *LOS* parpadea en rojo, indícanoslo para canalizar una visita técnica.\n\n¿Deseas que probemos reiniciar tu módem remotamente desde el sistema?`,
+        'CONSULTA_CLIENTE',
+        'CLIENTE_ACTIVO_SIN_ADEUDO',
+        targetJid
+      );
+      return;
+    }
+
+    // Si tiene adeudo o requiere validación de comprobante:
+    let msgPago = `¡Hola, *${nombreCliente}*! 👋 Con mucho gusto te apoyamos con la reactivación de tu servicio.\n\n`;
+    if (saldoPendiente > 0) {
+      msgPago += `📌 Registramos un saldo pendiente de *$${saldoPendiente} MXN* en tu cuenta.\n\n`;
+    }
+    msgPago += `📸 *Si ya realizaste tu pago o transferencia:*\nPor favor envía por aquí la *foto o captura de pantalla de tu comprobante de pago* indicando tu *Nombre completo* o *Número de contrato* para aplicarlo y reactivar tu internet de inmediato.\n\n💳 Si aún no has realizado tu pago, puedes solicitar los datos bancarios o enlace de Mercado Pago aquí mismo.`;
+
+    await this.enviarYLoguear(
+      phone,
+      msgPago,
+      'CONSULTA_CLIENTE',
+      'SOLICITUD_COMPROBANTE_REACTIVACION',
+      targetJid
+    );
+  }
+
+  /**
+   * Atiende a clientes residenciales que preguntan por cambiar su plan o contratar más megas
+   */
+  private static async procesarSolicitudCambioPlanCliente(
+    phone: string,
+    rawText: string,
+    session: Session | null,
+    targetJid?: string
+  ): Promise<void> {
+    const nombreCliente = this.formatDisplayName(session?.client_name, true) || '';
+    const saludo = nombreCliente ? `¡Hola, *${nombreCliente}*! 👋` : `¡Hola! 👋`;
+
+    const texto = `${saludo} ¡Con mucho gusto te orientamos sobre el cambio o mejora de tu paquete de internet! 🚀\n\nActualmente contamos con opciones de alta velocidad en fibra óptica:\n• *40 Megas* - Ideal para navegación básica y streaming\n• *60 Megas* - Excelente para familias y teletrabajo\n• *100 Megas* - Máxima fluidez para juegos y múltiples dispositivos\n• *200 Megas* - Velocidad ultra rápida simétrica\n\n👉 Para coordinar el cambio de tu paquete sin costo de migración, ¿a cuántos megas te gustaría cambiarte o deseas que un asesor te contacte por llamada?`;
+
+    await this.enviarYLoguear(
+      phone,
+      texto,
+      'VENTAS_CAMBIO_PLAN',
+      'INFORMACION_PLANES_CLIENTE',
+      targetJid
+    );
   }
 
   /**
