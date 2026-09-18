@@ -546,10 +546,40 @@ export class SmartOLTService {
       logger.info('Respuesta de autorización SmartOLT:', JSON.stringify(resData));
 
       if (resData?.status === true || response.status === 200 || resData?.response_code === 'success' || resData?.response === 'success' || (typeof resData?.response === 'string' && resData.response.toLowerCase().includes('saved'))) {
+        const onuExternalId = resData?.unique_external_id || resData?.onu_id || payload.sn;
+
+        // SmartOLT requiere configurar el modo WAN Static IP vía OMCI en endpoint separado
+        if (payload.ip_address && onuExternalId) {
+          try {
+            logger.info(`Configurando WAN Static IP para ${onuExternalId} (${payload.ip_address})...`);
+            const staticForm = new FormData();
+            staticForm.append('ipv4_address', String(payload.ip_address));
+            staticForm.append('subnet_mask', String(payload.netmask || '255.255.255.0'));
+            staticForm.append('gateway', String(payload.gateway || '172.19.2.254'));
+            staticForm.append('dns1', '8.8.8.8');
+            staticForm.append('dns2', '8.8.4.4');
+            staticForm.append('configuration_method', 'OMCI');
+            staticForm.append('ip_protocol', 'ipv4');
+
+            const staticHeaders = typeof (staticForm as any).getHeaders === 'function' ? (staticForm as any).getHeaders() : undefined;
+            const staticRes = await api.post(`/onu/set_onu_wan_mode_static_ip/${onuExternalId}`, staticForm, {
+              headers: staticHeaders
+            });
+            logger.info(`WAN Static IP configurada exitosamente para ${onuExternalId}:`, JSON.stringify(staticRes.data));
+
+            // Habilitar acceso remoto a la WAN IP
+            await api.post(`/onu/enable_allow_remote_access_to_wan_ip/${onuExternalId}`).catch((e) => {
+              logger.warn(`No se pudo habilitar acceso remoto a WAN IP para ${onuExternalId}:`, e?.message);
+            });
+          } catch (wanErr: any) {
+            logger.error(`Error al aplicar WAN Static IP para ${onuExternalId}:`, wanErr?.response?.data || wanErr?.message || wanErr);
+          }
+        }
+
         // Forzar registro en Turso DB
         TursoService.saveSmartOltOnus([
           {
-            unique_external_id: resData?.unique_external_id || resData?.onu_id || payload.sn,
+            unique_external_id: onuExternalId,
             sn: payload.sn,
             name: payload.name,
             speed_profile: payload.download_speed_profile_name || '40MB',
@@ -562,8 +592,8 @@ export class SmartOLTService {
 
         return {
           success: true,
-          message: resData?.message || resData?.response || `Módem ${payload.sn} autorizado correctamente en SmartOLT.`,
-          onu_id: resData?.unique_external_id || resData?.onu_id || payload.sn,
+          message: resData?.message || resData?.response || `Módem ${payload.sn} autorizado y configurado en Static IP en SmartOLT.`,
+          onu_id: onuExternalId,
           details: resData,
         };
       } else {
