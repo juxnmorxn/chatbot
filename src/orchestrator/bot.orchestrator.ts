@@ -4341,6 +4341,22 @@ ${techInfo}───────────────────────
         'ACTIVACION_EXITOSA',
         targetJid
       );
+
+      // Notificación automática al grupo de WhatsApp de Activaciones
+      // Formato: "2982-Diana Laura Lopez Gonzalez 172.19.2.178 Actopan LISTO"
+      const groupMsg = `${payload.name} ${payload.ip_address} ${payload.zone || 'Actopan'} LISTO`;
+      const configuredGroupJid = SettingsService.get(
+        'ACTIVATIONS_GROUP_JID',
+        'ACTIVATIONS_GROUP_JID',
+        SettingsService.get('GRUPO_ACTIVACIONES', 'GRUPO_ACTIVACIONES', '')
+      ).trim();
+
+      if (configuredGroupJid) {
+        logger.info(`[Grupo Activaciones] Enviando notificación de activación a ${configuredGroupJid}: "${groupMsg}"`);
+        await EvolutionService.enviarTexto(configuredGroupJid, groupMsg, { instant: true }).catch((gErr) => {
+          logger.warn(`No se pudo enviar notificación de activación al grupo ${configuredGroupJid}:`, gErr?.message || gErr);
+        });
+      }
     } else {
       await this.enviarYLoguear(
         phone,

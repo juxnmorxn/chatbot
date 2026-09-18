@@ -1971,6 +1971,11 @@ export function getAdminDashboardHtml(): string {
                 <label class="form-label">Groq API Key</label>
                 <input type="password" id="setting-GROQ_API_KEY" class="form-control" placeholder="••••••••">
               </div>
+              <div class="form-group">
+                <label class="form-label">Grupo de Activaciones (WhatsApp JID)</label>
+                <input type="text" id="setting-ACTIVATIONS_GROUP_JID" class="form-control" placeholder="1203630XXXXXXX@g.us">
+                <small style="font-size: 11px; color: var(--text-muted); display: block; margin-top: 4px;">Envía el reporte automático: &lt;Cliente&gt; &lt;IP&gt; &lt;Zona&gt; LISTO.</small>
+              </div>
               <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 10px;">
                 Guardar Configuraciones
               </button>
@@ -3301,7 +3306,7 @@ export function getAdminDashboardHtml(): string {
         const res = await apiFetch('/api/settings');
         if (res.settings) {
           Object.keys(res.settings).forEach(k => {
-            const input = document.getElementById('setting-' + k);
+            const input = document.getElementById('setting-' + k) || (k === 'activationsGroupJid' ? document.getElementById('setting-ACTIVATIONS_GROUP_JID') : null);
             if (input) input.value = res.settings[k];
           });
         }
@@ -3317,6 +3322,7 @@ export function getAdminDashboardHtml(): string {
         EVOLUTION_URL: document.getElementById('setting-EVOLUTION_URL')?.value.trim(),
         EVOLUTION_API_KEY: document.getElementById('setting-EVOLUTION_API_KEY')?.value.trim(),
         GROQ_API_KEY: document.getElementById('setting-GROQ_API_KEY')?.value.trim(),
+        ACTIVATIONS_GROUP_JID: document.getElementById('setting-ACTIVATIONS_GROUP_JID')?.value.trim(),
       };
 
       try {

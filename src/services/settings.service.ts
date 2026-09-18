@@ -22,6 +22,7 @@ export interface AppSettings {
   // ISP
   ispName?: string;
   soporteHumanoPhone?: string;
+  activationsGroupJid?: string;
   // Pagos y Cobranza
   paymentBank?: string;
   paymentAccount?: string;
@@ -131,6 +132,7 @@ export class SettingsService {
       smartoltApiKey: this.get('SMARTOLT_API_KEY', 'SMARTOLT_API_KEY', ''),
       ispName: this.get('ISP_NAME', 'ISP_NAME', 'CloudWareMx'),
       soporteHumanoPhone: this.get('SOPORTE_HUMANO_PHONE', 'SOPORTE_HUMANO_PHONE', ''),
+      activationsGroupJid: this.get('ACTIVATIONS_GROUP_JID', 'ACTIVATIONS_GROUP_JID', this.get('GRUPO_ACTIVACIONES', 'GRUPO_ACTIVACIONES', '')),
       paymentBank: this.get('PAYMENT_BANK', 'PAYMENT_BANK', ''),
       paymentAccount: this.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', ''),
       paymentBeneficiary: this.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', ''),
