@@ -1971,10 +1971,28 @@ export function getAdminDashboardHtml(): string {
                 <label class="form-label">Groq API Key</label>
                 <input type="password" id="setting-GROQ_API_KEY" class="form-control" placeholder="••••••••">
               </div>
-              <div class="form-group">
-                <label class="form-label">Grupo de Activaciones (WhatsApp JID)</label>
-                <input type="text" id="setting-ACTIVATIONS_GROUP_JID" class="form-control" placeholder="1203630XXXXXXX@g.us">
-                <small style="font-size: 11px; color: var(--text-muted); display: block; margin-top: 4px;">Envía el reporte automático: &lt;Cliente&gt; &lt;IP&gt; &lt;Zona&gt; LISTO.</small>
+              <div class="form-group" style="background: rgba(16, 185, 129, 0.05); border: 1px dashed rgba(16, 185, 129, 0.3); border-radius: var(--radius-sm); padding: 12px; margin-top: 14px;">
+                <label class="form-label" style="display: flex; align-items: center; justify-content: space-between;">
+                  <span>📢 Grupo de Activaciones (WhatsApp)</span>
+                  <span id="group-linked-badge" class="badge badge-success" style="display: none; font-size: 10px;">Vinculado</span>
+                </label>
+                <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                  <input type="text" id="setting-ACTIVATIONS_GROUP_JID" class="form-control" placeholder="https://chat.whatsapp.com/... o 1203630...@g.us">
+                  <button type="button" class="btn btn-secondary btn-sm" style="white-space: nowrap;" onclick="handleResolveGroupLink()" id="btn-resolve-group">
+                    🔗 Vincular Enlace
+                  </button>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px; margin-top: 6px;">
+                  <select id="select-active-groups" class="form-control" style="font-size: 12px; flex: 1;" onchange="handleSelectExistingGroup(this.value)">
+                    <option value="">-- O seleccionar de grupos activos en WhatsApp --</option>
+                  </select>
+                  <button type="button" class="btn btn-secondary btn-sm" onclick="fetchWhatsAppGroups()" title="Refrescar lista de grupos de WhatsApp">
+                    🔄
+                  </button>
+                </div>
+                <small style="font-size: 11px; color: var(--text-muted); display: block; margin-top: 8px;">
+                  💡 El bot enviará aquí el reporte automático al activar cada módem: <code>&lt;Nombre&gt; &lt;IP&gt; &lt;Zona&gt; LISTO</code>.
+                </small>
               </div>
               <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 10px;">
                 Guardar Configuraciones
@@ -3311,9 +3329,70 @@ export function getAdminDashboardHtml(): string {
           });
         }
         fetchWhatsAppStatus();
+        fetchWhatsAppGroups();
       } catch (err) {
         console.error('Error loading settings:', err);
       }
+    }
+
+    async function handleResolveGroupLink() {
+      const input = document.getElementById('setting-ACTIVATIONS_GROUP_JID');
+      const val = (input?.value || '').trim();
+      const btn = document.getElementById('btn-resolve-group');
+      if (!val) {
+        showToast('Atención', 'Ingresa el enlace de invitación (ej: https://chat.whatsapp.com/...) o JID del grupo.', 'warning');
+        return;
+      }
+
+      if (btn) btn.innerHTML = '<span class="spinner" style="width:12px;height:12px;margin-right:4px;"></span> Vinculando...';
+      try {
+        const res = await apiFetch('/api/whatsapp/resolve-group', {
+          method: 'POST',
+          body: JSON.stringify({ link: val }),
+        });
+        if (res.success && res.jid) {
+          if (input) input.value = res.jid;
+          const badge = document.getElementById('group-linked-badge');
+          if (badge) {
+            badge.style.display = 'inline-block';
+            badge.innerText = res.name || 'Vinculado';
+          }
+          showToast('¡Grupo Vinculado!', res.message || 'Grupo guardado exitosamente.', 'success');
+          fetchWhatsAppGroups();
+        } else {
+          showToast('Error', res.error || 'No se pudo vincular el grupo.', 'error');
+        }
+      } catch (err) {
+        showToast('Error', err.message, 'error');
+      } finally {
+        if (btn) btn.innerHTML = '🔗 Vincular Enlace';
+      }
+    }
+
+    async function fetchWhatsAppGroups() {
+      const select = document.getElementById('select-active-groups');
+      if (!select) return;
+      try {
+        const res = await apiFetch('/api/whatsapp/groups');
+        if (res.groups && Array.isArray(res.groups)) {
+          select.innerHTML = '<option value="">-- O seleccionar de grupos activos (' + res.groups.length + ') --</option>' +
+            res.groups.map(g => '<option value="' + g.id + '">' + (g.subject || g.id) + '</option>').join('');
+        }
+      } catch (err) {
+        console.warn('No se pudieron listar grupos de WhatsApp:', err);
+      }
+    }
+
+    function handleSelectExistingGroup(jid) {
+      if (!jid) return;
+      const input = document.getElementById('setting-ACTIVATIONS_GROUP_JID');
+      if (input) input.value = jid;
+      const badge = document.getElementById('group-linked-badge');
+      if (badge) {
+        badge.style.display = 'inline-block';
+        badge.innerText = 'Seleccionado';
+      }
+      showToast('Grupo Seleccionado', 'Haz clic en "Guardar Configuraciones" para aplicar.', 'info');
     }
 
     async function handleSaveSettings(e) {

@@ -278,5 +278,131 @@ export class EvolutionService {
       return { state: 'error', webhookOk: false };
     }
   }
+
+  /**
+   * Extrae el código de invitación de un enlace o texto de WhatsApp
+   */
+  static extractGroupInviteCode(linkOrCode: string): string {
+    const clean = (linkOrCode || '').trim();
+    const match = clean.match(/(?:chat\.whatsapp\.com\/|invite\/)?([a-zA-Z0-9_-]{20,28})/i);
+    return match ? match[1] : clean.replace(/[^a-zA-Z0-9_-]/g, '');
+  }
+
+  /**
+   * Consulta la información de un grupo mediante enlace de invitación o código y opcionalmente une al bot
+   */
+  static async resolveAndJoinGroupInvite(linkOrCode: string): Promise<{ success: boolean; jid?: string; name?: string; message?: string }> {
+    const clean = (linkOrCode || '').trim();
+
+    // Si ya es un JID directo (ej: 1203630XXXXX@g.us)
+    if (clean.endsWith('@g.us')) {
+      return {
+        success: true,
+        jid: clean,
+        name: 'Grupo WhatsApp',
+        message: `JID de grupo ${clean} validado.`,
+      };
+    }
+
+    const code = this.extractGroupInviteCode(clean);
+    if (!code) {
+      return { success: false, message: 'Enlace o código de invitación inválido.' };
+    }
+
+    const api = this.getApi();
+    const instance = this.getInstanceName();
+
+    try {
+      let groupJid = '';
+      let groupName = '';
+
+      // 1. Obtener información de la invitación
+      try {
+        const infoRes = await api.get(`/group/inviteInfo/${instance}`, {
+          params: { inviteCode: code },
+          timeout: 8000,
+        });
+        const d = infoRes.data;
+        groupJid = d?.id || d?.jid || d?.groupId || '';
+        groupName = d?.subject || d?.name || 'Grupo Activaciones';
+      } catch (err: any) {
+        logger.warn(`No se pudo obtener inviteInfo para "${code}":`, err?.response?.data || err?.message);
+      }
+
+      // 2. Unir a la instancia al grupo si no está unida
+      try {
+        const joinRes = await api.post(`/group/acceptInviteCode/${instance}`, null, {
+          params: { inviteCode: code },
+          timeout: 8000,
+        });
+        const jd = joinRes.data;
+        if (!groupJid) {
+          groupJid = jd?.id || jd?.groupId || jd?.jid || '';
+        }
+      } catch (joinErr: any) {
+        try {
+          await api.post(`/group/joinGroup/${instance}`, { inviteCode: code });
+        } catch {}
+      }
+
+      // 3. Si aún no tenemos el JID, consultar la lista de grupos activos
+      if (!groupJid) {
+        const allGroups = await this.fetchAllGroups();
+        const found = allGroups.find(
+          (g) => (groupName && g.subject.toLowerCase() === groupName.toLowerCase()) || g.subject.toLowerCase().includes('activac')
+        );
+        if (found) {
+          groupJid = found.id;
+          groupName = found.subject;
+        }
+      }
+
+      if (groupJid) {
+        return {
+          success: true,
+          jid: groupJid,
+          name: groupName || 'Grupo Activaciones',
+          message: `Grupo "${groupName || groupJid}" vinculado exitosamente.`,
+        };
+      }
+
+      return {
+        success: false,
+        message: 'No se pudo resolver el ID del grupo con ese enlace. Asegúrate de que la instancia de WhatsApp esté conectada.',
+      };
+    } catch (error: any) {
+      logger.error('Error al resolver enlace de grupo:', error?.response?.data || error?.message || error);
+      return {
+        success: false,
+        message: error?.response?.data?.message || error?.message || 'Error al conectar con Evolution API',
+      };
+    }
+  }
+
+  /**
+   * Obtiene la lista de todos los grupos donde la instancia de WhatsApp es miembro
+   */
+  static async fetchAllGroups(): Promise<Array<{ id: string; subject: string; size?: number }>> {
+    try {
+      const api = this.getApi();
+      const instance = this.getInstanceName();
+      const res = await api.get(`/group/fetchAllGroups/${instance}`, {
+        params: { getParticipants: false },
+        timeout: 8000,
+      });
+      const data = res.data;
+      const groups = Array.isArray(data) ? data : (data?.groups || data?.response || []);
+      return groups
+        .map((g: any) => ({
+          id: String(g.id || g.jid || ''),
+          subject: String(g.subject || g.name || 'Sin nombre'),
+          size: g.size || g.participants?.length || 0,
+        }))
+        .filter((g: any) => g.id.includes('@g.us'));
+    } catch (err: any) {
+      logger.warn('Error al obtener lista de grupos:', err?.response?.data || err?.message);
+      return [];
+    }
+  }
 }
 

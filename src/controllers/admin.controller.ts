@@ -656,6 +656,49 @@ export class AdminController {
   }
 
   /**
+   * Resuelve el JID y nombre de un grupo de WhatsApp a partir de un link de invitación
+   * y automáticamente guarda el grupo para notificaciones de activaciones.
+   */
+  static async resolveWhatsAppGroup(req: Request, res: Response): Promise<void> {
+    try {
+      const { link } = req.body;
+      if (!link || typeof link !== 'string') {
+        res.status(400).json({ success: false, error: 'Enlace o código de invitación requerido' });
+        return;
+      }
+
+      const result = await EvolutionService.resolveAndJoinGroupInvite(link);
+      if (result.success && result.jid) {
+        await SettingsService.set('ACTIVATIONS_GROUP_JID', result.jid);
+        res.json({
+          success: true,
+          jid: result.jid,
+          name: result.name,
+          message: `Grupo "${result.name || result.jid}" vinculado y guardado exitosamente.`,
+        });
+      } else {
+        res.status(400).json({ success: false, error: result.message || 'No se pudo resolver el grupo' });
+      }
+    } catch (error: any) {
+      logger.error('Error al resolver grupo de WhatsApp:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Obtiene la lista de grupos donde la instancia de WhatsApp está presente
+   */
+  static async getWhatsAppGroups(req: Request, res: Response): Promise<void> {
+    try {
+      const groups = await EvolutionService.fetchAllGroups();
+      res.json({ success: true, groups });
+    } catch (error: any) {
+      logger.error('Error al obtener grupos de WhatsApp:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
    * Dispara la sincronización de SmartOLT hacia Turso DB
    */
   static async syncSmartOlt(req: Request, res: Response): Promise<void> {

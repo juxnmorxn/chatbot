@@ -57,6 +57,8 @@ router.get('/api/sessions', AdminController.getSessions);
 router.get('/api/logs', AdminController.getLogs);
 router.get('/api/whatsapp/status', AdminController.getWhatsAppStatus);
 router.post('/api/whatsapp/disconnect', AdminController.disconnectWhatsApp);
+router.post('/api/whatsapp/resolve-group', AdminController.resolveWhatsAppGroup);
+router.get('/api/whatsapp/groups', AdminController.getWhatsAppGroups);
 router.post('/api/test/:service', AdminController.testService);
 router.post('/api/smartolt/sync', AdminController.syncSmartOlt);
 router.get('/api/smartolt/stats', AdminController.getSmartOltStats);
