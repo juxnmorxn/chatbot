@@ -76,6 +76,8 @@ router.get('/api/ipam/pools', AdminController.getIpamPools);
 router.get('/api/ipam/available', AdminController.getIpamAvailable);
 router.get('/api/smartolt/unconfigured', AdminController.getSmartOltUnconfigured);
 router.post('/api/smartolt/authorize', AdminController.authorizeSmartOltOnu);
+router.post('/api/smartolt/configure-tr069/:id', AdminController.configureSmartOltTr069);
+router.post('/api/smartolt/configure-tr069', AdminController.configureSmartOltTr069);
 
 // ==========================================
 // GESTIÓN DE TÉCNICOS AUTORIZADOS Y PINS

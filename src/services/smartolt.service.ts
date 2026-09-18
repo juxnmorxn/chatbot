@@ -677,6 +677,127 @@ export class SmartOLTService {
   }
 
   /**
+   * Configura o actualiza una ONU existente para habilitar TR-069 y WAN Static IP Dual Stack IPv4/IPv6
+   */
+  static async configureOnuTr069AndIpv6(onuIdOrExternalId: string, options?: {
+    ip_address?: string;
+    netmask?: string;
+    gateway?: string;
+    vlan?: string;
+    zone?: string;
+    olt_id?: string;
+  }): Promise<{ success: boolean; message: string; details?: any }> {
+    try {
+      const api = this.getApi();
+      const cleanId = onuIdOrExternalId.trim();
+
+      // 1. Obtener registro de Turso o detalles para conocer IP, Zona, etc.
+      let onuRecord = await TursoService.getOnuById(cleanId);
+      if (!onuRecord && cleanId.length < 12) {
+        const matches = await TursoService.searchOnusFuzzy(cleanId, 1);
+        if (matches.length > 0) onuRecord = matches[0];
+      }
+
+      const externalId = onuRecord?.unique_external_id || cleanId;
+      let rawData: any = {};
+      if (onuRecord?.raw_data) {
+        try { rawData = JSON.parse(onuRecord.raw_data); } catch {}
+      }
+
+      const ip = options?.ip_address || onuRecord?.ip_address || rawData?.ip_address || rawData?.ip;
+      const zone = options?.zone || onuRecord?.zone_name || rawData?.zone || rawData?.zone_name || 'Actopan';
+      const oltId = options?.olt_id || rawData?.olt_id || (zone.toLowerCase().includes('san agustin') ? '2' : '1');
+      const isSanAgustin = String(oltId) === '2' || zone.toLowerCase().includes('san agustin');
+      const mgmtVlan = isSanAgustin ? '60' : '99';
+
+      const results: string[] = [];
+
+      // A. Configurar Management IP en la VLAN de gestión (99 Actopan / 60 San Agustín)
+      try {
+        logger.info(`Configurando Management IP en VLAN ${mgmtVlan} para ${externalId}...`);
+        const mgmtForm = new FormData();
+        mgmtForm.append('vlan', mgmtVlan);
+        const mgmtHeaders = typeof (mgmtForm as any).getHeaders === 'function' ? (mgmtForm as any).getHeaders() : undefined;
+        await api.post(`/onu/set_onu_mgmt_ip_static_ip/${externalId}`, mgmtForm, { headers: mgmtHeaders });
+        results.push(`VLAN Gestión ${mgmtVlan}`);
+      } catch (mErr: any) {
+        logger.warn(`No se pudo asignar Management IP para ${externalId}:`, mErr?.response?.data || mErr?.message);
+      }
+
+      // B. Habilitar Perfil TR-069 SmartOLT sobre la interfaz de gestión (mgmt)
+      let tr069Ok = false;
+      try {
+        logger.info(`Habilitando Perfil TR-069 'SmartOLT' para ${externalId}...`);
+        const tr069Form = new FormData();
+        tr069Form.append('tr069_profile', 'SmartOLT');
+        tr069Form.append('tr069_interface', 'mgmt');
+        const tr069Headers = typeof (tr069Form as any).getHeaders === 'function' ? (tr069Form as any).getHeaders() : undefined;
+        await api.post(`/onu/enable_tr069/${externalId}`, tr069Form, { headers: tr069Headers });
+        tr069Ok = true;
+        results.push("TR-069 'SmartOLT' Activo");
+      } catch (trErr: any) {
+        logger.warn(`No se pudo habilitar TR-069 para ${externalId}:`, trErr?.response?.data || trErr?.message);
+      }
+
+      // C. Configurar WAN en Static IP con Dual Stack IPv4/IPv6 si tenemos IP
+      if (ip) {
+        try {
+          logger.info(`Configurando WAN Static IP para ${externalId} (${ip})...`);
+          const staticForm = new FormData();
+          staticForm.append('ipv4_address', String(ip));
+          staticForm.append('subnet_mask', String(options?.netmask || '255.255.255.0'));
+          staticForm.append('gateway', String(options?.gateway || '172.19.2.254'));
+          staticForm.append('dns1', '8.8.8.8');
+          staticForm.append('dns2', '8.8.4.4');
+          staticForm.append('configuration_method', tr069Ok ? 'TR069' : 'OMCI');
+          staticForm.append('ip_protocol', 'ipv4ipv6');
+          staticForm.append('ipv6_address_mode', 'Auto');
+          staticForm.append('ipv6_prefix_delegation_mode', 'DHCPv6-PD');
+
+          const staticHeaders = typeof (staticForm as any).getHeaders === 'function' ? (staticForm as any).getHeaders() : undefined;
+          await api.post(`/onu/set_onu_wan_mode_static_ip/${externalId}`, staticForm, { headers: staticHeaders });
+          results.push(`Dual Stack IPv4/IPv6 (${tr069Ok ? 'TR-069' : 'OMCI'})`);
+
+          // D. Habilitar acceso remoto a la WAN IP
+          await api.post(`/onu/enable_allow_remote_access_to_wan_ip/${externalId}`).catch(() => {});
+          results.push('Acceso remoto WAN');
+        } catch (wanErr: any) {
+          logger.error(`Error al aplicar WAN Static IP para ${externalId}:`, wanErr?.response?.data || wanErr?.message);
+        }
+      }
+
+      // Actualizar registro local en Turso DB
+      if (onuRecord) {
+        const updatedRaw = {
+          ...rawData,
+          tr069: 'Enabled',
+          tr069_profile: 'SmartOLT',
+          configuration_method: tr069Ok ? 'TR069' : 'OMCI',
+          ip_protocol: 'ipv4ipv6',
+          ipv6_address_mode: 'Auto',
+        };
+        await TursoService.saveSmartOltOnus([{
+          ...onuRecord,
+          raw_data: JSON.stringify(updatedRaw),
+          updated_at: new Date().toISOString(),
+        }]);
+      }
+
+      return {
+        success: true,
+        message: `Configuración aplicada a ${externalId}: ${results.join(', ')}`,
+      };
+    } catch (error: any) {
+      logger.error(`Error al configurar TR-069 e IPv6 para ${onuIdOrExternalId}:`, error?.response?.data || error?.message || error);
+      const errMsg = error?.response?.data?.message || error?.response?.data?.error || error?.message || 'Fallo de conexión';
+      return {
+        success: false,
+        message: `Error al configurar en SmartOLT: ${errMsg}`,
+      };
+    }
+  }
+
+  /**
    * Obtiene y almacena en caché el catálogo oficial de perfiles de velocidad configurados en SmartOLT
    */
   static async getSpeedProfilesCatalog(): Promise<SpeedProfileItem[]> {

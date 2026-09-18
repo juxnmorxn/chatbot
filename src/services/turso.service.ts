@@ -46,6 +46,9 @@ export interface AuditIpItem {
   smartolt_ip: string | null;
   wisphub_ip: string | null;
   ip_status: 'MISMATCH' | 'MATCH' | 'NO_IP' | 'ONLY_SMARTOLT' | 'ONLY_WISPHUB';
+  tr069_status?: 'ACTIVE' | 'OMCI' | 'MISSING';
+  ipv6_status?: 'DUAL_STACK' | 'IPV4_ONLY' | 'MISSING';
+  onu_external_id?: string | null;
   wisphub_estado: string | null;
   wisphub_facturas: string | null;
   wisphub_plan: string | null;
@@ -99,6 +102,43 @@ export interface TechnicianRecord {
   notes?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+function parseOnuTr069Status(rawJson?: any): 'ACTIVE' | 'OMCI' | 'MISSING' {
+  if (!rawJson) return 'MISSING';
+  try {
+    const raw = typeof rawJson === 'string' ? JSON.parse(rawJson) : rawJson;
+    const tr069 = String(raw.tr069 || raw.tr069_status || raw.tr069_enabled || '').toLowerCase();
+    const profile = String(raw.tr069_profile || raw.tr069_profile_name || '').toLowerCase();
+    const configMethod = String(raw.configuration_method || '').toLowerCase();
+
+    if (tr069 === 'enabled' || tr069 === 'active' || tr069 === '1' || profile.includes('smartolt') || configMethod.includes('tr069') || configMethod.includes('tr-069')) {
+      return 'ACTIVE';
+    }
+    if (configMethod.includes('omci')) {
+      return 'OMCI';
+    }
+    return 'MISSING';
+  } catch {
+    return 'MISSING';
+  }
+}
+
+function parseOnuIpv6Status(rawJson?: any): 'DUAL_STACK' | 'IPV4_ONLY' | 'MISSING' {
+  if (!rawJson) return 'MISSING';
+  try {
+    const raw = typeof rawJson === 'string' ? JSON.parse(rawJson) : rawJson;
+    const proto = String(raw.ip_protocol || raw.ip_mode || '').toLowerCase();
+    const v6Addr = raw.ipv6_address || raw.ipv6 || raw.ipv6_prefix;
+    const v6Mode = String(raw.ipv6_address_mode || '').toLowerCase();
+
+    if (proto.includes('ipv4ipv6') || proto.includes('dual') || proto.includes('v6') || (v6Mode && v6Mode !== 'none' && v6Mode !== 'disabled' && v6Mode !== '') || v6Addr) {
+      return 'DUAL_STACK';
+    }
+    return 'IPV4_ONLY';
+  } catch {
+    return 'MISSING';
+  }
 }
 
 export class TursoService {
@@ -1063,11 +1103,11 @@ export class TursoService {
   }
 
   /**
-   * Realiza el cruce de datos entre SmartOLT y WispHub (detección de discrepancias de IP)
+   * Realiza el cruce de datos entre SmartOLT y WispHub (detección de discrepancias de IP, TR-069 e IPv6)
    * 100% solo lectura. Cruza por número de folio/contrato (ej: 2861) y por nombre normalizado.
    */
   static async getAuditIpCross(options: {
-    filter?: 'all' | 'mismatches' | 'matches' | 'only_olt' | 'only_wisphub' | 'no_ip';
+    filter?: 'all' | 'mismatches' | 'matches' | 'only_olt' | 'only_wisphub' | 'no_ip' | 'missing_tr069' | 'missing_ipv6';
     search?: string;
     page?: number;
     limit?: number;
@@ -1081,6 +1121,8 @@ export class TursoService {
       onlySmartOlt: number;
       onlyWisphub: number;
       noIp: number;
+      missingTr069: number;
+      missingIpv6: number;
     };
     items: AuditIpItem[];
     total: number;
@@ -1187,6 +1229,9 @@ export class TursoService {
           }
         }
 
+        const tr069Status = parseOnuTr069Status(olt.raw_data);
+        const ipv6Status = parseOnuIpv6Status(olt.raw_data);
+
         if (whMatch) {
           whUsedIds.add(whMatch.id_servicio);
           const whIp = whMatch.ip ? String(whMatch.ip).trim() : null;
@@ -1208,6 +1253,9 @@ export class TursoService {
             smartolt_ip: oltIp,
             wisphub_ip: whIp,
             ip_status: ipStatus,
+            tr069_status: tr069Status,
+            ipv6_status: ipv6Status,
+            onu_external_id: String(olt.unique_external_id),
             wisphub_estado: String(whMatch.estado || 'Activo'),
             wisphub_facturas: String(whMatch.estado_facturas || 'Pagadas'),
             wisphub_plan: String(whMatch.plan_internet || ''),
@@ -1227,6 +1275,9 @@ export class TursoService {
             smartolt_ip: oltIp,
             wisphub_ip: null,
             ip_status: 'ONLY_SMARTOLT',
+            tr069_status: tr069Status,
+            ipv6_status: ipv6Status,
+            onu_external_id: String(olt.unique_external_id),
             wisphub_estado: null,
             wisphub_facturas: null,
             wisphub_plan: null,
@@ -1254,6 +1305,9 @@ export class TursoService {
             smartolt_ip: null,
             wisphub_ip: whIp,
             ip_status: 'ONLY_WISPHUB',
+            tr069_status: 'MISSING',
+            ipv6_status: 'MISSING',
+            onu_external_id: null,
             wisphub_estado: String(wh.estado || 'Activo'),
             wisphub_facturas: String(wh.estado_facturas || 'Pagadas'),
             wisphub_plan: String(wh.plan_internet || ''),
@@ -1275,6 +1329,8 @@ export class TursoService {
         onlySmartOlt: matchedItems.filter(i => i.ip_status === 'ONLY_SMARTOLT').length,
         onlyWisphub: matchedItems.filter(i => i.ip_status === 'ONLY_WISPHUB').length,
         noIp: matchedItems.filter(i => i.ip_status === 'NO_IP').length,
+        missingTr069: matchedItems.filter(i => i.smartolt_id && i.tr069_status !== 'ACTIVE').length,
+        missingIpv6: matchedItems.filter(i => i.smartolt_id && i.ipv6_status !== 'DUAL_STACK').length,
       };
 
       // 6. Aplicar filtro
@@ -1290,6 +1346,10 @@ export class TursoService {
         filtered = filtered.filter(i => i.ip_status === 'ONLY_WISPHUB');
       } else if (f === 'no_ip' || f === 'sin_ip') {
         filtered = filtered.filter(i => i.ip_status === 'NO_IP');
+      } else if (f === 'missing_tr069' || f === 'falta_tr069' || f === 'sin_tr069') {
+        filtered = filtered.filter(i => i.smartolt_id && i.tr069_status !== 'ACTIVE');
+      } else if (f === 'missing_ipv6' || f === 'falta_ipv6' || f === 'sin_ipv6') {
+        filtered = filtered.filter(i => i.smartolt_id && i.ipv6_status !== 'DUAL_STACK');
       }
 
       // 7. Aplicar búsqueda por texto si existe
@@ -1328,7 +1388,7 @@ export class TursoService {
     } catch (error: any) {
       logger.error('Error al realizar cruce de IPs SmartOLT vs WispHub:', error?.message || error);
       return {
-        summary: { totalSmartOlt: 0, totalWisphub: 0, mismatches: 0, matches: 0, onlySmartOlt: 0, onlyWisphub: 0, noIp: 0 },
+        summary: { totalSmartOlt: 0, totalWisphub: 0, mismatches: 0, matches: 0, onlySmartOlt: 0, onlyWisphub: 0, noIp: 0, missingTr069: 0, missingIpv6: 0 },
         items: [],
         total: 0,
         page: 1,

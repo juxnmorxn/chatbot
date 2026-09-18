@@ -874,6 +874,30 @@ export class AdminController {
     }
   }
 
+  /**
+   * Configura TR-069 y WAN IPv4/IPv6 Dual Stack en una ONU existente
+   */
+  static async configureSmartOltTr069(req: Request, res: Response): Promise<void> {
+    try {
+      const id = String(req.params.id || req.body?.onu_id || req.body?.id || '').trim();
+      if (!id) {
+        res.status(400).json({ success: false, error: 'ID o Serial de la ONU es requerido' });
+        return;
+      }
+
+      const options = req.body || {};
+      const result = await SmartOLTService.configureOnuTr069AndIpv6(id, options);
+      if (result.success) {
+        res.json(result);
+      } else {
+        res.status(400).json(result);
+      }
+    } catch (error: any) {
+      logger.error('Error al configurar TR-069/IPv6:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
   // ==========================================
   // GESTIÓN DE TÉCNICOS AUTORIZADOS
   // ==========================================

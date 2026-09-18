@@ -1692,6 +1692,8 @@ export function getAdminDashboardHtml(): string {
             <div style="display: flex; gap: 8px; flex-wrap: wrap;" id="audit-filter-buttons">
               <button class="btn btn-secondary btn-sm active" onclick="setAuditFilter('all', this)">Todos</button>
               <button class="btn btn-danger btn-sm" onclick="setAuditFilter('mismatches', this)">Discrepancias</button>
+              <button class="btn btn-warning btn-sm" onclick="setAuditFilter('missing_tr069', this)">Falta TR-069</button>
+              <button class="btn btn-info btn-sm" onclick="setAuditFilter('missing_ipv6', this)">Falta IPv6</button>
               <button class="btn btn-success btn-sm" onclick="setAuditFilter('matches', this)">Correctos</button>
               <button class="btn btn-secondary btn-sm" onclick="setAuditFilter('only_olt', this)">Solo SmartOLT</button>
               <button class="btn btn-secondary btn-sm" onclick="setAuditFilter('only_wisphub', this)">Solo WispHub</button>
@@ -1710,11 +1712,14 @@ export function getAdminDashboardHtml(): string {
                   <th>IP SmartOLT</th>
                   <th>IP WispHub</th>
                   <th>Estado IP</th>
+                  <th>TR-069</th>
+                  <th>IPv6</th>
                   <th>Plan WispHub</th>
+                  <th>Acción</th>
                 </tr>
               </thead>
               <tbody id="table-audit-body">
-                <tr><td colspan="6" style="text-align: center; color: var(--text-dim);">Cargando auditoría...</td></tr>
+                <tr><td colspan="9" style="text-align: center; color: var(--text-dim);">Cargando auditoría...</td></tr>
               </tbody>
             </table>
           </div>
@@ -2766,6 +2771,27 @@ export function getAdminDashboardHtml(): string {
             if (item.ip_status === 'ONLY_WISPHUB') statusBadge = '<span class="badge badge-purple">Solo WispHub</span>';
             if (item.ip_status === 'NO_IP') statusBadge = '<span class="badge badge-warning">Sin IP</span>';
 
+            let trBadge = '<span class="badge badge-success">ACTIVO</span>';
+            if (item.tr069_status === 'OMCI') trBadge = '<span class="badge badge-warning">OMCI</span>';
+            if (item.tr069_status === 'MISSING' || !item.tr069_status) trBadge = '<span class="badge badge-danger">FALTA</span>';
+
+            let ipv6Badge = '<span class="badge badge-success">DUAL STACK</span>';
+            if (item.ipv6_status === 'IPV4_ONLY') ipv6Badge = '<span class="badge badge-warning">SOLO IPv4</span>';
+            if (item.ipv6_status === 'MISSING' || !item.ipv6_status) ipv6Badge = '<span class="badge badge-danger">FALTA</span>';
+
+            let actionBtn = '<span style="font-size: 11px; color: var(--text-dim);">No en OLT</span>';
+            if (item.smartolt_id) {
+              const needsConfig = item.tr069_status !== 'ACTIVE' || item.ipv6_status !== 'DUAL_STACK';
+              const btnClass = needsConfig ? 'btn-primary' : 'btn-secondary';
+              const btnLabel = needsConfig ? '⚡ Activar TR069+IPv6' : '🔄 Reaplicar';
+              const safeClient = (item.cliente || 'Cliente').replace(/'/g, "\\'");
+              actionBtn = \`
+                <button class="btn \${btnClass} btn-sm" onclick="applyTr069AndIpv6Config('\${item.smartolt_id}', '\${safeClient}')">
+                  \${btnLabel}
+                </button>
+              \`;
+            }
+
             return \`
               <tr>
                 <td style="font-weight: 600;">\${escapeHtml(item.cliente || 'Desconocido')}</td>
@@ -2773,16 +2799,43 @@ export function getAdminDashboardHtml(): string {
                 <td style="font-family: var(--font-mono); color: var(--accent-cyan);">\${item.smartolt_ip || '--'}</td>
                 <td style="font-family: var(--font-mono); color: var(--accent-green);">\${item.wisphub_ip || '--'}</td>
                 <td>\${statusBadge}</td>
+                <td>\${trBadge}</td>
+                <td>\${ipv6Badge}</td>
                 <td>\${escapeHtml(item.wisphub_plan || '--')}</td>
+                <td>\${actionBtn}</td>
               </tr>
             \`;
           }).join('');
         } else {
-          tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-dim);">No se encontraron registros coincidentes.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; color: var(--text-dim);">No se encontraron registros coincidentes.</td></tr>';
         }
       } catch (err) {
         console.error('Error loading audit:', err);
       }
+    }
+
+    async function applyTr069AndIpv6Config(onuId, clientName) {
+      showConfirmDialog(
+        'Aprovisionar TR-069 + IPv6',
+        \`¿Deseas configurar automáticamente el perfil TR-069 de SmartOLT (VLAN de gestión) y WAN IPv4/IPv6 Dual Stack para <strong>\${clientName}</strong>?\`,
+        async () => {
+          showToast('Configurando', \`Enviando configuración a SmartOLT para \${clientName}...\`, 'info', 4000);
+          try {
+            const res = await apiFetch(\`/api/smartolt/configure-tr069/\${encodeURIComponent(onuId)}\`, {
+              method: 'POST',
+            });
+            if (res.success) {
+              showToast('Éxito', res.message || 'TR-069 e IPv6 Dual Stack configurados exitosamente.', 'success', 5000);
+              loadAuditData();
+            } else {
+              showToast('Error', res.message || res.error || 'No se pudo aplicar la configuración.', 'error', 5000);
+            }
+          } catch (err) {
+            showToast('Error', err.message || 'Fallo de conexión', 'error');
+          }
+        },
+        false
+      );
     }
 
     function setAuditFilter(f, btnElement) {
