@@ -35,8 +35,21 @@ export interface GroqClassificationResult {
   resumen_queja: string;
 }
 
+export interface ContratoInstalacionDatos {
+  folio: string | null;
+  cliente: string | null;
+  sn: string | null;
+  modelo: string | null;
+  paquete: string | null;
+  direccion: string | null;
+  colonia: string | null;
+  municipio_zona: string | null;
+  telefono: string | null;
+  wifi_password: string | null;
+}
+
 export interface GroqImageAnalysisResult {
-  tipo: 'COMPROBANTE_PAGO' | 'SPEEDTEST' | 'MODEM_LUCES' | 'OTRO';
+  tipo: 'COMPROBANTE_PAGO' | 'SPEEDTEST' | 'MODEM_LUCES' | 'CONTRATO_INSTALACION' | 'OTRO';
   descripcion: string;
   foco_rojo: boolean;
   equipo_apagado: boolean;
@@ -52,6 +65,7 @@ export interface GroqImageAnalysisResult {
     referencia: string | null;
     fecha: string | null;
   };
+  datos_contrato?: ContratoInstalacionDatos;
 }
 
 export class GroqService {
@@ -71,7 +85,7 @@ export class GroqService {
   }
 
   /**
-   * Analiza una imagen enviada por WhatsApp (foto de comprobante, speedtest o luces de módem)
+   * Analiza una imagen enviada por WhatsApp (foto de contrato, comprobante, speedtest o luces de módem)
    * utilizando el modelo de visión de Groq (qwen/qwen3.8-27b).
    */
   static async analizarImagen(imageBuffer: Buffer, mimeType: string = 'image/jpeg'): Promise<GroqImageAnalysisResult> {
@@ -84,29 +98,43 @@ export class GroqService {
       logger.info(`Analizando imagen con Groq Vision (${imageBuffer.length} bytes, ${cleanMime})...`);
 
       const systemPrompt = `
-Eres un analista visual experto en soporte técnico de un proveedor de servicios de internet (ISP).
-Tu objetivo es examinar la imagen enviada por el cliente y clasificarla estrictamente en una de estas categorías:
+Eres un analista visual experto en telecomunicaciones e ISP (CloudWare MX).
+Tu objetivo es examinar la imagen recibida y clasificarla estrictamente en una de estas categorías:
 
-1. "SPEEDTEST":
+1. "CONTRATO_INSTALACION":
+   - Foto o documento de carátula de contrato / suscripción de servicio de internet, comodato de equipo o formato de instalación.
+   - Extrae con máxima precisión:
+     * folio: número de folio del contrato (ej: "2979" en FOLIO:2979).
+     * cliente: Nombre completo del suscriptor/titular (ej: "Luis Daniel Portillo Noriega 2").
+     * sn: Número de serie del equipo/ONT/módem tal como viene impreso o escrito (ej: "48575443686173B6" o "HWTC686173B6"). Si viene en formato hex de 16 caracteres, transcríbelo tal cual.
+     * modelo: Modelo del equipo (ej: "EG8041V5", "HG8145X6-10", "HG8145V5", "ZTE-F660", etc.).
+     * paquete: Paquete marcado con X o seleccionado (ej: "40 MB", "60 MB", "200 MB", "400 MB", "600 MB").
+     * direccion: Calle y número exterior/interior (ej: "Cam. A La Estancia s/n Manzana #4").
+     * colonia: Colonia o localidad (ej: "La Estancia").
+     * municipio_zona: Municipio o zona de instalación (ej: "Actopan", "San Agustín", "San José").
+     * telefono: Número de teléfono fijo o móvil (ej: "7727363045").
+     * wifi_password: Clave o contraseña anotada (ej: "BZ6yMmYE").
+
+2. "SPEEDTEST":
    - Captura de pantalla de test de velocidad (Speedtest por Ookla, Fast.com, Google Speedtest, etc.).
    - Extrae con precisión: velocidad de descarga en Mbps (bajada_mbps), velocidad de subida en Mbps (subida_mbps), y latencia (ping_ms) si son legibles.
 
-2. "COMPROBANTE_PAGO":
+3. "COMPROBANTE_PAGO":
    - Recibo o captura de transferencia bancaria (BBVA, Banamex, Santander, Mercado Pago, Nu, etc.), ticket de OXXO / 7-Eleven, o ficha de depósito.
    - Extrae monto ($), banco/emisor, folio o referencia, y fecha si son legibles.
 
-3. "MODEM_LUCES":
-   - Foto de un módem / router / ONT (modelos Huawei EG8145V5, HG8245H, OptiXstar, x6, v5, etc., o cualquier equipo de fibra).
+4. "MODEM_LUCES":
+   - Foto de un módem / router / ONT de fibra óptica.
    - foco_rojo = true si observas algún LED rojo (foco LOS parpadeando en rojo o alarma).
    - equipo_apagado = true si el equipo no tiene ninguna luz encendida (apagado total).
    - luces_verdes = true si las luces principales (PON, POWER, LAN, WLAN) se ven en verde o azul normal.
 
-4. "OTRO":
+5. "OTRO":
    - Cualquier otra imagen que no pertenezca a las categorías anteriores.
 
 Devuelve EXCLUSIVAMENTE un JSON válido con esta estructura:
 {
-  "tipo": "COMPROBANTE_PAGO" | "SPEEDTEST" | "MODEM_LUCES" | "OTRO",
+  "tipo": "CONTRATO_INSTALACION" | "COMPROBANTE_PAGO" | "SPEEDTEST" | "MODEM_LUCES" | "OTRO",
   "descripcion": "resumen en 1 oración de lo que se ve en la foto",
   "foco_rojo": boolean,
   "equipo_apagado": boolean,
@@ -121,13 +149,25 @@ Devuelve EXCLUSIVAMENTE un JSON válido con esta estructura:
     "banco": string | null,
     "referencia": string | null,
     "fecha": string | null
+  },
+  "datos_contrato": {
+    "folio": string | null,
+    "cliente": string | null,
+    "sn": string | null,
+    "modelo": string | null,
+    "paquete": string | null,
+    "direccion": string | null,
+    "colonia": string | null,
+    "municipio_zona": string | null,
+    "telefono": string | null,
+    "wifi_password": string | null
   }
 }
 `.trim();
 
       const response = await groq.chat.completions.create({
         model: 'qwen/qwen3.8-27b',
-        max_tokens: 300,
+        max_tokens: 350,
         response_format: { type: 'json_object' },
         messages: [
           {
@@ -156,6 +196,7 @@ Devuelve EXCLUSIVAMENTE un JSON válido con esta estructura:
         luces_verdes: Boolean(parsed.luces_verdes),
         speedtest: parsed.speedtest || { bajada_mbps: null, subida_mbps: null, ping_ms: null },
         datos_pago: parsed.datos_pago || { monto: null, banco: null, referencia: null, fecha: null },
+        datos_contrato: parsed.datos_contrato || undefined,
       };
     } catch (error: any) {
       logger.warn('Error al analizar imagen con Groq Vision:', error?.message || error);
@@ -164,9 +205,7 @@ Devuelve EXCLUSIVAMENTE un JSON válido con esta estructura:
         descripcion: 'Imagen adjunta recibida',
         foco_rojo: false,
         equipo_apagado: false,
-        luces_verdes: false,
-        speedtest: { bajada_mbps: null, subida_mbps: null, ping_ms: null },
-        datos_pago: { monto: null, banco: null, referencia: null, fecha: null },
+        luces_verdes: true,
       };
     }
   }
