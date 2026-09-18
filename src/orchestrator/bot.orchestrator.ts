@@ -4156,7 +4156,7 @@ ${techInfo}───────────────────────
       board: unconfigured.board,
       port: unconfigured.port,
       sn: unconfigured.sn,
-      onu_type: unconfigured.onu_type_name || unconfigured.onu_type || 'HG8145X6-10',
+      onu_type: SmartOLTService.normalizeOnuType(unconfigured.onu_type_name || unconfigured.onu_type, unconfigured.sn),
       name: parsed.name,
       onu_mode: 'Routing',
       vlan: nextIp.vlan,
@@ -4178,7 +4178,7 @@ ${techInfo}───────────────────────
       oltName: targetOltName,
       zone: targetZone,
       signal: unconfigured.onu_signal_1490 || unconfigured.onu_signal || 'Detectada',
-      model: unconfigured.onu_type_name || unconfigured.onu_type || 'ZTE-F660',
+      model: payload.onu_type || 'EG8041V5',
     };
 
     await TursoService.upsertSession({

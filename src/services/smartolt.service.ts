@@ -442,18 +442,23 @@ export class SmartOLTService {
         ? data
         : data?.onus || data?.response || data?.unconfigured_onus || [];
 
-      return rawOnus.map((item: any) => ({
-        olt_id: item.olt_id || item.olt || '',
-        olt_name: item.olt_name || (String(item.olt_id) === '2' ? 'OLT-SanAgustin' : 'OLT5800-Actopan'),
-        pon_type: item.pon_type || 'gpon',
-        board: item.board || item.slot || '0',
-        port: item.port || item.pon || '0',
-        sn: String(item.sn || item.serial_number || item.onu_sn || '').trim().toUpperCase(),
-        onu_type: item.onu_type_name || item.onu_type || item.model || 'HG8145X6-10',
-        onu_type_name: item.onu_type_name || item.onu_type || item.model || '',
-        onu_signal: item.onu_signal || item.signal || item.rx_power || '',
-        onu_signal_1490: item.onu_signal_1490 || item.onu_signal_value || '',
-      }));
+      return rawOnus.map((item: any) => {
+        const sn = String(item.sn || item.serial_number || item.onu_sn || '').trim().toUpperCase();
+        const rawModel = item.onu_type_name || item.onu_type || item.model || '';
+        const normModel = this.normalizeOnuType(rawModel, sn);
+        return {
+          olt_id: item.olt_id || item.olt || '',
+          olt_name: item.olt_name || (String(item.olt_id) === '2' ? 'OLT-SanAgustin' : 'OLT5800-Actopan'),
+          pon_type: item.pon_type || 'gpon',
+          board: item.board || item.slot || '0',
+          port: item.port || item.pon || '0',
+          sn,
+          onu_type: normModel,
+          onu_type_name: normModel,
+          onu_signal: item.onu_signal || item.signal || item.rx_power || '',
+          onu_signal_1490: item.onu_signal_1490 || item.onu_signal_value || '',
+        };
+      });
     } catch (error: any) {
       logger.error('Error al obtener ONUs sin configurar en SmartOLT:', error?.response?.data || error?.message || error);
       return [];
@@ -471,22 +476,107 @@ export class SmartOLTService {
     }
 
     try {
-      const unconfigured = await this.getUnconfiguredOnus();
-      logger.info(`Buscando ONU con sufijo '${cleanSuffix}' entre ${unconfigured.length} ONUs no configuradas...`);
+      const unconfiguredList = await this.getUnconfiguredOnus();
+      logger.info(`Buscando ONU con sufijo '${cleanSuffix}' entre ${unconfiguredList.length} ONUs sin autorizar en SmartOLT.`);
 
-      // 1. Coincidencia exacta por terminación
-      const matchExact = unconfigured.find((o) => o.sn.toUpperCase().endsWith(cleanSuffix));
-      if (matchExact) return matchExact;
+      const found = unconfiguredList.find((onu) => {
+        const cleanSn = (onu.sn || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+        return cleanSn.endsWith(cleanSuffix) || cleanSn.includes(cleanSuffix);
+      });
 
-      // 2. Coincidencia por contener el sufijo (si el técnico pasó parte intermedia o completa)
-      const matchContains = unconfigured.find((o) => o.sn.toUpperCase().includes(cleanSuffix));
-      if (matchContains) return matchContains;
-
-      return null;
+      return found || null;
     } catch (error: any) {
       logger.error('Error al buscar ONU sin configurar por sufijo:', error?.message || error);
       return null;
     }
+  }
+
+  /**
+   * Normaliza el modelo/tipo de ONU según el catálogo oficial registrado en SmartOLT
+   */
+  static normalizeOnuType(rawModel?: string, sn?: string): string {
+    const cleanModel = (rawModel || '').trim();
+    const cleanSn = (sn || '').trim().toUpperCase();
+
+    const catalog = [
+      'EG8041V5', 'EG8145V5', 'HG8010H', 'HG8120C', 'HG8145V5', 'HG8145V5V3',
+      'HG8145X6', 'HG8145X6-10', 'HG8145X6-12', 'HG8145X610', 'HG8240H', 'HG8240T',
+      'HG8242', 'HG8242H', 'HG8245H', 'HG8310M', 'HG8311', 'HG8321R', 'HG8326R',
+      'HG8340M', 'HG8346M', 'HG8346R', 'HG8347R', 'HG8545M', 'HG8546M', 'HG865',
+      'HS8145V', 'HS8546V', 'ONU-type-eth-4-pots-1-catv-1', 'ONU-type-eth-4-pots-2-catv-0',
+      'ZTE-F600', 'ZTE-F601', 'ZTE-F601V6.0', 'ZTE-F620', 'ZTE-F623', 'ZTE-F625',
+      'ZTE-F625G', 'ZTE-F627', 'ZTE-F643', 'ZTE-F643V6.0', 'ZTE-F660', 'ZTE-F660V5.0',
+      'ZTE-F660V5.2', 'ZTE-F660V6.0', 'ZTE-F668'
+    ];
+
+    if (cleanModel) {
+      const exactMatch = catalog.find(c => c.toLowerCase() === cleanModel.toLowerCase());
+      if (exactMatch) return exactMatch;
+
+      const upper = cleanModel.toUpperCase().replace(/[\s_]/g, '-');
+
+      // Huawei matches
+      if (upper.includes('8041')) return 'EG8041V5';
+      if (upper.includes('8145X6-12') || upper.includes('8145X612')) return 'HG8145X6-12';
+      if (upper.includes('8145X6-10') || upper.includes('8145X610')) return 'HG8145X6-10';
+      if (upper.includes('8145X6')) return 'HG8145X6';
+      if (upper.includes('8145V5V3') || upper.includes('8145V5-V3')) return 'HG8145V5V3';
+      if (upper.includes('EG8145V5') || (upper.startsWith('EG') && upper.includes('8145'))) return 'EG8145V5';
+      if (upper.includes('8145V5') || upper.includes('8145')) return 'HG8145V5';
+      if (upper.includes('8240H')) return 'HG8240H';
+      if (upper.includes('8240T')) return 'HG8240T';
+      if (upper.includes('8242H')) return 'HG8242H';
+      if (upper.includes('8242')) return 'HG8242';
+      if (upper.includes('8245H') || upper.includes('8245')) return 'HG8245H';
+      if (upper.includes('8010')) return 'HG8010H';
+      if (upper.includes('8120')) return 'HG8120C';
+      if (upper.includes('8310')) return 'HG8310M';
+      if (upper.includes('8311')) return 'HG8311';
+      if (upper.includes('8321')) return 'HG8321R';
+      if (upper.includes('8326')) return 'HG8326R';
+      if (upper.includes('8340')) return 'HG8340M';
+      if (upper.includes('8346M')) return 'HG8346M';
+      if (upper.includes('8346R') || upper.includes('8346')) return 'HG8346R';
+      if (upper.includes('8347')) return 'HG8347R';
+      if (upper.includes('8545')) return 'HG8545M';
+      if (upper.includes('8546M')) return 'HG8546M';
+      if (upper.includes('865')) return 'HG865';
+      if (upper.includes('HS8145') || upper.includes('HS8145V')) return 'HS8145V';
+      if (upper.includes('HS8546') || upper.includes('HS8546V')) return 'HS8546V';
+
+      // ZTE matches
+      if (upper.includes('F668')) return 'ZTE-F668';
+      if (upper.includes('F660')) {
+        if (upper.includes('V5.0') || upper.includes('V50')) return 'ZTE-F660V5.0';
+        if (upper.includes('V5.2') || upper.includes('V52')) return 'ZTE-F660V5.2';
+        if (upper.includes('V6.0') || upper.includes('V60')) return 'ZTE-F660V6.0';
+        return 'ZTE-F660';
+      }
+      if (upper.includes('F601')) {
+        if (upper.includes('V6.0') || upper.includes('V60')) return 'ZTE-F601V6.0';
+        return 'ZTE-F601';
+      }
+      if (upper.includes('F600')) return 'ZTE-F600';
+      if (upper.includes('F620')) return 'ZTE-F620';
+      if (upper.includes('F623')) return 'ZTE-F623';
+      if (upper.includes('F625G')) return 'ZTE-F625G';
+      if (upper.includes('F625')) return 'ZTE-F625';
+      if (upper.includes('F627')) return 'ZTE-F627';
+      if (upper.includes('F643')) {
+        if (upper.includes('V6.0') || upper.includes('V60')) return 'ZTE-F643V6.0';
+        return 'ZTE-F643';
+      }
+    }
+
+    // Heurística por prefijo de Número de Serie (SN)
+    if (cleanSn.startsWith('HWTC') || cleanSn.startsWith('48575443')) {
+      return 'EG8041V5';
+    }
+    if (cleanSn.startsWith('ZTEG') || cleanSn.startsWith('5A544547')) {
+      return 'ZTE-F660';
+    }
+
+    return 'EG8041V5';
   }
 
   /**
@@ -518,17 +608,19 @@ export class SmartOLTService {
     const cleanAddress = this.normalizeSmartOltString(payload.address);
     const cleanZone = this.normalizeSmartOltString(payload.zone);
     const cleanComment = this.normalizeSmartOltString(payload.comment);
+    const cleanSn = String(payload.sn).trim().toUpperCase();
+    const cleanOnuType = this.normalizeOnuType(payload.onu_type, cleanSn);
 
-    logger.info(`Iniciando autorización en SmartOLT para SN: ${payload.sn}, Cliente: "${cleanName}", OLT: ${payload.olt_id}, VLAN: ${payload.vlan}, IP: ${payload.ip_address}`);
+    logger.info(`Iniciando autorización en SmartOLT para SN: ${cleanSn}, Modelo: ${cleanOnuType}, Cliente: "${cleanName}", OLT: ${payload.olt_id}, VLAN: ${payload.vlan}, IP: ${payload.ip_address}`);
     const apiKey = this.getApiKey();
 
     if (!apiKey || apiKey.includes('tu_token')) {
       logger.info('Modo DEV: Autorización simulada exitosa.');
       return {
         success: true,
-        message: `ONU ${payload.sn} autorizada exitosamente en modo simulación. IP asignada: ${payload.ip_address}, VLAN: ${payload.vlan}`,
-        onu_id: `SIM-${payload.sn}`,
-        details: { ...payload, name: cleanName },
+        message: `ONU ${cleanSn} autorizada exitosamente en modo simulación (${cleanOnuType}). IP asignada: ${payload.ip_address}, VLAN: ${payload.vlan}`,
+        onu_id: `SIM-${cleanSn}`,
+        details: { ...payload, name: cleanName, onu_type: cleanOnuType },
       };
     }
 
@@ -541,8 +633,8 @@ export class SmartOLTService {
       form.append('pon_type', payload.pon_type || 'gpon');
       form.append('board', String(payload.board));
       form.append('port', String(payload.port));
-      form.append('sn', String(payload.sn).trim().toUpperCase());
-      form.append('onu_type', String(payload.onu_type || 'HG8145X6-10'));
+      form.append('sn', cleanSn);
+      form.append('onu_type', cleanOnuType);
       form.append('name', cleanName);
       
       // Modo de Operación WAN: Routing con IP estática y acceso remoto habilitado
@@ -563,8 +655,8 @@ export class SmartOLTService {
       form.append('dns1', '8.8.8.8');
       form.append('dns2', '8.8.4.4');
       
-      // Perfiles de velocidad y VLAN
-      form.append('line_profile', String(payload.line_profile || 'VLAN'));
+      // Perfiles de velocidad y Line-Profile VLAN obligatorio
+      form.append('line_profile', 'VLAN');
       form.append('download_speed_profile_name', String(payload.download_speed_profile_name || '40MB-DOWN'));
       form.append('upload_speed_profile_name', String(payload.upload_speed_profile_name || '40MB-UP'));
       if (cleanAddress) form.append('address', cleanAddress);
@@ -576,66 +668,97 @@ export class SmartOLTService {
       logger.info('Respuesta de autorización SmartOLT:', JSON.stringify(resData));
 
       if (resData?.status === true || response.status === 200 || resData?.response_code === 'success' || resData?.response === 'success' || (typeof resData?.response === 'string' && resData.response.toLowerCase().includes('saved'))) {
-        const onuExternalId = resData?.unique_external_id || resData?.onu_id || payload.sn;
+        const onuExternalId = resData?.unique_external_id || resData?.onu_id || cleanSn;
 
-        // SmartOLT Aprovisionamiento TR-069 / OMCI y WAN Static IP Dual Stack
+        // SmartOLT Aprovisionamiento WAN / TR-069 / OMCI
         if (payload.ip_address && onuExternalId) {
-          const isSanAgustin = String(payload.olt_id) === '2' || (payload.zone || '').toLowerCase().includes('san agustin');
+          const zoneLower = (cleanZone || payload.zone || '').toLowerCase();
+          const isSanJose = zoneLower.includes('san jose') || zoneLower.includes('san josé');
+          const isSanAgustin = String(payload.olt_id) === '2' || zoneLower.includes('san agustin');
           const mgmtVlan = isSanAgustin ? '60' : '99';
 
-          // 1. Configurar Management IP en la VLAN de gestión (99 Actopan / 60 San Agustín)
-          try {
-            logger.info(`Configurando Management IP en VLAN ${mgmtVlan} para ${onuExternalId}...`);
-            const mgmtForm = new FormData();
-            mgmtForm.append('vlan', mgmtVlan);
-            const mgmtHeaders = typeof (mgmtForm as any).getHeaders === 'function' ? (mgmtForm as any).getHeaders() : undefined;
-            await api.post(`/onu/set_onu_mgmt_ip_static_ip/${onuExternalId}`, mgmtForm, { headers: mgmtHeaders });
-            logger.info(`Management IP asignada con éxito para ${onuExternalId}`);
-          } catch (mErr: any) {
-            logger.warn(`No se pudo asignar Management IP para ${onuExternalId}:`, mErr?.response?.data || mErr?.message);
-          }
+          if (isSanJose) {
+            // Regla San José: NO requiere TR-069 ni IPv6, únicamente Static IPv4 directo vía OMCI
+            logger.info(`Zona San José detectada para ${onuExternalId}: Configurando solo WAN Static IPv4 (OMCI) sin TR-069 ni IPv6...`);
+            try {
+              const staticForm = new FormData();
+              staticForm.append('ipv4_address', String(payload.ip_address));
+              staticForm.append('subnet_mask', String(payload.netmask || '255.255.255.0'));
+              staticForm.append('gateway', String(payload.gateway || '172.19.2.254'));
+              staticForm.append('dns1', '8.8.8.8');
+              staticForm.append('dns2', '8.8.4.4');
+              staticForm.append('configuration_method', 'OMCI');
+              staticForm.append('ip_protocol', 'ipv4');
 
-          // 2. Habilitar Perfil TR-069 SmartOLT sobre la interfaz de gestión (mgmt)
-          let tr069Enabled = false;
-          try {
-            logger.info(`Habilitando Perfil TR-069 'SmartOLT' para ${onuExternalId}...`);
-            const tr069Form = new FormData();
-            tr069Form.append('tr069_profile', 'SmartOLT');
-            tr069Form.append('tr069_interface', 'mgmt');
-            const tr069Headers = typeof (tr069Form as any).getHeaders === 'function' ? (tr069Form as any).getHeaders() : undefined;
-            await api.post(`/onu/enable_tr069/${onuExternalId}`, tr069Form, { headers: tr069Headers });
-            tr069Enabled = true;
-            logger.info(`Perfil TR-069 SmartOLT habilitado con éxito para ${onuExternalId}`);
-          } catch (trErr: any) {
-            logger.warn(`No se pudo habilitar TR-069 para ${onuExternalId} (se usará OMCI):`, trErr?.response?.data || trErr?.message);
-          }
+              const staticHeaders = typeof (staticForm as any).getHeaders === 'function' ? (staticForm as any).getHeaders() : undefined;
+              const staticRes = await api.post(`/onu/set_onu_wan_mode_static_ip/${onuExternalId}`, staticForm, {
+                headers: staticHeaders
+              });
+              logger.info(`WAN Static IP IPv4 (OMCI) configurada exitosamente para ${onuExternalId} en San José:`, JSON.stringify(staticRes.data));
 
-          // 3. Configurar WAN en Static IP con Dual Stack IPv4/IPv6 y Auto
-          try {
-            logger.info(`Configurando WAN Static IP para ${onuExternalId} (${payload.ip_address})...`);
-            const staticForm = new FormData();
-            staticForm.append('ipv4_address', String(payload.ip_address));
-            staticForm.append('subnet_mask', String(payload.netmask || '255.255.255.0'));
-            staticForm.append('gateway', String(payload.gateway || '172.19.2.254'));
-            staticForm.append('dns1', '8.8.8.8');
-            staticForm.append('dns2', '8.8.4.4');
-            staticForm.append('configuration_method', tr069Enabled ? 'TR069' : 'OMCI');
-            staticForm.append('ip_protocol', 'ipv4ipv6');
-            staticForm.append('ipv6_address_mode', 'Auto');
-            staticForm.append('ipv6_prefix_delegation_mode', 'DHCPv6-PD');
+              // Habilitar acceso remoto a la WAN IP
+              await api.post(`/onu/enable_allow_remote_access_to_wan_ip/${onuExternalId}`).catch((e) => {
+                logger.warn(`No se pudo habilitar acceso remoto a WAN IP para ${onuExternalId}:`, e?.message);
+              });
+            } catch (wanErr: any) {
+              logger.error(`Error al aplicar WAN Static IP para San José ${onuExternalId}:`, wanErr?.response?.data || wanErr?.message || wanErr);
+            }
+          } else {
+            // Actopan / San Agustín / Resto de Zonas: Gestión + TR-069 + Dual Stack IPv4/IPv6
+            // 1. Configurar Management IP en la VLAN de gestión (99 Actopan / 60 San Agustín)
+            try {
+              logger.info(`Configurando Management IP en VLAN ${mgmtVlan} para ${onuExternalId}...`);
+              const mgmtForm = new FormData();
+              mgmtForm.append('vlan', mgmtVlan);
+              const mgmtHeaders = typeof (mgmtForm as any).getHeaders === 'function' ? (mgmtForm as any).getHeaders() : undefined;
+              await api.post(`/onu/set_onu_mgmt_ip_static_ip/${onuExternalId}`, mgmtForm, { headers: mgmtHeaders });
+              logger.info(`Management IP asignada con éxito para ${onuExternalId}`);
+            } catch (mErr: any) {
+              logger.warn(`No se pudo asignar Management IP para ${onuExternalId}:`, mErr?.response?.data || mErr?.message);
+            }
 
-            const staticHeaders = typeof (staticForm as any).getHeaders === 'function' ? (staticForm as any).getHeaders() : undefined;
-            const staticRes = await api.post(`/onu/set_onu_wan_mode_static_ip/${onuExternalId}`, staticForm, {
-              headers: staticHeaders
-            });
-            logger.info(`WAN Static IP (${tr069Enabled ? 'TR069' : 'OMCI'}) configurada exitosamente para ${onuExternalId}:`, JSON.stringify(staticRes.data));
+            // 2. Habilitar Perfil TR-069 SmartOLT sobre la interfaz de gestión (mgmt)
+            let tr069Enabled = false;
+            try {
+              logger.info(`Habilitando Perfil TR-069 'SmartOLT' para ${onuExternalId}...`);
+              const tr069Form = new FormData();
+              tr069Form.append('tr069_profile', 'SmartOLT');
+              tr069Form.append('tr069_interface', 'mgmt');
+              const tr069Headers = typeof (tr069Form as any).getHeaders === 'function' ? (tr069Form as any).getHeaders() : undefined;
+              await api.post(`/onu/enable_tr069/${onuExternalId}`, tr069Form, { headers: tr069Headers });
+              tr069Enabled = true;
+              logger.info(`Perfil TR-069 SmartOLT habilitado con éxito para ${onuExternalId}`);
+            } catch (trErr: any) {
+              logger.warn(`No se pudo habilitar TR-069 para ${onuExternalId} (se usará OMCI):`, trErr?.response?.data || trErr?.message);
+            }
 
-            // 4. Habilitar acceso remoto a la WAN IP
-            await api.post(`/onu/enable_allow_remote_access_to_wan_ip/${onuExternalId}`).catch((e) => {
-              logger.warn(`No se pudo habilitar acceso remoto a WAN IP para ${onuExternalId}:`, e?.message);
-            });
-          } catch (wanErr: any) {
-            logger.error(`Error al aplicar WAN Static IP para ${onuExternalId}:`, wanErr?.response?.data || wanErr?.message || wanErr);
+            // 3. Configurar WAN en Static IP con Dual Stack IPv4/IPv6 y Auto
+            try {
+              logger.info(`Configurando WAN Static IP para ${onuExternalId} (${payload.ip_address})...`);
+              const staticForm = new FormData();
+              staticForm.append('ipv4_address', String(payload.ip_address));
+              staticForm.append('subnet_mask', String(payload.netmask || '255.255.255.0'));
+              staticForm.append('gateway', String(payload.gateway || '172.19.2.254'));
+              staticForm.append('dns1', '8.8.8.8');
+              staticForm.append('dns2', '8.8.4.4');
+              staticForm.append('configuration_method', tr069Enabled ? 'TR069' : 'OMCI');
+              staticForm.append('ip_protocol', 'ipv4ipv6');
+              staticForm.append('ipv6_address_mode', 'Auto');
+              staticForm.append('ipv6_prefix_delegation_mode', 'DHCPv6-PD');
+
+              const staticHeaders = typeof (staticForm as any).getHeaders === 'function' ? (staticForm as any).getHeaders() : undefined;
+              const staticRes = await api.post(`/onu/set_onu_wan_mode_static_ip/${onuExternalId}`, staticForm, {
+                headers: staticHeaders
+              });
+              logger.info(`WAN Static IP (${tr069Enabled ? 'TR069' : 'OMCI'}) configurada exitosamente para ${onuExternalId}:`, JSON.stringify(staticRes.data));
+
+              // 4. Habilitar acceso remoto a la WAN IP
+              await api.post(`/onu/enable_allow_remote_access_to_wan_ip/${onuExternalId}`).catch((e) => {
+                logger.warn(`No se pudo habilitar acceso remoto a WAN IP para ${onuExternalId}:`, e?.message);
+              });
+            } catch (wanErr: any) {
+              logger.error(`Error al aplicar WAN Static IP para ${onuExternalId}:`, wanErr?.response?.data || wanErr?.message || wanErr);
+            }
           }
         }
 
@@ -643,19 +766,19 @@ export class SmartOLTService {
         TursoService.saveSmartOltOnus([
           {
             unique_external_id: onuExternalId,
-            sn: payload.sn,
-            name: payload.name,
+            sn: cleanSn,
+            name: cleanName,
             speed_profile: payload.download_speed_profile_name || '40MB',
             ip_address: payload.ip_address,
-            zone_name: payload.zone || 'Actopan',
-            raw_data: JSON.stringify(payload),
+            zone_name: cleanZone || 'Actopan',
+            raw_data: JSON.stringify({ ...payload, onu_type: cleanOnuType, name: cleanName }),
             updated_at: new Date().toISOString(),
           },
         ]).catch(() => {});
 
         return {
           success: true,
-          message: resData?.message || resData?.response || `Módem ${payload.sn} autorizado y configurado en Static IP en SmartOLT.`,
+          message: resData?.message || resData?.response || `Módem ${cleanSn} (${cleanOnuType}) autorizado y configurado en Static IP en SmartOLT.`,
           onu_id: onuExternalId,
           details: resData,
         };
@@ -706,63 +829,91 @@ export class SmartOLTService {
 
       const ip = options?.ip_address || onuRecord?.ip_address || rawData?.ip_address || rawData?.ip;
       const zone = options?.zone || onuRecord?.zone_name || rawData?.zone || rawData?.zone_name || 'Actopan';
-      const oltId = options?.olt_id || rawData?.olt_id || (zone.toLowerCase().includes('san agustin') ? '2' : '1');
-      const isSanAgustin = String(oltId) === '2' || zone.toLowerCase().includes('san agustin');
+      const zoneLower = (zone || '').toLowerCase();
+      const isSanJose = zoneLower.includes('san jose') || zoneLower.includes('san josé');
+      const oltId = options?.olt_id || rawData?.olt_id || (zoneLower.includes('san agustin') ? '2' : '1');
+      const isSanAgustin = String(oltId) === '2' || zoneLower.includes('san agustin');
       const mgmtVlan = isSanAgustin ? '60' : '99';
 
       const results: string[] = [];
-
-      // A. Configurar Management IP en la VLAN de gestión (99 Actopan / 60 San Agustín)
-      try {
-        logger.info(`Configurando Management IP en VLAN ${mgmtVlan} para ${externalId}...`);
-        const mgmtForm = new FormData();
-        mgmtForm.append('vlan', mgmtVlan);
-        const mgmtHeaders = typeof (mgmtForm as any).getHeaders === 'function' ? (mgmtForm as any).getHeaders() : undefined;
-        await api.post(`/onu/set_onu_mgmt_ip_static_ip/${externalId}`, mgmtForm, { headers: mgmtHeaders });
-        results.push(`VLAN Gestión ${mgmtVlan}`);
-      } catch (mErr: any) {
-        logger.warn(`No se pudo asignar Management IP para ${externalId}:`, mErr?.response?.data || mErr?.message);
-      }
-
-      // B. Habilitar Perfil TR-069 SmartOLT sobre la interfaz de gestión (mgmt)
       let tr069Ok = false;
-      try {
-        logger.info(`Habilitando Perfil TR-069 'SmartOLT' para ${externalId}...`);
-        const tr069Form = new FormData();
-        tr069Form.append('tr069_profile', 'SmartOLT');
-        tr069Form.append('tr069_interface', 'mgmt');
-        const tr069Headers = typeof (tr069Form as any).getHeaders === 'function' ? (tr069Form as any).getHeaders() : undefined;
-        await api.post(`/onu/enable_tr069/${externalId}`, tr069Form, { headers: tr069Headers });
-        tr069Ok = true;
-        results.push("TR-069 'SmartOLT' Activo");
-      } catch (trErr: any) {
-        logger.warn(`No se pudo habilitar TR-069 para ${externalId}:`, trErr?.response?.data || trErr?.message);
-      }
 
-      // C. Configurar WAN en Static IP con Dual Stack IPv4/IPv6 si tenemos IP
-      if (ip) {
+      if (isSanJose) {
+        // San José: solo Static IPv4 vía OMCI
+        if (ip) {
+          try {
+            logger.info(`Configurando WAN Static IPv4 OMCI para San José ${externalId} (${ip})...`);
+            const staticForm = new FormData();
+            staticForm.append('ipv4_address', String(ip));
+            staticForm.append('subnet_mask', String(options?.netmask || '255.255.255.0'));
+            staticForm.append('gateway', String(options?.gateway || '172.19.2.254'));
+            staticForm.append('dns1', '8.8.8.8');
+            staticForm.append('dns2', '8.8.4.4');
+            staticForm.append('configuration_method', 'OMCI');
+            staticForm.append('ip_protocol', 'ipv4');
+
+            const staticHeaders = typeof (staticForm as any).getHeaders === 'function' ? (staticForm as any).getHeaders() : undefined;
+            await api.post(`/onu/set_onu_wan_mode_static_ip/${externalId}`, staticForm, { headers: staticHeaders });
+            results.push('Static IPv4 OMCI (San José)');
+
+            await api.post(`/onu/enable_allow_remote_access_to_wan_ip/${externalId}`).catch(() => {});
+            results.push('Acceso remoto WAN');
+          } catch (wanErr: any) {
+            logger.error(`Error al aplicar WAN Static IP para ${externalId}:`, wanErr?.response?.data || wanErr?.message);
+          }
+        }
+      } else {
+        // A. Configurar Management IP en la VLAN de gestión (99 Actopan / 60 San Agustín)
         try {
-          logger.info(`Configurando WAN Static IP para ${externalId} (${ip})...`);
-          const staticForm = new FormData();
-          staticForm.append('ipv4_address', String(ip));
-          staticForm.append('subnet_mask', String(options?.netmask || '255.255.255.0'));
-          staticForm.append('gateway', String(options?.gateway || '172.19.2.254'));
-          staticForm.append('dns1', '8.8.8.8');
-          staticForm.append('dns2', '8.8.4.4');
-          staticForm.append('configuration_method', tr069Ok ? 'TR069' : 'OMCI');
-          staticForm.append('ip_protocol', 'ipv4ipv6');
-          staticForm.append('ipv6_address_mode', 'Auto');
-          staticForm.append('ipv6_prefix_delegation_mode', 'DHCPv6-PD');
+          logger.info(`Configurando Management IP en VLAN ${mgmtVlan} para ${externalId}...`);
+          const mgmtForm = new FormData();
+          mgmtForm.append('vlan', mgmtVlan);
+          const mgmtHeaders = typeof (mgmtForm as any).getHeaders === 'function' ? (mgmtForm as any).getHeaders() : undefined;
+          await api.post(`/onu/set_onu_mgmt_ip_static_ip/${externalId}`, mgmtForm, { headers: mgmtHeaders });
+          results.push(`VLAN Gestión ${mgmtVlan}`);
+        } catch (mErr: any) {
+          logger.warn(`No se pudo asignar Management IP para ${externalId}:`, mErr?.response?.data || mErr?.message);
+        }
 
-          const staticHeaders = typeof (staticForm as any).getHeaders === 'function' ? (staticForm as any).getHeaders() : undefined;
-          await api.post(`/onu/set_onu_wan_mode_static_ip/${externalId}`, staticForm, { headers: staticHeaders });
-          results.push(`Dual Stack IPv4/IPv6 (${tr069Ok ? 'TR-069' : 'OMCI'})`);
+        // B. Habilitar Perfil TR-069 SmartOLT sobre la interfaz de gestión (mgmt)
+        try {
+          logger.info(`Habilitando Perfil TR-069 'SmartOLT' para ${externalId}...`);
+          const tr069Form = new FormData();
+          tr069Form.append('tr069_profile', 'SmartOLT');
+          tr069Form.append('tr069_interface', 'mgmt');
+          const tr069Headers = typeof (tr069Form as any).getHeaders === 'function' ? (tr069Form as any).getHeaders() : undefined;
+          await api.post(`/onu/enable_tr069/${externalId}`, tr069Form, { headers: tr069Headers });
+          tr069Ok = true;
+          results.push("TR-069 'SmartOLT' Activo");
+        } catch (trErr: any) {
+          logger.warn(`No se pudo habilitar TR-069 para ${externalId}:`, trErr?.response?.data || trErr?.message);
+        }
 
-          // D. Habilitar acceso remoto a la WAN IP
-          await api.post(`/onu/enable_allow_remote_access_to_wan_ip/${externalId}`).catch(() => {});
-          results.push('Acceso remoto WAN');
-        } catch (wanErr: any) {
-          logger.error(`Error al aplicar WAN Static IP para ${externalId}:`, wanErr?.response?.data || wanErr?.message);
+        // C. Configurar WAN en Static IP con Dual Stack IPv4/IPv6 si tenemos IP
+        if (ip) {
+          try {
+            logger.info(`Configurando WAN Static IP para ${externalId} (${ip})...`);
+            const staticForm = new FormData();
+            staticForm.append('ipv4_address', String(ip));
+            staticForm.append('subnet_mask', String(options?.netmask || '255.255.255.0'));
+            staticForm.append('gateway', String(options?.gateway || '172.19.2.254'));
+            staticForm.append('dns1', '8.8.8.8');
+            staticForm.append('dns2', '8.8.4.4');
+            staticForm.append('configuration_method', tr069Ok ? 'TR069' : 'OMCI');
+            staticForm.append('ip_protocol', 'ipv4ipv6');
+            staticForm.append('ipv6_address_mode', 'Auto');
+            staticForm.append('ipv6_prefix_delegation_mode', 'DHCPv6-PD');
+
+            const staticHeaders = typeof (staticForm as any).getHeaders === 'function' ? (staticForm as any).getHeaders() : undefined;
+            await api.post(`/onu/set_onu_wan_mode_static_ip/${externalId}`, staticForm, { headers: staticHeaders });
+            results.push(`Dual Stack IPv4/IPv6 (${tr069Ok ? 'TR-069' : 'OMCI'})`);
+
+            // D. Habilitar acceso remoto a la WAN IP
+            await api.post(`/onu/enable_allow_remote_access_to_wan_ip/${externalId}`).catch(() => {});
+            results.push('Acceso remoto WAN');
+          } catch (wanErr: any) {
+            logger.error(`Error al aplicar WAN Static IP para ${externalId}:`, wanErr?.response?.data || wanErr?.message);
+          }
         }
       }
 
