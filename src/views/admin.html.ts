@@ -1595,16 +1595,23 @@ export function getAdminDashboardHtml(): string {
 
       <!-- VIEW 3: KANBAN TICKETS BOARD -->
       <section id="view-tickets" class="view-container">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
           <div>
             <h3 style="font-size: 16px; font-weight: 700;">Tablero de Soporte Técnico</h3>
             <p style="font-size: 12px; color: var(--text-muted);">Mueve y asigna técnicos a los folios de servicio.</p>
           </div>
-          <button class="btn btn-secondary btn-sm" onclick="loadTicketsData()">
-            <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"></path></svg>
-            <span>Recargar Tablero</span>
-          </button>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <button class="btn btn-secondary btn-sm" onclick="loadTicketsData()">
+              <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"></path></svg>
+              <span>Recargar Tablero</span>
+            </button>
+            <button id="btn-clear-all-tickets" class="btn btn-danger btn-sm" style="display: none;" onclick="confirmClearAllTickets()">
+              <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+              <span>Vaciar Tickets</span>
+            </button>
+          </div>
         </div>
+
 
         <div class="kanban-board">
           <div class="kanban-column">
@@ -1794,14 +1801,14 @@ export function getAdminDashboardHtml(): string {
           </div>
         </div>
 
-        <!-- Danger Zone -->
-        <div class="glass-card" style="margin-top: 24px; border-color: rgba(244, 63, 94, 0.3);">
-          <h3 style="font-size: 15px; font-weight: 700; color: var(--accent-rose); margin-bottom: 12px;">Zona de Pruebas & Reset</h3>
-          <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">Elimina datos de prueba sin afectar la base de datos de producción.</p>
+        <!-- Danger Zone (Superadmin Only) -->
+        <div id="settings-danger-zone" class="glass-card" style="margin-top: 24px; border-color: rgba(244, 63, 94, 0.3); display: none;">
+          <h3 style="font-size: 15px; font-weight: 700; color: var(--accent-rose); margin-bottom: 12px;">Zona de Pruebas & Reset (Superadmin)</h3>
+          <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">Elimina datos de prueba sin afectar la base de datos de producción. Requiere confirmación.</p>
           <div style="display: flex; gap: 12px; flex-wrap: wrap;">
             <button class="btn btn-danger btn-sm" onclick="clearSessionsData()">Vaciar Sesiones</button>
             <button class="btn btn-danger btn-sm" onclick="clearLogsData()">Vaciar Historial Logs</button>
-            <button class="btn btn-danger btn-sm" onclick="clearTicketsData()">Vaciar Tickets</button>
+            <button class="btn btn-danger btn-sm" onclick="confirmClearAllTickets()">Vaciar Tickets</button>
           </div>
         </div>
       </section>
@@ -2021,11 +2028,23 @@ export function getAdminDashboardHtml(): string {
       document.getElementById('user-display-name').innerText = state.user.name || state.user.username;
       document.getElementById('user-display-role').innerText = state.user.role || 'Admin';
 
+      const isSuper = state.user.role === 'superadmin';
       const userNav = document.getElementById('nav-item-users');
       if (userNav) {
-        userNav.style.display = state.user.role === 'superadmin' ? 'flex' : 'none';
+        userNav.style.display = isSuper ? 'flex' : 'none';
+      }
+
+      const btnClearTickets = document.getElementById('btn-clear-all-tickets');
+      if (btnClearTickets) {
+        btnClearTickets.style.display = isSuper ? 'inline-flex' : 'none';
+      }
+
+      const dangerZone = document.getElementById('settings-danger-zone');
+      if (dangerZone) {
+        dangerZone.style.display = isSuper ? 'block' : 'none';
       }
     }
+
 
     // Navigation
     function navigateTo(viewId) {
@@ -2577,10 +2596,20 @@ export function getAdminDashboardHtml(): string {
             <label class="form-label">Notas de Resolución</label>
             <textarea id="modal-ticket-notes" class="form-control" rows="2" placeholder="Detalle de solución...">\${escapeHtml(t.resolution_notes || '')}</textarea>
           </div>
+          \${state.user?.role === 'superadmin' ? \`
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--card-border);">
+              <span style="font-size: 11.5px; color: var(--text-dim);">Zona Superadmin</span>
+              <button type="button" class="btn btn-danger btn-sm" onclick="confirmDeleteSingleTicket('\${t.folio}')">
+                <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                <span>Eliminar Ticket</span>
+              </button>
+            </div>
+          \` : ''}
         </div>
       \`;
 
       openModal(\`Detalle del Ticket \${t.folio}\`, content, async () => {
+
         const newStatus = document.getElementById('modal-ticket-status-select').value;
         const newTech = document.getElementById('modal-ticket-tech-input').value.trim();
         const notes = document.getElementById('modal-ticket-notes').value.trim();
@@ -2965,26 +2994,73 @@ export function getAdminDashboardHtml(): string {
     }
 
     function clearSessionsData() {
-      showConfirmDialog('Vaciar Sesiones', '¿Deseas eliminar todas las sesiones de clientes en Turso?', async () => {
+      if (state.user?.role !== 'superadmin') {
+        showToast('Acceso Denegado', 'Solo el superadmin puede vaciar sesiones.', 'error');
+        return;
+      }
+      showConfirmDialog('⚠️ Vaciar Sesiones de Clientes', '¿Estás seguro de que deseas eliminar todas las sesiones activas en Turso DB? El bot reiniciará el flujo con los clientes.', async () => {
         const res = await apiFetch('/api/sessions/clear-all', { method: 'DELETE' });
-        showToast('Sesiones Vaciadas', res.message, 'success');
-        loadDashboardData();
+        if (res.success) {
+          showToast('Sesiones Vaciadas', res.message || 'Sesiones eliminadas correctamente.', 'success');
+          loadDashboardData();
+        } else {
+          showToast('Error', res.error || 'Error al vaciar sesiones.', 'error');
+        }
       });
     }
 
     function clearLogsData() {
-      showConfirmDialog('Vaciar Historial', '¿Deseas vaciar todos los logs de conversación?', async () => {
+      if (state.user?.role !== 'superadmin') {
+        showToast('Acceso Denegado', 'Solo el superadmin puede vaciar historiales.', 'error');
+        return;
+      }
+      showConfirmDialog('⚠️ Vaciar Historial de Logs', '¿Estás seguro de que deseas eliminar todos los mensajes y registros de conversación?', async () => {
         const res = await apiFetch('/api/logs/clear-all', { method: 'DELETE' });
-        showToast('Historial Vaciado', res.message, 'success');
-        loadDashboardData();
+        if (res.success) {
+          showToast('Historial Vaciado', res.message || 'Logs eliminados correctamente.', 'success');
+          loadDashboardData();
+        } else {
+          showToast('Error', res.error || 'Error al vaciar historial.', 'error');
+        }
+      });
+    }
+
+    function confirmClearAllTickets() {
+      if (state.user?.role !== 'superadmin') {
+        showToast('Acceso Denegado', 'Solo el superadmin puede vaciar tickets.', 'error');
+        return;
+      }
+      showConfirmDialog('⚠️ Vaciar Todos los Tickets', '¿Estás seguro de que deseas eliminar permanentemente TODOS los tickets de prueba? Esta acción es irreversible.', async () => {
+        const res = await apiFetch('/api/tickets/clear-all', { method: 'DELETE' });
+        if (res.success) {
+          showToast('Tickets Vaciados', res.message || 'Todos los tickets han sido eliminados.', 'success');
+          loadTicketsData();
+          loadDashboardData();
+        } else {
+          showToast('Error', res.error || 'Error al vaciar tickets.', 'error');
+        }
       });
     }
 
     function clearTicketsData() {
-      showConfirmDialog('Vaciar Tickets', '¿Deseas eliminar todos los tickets de prueba?', async () => {
-        const res = await apiFetch('/api/tickets/clear-all', { method: 'DELETE' });
-        showToast('Tickets Vaciados', res.message, 'success');
-        loadDashboardData();
+      confirmClearAllTickets();
+    }
+
+    function confirmDeleteSingleTicket(folio) {
+      if (state.user?.role !== 'superadmin') {
+        showToast('Acceso Denegado', 'Solo el superadmin puede eliminar tickets.', 'error');
+        return;
+      }
+      closeModal();
+      showConfirmDialog('Eliminar Ticket', \`¿Deseas eliminar permanentemente el ticket \${folio}? Esta acción no se puede deshacer.\`, async () => {
+        const res = await apiFetch(\`/api/tickets/\${encodeURIComponent(folio)}\`, { method: 'DELETE' });
+        if (res.success) {
+          showToast('Ticket Eliminado', \`El ticket \${folio} fue eliminado correctamente.\`, 'info');
+          loadTicketsData();
+          loadDashboardData();
+        } else {
+          showToast('Error', res.error || 'No se pudo eliminar el ticket.', 'error');
+        }
       });
     }
 

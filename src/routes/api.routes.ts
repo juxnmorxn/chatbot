@@ -94,19 +94,23 @@ router.get('/api/tickets', AdminController.getTickets);
 router.patch('/api/tickets/:folio/status', AdminController.updateTicketStatus);
 router.post('/api/tickets/:folio/status', AdminController.updateTicketStatus);
 router.post('/api/tickets/:folio/assign', AdminController.assignTicketTechnician);
+router.delete('/api/tickets/:folio', requireAdminAuth(['superadmin']), AdminController.deleteTicket);
+router.post('/api/tickets/:folio/delete', requireAdminAuth(['superadmin']), AdminController.deleteTicket);
 router.get('/api/tickets/stats', AdminController.getTicketStats);
 router.post('/api/sessions/:phone/toggle-pause', AdminController.toggleBotPause);
 
 // ==========================================
-// RUTAS DE LIMPIEZA Y REINICIO DE PRUEBAS
+// RUTAS DE LIMPIEZA Y REINICIO DE PRUEBAS (SOLO SUPERADMIN)
 // ==========================================
-router.delete('/api/sessions/clear-all', AdminController.clearAllSessions);
-router.post('/api/sessions/clear-all', AdminController.clearAllSessions);
-router.delete('/api/sessions/:phone', AdminController.deleteSession);
-router.delete('/api/logs/clear-all', AdminController.clearAllLogs);
-router.post('/api/logs/clear-all', AdminController.clearAllLogs);
-router.delete('/api/tickets/clear-all', AdminController.clearAllTickets);
-router.post('/api/tickets/clear-all', AdminController.clearAllTickets);
+router.delete('/api/sessions/clear-all', requireAdminAuth(['superadmin']), AdminController.clearAllSessions);
+router.post('/api/sessions/clear-all', requireAdminAuth(['superadmin']), AdminController.clearAllSessions);
+router.delete('/api/sessions/:phone', requireAdminAuth(['superadmin']), AdminController.deleteSession);
+router.post('/api/sessions/:phone/delete', requireAdminAuth(['superadmin']), AdminController.deleteSession);
+router.delete('/api/logs/clear-all', requireAdminAuth(['superadmin']), AdminController.clearAllLogs);
+router.post('/api/logs/clear-all', requireAdminAuth(['superadmin']), AdminController.clearAllLogs);
+router.delete('/api/tickets/clear-all', requireAdminAuth(['superadmin']), AdminController.clearAllTickets);
+router.post('/api/tickets/clear-all', requireAdminAuth(['superadmin']), AdminController.clearAllTickets);
+
 
 // ==========================================
 // HEALTHCHECKS

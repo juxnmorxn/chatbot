@@ -1548,6 +1548,25 @@ export class TursoService {
     return res.rowsAffected || 0;
   }
 
+  /**
+   * Elimina un ticket individual por folio
+   */
+  static async deleteTicket(folio: string): Promise<boolean> {
+    try {
+      const client = getTursoClient();
+      const res = await client.execute({
+        sql: 'DELETE FROM tickets WHERE folio = ?',
+        args: [folio],
+      });
+      logger.info(`Ticket ${folio} eliminado de Turso DB.`);
+      return (res.rowsAffected || 0) > 0;
+    } catch (error: any) {
+      logger.error(`Error al eliminar ticket ${folio}:`, error?.message || error);
+      return false;
+    }
+  }
+
+
   // ==========================================
   // GESTIÓN DE TÉCNICOS AUTORIZADOS Y PINS
   // ==========================================

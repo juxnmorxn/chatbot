@@ -508,11 +508,31 @@ export class AdminController {
   static async clearAllTickets(req: Request, res: Response): Promise<void> {
     try {
       const count = await TursoService.clearAllTickets();
+      AdminController.broadcastSSE('tickets:update', { action: 'clear_all', count });
       res.json({ success: true, message: `Se eliminaron ${count} tickets de prueba.` });
     } catch (error: any) {
       res.status(500).json({ success: false, error: error?.message || error });
     }
   }
+
+  /**
+   * Elimina un ticket individual por folio
+   */
+  static async deleteTicket(req: Request, res: Response): Promise<void> {
+    try {
+      const folio = String(req.params.folio || '');
+      const ok = await TursoService.deleteTicket(folio);
+      if (ok) {
+        AdminController.broadcastSSE('tickets:update', { action: 'delete', folio });
+        res.json({ success: true, message: `Ticket ${folio} eliminado exitosamente.` });
+      } else {
+        res.status(404).json({ success: false, error: 'Ticket no encontrado o no eliminado' });
+      }
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
 
   /**
    * Busca clientes en SmartOLT / Turso para diagnóstico
