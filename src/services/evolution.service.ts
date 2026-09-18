@@ -73,29 +73,32 @@ export class EvolutionService {
   static async enviarTexto(
     phone: string,
     mensajeRaw: string,
-    opciones: { delayMin?: number; delayMax?: number; isBroadcast?: boolean } = {}
+    opciones: { delayMin?: number; delayMax?: number; isBroadcast?: boolean; instant?: boolean } = {}
   ): Promise<boolean> {
     const recipient = this.formatRecipient(phone);
     const mensaje = parseSpintax(mensajeRaw);
 
-    // Regla Anti-Ban: Jitter de 8 a 15 segundos si es difusión, o de 1.5 a 3s si es interactivo
-    if (opciones.isBroadcast) {
+    // Regla Anti-Ban: Jitter de 8 a 15 segundos si es difusión, o de 1.2 a 2.5s si es interactivo regular
+    // En modo instantáneo (técnicos / activaciones) no se añade retraso artificial
+    if (opciones.instant) {
+      // Modo instantáneo directo para técnicos
+    } else if (opciones.isBroadcast) {
       const waitTime = Math.floor(Math.random() * (15000 - 8000 + 1)) + 8000;
       logger.info(`[Anti-Ban] Aplicando jitter de difusión: ${waitTime}ms para ${recipient}`);
       await new Promise((r) => setTimeout(r, waitTime));
-    } else {
+    } else if (opciones.delayMin !== 0 || opciones.delayMax !== 0) {
       await randomDelay(opciones.delayMin || 1200, opciones.delayMax || 2500);
     }
 
     try {
-      logger.info(`Enviando mensaje de texto a ${recipient}`);
+      logger.info(`Enviando mensaje de texto a ${recipient}${opciones.instant ? ' (Modo Instantáneo)' : ''}`);
       const api = this.getApi();
       const instance = this.getInstanceName();
       const response = await api.post(`/message/sendText/${instance}`, {
         number: recipient,
         text: mensaje,
         options: {
-          delay: 1500,
+          delay: opciones.instant ? 0 : 1500,
           presence: 'composing',
         },
       });
@@ -160,7 +163,8 @@ export class EvolutionService {
     phone: string,
     textoPrincipal: string,
     botones: BotButton[],
-    pieDePagina: string = 'CloudWareMx Soporte Automático'
+    pieDePagina: string = 'CloudWareMx Soporte Automático',
+    opciones: { delayMin?: number; delayMax?: number; isBroadcast?: boolean; instant?: boolean } = {}
   ): Promise<boolean> {
     const recipient = this.formatRecipient(phone);
     const texto = parseSpintax(textoPrincipal);
@@ -173,7 +177,7 @@ export class EvolutionService {
     const mensajeCompleto = `${texto}\n\n${opcionesTexto}\n\n_${pieDePagina}_\n_Por favor responde con el número de tu opción (ej. 1, 2 o 3) o describe tu duda._`;
 
     logger.info(`Enviando menú estructurado a ${recipient}: ${botones.map((b) => b.title).join(' | ')}`);
-    return this.enviarTexto(recipient, mensajeCompleto);
+    return this.enviarTexto(recipient, mensajeCompleto, opciones);
   }
 
   /**

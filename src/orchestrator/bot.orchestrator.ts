@@ -398,15 +398,23 @@ export class BotOrchestrator {
     intencion: string | null = null,
     accion: string | null = null,
     targetJid?: string,
-    botones?: BotButton[]
+    botones?: BotButton[],
+    instantOverride?: boolean
   ): Promise<boolean> {
     const textoFinal = parseSpintax(mensaje);
     const dest = targetJid || phone;
+    const esTecnico = instantOverride ?? (
+      intencion === 'ACTIVACION_TECNICO' ||
+      intencion === 'CAMBIO_PAQUETE_TECNICO' ||
+      (accion || '').includes('TECNICO') ||
+      (accion || '').includes('ACTIVACION') ||
+      (accion || '').includes('CONTRATO')
+    );
     let ok = false;
     if (botones && botones.length > 0) {
-      ok = await EvolutionService.enviarBotones(dest, textoFinal, botones);
+      ok = await EvolutionService.enviarBotones(dest, textoFinal, botones, undefined, { instant: esTecnico });
     } else {
-      ok = await EvolutionService.enviarTexto(dest, textoFinal);
+      ok = await EvolutionService.enviarTexto(dest, textoFinal, { instant: esTecnico });
     }
     await TursoService.logMessage(phone, 'OUT', textoFinal, intencion, accion);
     return ok;

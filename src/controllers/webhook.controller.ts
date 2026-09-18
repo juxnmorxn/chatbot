@@ -274,8 +274,18 @@ export class WebhookController {
       }
 
 
-      // Si es un clic de botón o archivo multimedia sin texto, procesamos de inmediato
-      if (extracted.buttonId || (extracted.isMedia && !extracted.text)) {
+      // Si es un clic de botón, archivo multimedia, mensaje de técnico o comando de activación/técnico, procesamos de inmediato sin debounce
+      const lowerText = (extracted.text || '').toLowerCase().trim();
+      const isTechAction = Boolean(
+        extracted.buttonId?.includes('ACTIVACION') ||
+        /^(?:activar|activaci|alta|aprovisionar|registrar|cambiar plan|cambiar zona|cambiar nombre|cambiar serie|si|sí|confirmar|confirmo|no|cancelar)\b/i.test(lowerText) ||
+        lowerText.startsWith('activar') ||
+        lowerText.startsWith('cambiar')
+      );
+
+      const isTechnician = isTechAction || await TursoService.isAuthorizedTechnician(phone.replace(/\D/g, '')).catch(() => false);
+
+      if (extracted.buttonId || (extracted.isMedia && !extracted.text) || isTechnician) {
         setImmediate(() => {
           BotOrchestrator.procesarMensaje(incomingEvent).catch((err) => {
             logger.error(`Error en BotOrchestrator para ${phone}:`, err?.message || err);
@@ -284,8 +294,8 @@ export class WebhookController {
         return;
       }
 
-      // Si es mensaje de texto o audio transcrito:
-      // 1. Activar estado "Escribiendo..." (composing) en WhatsApp para simulación humana inmediata
+      // Si es mensaje de texto o audio transcrito de un cliente residencial:
+      // 1. Activar estado "Escribiendo..." (composing) en WhatsApp para simulación humana
       EvolutionService.enviarPresencia(phone, 'composing', 5000).catch(() => {});
 
       // 2. Programar en el búfer de debounce (5 segundos para agrupar ráfagas y dar ventana al operador)
