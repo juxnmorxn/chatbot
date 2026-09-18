@@ -63,13 +63,29 @@ export class SettingsService {
    * Obtiene un valor de configuración: primero busca en Turso (caché), y si no existe usa process.env
    */
   static get(key: string, envFallbackKey?: string, defaultValue: string = ''): string {
+    const isUrlKey = key.includes('URL');
+
     if (this.cache.has(key)) {
-      const val = this.cache.get(key);
-      if (val !== undefined && val.trim() !== '') return val;
+      const val = this.cache.get(key)?.trim() || '';
+      if (val) {
+        if (isUrlKey) {
+          if (val.startsWith('http://') || val.startsWith('https://')) {
+            return val;
+          }
+          // Si el valor en BD está corrupto (ej: "admin"), ignorar y usar fallback
+        } else {
+          return val;
+        }
+      }
     }
 
     if (envFallbackKey && process.env[envFallbackKey]) {
-      return process.env[envFallbackKey] || '';
+      const envVal = process.env[envFallbackKey]?.trim() || '';
+      if (envVal) {
+        if (!isUrlKey || envVal.startsWith('http://') || envVal.startsWith('https://')) {
+          return envVal;
+        }
+      }
     }
 
     return defaultValue;
@@ -80,6 +96,15 @@ export class SettingsService {
    */
   static async set(key: string, value: string): Promise<void> {
     try {
+      const isUrlKey = key.includes('URL');
+      const cleanVal = (value || '').trim();
+
+      // Si es una clave de URL, solo guardar si es válida
+      if (isUrlKey && cleanVal && !cleanVal.startsWith('http://') && !cleanVal.startsWith('https://')) {
+        logger.warn(`Intento de guardar URL inválida para ${key}: "${cleanVal}". Omitiendo.`);
+        return;
+      }
+
       const client = getTursoClient();
       const now = new Date().toISOString();
       await client.execute({
@@ -90,9 +115,9 @@ export class SettingsService {
             value = excluded.value,
             updated_at = excluded.updated_at
         `,
-        args: [key, value, now],
+        args: [key, cleanVal, now],
       });
-      this.cache.set(key, value);
+      this.cache.set(key, cleanVal);
       logger.info(`Configuración actualizada: ${key}`);
     } catch (error: any) {
       logger.error(`Error al guardar configuración ${key}:`, error?.message || error);

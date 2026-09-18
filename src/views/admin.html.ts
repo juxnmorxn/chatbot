@@ -1955,22 +1955,22 @@ export function getAdminDashboardHtml(): string {
             </div>
           </div>
 
-          <!-- Settings Form -->
-          <div class="glass-card">
-            <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 14px;">Variables de Entorno en Turso DB</h3>
-            <form id="settings-form" onsubmit="handleSaveSettings(event)">
-              <div class="form-group">
-                <label class="form-label">Evolution API URL</label>
-                <input type="text" id="setting-EVOLUTION_URL" class="form-control" placeholder="https://evolution.example.com">
-              </div>
-              <div class="form-group">
-                <label class="form-label">Evolution API Key</label>
-                <input type="password" id="setting-EVOLUTION_API_KEY" class="form-control" placeholder="••••••••">
-              </div>
-              <div class="form-group">
-                <label class="form-label">Groq API Key</label>
-                <input type="password" id="setting-GROQ_API_KEY" class="form-control" placeholder="••••••••">
-              </div>
+            <!-- Settings Form -->
+            <div class="glass-card">
+              <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 14px;">Variables de Entorno en Turso DB</h3>
+              <form id="settings-form" onsubmit="handleSaveSettings(event)" autocomplete="off">
+                <div class="form-group">
+                  <label class="form-label">Evolution API URL</label>
+                  <input type="text" id="setting-EVOLUTION_URL" class="form-control" placeholder="https://evolution.example.com" autocomplete="off" spellcheck="false">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Evolution API Key</label>
+                  <input type="password" id="setting-EVOLUTION_API_KEY" class="form-control" placeholder="••••••••" autocomplete="new-password">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Groq API Key</label>
+                  <input type="password" id="setting-GROQ_API_KEY" class="form-control" placeholder="••••••••" autocomplete="new-password">
+                </div>
               <div class="form-group" style="background: rgba(16, 185, 129, 0.05); border: 1px dashed rgba(16, 185, 129, 0.3); border-radius: var(--radius-sm); padding: 12px; margin-top: 14px;">
                 <label class="form-label" style="display: flex; align-items: center; justify-content: space-between;">
                   <span>📢 Grupo de Activaciones (WhatsApp)</span>
@@ -3323,9 +3323,22 @@ export function getAdminDashboardHtml(): string {
       try {
         const res = await apiFetch('/api/settings');
         if (res.settings) {
+          const keyMap = {
+            evolutionUrl: 'setting-EVOLUTION_URL',
+            evolutionApiKey: 'setting-EVOLUTION_API_KEY',
+            groqApiKey: 'setting-GROQ_API_KEY',
+            activationsGroupJid: 'setting-ACTIVATIONS_GROUP_JID',
+            EVOLUTION_URL: 'setting-EVOLUTION_URL',
+            EVOLUTION_API_KEY: 'setting-EVOLUTION_API_KEY',
+            GROQ_API_KEY: 'setting-GROQ_API_KEY',
+            ACTIVATIONS_GROUP_JID: 'setting-ACTIVATIONS_GROUP_JID',
+          };
           Object.keys(res.settings).forEach(k => {
-            const input = document.getElementById('setting-' + k) || (k === 'activationsGroupJid' ? document.getElementById('setting-ACTIVATIONS_GROUP_JID') : null);
-            if (input) input.value = res.settings[k];
+            const targetId = keyMap[k] || ('setting-' + k);
+            const input = document.getElementById(targetId);
+            if (input && res.settings[k] !== undefined && res.settings[k] !== null) {
+              input.value = res.settings[k];
+            }
           });
         }
         fetchWhatsAppStatus();
@@ -3397,8 +3410,14 @@ export function getAdminDashboardHtml(): string {
 
     async function handleSaveSettings(e) {
       e.preventDefault();
+      const evoUrl = document.getElementById('setting-EVOLUTION_URL')?.value.trim();
+      if (evoUrl && !evoUrl.startsWith('http://') && !evoUrl.startsWith('https://')) {
+        showToast('URL Inválida', 'Evolution API URL debe comenzar con http:// o https://', 'warning');
+        return;
+      }
+
       const settings = {
-        EVOLUTION_URL: document.getElementById('setting-EVOLUTION_URL')?.value.trim(),
+        EVOLUTION_URL: evoUrl,
         EVOLUTION_API_KEY: document.getElementById('setting-EVOLUTION_API_KEY')?.value.trim(),
         GROQ_API_KEY: document.getElementById('setting-GROQ_API_KEY')?.value.trim(),
         ACTIVATIONS_GROUP_JID: document.getElementById('setting-ACTIVATIONS_GROUP_JID')?.value.trim(),
