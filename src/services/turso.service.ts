@@ -1279,29 +1279,31 @@ export class TursoService {
 
       // 6. Aplicar filtro
       let filtered = matchedItems;
-      if (filter === 'mismatches') {
+      const f = String(filter || 'all').trim().toLowerCase();
+      if (f === 'mismatches' || f === 'mismatch' || f === 'discrepancias' || f === 'discrepancia') {
         filtered = filtered.filter(i => i.ip_status === 'MISMATCH');
-      } else if (filter === 'matches') {
+      } else if (f === 'matches' || f === 'match' || f === 'correctos' || f === 'correcto' || f === 'coinciden' || f === 'coincide') {
         filtered = filtered.filter(i => i.ip_status === 'MATCH');
-      } else if (filter === 'only_olt') {
+      } else if (f === 'only_olt' || f === 'only_smartolt' || f === 'smartolt' || f === 'solo_smartolt') {
         filtered = filtered.filter(i => i.ip_status === 'ONLY_SMARTOLT');
-      } else if (filter === 'only_wisphub') {
+      } else if (f === 'only_wisphub' || f === 'wisphub' || f === 'solo_wisphub') {
         filtered = filtered.filter(i => i.ip_status === 'ONLY_WISPHUB');
-      } else if (filter === 'no_ip') {
+      } else if (f === 'no_ip' || f === 'sin_ip') {
         filtered = filtered.filter(i => i.ip_status === 'NO_IP');
       }
 
       // 7. Aplicar búsqueda por texto si existe
       if (search) {
         filtered = filtered.filter(i =>
-          i.cliente.toLowerCase().includes(search) ||
-          i.folio.toLowerCase().includes(search) ||
-          i.servicio.toLowerCase().includes(search) ||
-          (i.smartolt_ip && i.smartolt_ip.includes(search)) ||
-          (i.wisphub_ip && i.wisphub_ip.includes(search)) ||
-          (i.zona_o_router && i.zona_o_router.toLowerCase().includes(search)) ||
-          (i.sn_smartolt && i.sn_smartolt.toLowerCase().includes(search)) ||
-          (i.sn_wisphub && i.sn_wisphub.toLowerCase().includes(search))
+          (i.cliente && String(i.cliente).toLowerCase().includes(search)) ||
+          (i.folio && String(i.folio).toLowerCase().includes(search)) ||
+          (i.servicio && String(i.servicio).toLowerCase().includes(search)) ||
+          (i.smartolt_ip && String(i.smartolt_ip).toLowerCase().includes(search)) ||
+          (i.wisphub_ip && String(i.wisphub_ip).toLowerCase().includes(search)) ||
+          (i.zona_o_router && String(i.zona_o_router).toLowerCase().includes(search)) ||
+          (i.sn_smartolt && String(i.sn_smartolt).toLowerCase().includes(search)) ||
+          (i.sn_wisphub && String(i.sn_wisphub).toLowerCase().includes(search)) ||
+          (i.wisphub_plan && String(i.wisphub_plan).toLowerCase().includes(search))
         );
       }
 

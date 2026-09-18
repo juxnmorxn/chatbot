@@ -1690,13 +1690,13 @@ export function getAdminDashboardHtml(): string {
         <div class="glass-card" style="margin-bottom: 20px;">
           <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;">
             <div style="display: flex; gap: 8px; flex-wrap: wrap;" id="audit-filter-buttons">
-              <button class="btn btn-secondary btn-sm active" onclick="setAuditFilter('all')">Todos</button>
-              <button class="btn btn-danger btn-sm" onclick="setAuditFilter('MISMATCH')">Mismatches</button>
-              <button class="btn btn-success btn-sm" onclick="setAuditFilter('MATCH')">Correctos</button>
-              <button class="btn btn-secondary btn-sm" onclick="setAuditFilter('ONLY_SMARTOLT')">Solo SmartOLT</button>
-              <button class="btn btn-secondary btn-sm" onclick="setAuditFilter('ONLY_WISPHUB')">Solo WispHub</button>
+              <button class="btn btn-secondary btn-sm active" onclick="setAuditFilter('all', this)">Todos</button>
+              <button class="btn btn-danger btn-sm" onclick="setAuditFilter('mismatches', this)">Discrepancias</button>
+              <button class="btn btn-success btn-sm" onclick="setAuditFilter('matches', this)">Correctos</button>
+              <button class="btn btn-secondary btn-sm" onclick="setAuditFilter('only_olt', this)">Solo SmartOLT</button>
+              <button class="btn btn-secondary btn-sm" onclick="setAuditFilter('only_wisphub', this)">Solo WispHub</button>
             </div>
-            <input type="text" id="audit-search-input" class="form-control" style="max-width: 260px;" placeholder="Buscar por nombre, IP o SN..." oninput="handleAuditSearch(this.value)">
+            <input type="text" id="audit-search-input" class="form-control" style="max-width: 260px;" placeholder="Buscar por cliente, IP, folio o SN..." oninput="handleAuditSearch(this.value)">
           </div>
         </div>
 
@@ -2745,22 +2745,23 @@ export function getAdminDashboardHtml(): string {
     async function loadAuditData() {
       try {
         const params = new URLSearchParams({
-          filter: state.audit.filter,
-          search: state.audit.search,
-          page: state.audit.page,
-          limit: state.audit.limit,
+          filter: state.audit.filter || 'all',
+          search: state.audit.search || '',
+          page: state.audit.page || 1,
+          limit: state.audit.limit || 30,
         });
 
         const res = await apiFetch('/api/audit/ip-cross?' + params.toString());
         state.audit.total = res.total || 0;
 
-        document.getElementById('audit-pagination-info').innerText = \`Mostrando página \${state.audit.page} de \${Math.ceil((res.total || 1) / state.audit.limit)} (\${res.total} registros)\`;
+        const totalPages = Math.max(1, Math.ceil((res.total || 0) / state.audit.limit));
+        document.getElementById('audit-pagination-info').innerText = \`Mostrando página \${state.audit.page} de \${totalPages} (\${res.total || 0} registros)\`;
 
         const tbody = document.getElementById('table-audit-body');
         if (res.items && res.items.length > 0) {
           tbody.innerHTML = res.items.map(item => {
-            let statusBadge = '<span class="badge badge-success">MATCH</span>';
-            if (item.ip_status === 'MISMATCH') statusBadge = '<span class="badge badge-danger">MISMATCH</span>';
+            let statusBadge = '<span class="badge badge-success">CORRECTO</span>';
+            if (item.ip_status === 'MISMATCH') statusBadge = '<span class="badge badge-danger">DISCREPANCIA</span>';
             if (item.ip_status === 'ONLY_SMARTOLT') statusBadge = '<span class="badge badge-info">Solo SmartOLT</span>';
             if (item.ip_status === 'ONLY_WISPHUB') statusBadge = '<span class="badge badge-purple">Solo WispHub</span>';
             if (item.ip_status === 'NO_IP') statusBadge = '<span class="badge badge-warning">Sin IP</span>';
@@ -2768,7 +2769,7 @@ export function getAdminDashboardHtml(): string {
             return \`
               <tr>
                 <td style="font-weight: 600;">\${escapeHtml(item.cliente || 'Desconocido')}</td>
-                <td style="font-family: var(--font-mono); font-size: 11px;">\${item.servicio || item.folio || '--'}</td>
+                <td style="font-family: var(--font-mono); font-size: 11px;">\${escapeHtml(item.servicio || item.folio || '--')}</td>
                 <td style="font-family: var(--font-mono); color: var(--accent-cyan);">\${item.smartolt_ip || '--'}</td>
                 <td style="font-family: var(--font-mono); color: var(--accent-green);">\${item.wisphub_ip || '--'}</td>
                 <td>\${statusBadge}</td>
@@ -2777,25 +2778,31 @@ export function getAdminDashboardHtml(): string {
             \`;
           }).join('');
         } else {
-          tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-dim);">No se encontraron registros.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-dim);">No se encontraron registros coincidentes.</td></tr>';
         }
       } catch (err) {
         console.error('Error loading audit:', err);
       }
     }
 
-    function setAuditFilter(f) {
+    function setAuditFilter(f, btnElement) {
       state.audit.filter = f;
       state.audit.page = 1;
       document.querySelectorAll('#audit-filter-buttons button').forEach(b => b.classList.remove('active'));
-      event.target.classList.add('active');
+      if (btnElement) {
+        btnElement.classList.add('active');
+      }
       loadAuditData();
     }
 
+    let auditSearchDebounce = null;
     function handleAuditSearch(q) {
-      state.audit.search = q.trim();
-      state.audit.page = 1;
-      loadAuditData();
+      clearTimeout(auditSearchDebounce);
+      auditSearchDebounce = setTimeout(() => {
+        state.audit.search = (q || '').trim();
+        state.audit.page = 1;
+        loadAuditData();
+      }, 250);
     }
 
     function changeAuditPage(dir) {
