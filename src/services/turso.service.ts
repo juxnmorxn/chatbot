@@ -1350,6 +1350,10 @@ export class TursoService {
         filtered = filtered.filter(i => i.smartolt_id && i.tr069_status !== 'ACTIVE');
       } else if (f === 'missing_ipv6' || f === 'falta_ipv6' || f === 'sin_ipv6') {
         filtered = filtered.filter(i => i.smartolt_id && i.ipv6_status !== 'DUAL_STACK');
+      } else if (f === 'pending' || f === 'pendientes' || f === 'pendientes_tr069_ipv6') {
+        filtered = filtered.filter(i => i.smartolt_id && (i.tr069_status !== 'ACTIVE' || i.ipv6_status !== 'DUAL_STACK'));
+      } else if (f === 'ready' || f === 'completados' || f === 'listos' || f === 'provisioned') {
+        filtered = filtered.filter(i => i.smartolt_id && i.tr069_status === 'ACTIVE' && i.ipv6_status === 'DUAL_STACK');
       }
 
       // 7. Aplicar búsqueda por texto si existe

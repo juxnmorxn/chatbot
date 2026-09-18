@@ -624,6 +624,81 @@ export function getAdminDashboardHtml(): string {
       background: rgba(244, 63, 94, 0.25);
     }
 
+    .btn-warning {
+      background: rgba(245, 158, 11, 0.15);
+      border-color: rgba(245, 158, 11, 0.35);
+      color: #fcd34d;
+    }
+
+    .btn-warning:hover {
+      background: rgba(245, 158, 11, 0.25);
+    }
+
+    .btn-info {
+      background: rgba(14, 165, 233, 0.15);
+      border-color: rgba(14, 165, 233, 0.35);
+      color: #7dd3fc;
+    }
+
+    .btn-info:hover {
+      background: rgba(14, 165, 233, 0.25);
+    }
+
+    .btn.active, .btn-secondary.active {
+      background: var(--primary) !important;
+      border-color: #818cf8 !important;
+      color: #fff !important;
+      box-shadow: 0 0 14px rgba(99, 102, 241, 0.5) !important;
+      font-weight: 700 !important;
+    }
+
+    .btn-danger.active {
+      background: #e11d48 !important;
+      border-color: #fda4af !important;
+      color: #fff !important;
+      box-shadow: 0 0 14px rgba(225, 29, 72, 0.5) !important;
+      font-weight: 700 !important;
+    }
+
+    .btn-warning.active {
+      background: #d97706 !important;
+      border-color: #fcd34d !important;
+      color: #fff !important;
+      box-shadow: 0 0 14px rgba(217, 119, 6, 0.5) !important;
+      font-weight: 700 !important;
+    }
+
+    .btn-info.active {
+      background: #0284c7 !important;
+      border-color: #7dd3fc !important;
+      color: #fff !important;
+      box-shadow: 0 0 14px rgba(2, 132, 199, 0.5) !important;
+      font-weight: 700 !important;
+    }
+
+    .btn-success.active {
+      background: #059669 !important;
+      border-color: #6ee7b7 !important;
+      color: #fff !important;
+      box-shadow: 0 0 14px rgba(5, 150, 105, 0.5) !important;
+      font-weight: 700 !important;
+    }
+
+    .spinner {
+      width: 24px;
+      height: 24px;
+      border: 3px solid rgba(255, 255, 255, 0.15);
+      border-top-color: var(--accent-cyan);
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+      display: inline-block;
+      vertical-align: middle;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
     .btn-sm {
       padding: 6px 12px;
       font-size: 12px;
@@ -1369,6 +1444,13 @@ export function getAdminDashboardHtml(): string {
           </span>
           <span class="nav-text">Auditoría SmartOLT</span>
         </div>
+        <div class="nav-item" data-view="provisioning" onclick="navigateTo('provisioning')" title="Aprovisionamiento TR-069 & IPv6">
+          <span class="nav-icon">
+            <svg class="svg-icon" viewBox="0 0 24 24"><path d="m13 2-2 2.5h3L11 9h4l-5 7 1.5-4.5H8.5L13 2z"></path></svg>
+          </span>
+          <span class="nav-text">Aprovisionar IPv6</span>
+          <span id="badge-prov-pending" class="nav-badge alert-badge" style="display: none;">0</span>
+        </div>
         <div class="nav-item" data-view="technicians" onclick="navigateTo('technicians')" title="Técnicos & PINs">
           <span class="nav-icon">
             <svg class="svg-icon" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><polyline points="16 11 18 13 22 9"></polyline></svg>
@@ -1733,6 +1815,96 @@ export function getAdminDashboardHtml(): string {
         </div>
       </section>
 
+      <!-- VIEW: APROVISIONAMIENTO TR-069 & IPV6 -->
+      <section id="view-provisioning" class="view-container">
+        <div class="grid-metrics" style="margin-bottom: 20px;">
+          <div class="glass-card metric-card">
+            <div class="metric-header">
+              <span>Total ONUs en SmartOLT</span>
+              <div class="metric-icon-box" style="color: var(--accent-cyan);">
+                <svg class="svg-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line></svg>
+              </div>
+            </div>
+            <div id="metric-prov-total" class="metric-value">--</div>
+            <div class="metric-footer">Registradas en la red</div>
+          </div>
+
+          <div class="glass-card metric-card">
+            <div class="metric-header">
+              <span>Falta TR-069</span>
+              <div class="metric-icon-box" style="color: var(--accent-amber);">
+                <svg class="svg-icon" viewBox="0 0 24 24"><path d="m10.29 3.86-8.47 14.14A2 2 0 0 0 3.53 21h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path></svg>
+              </div>
+            </div>
+            <div id="metric-prov-tr069" class="metric-value" style="color: var(--accent-amber);">--</div>
+            <div class="metric-footer">Sin perfil TR-069 activo</div>
+          </div>
+
+          <div class="glass-card metric-card">
+            <div class="metric-header">
+              <span>Falta IPv6</span>
+              <div class="metric-icon-box" style="color: #38bdf8;">
+                <svg class="svg-icon" viewBox="0 0 24 24"><path d="M12 2v20M2 12h20"></path></svg>
+              </div>
+            </div>
+            <div id="metric-prov-ipv6" class="metric-value" style="color: #38bdf8;">--</div>
+            <div class="metric-footer">Solo IPv4 (Sin Dual Stack)</div>
+          </div>
+
+          <div class="glass-card metric-card">
+            <div class="metric-header">
+              <span>100% Configurados</span>
+              <div class="metric-icon-box" style="color: var(--accent-green);">
+                <svg class="svg-icon" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+              </div>
+            </div>
+            <div id="metric-prov-ready" class="metric-value" style="color: var(--accent-green);">--</div>
+            <div class="metric-footer">TR-069 + IPv6 Dual Stack</div>
+          </div>
+        </div>
+
+        <div class="glass-card" style="margin-bottom: 20px;">
+          <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;">
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;" id="prov-filter-buttons">
+              <button class="btn btn-warning btn-sm active" onclick="setProvFilter('pending', this)">Pendientes (TR-069 / IPv6)</button>
+              <button class="btn btn-secondary btn-sm" onclick="setProvFilter('missing_tr069', this)">Solo Falta TR-069</button>
+              <button class="btn btn-secondary btn-sm" onclick="setProvFilter('missing_ipv6', this)">Solo Falta IPv6</button>
+              <button class="btn btn-success btn-sm" onclick="setProvFilter('ready', this)">Completados (100%)</button>
+              <button class="btn btn-secondary btn-sm" onclick="setProvFilter('all', this)">Todas las ONUs</button>
+            </div>
+            <input type="text" id="prov-search-input" class="form-control" style="max-width: 260px;" placeholder="Buscar cliente, SN, IP o Zona..." oninput="handleProvSearch(this.value)">
+          </div>
+        </div>
+
+        <div class="glass-card">
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Cliente</th>
+                  <th>Serial (SN)</th>
+                  <th>IP WAN</th>
+                  <th>Zona / OLT</th>
+                  <th>Estado TR-069</th>
+                  <th>Estado IPv6</th>
+                  <th>Acción</th>
+                </tr>
+              </thead>
+              <tbody id="table-prov-body">
+                <tr><td colspan="7" style="text-align: center; color: var(--text-dim);">Cargando aprovisionamiento...</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 16px;">
+            <span id="prov-pagination-info" style="font-size: 12px; color: var(--text-muted);">Página 1</span>
+            <div style="display: flex; gap: 8px;">
+              <button id="btn-prov-prev" class="btn btn-secondary btn-sm" onclick="changeProvPage(-1)">◀ Anterior</button>
+              <button id="btn-prov-next" class="btn btn-secondary btn-sm" onclick="changeProvPage(1)">Siguiente ▶</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- VIEW 6: TÉCNICOS & PINS -->
       <section id="view-technicians" class="view-container">
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
@@ -1864,6 +2036,7 @@ export function getAdminDashboardHtml(): string {
       activeChatPhone: null,
       tickets: [],
       audit: { filter: 'all', search: '', page: 1, limit: 30, total: 0 },
+      provisioning: { filter: 'pending', search: '', page: 1, limit: 30, total: 0 },
       technicians: [],
       adminUsers: [],
       isSidebarCollapsed: false,
@@ -2076,6 +2249,7 @@ export function getAdminDashboardHtml(): string {
         'tickets': 'Mesa de Tickets (Kanban)',
         'ipam': 'IPAM & Gestión de Pools VLAN',
         'audit': 'Auditoría SmartOLT vs WispHub',
+        'provisioning': 'Aprovisionamiento TR-069 & IPv6 Dual Stack',
         'technicians': 'Técnicos Autorizados & PINs',
         'settings': 'Configuración del Sistema',
         'users': 'Usuarios & Roles de Acceso',
@@ -2110,6 +2284,7 @@ export function getAdminDashboardHtml(): string {
         case 'tickets': loadTicketsData(); break;
         case 'ipam': loadIpamData(); break;
         case 'audit': loadAuditData(); break;
+        case 'provisioning': loadProvisioningData(); break;
         case 'technicians': loadTechniciansData(); break;
         case 'settings': loadSettingsData(); break;
         case 'users': loadAdminUsersData(); break;
@@ -2748,6 +2923,18 @@ export function getAdminDashboardHtml(): string {
 
     // Audit Module
     async function loadAuditData() {
+      const tbody = document.getElementById('table-audit-body');
+      if (tbody) {
+        tbody.innerHTML = \`
+          <tr>
+            <td colspan="9" style="text-align: center; padding: 36px 20px;">
+              <div class="spinner" style="margin-bottom: 10px;"></div>
+              <div style="font-size: 13px; color: var(--text-dim);">Consultando datos y aplicando filtros...</div>
+            </td>
+          </tr>
+        \`;
+      }
+
       try {
         const params = new URLSearchParams({
           filter: state.audit.filter || 'all',
@@ -2762,7 +2949,6 @@ export function getAdminDashboardHtml(): string {
         const totalPages = Math.max(1, Math.ceil((res.total || 0) / state.audit.limit));
         document.getElementById('audit-pagination-info').innerText = \`Mostrando página \${state.audit.page} de \${totalPages} (\${res.total || 0} registros)\`;
 
-        const tbody = document.getElementById('table-audit-body');
         if (res.items && res.items.length > 0) {
           tbody.innerHTML = res.items.map(item => {
             let statusBadge = '<span class="badge badge-success">CORRECTO</span>';
@@ -2782,14 +2968,16 @@ export function getAdminDashboardHtml(): string {
             let actionBtn = '<span style="font-size: 11px; color: var(--text-dim);">No en OLT</span>';
             if (item.smartolt_id) {
               const needsConfig = item.tr069_status !== 'ACTIVE' || item.ipv6_status !== 'DUAL_STACK';
-              const btnClass = needsConfig ? 'btn-primary' : 'btn-secondary';
-              const btnLabel = needsConfig ? '⚡ Activar TR069+IPv6' : '🔄 Reaplicar';
-              const safeClient = (item.cliente || 'Cliente').replace(/'/g, "\\'");
-              actionBtn = \`
-                <button class="btn \${btnClass} btn-sm" onclick="applyTr069AndIpv6Config('\${item.smartolt_id}', '\${safeClient}')">
-                  \${btnLabel}
-                </button>
-              \`;
+              if (needsConfig) {
+                const safeClient = (item.cliente || 'Cliente').replace(/'/g, "\\'");
+                actionBtn = \`
+                  <button class="btn btn-primary btn-sm" onclick="applyTr069AndIpv6Config('\${item.smartolt_id}', '\${safeClient}')" title="Aprovisionar TR-069 + IPv6">
+                    ⚡ Aprovisionar
+                  </button>
+                \`;
+              } else {
+                actionBtn = '<span class="badge badge-success" style="opacity: 0.85;">✓ Configurado</span>';
+              }
             }
 
             return \`
@@ -2826,7 +3014,8 @@ export function getAdminDashboardHtml(): string {
             });
             if (res.success) {
               showToast('Éxito', res.message || 'TR-069 e IPv6 Dual Stack configurados exitosamente.', 'success', 5000);
-              loadAuditData();
+              if (state.currentView === 'audit') loadAuditData();
+              if (state.currentView === 'provisioning') loadProvisioningData();
             } else {
               showToast('Error', res.message || res.error || 'No se pudo aplicar la configuración.', 'error', 5000);
             }
@@ -2864,6 +3053,129 @@ export function getAdminDashboardHtml(): string {
       if (newPage >= 1 && newPage <= maxPage) {
         state.audit.page = newPage;
         loadAuditData();
+      }
+    }
+
+    // Provisioning Dedicated Module
+    async function loadProvisioningData() {
+      const tbody = document.getElementById('table-prov-body');
+      if (tbody) {
+        tbody.innerHTML = \`
+          <tr>
+            <td colspan="7" style="text-align: center; padding: 36px 20px;">
+              <div class="spinner" style="margin-bottom: 10px;"></div>
+              <div style="font-size: 13px; color: var(--text-dim);">Consultando estado de aprovisionamiento...</div>
+            </td>
+          </tr>
+        \`;
+      }
+
+      try {
+        const params = new URLSearchParams({
+          filter: state.provisioning.filter || 'pending',
+          search: state.provisioning.search || '',
+          page: state.provisioning.page || 1,
+          limit: state.provisioning.limit || 30,
+        });
+
+        const res = await apiFetch('/api/audit/ip-cross?' + params.toString());
+        state.provisioning.total = res.total || 0;
+
+        // Update metric cards
+        const sum = res.summary || {};
+        const missingTr = sum.missingTr069 || 0;
+        const missingV6 = sum.missingIpv6 || 0;
+        const totalOlt = sum.totalSmartOlt || 0;
+        const readyCount = Math.max(0, totalOlt - Math.max(missingTr, missingV6));
+
+        document.getElementById('metric-prov-total').innerText = Number(totalOlt).toLocaleString();
+        document.getElementById('metric-prov-tr069').innerText = Number(missingTr).toLocaleString();
+        document.getElementById('metric-prov-ipv6').innerText = Number(missingV6).toLocaleString();
+        document.getElementById('metric-prov-ready').innerText = Number(readyCount).toLocaleString();
+
+        const bProv = document.getElementById('badge-prov-pending');
+        const pendingTotal = Math.max(missingTr, missingV6);
+        if (bProv) {
+          if (pendingTotal > 0) {
+            bProv.innerText = pendingTotal;
+            bProv.style.display = 'inline-block';
+          } else {
+            bProv.style.display = 'none';
+          }
+        }
+
+        const totalPages = Math.max(1, Math.ceil((res.total || 0) / state.provisioning.limit));
+        document.getElementById('prov-pagination-info').innerText = \`Mostrando página \${state.provisioning.page} de \${totalPages} (\${res.total || 0} registros)\`;
+
+        if (res.items && res.items.length > 0) {
+          tbody.innerHTML = res.items.map(item => {
+            let trBadge = '<span class="badge badge-success">ACTIVO</span>';
+            if (item.tr069_status === 'OMCI') trBadge = '<span class="badge badge-warning">OMCI</span>';
+            if (item.tr069_status === 'MISSING' || !item.tr069_status) trBadge = '<span class="badge badge-danger">FALTA</span>';
+
+            let ipv6Badge = '<span class="badge badge-success">DUAL STACK</span>';
+            if (item.ipv6_status === 'IPV4_ONLY') ipv6Badge = '<span class="badge badge-warning">SOLO IPv4</span>';
+            if (item.ipv6_status === 'MISSING' || !item.ipv6_status) ipv6Badge = '<span class="badge badge-danger">FALTA</span>';
+
+            let actionBtn = '<span class="badge badge-success" style="opacity: 0.85;">✓ Configurado</span>';
+            const needsConfig = item.tr069_status !== 'ACTIVE' || item.ipv6_status !== 'DUAL_STACK';
+            if (item.smartolt_id && needsConfig) {
+              const safeClient = (item.cliente || 'Cliente').replace(/'/g, "\\'");
+              actionBtn = \`
+                <button class="btn btn-primary btn-sm" onclick="applyTr069AndIpv6Config('\${item.smartolt_id}', '\${safeClient}')">
+                  ⚡ Aprovisionar TR069+IPv6
+                </button>
+              \`;
+            } else if (!item.smartolt_id) {
+              actionBtn = '<span style="font-size: 11px; color: var(--text-dim);">No en OLT</span>';
+            }
+
+            return \`
+              <tr>
+                <td style="font-weight: 600;">\${escapeHtml(item.cliente || 'Desconocido')}</td>
+                <td style="font-family: var(--font-mono); font-weight: 600; color: var(--accent-cyan); font-size: 12px;">\${escapeHtml(item.sn_smartolt || item.sn_wisphub || '--')}</td>
+                <td style="font-family: var(--font-mono); color: var(--accent-green);">\${item.smartolt_ip || item.wisphub_ip || '--'}</td>
+                <td><span class="badge badge-info">\${escapeHtml(item.zona_o_router || 'Actopan')}</span></td>
+                <td>\${trBadge}</td>
+                <td>\${ipv6Badge}</td>
+                <td>\${actionBtn}</td>
+              </tr>
+            \`;
+          }).join('');
+        } else {
+          tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-dim);">No hay ONUs que requieran aprovisionamiento con el filtro actual.</td></tr>';
+        }
+      } catch (err) {
+        console.error('Error loading provisioning:', err);
+      }
+    }
+
+    function setProvFilter(f, btnElement) {
+      state.provisioning.filter = f;
+      state.provisioning.page = 1;
+      document.querySelectorAll('#prov-filter-buttons button').forEach(b => b.classList.remove('active'));
+      if (btnElement) {
+        btnElement.classList.add('active');
+      }
+      loadProvisioningData();
+    }
+
+    let provSearchDebounce = null;
+    function handleProvSearch(q) {
+      clearTimeout(provSearchDebounce);
+      provSearchDebounce = setTimeout(() => {
+        state.provisioning.search = (q || '').trim();
+        state.provisioning.page = 1;
+        loadProvisioningData();
+      }, 250);
+    }
+
+    function changeProvPage(dir) {
+      const maxPage = Math.ceil(state.provisioning.total / state.provisioning.limit) || 1;
+      const newPage = state.provisioning.page + dir;
+      if (newPage >= 1 && newPage <= maxPage) {
+        state.provisioning.page = newPage;
+        loadProvisioningData();
       }
     }
 
