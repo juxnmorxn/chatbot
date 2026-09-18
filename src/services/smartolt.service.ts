@@ -548,8 +548,39 @@ export class SmartOLTService {
       if (resData?.status === true || response.status === 200 || resData?.response_code === 'success' || resData?.response === 'success' || (typeof resData?.response === 'string' && resData.response.toLowerCase().includes('saved'))) {
         const onuExternalId = resData?.unique_external_id || resData?.onu_id || payload.sn;
 
-        // SmartOLT requiere configurar el modo WAN Static IP vía OMCI en endpoint separado
+        // SmartOLT Aprovisionamiento TR-069 / OMCI y WAN Static IP Dual Stack
         if (payload.ip_address && onuExternalId) {
+          const isSanAgustin = String(payload.olt_id) === '2' || (payload.zone || '').toLowerCase().includes('san agustin');
+          const mgmtVlan = isSanAgustin ? '60' : '99';
+
+          // 1. Configurar Management IP en la VLAN de gestión (99 Actopan / 60 San Agustín)
+          try {
+            logger.info(`Configurando Management IP en VLAN ${mgmtVlan} para ${onuExternalId}...`);
+            const mgmtForm = new FormData();
+            mgmtForm.append('vlan', mgmtVlan);
+            const mgmtHeaders = typeof (mgmtForm as any).getHeaders === 'function' ? (mgmtForm as any).getHeaders() : undefined;
+            await api.post(`/onu/set_onu_mgmt_ip_static_ip/${onuExternalId}`, mgmtForm, { headers: mgmtHeaders });
+            logger.info(`Management IP asignada con éxito para ${onuExternalId}`);
+          } catch (mErr: any) {
+            logger.warn(`No se pudo asignar Management IP para ${onuExternalId}:`, mErr?.response?.data || mErr?.message);
+          }
+
+          // 2. Habilitar Perfil TR-069 SmartOLT sobre la interfaz de gestión (mgmt)
+          let tr069Enabled = false;
+          try {
+            logger.info(`Habilitando Perfil TR-069 'SmartOLT' para ${onuExternalId}...`);
+            const tr069Form = new FormData();
+            tr069Form.append('tr069_profile', 'SmartOLT');
+            tr069Form.append('tr069_interface', 'mgmt');
+            const tr069Headers = typeof (tr069Form as any).getHeaders === 'function' ? (tr069Form as any).getHeaders() : undefined;
+            await api.post(`/onu/enable_tr069/${onuExternalId}`, tr069Form, { headers: tr069Headers });
+            tr069Enabled = true;
+            logger.info(`Perfil TR-069 SmartOLT habilitado con éxito para ${onuExternalId}`);
+          } catch (trErr: any) {
+            logger.warn(`No se pudo habilitar TR-069 para ${onuExternalId} (se usará OMCI):`, trErr?.response?.data || trErr?.message);
+          }
+
+          // 3. Configurar WAN en Static IP con Dual Stack IPv4/IPv6 y Auto
           try {
             logger.info(`Configurando WAN Static IP para ${onuExternalId} (${payload.ip_address})...`);
             const staticForm = new FormData();
@@ -558,16 +589,18 @@ export class SmartOLTService {
             staticForm.append('gateway', String(payload.gateway || '172.19.2.254'));
             staticForm.append('dns1', '8.8.8.8');
             staticForm.append('dns2', '8.8.4.4');
-            staticForm.append('configuration_method', 'OMCI');
-            staticForm.append('ip_protocol', 'ipv4');
+            staticForm.append('configuration_method', tr069Enabled ? 'TR069' : 'OMCI');
+            staticForm.append('ip_protocol', 'ipv4ipv6');
+            staticForm.append('ipv6_address_mode', 'Auto');
+            staticForm.append('ipv6_prefix_delegation_mode', 'DHCPv6-PD');
 
             const staticHeaders = typeof (staticForm as any).getHeaders === 'function' ? (staticForm as any).getHeaders() : undefined;
             const staticRes = await api.post(`/onu/set_onu_wan_mode_static_ip/${onuExternalId}`, staticForm, {
               headers: staticHeaders
             });
-            logger.info(`WAN Static IP configurada exitosamente para ${onuExternalId}:`, JSON.stringify(staticRes.data));
+            logger.info(`WAN Static IP (${tr069Enabled ? 'TR069' : 'OMCI'}) configurada exitosamente para ${onuExternalId}:`, JSON.stringify(staticRes.data));
 
-            // Habilitar acceso remoto a la WAN IP
+            // 4. Habilitar acceso remoto a la WAN IP
             await api.post(`/onu/enable_allow_remote_access_to_wan_ip/${onuExternalId}`).catch((e) => {
               logger.warn(`No se pudo habilitar acceso remoto a WAN IP para ${onuExternalId}:`, e?.message);
             });
