@@ -261,7 +261,30 @@ export class WebhookController {
         imageAnalysis,
       };
 
-      // Si el bot está en pausa por intervención humana activa:
+      // Si es un clic de botón, archivo multimedia, mensaje de técnico o comando de activación/técnico, procesamos de inmediato sin debounce
+      const lowerText = (extracted.text || '').toLowerCase().trim();
+      const isTechAction = Boolean(
+        extracted.buttonId?.includes('ACTIVACION') ||
+        /^(?:activar|activaci|alta|aprovisionar|registrar|cambiar plan|cambiar zona|cambiar nombre|cambiar serie|si|sí|confirmar|confirmo|no|cancelar)\b/i.test(lowerText) ||
+        lowerText.startsWith('activar') ||
+        lowerText.startsWith('cambiar') ||
+        imageAnalysis?.tipo_documento === 'CONTRATO_INSTALACION'
+      );
+
+      const isTechnician = isTechAction || await TursoService.isAuthorizedTechnician(phone.replace(/\D/g, '')).catch(() => false);
+
+      // Comandos técnicos y fotos de contratos tienen prioridad absoluta y NUNCA son bloqueados por human takeover
+      if (isTechAction || isTechnician) {
+        BotOrchestrator.finalizarIntervencionHumana(phone).catch(() => {});
+        setImmediate(() => {
+          BotOrchestrator.procesarMensaje(incomingEvent).catch((err) => {
+            logger.error(`Error en BotOrchestrator para técnico ${phone}:`, err?.message || err);
+          });
+        });
+        return;
+      }
+
+      // Si el bot está en pausa por intervención humana activa (solo clientes residenciales regulares):
       const estadoPausa = BotOrchestrator.estaBotPausado(phone);
       if (estadoPausa.pausado) {
         // Enviar a procesarMensaje para que extienda la ventana deslizable (+60m), guarde log y emita SSE
@@ -273,19 +296,7 @@ export class WebhookController {
         return;
       }
 
-
-      // Si es un clic de botón, archivo multimedia, mensaje de técnico o comando de activación/técnico, procesamos de inmediato sin debounce
-      const lowerText = (extracted.text || '').toLowerCase().trim();
-      const isTechAction = Boolean(
-        extracted.buttonId?.includes('ACTIVACION') ||
-        /^(?:activar|activaci|alta|aprovisionar|registrar|cambiar plan|cambiar zona|cambiar nombre|cambiar serie|si|sí|confirmar|confirmo|no|cancelar)\b/i.test(lowerText) ||
-        lowerText.startsWith('activar') ||
-        lowerText.startsWith('cambiar')
-      );
-
-      const isTechnician = isTechAction || await TursoService.isAuthorizedTechnician(phone.replace(/\D/g, '')).catch(() => false);
-
-      if (extracted.buttonId || (extracted.isMedia && !extracted.text) || isTechnician) {
+      if (extracted.buttonId || (extracted.isMedia && !extracted.text)) {
         setImmediate(() => {
           BotOrchestrator.procesarMensaje(incomingEvent).catch((err) => {
             logger.error(`Error en BotOrchestrator para ${phone}:`, err?.message || err);

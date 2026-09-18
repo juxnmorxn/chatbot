@@ -435,31 +435,56 @@ export class BotOrchestrator {
     // 0. Obtener sesión de Turso DB
     let session = await TursoService.getSession(phone);
     const inputContent = rawText || (buttonId ? `[Botón: ${buttonId}]` : (event.isMedia ? '[Foto/Comprobante]' : '[Desconocido]'));
+    const lowerMsg = rawText.toLowerCase().trim();
+
+    // Detección anticipada de comandos y flujos de técnicos de campo
+    const esComandoCambioPaquete = /(?:cambiar|modificar|actualizar|subir|bajar)\s+(?:de\s+)?(?:paquete|plan|velocidad|megas)\b/i.test(rawText) ||
+      /^cambiar\s+(?:paquete|plan)\b/i.test(lowerMsg);
+
+    const esComandoActivacion = buttonId === 'BTN_ACTIVAR_MODEM' ||
+      /^(?:activar|activaci[oó]n|alta|aprovisionar|registrar)\b/i.test(lowerMsg) ||
+      /(?:activar|activaci[oó]n|alta|aprovisionar|registrar)\s*(?:de\s+)?(?:cliente|modem|onu|equipo|serie)?[:\s]*/i.test(rawText) ||
+      lowerMsg.startsWith('activar') ||
+      lowerMsg.startsWith('activaci') ||
+      lowerMsg.startsWith('alta') ||
+      lowerMsg.startsWith('aprovisionar') ||
+      lowerMsg.startsWith('registrar') ||
+      (event.imageAnalysis as any)?.tipo_documento === 'CONTRATO_INSTALACION';
+
+    const esPasoTecnicoEnCurso = session?.step?.startsWith('ACTIVACION_') ||
+      session?.step === 'PENDIENTE_CONFIRMACION_ACTIVACION_ONU';
+
+    const esAccionTecnica = esComandoActivacion || esComandoCambioPaquete || esPasoTecnicoEnCurso;
 
     // 1. Verificar si hay Intervención Humana activa (Memoria o Turso DB)
-    const estadoPausa = this.estaBotPausado(phone, session);
-    if (estadoPausa.pausado) {
-      logger.info(`[Human Takeover] Bot en pausa para ${phone} (${estadoPausa.minutosRestantes}m restantes). Intervención humana activa.`);
-      // Registrar mensaje entrante en la auditoría
-      await TursoService.logMessage(phone, 'IN', inputContent, 'INTERVENCION_HUMANA', 'MENSAJE_CLIENTE_DURANTE_TAKEOVER');
+    // EXCEPCIÓN: Comandos técnicos, fotos de contratos y activaciones NUNCA son bloqueados por human takeover
+    if (esAccionTecnica) {
+      await this.finalizarIntervencionHumana(phone);
+    } else {
+      const estadoPausa = this.estaBotPausado(phone, session);
+      if (estadoPausa.pausado) {
+        logger.info(`[Human Takeover] Bot en pausa para ${phone} (${estadoPausa.minutosRestantes}m restantes). Intervención humana activa.`);
+        // Registrar mensaje entrante en la auditoría
+        await TursoService.logMessage(phone, 'IN', inputContent, 'INTERVENCION_HUMANA', 'MENSAJE_CLIENTE_DURANTE_TAKEOVER');
 
-      // Ventana deslizable: otorgar 60 minutos adicionales de gracia al operador para responder
-      await this.activarPausaOperador(phone, 60, 'Ventana deslizable: respuesta del cliente durante atención humana', 'OPERATOR_WAITING_CLIENT');
+        // Ventana deslizable: otorgar 60 minutos adicionales de gracia al operador para responder
+        await this.activarPausaOperador(phone, 60, 'Ventana deslizable: respuesta del cliente durante atención humana', 'OPERATOR_WAITING_CLIENT');
 
-      // Notificar a la bandeja del operador en tiempo real vía SSE
-      try {
-        const { AdminController } = require('../controllers/admin.controller');
-        AdminController.broadcastSSE('chat:message', {
-          phone,
-          direction: 'IN',
-          message: inputContent,
-          created_at: new Date().toISOString(),
-          is_paused: true,
-          status: 'OPERATOR_WAITING_CLIENT',
-        });
-      } catch {}
+        // Notificar a la bandeja del operador en tiempo real vía SSE
+        try {
+          const { AdminController } = require('../controllers/admin.controller');
+          AdminController.broadcastSSE('chat:message', {
+            phone,
+            direction: 'IN',
+            message: inputContent,
+            created_at: new Date().toISOString(),
+            is_paused: true,
+            status: 'OPERATOR_WAITING_CLIENT',
+          });
+        } catch {}
 
-      return;
+        return;
+      }
     }
 
     // 2. Control de Sesión Inactiva / Stale Session (> 24 horas)
@@ -495,9 +520,6 @@ export class BotOrchestrator {
         step: 'CONVERSACIONAL',
       });
     }
-
-
-    const lowerMsg = rawText.toLowerCase().trim();
 
     // Silencio de Cortesía ante respuestas breves de acuse si la consulta ya concluyó o hay reporte activo:
     const confirmacionesCortas = [
@@ -580,19 +602,6 @@ export class BotOrchestrator {
       await this.procesarModificacionActivacionEnCaliente(phone, rawText, session, targetJid);
       return;
     }
-
-    // D. Detección de comandos de técnicos y clientes (Cambio de paquete y Activación)
-    const esComandoCambioPaquete = /(?:cambiar|modificar|actualizar|subir|bajar)\s+(?:de\s+)?(?:paquete|plan|velocidad|megas)\b/i.test(rawText) ||
-      /^cambiar\s+(?:paquete|plan)\b/i.test(lowerMsg);
-
-    const esComandoActivacion = buttonId === 'BTN_ACTIVAR_MODEM' ||
-      /^(?:activar|activaci[oó]n|alta|aprovisionar|registrar)\b/i.test(lowerMsg) ||
-      /(?:activar|activaci[oó]n|alta|aprovisionar|registrar)\s*(?:de\s+)?(?:cliente|modem|onu|equipo|serie)?[:\s]*/i.test(rawText) ||
-      lowerMsg.startsWith('activar') ||
-      lowerMsg.startsWith('activaci') ||
-      lowerMsg.startsWith('alta') ||
-      lowerMsg.startsWith('aprovisionar') ||
-      lowerMsg.startsWith('registrar');
 
     // 2.0 CONTROL INTELIGENTE DE COMANDOS TÉCNICOS VS CLIENTES
     const authTecnico = await this.verificarAutorizacionTecnico(phone, rawText);
@@ -3834,8 +3843,8 @@ export class BotOrchestrator {
         return { autorizado: true, tech: null };
       }
 
-      // Buscar si incluyeron un PIN numérico en el texto (4 a 8 dígitos)
-      const pinMatch = (rawText || '').match(/\b(\d{4,8})\b/);
+      // Buscar si incluyeron un PIN numérico en el texto (4 a 8 dígitos) precedido por pin, clave o pass
+      const pinMatch = (rawText || '').match(/\b(?:pin|clave|pass|c[oó]digo)\s*[:=\s]*(\d{4,8})\b/i);
       const pin = pinMatch ? pinMatch[1] : undefined;
 
       const tech = await TursoService.isAuthorizedTechnician(phone, pin);
