@@ -490,10 +490,36 @@ export class SmartOLTService {
   }
 
   /**
+   * Normaliza cadenas para SmartOLT eliminando acentos (á->a), diacríticos, eñes (ñ->n) y caracteres especiales
+   * para evitar errores de validación de SmartOLT ("Invalid characters", etc.).
+   */
+  static normalizeSmartOltString(str: string | undefined | null): string {
+    if (!str) return '';
+    return String(str)
+      // Descomponer caracteres con acentos
+      .normalize('NFD')
+      // Eliminar marcas de acento (á->a, é->e, í->i, ó->o, ú->u, etc.)
+      .replace(/[\u0300-\u036f]/g, '')
+      // Reemplazo específico para eñes
+      .replace(/ñ/g, 'n')
+      .replace(/Ñ/g, 'N')
+      // Eliminar caracteres especiales no permitidos por SmartOLT (permitir letras, números, espacios, guiones, puntos y barras)
+      .replace(/[^a-zA-Z0-9\s.\-_#/]/g, ' ')
+      // Reducir espacios consecutivos
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  /**
    * Ejecuta la autorización y aprovisionamiento automático de la ONU en SmartOLT
    */
   static async authorizeOnu(payload: AuthorizeOnuPayload): Promise<AuthorizeOnuResult> {
-    logger.info(`Iniciando autorización en SmartOLT para SN: ${payload.sn}, OLT: ${payload.olt_id}, VLAN: ${payload.vlan}, IP: ${payload.ip_address}`);
+    const cleanName = this.normalizeSmartOltString(payload.name);
+    const cleanAddress = this.normalizeSmartOltString(payload.address);
+    const cleanZone = this.normalizeSmartOltString(payload.zone);
+    const cleanComment = this.normalizeSmartOltString(payload.comment);
+
+    logger.info(`Iniciando autorización en SmartOLT para SN: ${payload.sn}, Cliente: "${cleanName}", OLT: ${payload.olt_id}, VLAN: ${payload.vlan}, IP: ${payload.ip_address}`);
     const apiKey = this.getApiKey();
 
     if (!apiKey || apiKey.includes('tu_token')) {
@@ -502,7 +528,7 @@ export class SmartOLTService {
         success: true,
         message: `ONU ${payload.sn} autorizada exitosamente en modo simulación. IP asignada: ${payload.ip_address}, VLAN: ${payload.vlan}`,
         onu_id: `SIM-${payload.sn}`,
-        details: payload,
+        details: { ...payload, name: cleanName },
       };
     }
 
@@ -515,9 +541,9 @@ export class SmartOLTService {
       form.append('pon_type', payload.pon_type || 'gpon');
       form.append('board', String(payload.board));
       form.append('port', String(payload.port));
-      form.append('sn', String(payload.sn));
+      form.append('sn', String(payload.sn).trim().toUpperCase());
       form.append('onu_type', String(payload.onu_type || 'HG8145X6-10'));
-      form.append('name', String(payload.name));
+      form.append('name', cleanName);
       
       // Modo de Operación WAN: Routing con IP estática y acceso remoto habilitado
       form.append('mode', 'Routing');
@@ -541,9 +567,9 @@ export class SmartOLTService {
       form.append('line_profile', String(payload.line_profile || 'VLAN'));
       form.append('download_speed_profile_name', String(payload.download_speed_profile_name || '40MB-DOWN'));
       form.append('upload_speed_profile_name', String(payload.upload_speed_profile_name || '40MB-UP'));
-      if (payload.address) form.append('address', String(payload.address));
-      if (payload.zone) form.append('zone', String(payload.zone));
-      if (payload.comment) form.append('comment', String(payload.comment));
+      if (cleanAddress) form.append('address', cleanAddress);
+      if (cleanZone) form.append('zone', cleanZone);
+      if (cleanComment) form.append('comment', cleanComment);
 
       const response = await api.post('/onu/authorize_onu', form);
       const resData = response.data;
