@@ -236,8 +236,14 @@ export class AdminController {
       const phone = String(req.params.phone || '');
       const limit = parseInt(req.query.limit as string, 10) || 80;
       const messages = await TursoService.getChatMessagesByPhone(phone, limit);
-      const isPaused = BotOrchestrator.estaBotPausado(phone);
-      res.json({ success: true, messages, is_paused: isPaused });
+      const session = await TursoService.getSession(phone);
+      const isPaused = BotOrchestrator.estaBotPausado(phone, session);
+      res.json({
+        success: true,
+        messages,
+        is_paused: isPaused.pausado,
+        takeover: isPaused,
+      });
     } catch (error: any) {
       logger.error(`Error al obtener mensajes de ${req.params.phone}:`, error?.message || error);
       res.status(500).json({ success: false, error: error?.message || error });
@@ -245,11 +251,11 @@ export class AdminController {
   }
 
   /**
-   * Envía un mensaje manual de WhatsApp y opcionalmente activa el Human Takeover
+   * Envía un mensaje manual de WhatsApp y activa el Human Takeover adaptativo
    */
   static async sendManualChatMessage(req: Request, res: Response): Promise<void> {
     try {
-      const { phone, message, autoPauseMinutes } = req.body || {};
+      const { phone, message, autoPauseMinutes, mode } = req.body || {};
       if (!phone || !message) {
         res.status(400).json({ success: false, error: 'Teléfono y mensaje son obligatorios' });
         return;
@@ -271,9 +277,16 @@ export class AdminController {
       // Registrar en el historial de Turso
       await TursoService.logMessage(cleanPhone, 'OUT', text, 'HUMAN_TAKEOVER', 'Mensaje enviado por operador humano');
 
-      // Activar pausa automática del bot por el tiempo indicado (default: 60 minutos)
-      const pauseMins = parseInt(autoPauseMinutes, 10) || 60;
-      BotOrchestrator.activarPausaOperador(cleanPhone, pauseMins, 'Intervención manual por agente humano');
+      // Activar pausa automática del bot por defecto 240m (o especificado)
+      const forzarHastaManana = mode === 'next_morning';
+      const pauseMins = parseInt(autoPauseMinutes, 10) || (mode === '1h' ? 60 : 240);
+      const takeoverRes = await BotOrchestrator.activarPausaOperador(
+        cleanPhone,
+        pauseMins,
+        'Intervención manual por agente humano desde panel',
+        'OPERATOR_ACTIVE',
+        forzarHastaManana
+      );
 
       // Broadcast evento SSE
       AdminController.broadcastSSE('chat:message', {
@@ -282,12 +295,13 @@ export class AdminController {
         message: text,
         created_at: new Date().toISOString(),
         is_paused: true,
+        takeover: takeoverRes,
       });
 
       res.json({
         success: true,
-        message: 'Mensaje enviado exitosamente. Bot pausado para atención humana.',
-        paused_for_minutes: pauseMins,
+        message: `Mensaje enviado. Bot en pausa (${takeoverRes.descripcion}).`,
+        takeover: takeoverRes,
       });
     } catch (error: any) {
       logger.error('Error al enviar mensaje manual de chat:', error?.message || error);
@@ -300,25 +314,60 @@ export class AdminController {
    */
   static async toggleHumanTakeover(req: Request, res: Response): Promise<void> {
     try {
-      const { phone, pause, minutes } = req.body || {};
+      const { phone, pause, minutes, mode } = req.body || {};
       if (!phone) {
         res.status(400).json({ success: false, error: 'Número de teléfono requerido' });
         return;
       }
 
       const cleanPhone = String(phone).trim();
-      if (pause === false) {
-        BotOrchestrator.reanudarBot(cleanPhone);
-        AdminController.broadcastSSE('chat:status', { phone: cleanPhone, is_paused: false });
+      if (pause === false || mode === 'resume') {
+        await BotOrchestrator.reanudarBot(cleanPhone);
+        AdminController.broadcastSSE('chat:status', { phone: cleanPhone, is_paused: false, status: 'BOT' });
         res.json({ success: true, is_paused: false, message: `Bot reactivado para ${cleanPhone}` });
       } else {
-        const mins = parseInt(minutes, 10) || 60;
+        const forzarHastaManana = mode === 'next_morning';
+        const mins = mode === '1h' ? 60 : (parseInt(minutes, 10) || 240);
         WebhookController.cancelPendingDebounce(cleanPhone);
-        BotOrchestrator.activarPausaOperador(cleanPhone, mins, 'Pausado manualmente desde panel');
-        AdminController.broadcastSSE('chat:status', { phone: cleanPhone, is_paused: true, minutes: mins });
-        res.json({ success: true, is_paused: true, minutes: mins, message: `Bot pausado para ${cleanPhone} por ${mins} min` });
+        const takeoverRes = await BotOrchestrator.activarPausaOperador(
+          cleanPhone,
+          mins,
+          'Pausado manualmente desde panel',
+          'OPERATOR_ACTIVE',
+          forzarHastaManana
+        );
+        AdminController.broadcastSSE('chat:status', { phone: cleanPhone, is_paused: true, takeover: takeoverRes });
+        res.json({
+          success: true,
+          is_paused: true,
+          takeover: takeoverRes,
+          message: `Bot pausado para ${cleanPhone} (${takeoverRes.descripcion})`,
+        });
       }
     } catch (error: any) {
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Finaliza el caso de atención humana y reactiva el bot limpiamente
+   */
+  static async closeChatCase(req: Request, res: Response): Promise<void> {
+    try {
+      const phone = String(req.params.phone || req.body?.phone || '').trim();
+      if (!phone) {
+        res.status(400).json({ success: false, error: 'Teléfono requerido' });
+        return;
+      }
+
+      await BotOrchestrator.finalizarIntervencionHumana(phone);
+      AdminController.broadcastSSE('chat:status', { phone, is_paused: false, status: 'RESOLVED' });
+      res.json({
+        success: true,
+        message: `Caso cerrado exitosamente para ${phone}. El bot atenderá limpiamente las próximas consultas.`,
+      });
+    } catch (error: any) {
+      logger.error('Error al cerrar caso de chat:', error?.message || error);
       res.status(500).json({ success: false, error: error?.message || error });
     }
   }

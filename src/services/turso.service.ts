@@ -66,6 +66,8 @@ export interface Session {
   opt_out: number;
   last_interaction: string;
   metadata: string | null;
+  human_takeover_until?: string | null;
+  human_takeover_status?: string | null;
 }
 
 export interface TicketRecord {
@@ -126,6 +128,8 @@ export class TursoService {
         opt_out: Number(row.opt_out || 0),
         last_interaction: String(row.last_interaction || new Date().toISOString()),
         metadata: row.metadata ? String(row.metadata) : null,
+        human_takeover_until: row.human_takeover_until ? String(row.human_takeover_until) : null,
+        human_takeover_status: row.human_takeover_status ? String(row.human_takeover_status) : 'BOT',
       };
     } catch (error: any) {
       logger.error(`Error al obtener sesión de ${phone}:`, error?.message || error);
@@ -150,14 +154,16 @@ export class TursoService {
       opt_out: data.opt_out ?? existing?.opt_out ?? 0,
       last_interaction: now,
       metadata: data.metadata ?? existing?.metadata ?? null,
+      human_takeover_until: data.human_takeover_until !== undefined ? data.human_takeover_until : (existing?.human_takeover_until ?? null),
+      human_takeover_status: data.human_takeover_status ?? existing?.human_takeover_status ?? 'BOT',
     };
 
     try {
       const client = getTursoClient();
       await client.execute({
         sql: `
-          INSERT INTO sessions (phone, step, client_id, service_id, client_name, onu_id, opt_out, last_interaction, metadata)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO sessions (phone, step, client_id, service_id, client_name, onu_id, opt_out, last_interaction, metadata, human_takeover_until, human_takeover_status)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(phone) DO UPDATE SET
             step = excluded.step,
             client_id = COALESCE(excluded.client_id, sessions.client_id),
@@ -166,7 +172,9 @@ export class TursoService {
             onu_id = COALESCE(excluded.onu_id, sessions.onu_id),
             opt_out = excluded.opt_out,
             last_interaction = excluded.last_interaction,
-            metadata = COALESCE(excluded.metadata, sessions.metadata)
+            metadata = COALESCE(excluded.metadata, sessions.metadata),
+            human_takeover_until = excluded.human_takeover_until,
+            human_takeover_status = excluded.human_takeover_status
         `,
         args: [
           merged.phone,
@@ -177,15 +185,51 @@ export class TursoService {
           merged.onu_id,
           merged.opt_out,
           merged.last_interaction,
-          merged.metadata,
+          merged.metadata ?? null,
+          merged.human_takeover_until ?? null,
+          merged.human_takeover_status ?? 'BOT',
         ],
       });
 
       return merged;
     } catch (error: any) {
-      logger.error(`Error al guardar sesión para ${data.phone}:`, error?.message || error);
+      logger.error(`Error al actualizar sesión de ${data.phone}:`, error?.message || error);
       return merged;
     }
+  }
+
+  /**
+   * Actualiza el estado de intervención humana directamente en Turso
+   */
+  static async setHumanTakeover(
+    phone: string,
+    untilIso: string | null,
+    status: 'OPERATOR_ACTIVE' | 'OPERATOR_WAITING_CLIENT' | 'RESOLVED' | 'BOT' = 'OPERATOR_ACTIVE'
+  ): Promise<void> {
+    try {
+      const client = getTursoClient();
+      const now = new Date().toISOString();
+      await client.execute({
+        sql: `
+          INSERT INTO sessions (phone, human_takeover_until, human_takeover_status, last_interaction)
+          VALUES (?, ?, ?, ?)
+          ON CONFLICT(phone) DO UPDATE SET
+            human_takeover_until = excluded.human_takeover_until,
+            human_takeover_status = excluded.human_takeover_status,
+            last_interaction = excluded.last_interaction
+        `,
+        args: [phone, untilIso, status, now],
+      });
+    } catch (error: any) {
+      logger.error(`Error al persistir human takeover para ${phone}:`, error?.message || error);
+    }
+  }
+
+  /**
+   * Finaliza la intervención humana y reinicia el estado
+   */
+  static async clearHumanTakeover(phone: string): Promise<void> {
+    await this.setHumanTakeover(phone, null, 'BOT');
   }
 
   /**
@@ -1957,6 +2001,8 @@ export class TursoService {
           s.step,
           s.last_interaction,
           s.metadata,
+          s.human_takeover_until,
+          s.human_takeover_status,
           (
             SELECT l.message 
             FROM conversation_logs l 
@@ -1980,6 +2026,9 @@ export class TursoService {
       return res.rows.map((r: any) => {
         let meta: any = {};
         try { meta = JSON.parse(r.metadata || '{}'); } catch {}
+        const untilIso = r.human_takeover_until ? String(r.human_takeover_until) : (meta.humanTakeoverUntil || null);
+        const isPaused = Boolean(untilIso && new Date(untilIso).getTime() > Date.now());
+
         return {
           phone: String(r.phone),
           client_name: r.client_name ? String(r.client_name) : null,
@@ -1988,7 +2037,9 @@ export class TursoService {
           last_interaction: String(r.last_interaction || ''),
           last_message: r.last_message ? String(r.last_message) : '[Sin mensajes previos]',
           last_direction: (r.last_direction || 'IN') as 'IN' | 'OUT',
-          is_human_paused: Boolean(meta.humanTakeoverUntil && new Date(meta.humanTakeoverUntil).getTime() > Date.now()),
+          is_human_paused: isPaused,
+          human_takeover_until: untilIso,
+          human_takeover_status: r.human_takeover_status ? String(r.human_takeover_status) : (isPaused ? 'OPERATOR_ACTIVE' : 'BOT'),
         };
       });
     } catch (error: any) {
@@ -2040,8 +2091,11 @@ export interface ChatConversationItem {
   last_message: string;
   last_direction: 'IN' | 'OUT';
   is_human_paused: boolean;
+  human_takeover_until?: string | null;
+  human_takeover_status?: string | null;
   unread_count?: number;
 }
+
 
 
 

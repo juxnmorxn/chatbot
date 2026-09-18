@@ -192,9 +192,17 @@ export class WebhookController {
         if (esCierreOperador) {
           logger.info(`[Human Takeover] Operador cerró la conversación con frase de despedida ("${extracted.text}"). Finalizando sesión para ${phone}.`);
           BotOrchestrator.finalizarIntervencionHumana(phone).catch(() => {});
+          try {
+            const { AdminController } = require('./admin.controller');
+            AdminController.broadcastSSE('chat:status', { phone, is_paused: false, status: 'RESOLVED' });
+          } catch {}
         } else {
-          // Pausamos el bot para este cliente durante 60 minutos mientras el operador conversa
-          BotOrchestrator.activarPausaOperador(phone, 60, 'Operador respondió desde WhatsApp');
+          // Pausamos el bot con ventana adaptativa inteligente de 4 horas (o hasta 10 AM siguiente día)
+          BotOrchestrator.activarPausaOperador(phone, 240, 'Operador respondió desde WhatsApp Web/Móvil').catch(() => {});
+          try {
+            const { AdminController } = require('./admin.controller');
+            AdminController.broadcastSSE('chat:status', { phone, is_paused: true, status: 'OPERATOR_ACTIVE' });
+          } catch {}
         }
 
         // Auditoría en Turso
@@ -243,14 +251,6 @@ export class WebhookController {
         return;
       }
 
-      // Si el bot está en pausa por intervención humana activa:
-      const estadoPausa = BotOrchestrator.estaBotPausado(phone);
-      if (estadoPausa.pausado) {
-        logger.info(`[Human Takeover] Mensaje de ${phone} no respondido por bot (humano al mando, ${estadoPausa.minutosRestantes}m restantes).`);
-        TursoService.logMessage(phone, 'IN', extracted.text || '[Multimedia/Botón]', null, 'BOT_PAUSADO_OPERADOR').catch(() => {});
-        return;
-      }
-
       const incomingEvent: IncomingMessageEvent = {
         phone,
         remoteJid,
@@ -260,6 +260,19 @@ export class WebhookController {
         isMedia: extracted.isMedia,
         imageAnalysis,
       };
+
+      // Si el bot está en pausa por intervención humana activa:
+      const estadoPausa = BotOrchestrator.estaBotPausado(phone);
+      if (estadoPausa.pausado) {
+        // Enviar a procesarMensaje para que extienda la ventana deslizable (+60m), guarde log y emita SSE
+        setImmediate(() => {
+          BotOrchestrator.procesarMensaje(incomingEvent).catch((err) => {
+            logger.error(`Error en BotOrchestrator (paused) para ${phone}:`, err?.message || err);
+          });
+        });
+        return;
+      }
+
 
       // Si es un clic de botón o archivo multimedia sin texto, procesamos de inmediato
       if (extracted.buttonId || (extracted.isMedia && !extracted.text)) {

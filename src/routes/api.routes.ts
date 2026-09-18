@@ -43,6 +43,9 @@ router.get('/api/admin/chats', AdminController.getChatConversations);
 router.get('/api/admin/chats/:phone/messages', AdminController.getChatMessages);
 router.post('/api/admin/chats/send', AdminController.sendManualChatMessage);
 router.post('/api/admin/chats/takeover', AdminController.toggleHumanTakeover);
+router.post('/api/admin/chats/:phone/close', AdminController.closeChatCase);
+router.post('/api/admin/chats/close', AdminController.closeChatCase);
+
 
 // ==========================================
 // APIS ADMINISTRATIVAS PARA VARIABLES Y CONFIGURACIÓN

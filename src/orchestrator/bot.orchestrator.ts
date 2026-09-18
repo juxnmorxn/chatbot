@@ -59,35 +59,124 @@ export class BotOrchestrator {
     { id: 'BTN_ASESOR', title: '👤 Hablar con Asesor' },
   ];
 
-  private static humanTakeoverMap = new Map<string, number>();
+  private static humanTakeoverMap = new Map<string, {
+    untilMs: number;
+    untilIso: string;
+    status: 'OPERATOR_ACTIVE' | 'OPERATOR_WAITING_CLIENT' | 'RESOLVED' | 'BOT';
+    reason?: string;
+  }>();
 
   /**
-   * Pausa las respuestas automáticas del bot para un número específico
+   * Calcula el tiempo de pausa adaptado al horario de atención de oficina (hora Hidalgo, México)
+   * Si la pausa ocurre fuera de horario o cerca de la salida (después de 18:00), se extiende hasta las 10:00 AM del siguiente día hábil.
    */
-  static activarPausaOperador(phone: string, minutos: number = 60, razon?: string): void {
-    const cleanPhone = phone.replace(/\D/g, '');
-    const until = Date.now() + minutos * 60 * 1000;
-    this.humanTakeoverMap.set(cleanPhone, until);
-    logger.info(`[Human Takeover] Bot silenciado para ${cleanPhone} por ${minutos}m (${razon || 'Operador en WhatsApp'}).`);
+  static calcularPausaInteligente(minutos: number = 240, forzarHastaManana: boolean = false): {
+    untilMs: number;
+    untilIso: string;
+    minutosReales: number;
+    descripcion: string;
+  } {
+    const now = new Date();
+    // Hora en zona horaria México (Hidalgo)
+    const nowMxStr = now.toLocaleString('en-US', { timeZone: 'America/Mexico_City' });
+    const nowMx = new Date(nowMxStr);
+    const hourMx = nowMx.getHours();
+
+    let targetMs = now.getTime() + minutos * 60 * 1000;
+    let descripcion = `${minutos} minutos`;
+
+    if (forzarHastaManana || hourMx >= 18 || hourMx < 8) {
+      // Calcular próximo día a las 10:00 AM hora México
+      const targetMx = new Date(nowMx);
+      if (hourMx >= 18) {
+        targetMx.setDate(targetMx.getDate() + 1);
+      }
+      targetMx.setHours(10, 0, 0, 0);
+
+      // Si cae domingo (0), pasar al lunes
+      if (targetMx.getDay() === 0) {
+        targetMx.setDate(targetMx.getDate() + 1);
+      }
+
+      const diffMs = targetMx.getTime() - nowMx.getTime();
+      if (diffMs > 0 && (forzarHastaManana || diffMs > minutos * 60 * 1000)) {
+        targetMs = now.getTime() + diffMs;
+        const diffMins = Math.ceil(diffMs / 60000);
+        descripcion = `Hasta mañana 10:00 AM (${diffMins} min)`;
+        return {
+          untilMs: targetMs,
+          untilIso: new Date(targetMs).toISOString(),
+          minutosReales: diffMins,
+          descripcion,
+        };
+      }
+    }
+
+    return {
+      untilMs: targetMs,
+      untilIso: new Date(targetMs).toISOString(),
+      minutosReales: minutos,
+      descripcion,
+    };
   }
 
   /**
-   * Reactiva el bot para un número específico
+   * Pausa las respuestas automáticas del bot para un número específico y persiste en Turso DB
    */
-  static reanudarBot(phone: string): void {
+  static async activarPausaOperador(
+    phone: string,
+    minutos: number = 240,
+    razon?: string,
+    status: 'OPERATOR_ACTIVE' | 'OPERATOR_WAITING_CLIENT' = 'OPERATOR_ACTIVE',
+    forzarHastaManana: boolean = false
+  ): Promise<{ untilIso: string; minutos: number; descripcion: string }> {
+    const cleanPhone = phone.replace(/\D/g, '');
+    const calculo = this.calcularPausaInteligente(minutos, forzarHastaManana);
+
+    this.humanTakeoverMap.set(cleanPhone, {
+      untilMs: calculo.untilMs,
+      untilIso: calculo.untilIso,
+      status,
+      reason: razon,
+    });
+
+    try {
+      await TursoService.setHumanTakeover(cleanPhone, calculo.untilIso, status);
+    } catch (err: any) {
+      logger.warn(`Error al persistir human takeover para ${cleanPhone}:`, err?.message || err);
+    }
+
+    logger.info(`[Human Takeover] Bot silenciado para ${cleanPhone} por ${calculo.descripcion} (${razon || 'Operador en WhatsApp'}).`);
+    return {
+      untilIso: calculo.untilIso,
+      minutos: calculo.minutosReales,
+      descripcion: calculo.descripcion,
+    };
+  }
+
+  /**
+   * Reactiva el bot para un número específico y limpia estado en Turso DB
+   */
+  static async reanudarBot(phone: string): Promise<void> {
     const cleanPhone = phone.replace(/\D/g, '');
     this.humanTakeoverMap.delete(cleanPhone);
+    try {
+      await TursoService.clearHumanTakeover(cleanPhone);
+    } catch (err: any) {
+      logger.warn(`Error al limpiar human takeover para ${cleanPhone}:`, err?.message || err);
+    }
     logger.info(`[Human Takeover] Bot reactivado para ${cleanPhone}.`);
   }
 
   /**
-   * Finaliza la intervención humana cuando el operador envía una despedida (ej. "buen día").
+   * Finaliza la intervención humana cuando el operador envía una despedida (ej. "buen día") o pulsa Finalizar en el panel.
    * Quita la pausa y reinicia el estado de la sesión en Turso para que el siguiente mensaje empiece limpiamente desde 0.
    */
   static async finalizarIntervencionHumana(phone: string): Promise<void> {
     const cleanPhone = phone.replace(/\D/g, '');
     this.humanTakeoverMap.delete(cleanPhone);
     try {
+      await TursoService.clearHumanTakeover(cleanPhone);
       const session = await TursoService.getSession(cleanPhone);
       let metaObj: any = {};
       try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
@@ -103,6 +192,8 @@ export class BotOrchestrator {
         phone: cleanPhone,
         step: 'CONSULTA_FINALIZADA',
         metadata: JSON.stringify(metaObj),
+        human_takeover_until: null,
+        human_takeover_status: 'BOT',
       });
       logger.info(`[Human Takeover] Conversación finalizada por operador para ${cleanPhone}. Próximo mensaje iniciará desde 0.`);
     } catch (err: any) {
@@ -112,17 +203,57 @@ export class BotOrchestrator {
 
   /**
    * Consulta si el bot está pausado para un número y cuántos minutos le restan
+   * Verifica memoria y base de datos Turso DB de forma resiliente ante reinicios
    */
-  static estaBotPausado(phone: string): { pausado: boolean; minutosRestantes: number } {
+  static estaBotPausado(phone: string, session?: Session | null): {
+    pausado: boolean;
+    minutosRestantes: number;
+    status: string;
+    untilIso: string | null;
+  } {
     const cleanPhone = phone.replace(/\D/g, '');
-    const until = this.humanTakeoverMap.get(cleanPhone);
-    if (!until) return { pausado: false, minutosRestantes: 0 };
-    const remainingMs = until - Date.now();
-    if (remainingMs <= 0) {
-      this.humanTakeoverMap.delete(cleanPhone);
-      return { pausado: false, minutosRestantes: 0 };
+    const entry = this.humanTakeoverMap.get(cleanPhone);
+
+    if (entry) {
+      const remainingMs = entry.untilMs - Date.now();
+      if (remainingMs > 0) {
+        return {
+          pausado: true,
+          minutosRestantes: Math.ceil(remainingMs / 60000),
+          status: entry.status,
+          untilIso: entry.untilIso,
+        };
+      } else {
+        this.humanTakeoverMap.delete(cleanPhone);
+        TursoService.clearHumanTakeover(cleanPhone).catch(() => {});
+      }
     }
-    return { pausado: true, minutosRestantes: Math.ceil(remainingMs / 60000) };
+
+    // Si no está en memoria pero la sesión de Turso tiene human_takeover_until
+    const dbUntilIso = session?.human_takeover_until;
+    if (dbUntilIso) {
+      const dbUntilMs = new Date(dbUntilIso).getTime();
+      const remainingMs = dbUntilMs - Date.now();
+      if (!isNaN(dbUntilMs) && remainingMs > 0) {
+        const dbStatus = (session?.human_takeover_status as any) || 'OPERATOR_ACTIVE';
+        this.humanTakeoverMap.set(cleanPhone, {
+          untilMs: dbUntilMs,
+          untilIso: dbUntilIso,
+          status: dbStatus,
+        });
+        return {
+          pausado: true,
+          minutosRestantes: Math.ceil(remainingMs / 60000),
+          status: dbStatus,
+          untilIso: dbUntilIso,
+        };
+      } else {
+        // Expiró en DB
+        TursoService.clearHumanTakeover(cleanPhone).catch(() => {});
+      }
+    }
+
+    return { pausado: false, minutosRestantes: 0, status: 'BOT', untilIso: null };
   }
 
   private static getIspName(): string {
@@ -293,25 +424,70 @@ export class BotOrchestrator {
 
     logger.info(`Procesando mensaje de ${phone} (Destino WhatsApp: ${targetJid}): "${rawText}"`);
 
-    // 0. Si el bot está en pausa por intervención de un operador humano:
-    const estadoPausa = this.estaBotPausado(phone);
+    // 0. Obtener sesión de Turso DB
+    let session = await TursoService.getSession(phone);
+    const inputContent = rawText || (buttonId ? `[Botón: ${buttonId}]` : (event.isMedia ? '[Foto/Comprobante]' : '[Desconocido]'));
+
+    // 1. Verificar si hay Intervención Humana activa (Memoria o Turso DB)
+    const estadoPausa = this.estaBotPausado(phone, session);
     if (estadoPausa.pausado) {
       logger.info(`[Human Takeover] Bot en pausa para ${phone} (${estadoPausa.minutosRestantes}m restantes). Intervención humana activa.`);
+      // Registrar mensaje entrante en la auditoría
+      await TursoService.logMessage(phone, 'IN', inputContent, 'INTERVENCION_HUMANA', 'MENSAJE_CLIENTE_DURANTE_TAKEOVER');
+
+      // Ventana deslizable: otorgar 60 minutos adicionales de gracia al operador para responder
+      await this.activarPausaOperador(phone, 60, 'Ventana deslizable: respuesta del cliente durante atención humana', 'OPERATOR_WAITING_CLIENT');
+
+      // Notificar a la bandeja del operador en tiempo real vía SSE
+      try {
+        const { AdminController } = require('../controllers/admin.controller');
+        AdminController.broadcastSSE('chat:message', {
+          phone,
+          direction: 'IN',
+          message: inputContent,
+          created_at: new Date().toISOString(),
+          is_paused: true,
+          status: 'OPERATOR_WAITING_CLIENT',
+        });
+      } catch {}
+
       return;
     }
 
+    // 2. Control de Sesión Inactiva / Stale Session (> 24 horas)
+    if (session && session.last_interaction) {
+      const diffHours = (Date.now() - new Date(session.last_interaction).getTime()) / (1000 * 60 * 60);
+      if (diffHours >= 24) {
+        logger.info(`[Auto-Reset] Sesión de ${phone} inactiva por ${Math.round(diffHours)}h (>24h). Reiniciando limpiamente a paso inicial.`);
+        await TursoService.clearHumanTakeover(phone);
+        let metaReset: any = {};
+        try { metaReset = JSON.parse(session.metadata || '{}'); } catch {}
+        metaReset.consultaFinalizada = false;
+        metaReset.comprobacionIniciada = null;
+        metaReset.resumenFalla = null;
+        metaReset.ticketFolio = null;
+        metaReset.pendingServices = [];
+
+        session = await TursoService.upsertSession({
+          phone,
+          step: 'CONVERSACIONAL',
+          metadata: JSON.stringify(metaReset),
+          human_takeover_until: null,
+          human_takeover_status: 'BOT',
+        });
+      }
+    }
+
     // Registrar mensaje entrante en la auditoría de Turso
-    const inputContent = rawText || (buttonId ? `[Botón: ${buttonId}]` : (event.isMedia ? '[Foto/Comprobante]' : '[Desconocido]'));
     await TursoService.logMessage(phone, 'IN', inputContent, null, 'MENSAJE_ENTRANTE');
 
-    // 1. Obtener o inicializar sesión en Turso
-    let session = await TursoService.getSession(phone);
     if (!session) {
       session = await TursoService.upsertSession({
         phone,
         step: 'CONVERSACIONAL',
       });
     }
+
 
     const lowerMsg = rawText.toLowerCase().trim();
 

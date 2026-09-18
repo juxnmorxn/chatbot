@@ -33,9 +33,19 @@ export async function initTursoDatabase(): Promise<void> {
         onu_id TEXT,
         opt_out INTEGER DEFAULT 0,
         last_interaction TEXT,
-        metadata TEXT
+        metadata TEXT,
+        human_takeover_until TEXT,
+        human_takeover_status TEXT DEFAULT 'BOT'
       );
     `);
+
+    // Migraciones no destructivas para tabla sessions
+    try {
+      await client.execute(`ALTER TABLE sessions ADD COLUMN human_takeover_until TEXT;`);
+    } catch (_) {}
+    try {
+      await client.execute(`ALTER TABLE sessions ADD COLUMN human_takeover_status TEXT DEFAULT 'BOT';`);
+    } catch (_) {}
 
     await client.execute(`
       CREATE TABLE IF NOT EXISTS settings (

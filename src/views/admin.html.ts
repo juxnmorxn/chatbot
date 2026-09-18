@@ -1560,10 +1560,17 @@ export function getAdminDashboardHtml(): string {
                   <span id="active-chat-phone" style="font-size: 11px; color: var(--text-muted); font-family: var(--font-mono);">--</span>
                 </div>
               </div>
-              <div style="display: flex; align-items: center; gap: 10px;">
+              <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                 <div id="takeover-status-indicator" class="badge badge-success">🤖 Bot Automático</div>
                 <button id="btn-toggle-takeover" class="btn btn-secondary btn-sm" onclick="toggleCurrentChatTakeover()">
-                  Pausar Bot
+                  Pausar 4h
+                </button>
+                <button class="btn btn-secondary btn-sm" title="Pausar hasta mañana a las 10:00 AM" onclick="pauseCurrentChatUntilMorning()">
+                  🌙 Hasta Mañana
+                </button>
+                <button class="btn btn-danger btn-sm" title="Finalizar caso y reactivar bot" onclick="closeCurrentChatCase()">
+                  <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"></path></svg>
+                  <span>Cerrar Caso</span>
                 </button>
               </div>
             </div>
@@ -2100,9 +2107,23 @@ export function getAdminDashboardHtml(): string {
             loadLiveChatData(false);
             if (state.activeChatPhone && state.activeChatPhone === data.phone) {
               appendChatMessage(data);
+              if (data.is_paused !== undefined) {
+                updateTakeoverButton(data.is_paused, data.takeover);
+              }
             }
           }
         });
+
+        evtSource.addEventListener('chat:status', (e) => {
+          const data = JSON.parse(e.data || '{}');
+          if (state.currentView === 'live-chat') {
+            loadLiveChatData(false);
+            if (state.activeChatPhone && state.activeChatPhone === data.phone) {
+              updateTakeoverButton(data.is_paused, data.takeover);
+            }
+          }
+        });
+
 
         evtSource.addEventListener('tickets:update', () => {
           if (state.currentView === 'tickets') loadTicketsData();
@@ -2290,13 +2311,14 @@ export function getAdminDashboardHtml(): string {
       const chat = state.chats.find(c => c.phone === phone);
       document.getElementById('active-chat-name').innerText = chat?.client_name || phone;
       document.getElementById('active-chat-phone').innerText = phone;
-      document.getElementById('active-chat-avatar').innerText = (chat?.client_name || phone).substring(0, 2).toUpperCase();
-
       updateTakeoverButton(chat?.is_human_paused);
 
       try {
-        const res = await apiFetch(\`/api/admin/chats/\${encodeURIComponent(phone)}/messages\`);
+        const res = await apiFetch('/api/admin/chats/' + encodeURIComponent(phone) + '/messages');
         renderChatMessages(res.messages || []);
+        if (res.is_paused !== undefined) {
+          updateTakeoverButton(res.is_paused, res.takeover);
+        }
       } catch (err) {
         showToast('Error', 'No se pudieron cargar los mensajes', 'error');
       }
@@ -2362,12 +2384,15 @@ export function getAdminDashboardHtml(): string {
           body: JSON.stringify({
             phone: state.activeChatPhone,
             message: text,
-            autoPauseMinutes: 60,
+            mode: '4h',
           }),
         });
 
         if (res.success) {
-          updateTakeoverButton(true);
+          updateTakeoverButton(true, res.takeover);
+          const chat = state.chats.find(c => c.phone === state.activeChatPhone);
+          if (chat) chat.is_human_paused = true;
+          renderChatThreads(state.chats);
         } else {
           showToast('Error', res.error || 'No se pudo enviar el mensaje', 'error');
         }
@@ -2376,19 +2401,21 @@ export function getAdminDashboardHtml(): string {
       }
     }
 
-    function updateTakeoverButton(isPaused) {
+    function updateTakeoverButton(isPaused, takeover) {
       const ind = document.getElementById('takeover-status-indicator');
       const btn = document.getElementById('btn-toggle-takeover');
+      if (!ind || !btn) return;
 
       if (isPaused) {
         ind.className = 'badge badge-warning';
-        ind.innerText = '⏸️ Operador Humano';
+        const desc = takeover?.descripcion || (takeover?.minutosRestantes ? (takeover.minutosRestantes + 'm restantes') : 'Humano Activo');
+        ind.innerText = '⏸️ Operador (' + desc + ')';
         btn.innerText = 'Reactivar Bot';
         btn.className = 'btn btn-success btn-sm';
       } else {
         ind.className = 'badge badge-success';
         ind.innerText = '🤖 Bot Automático';
-        btn.innerText = 'Pausar Bot';
+        btn.innerText = 'Pausar 4h';
         btn.className = 'btn btn-secondary btn-sm';
       }
     }
@@ -2404,19 +2431,69 @@ export function getAdminDashboardHtml(): string {
           body: JSON.stringify({
             phone: state.activeChatPhone,
             pause: willPause,
-            minutes: 60,
+            mode: willPause ? '4h' : 'resume',
           }),
         });
 
         if (res.success) {
           if (chat) chat.is_human_paused = willPause;
-          updateTakeoverButton(willPause);
+          updateTakeoverButton(willPause, res.takeover);
+          renderChatThreads(state.chats);
           showToast('Modo de Atención', res.message, 'success');
         }
       } catch (err) {
         showToast('Error', err.message, 'error');
       }
     }
+
+    async function pauseCurrentChatUntilMorning() {
+      if (!state.activeChatPhone) return;
+      const chat = state.chats.find(c => c.phone === state.activeChatPhone);
+
+      try {
+        const res = await apiFetch('/api/admin/chats/takeover', {
+          method: 'POST',
+          body: JSON.stringify({
+            phone: state.activeChatPhone,
+            pause: true,
+            mode: 'next_morning',
+          }),
+        });
+
+        if (res.success) {
+          if (chat) chat.is_human_paused = true;
+          updateTakeoverButton(true, res.takeover);
+          renderChatThreads(state.chats);
+          showToast('Pausa Nocturna', res.message, 'success');
+        }
+      } catch (err) {
+        showToast('Error', err.message, 'error');
+      }
+    }
+
+    async function closeCurrentChatCase() {
+      if (!state.activeChatPhone) return;
+      const chat = state.chats.find(c => c.phone === state.activeChatPhone);
+      const phone = state.activeChatPhone;
+
+      try {
+        const res = await apiFetch('/api/admin/chats/' + encodeURIComponent(phone) + '/close', {
+          method: 'POST',
+        });
+
+        if (res.success) {
+          if (chat) chat.is_human_paused = false;
+          updateTakeoverButton(false);
+          renderChatThreads(state.chats);
+          showToast('Caso Finalizado', res.message, 'success');
+        } else {
+          showToast('Error', res.error || 'No se pudo cerrar el caso', 'error');
+        }
+      } catch (err) {
+        showToast('Error', err.message, 'error');
+      }
+    }
+
 
     // Tickets Kanban Module
     async function loadTicketsData() {
