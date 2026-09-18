@@ -6,7 +6,10 @@ import { GroqService } from '../services/groq.service';
 import { WispHubService } from '../services/wisphub.service';
 import { SmartOLTService } from '../services/smartolt.service';
 import { IpamService } from '../services/ipam.service';
+import { EvolutionService } from '../services/evolution.service';
 import { BotOrchestrator } from '../orchestrator/bot.orchestrator';
+import { WebhookController } from './webhook.controller';
+import { hashPassword, verifyPassword, generateSessionToken, AuthenticatedRequest } from '../utils/auth';
 import axios from 'axios';
 import { config } from '../config/env';
 import { Logger } from '../utils/logger';
@@ -14,6 +17,338 @@ import { Logger } from '../utils/logger';
 const logger = new Logger('AdminController');
 
 export class AdminController {
+  private static sseClients: Set<Response> = new Set();
+
+  /**
+   * Emite eventos en tiempo real a todos los clientes SSE conectados
+   */
+  public static broadcastSSE(event: string, data: any): void {
+    const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+    for (const client of AdminController.sseClients) {
+      try {
+        client.write(payload);
+      } catch {
+        AdminController.sseClients.delete(client);
+      }
+    }
+  }
+
+  /**
+   * Endpoint de Server-Sent Events (SSE) para transmisión en vivo
+   */
+  static liveStreamSSE(req: Request, res: Response): void {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no'); // Para Nginx / Render proxies
+    res.flushHeaders?.();
+
+    AdminController.sseClients.add(res);
+
+    // Enviar evento de conexión inicial
+    res.write(`event: connected\ndata: ${JSON.stringify({ status: 'connected', timestamp: new Date().toISOString() })}\n\n`);
+
+    // Heartbeat cada 25 segundos para evitar timeouts de proxies
+    const heartbeat = setInterval(() => {
+      try {
+        res.write(`event: ping\ndata: ${Date.now()}\n\n`);
+      } catch {
+        clearInterval(heartbeat);
+        AdminController.sseClients.delete(res);
+      }
+    }, 25000);
+
+    req.on('close', () => {
+      clearInterval(heartbeat);
+      AdminController.sseClients.delete(res);
+    });
+  }
+
+  // ==========================================
+  // AUTENTICACIÓN Y ROLES (RBAC)
+  // ==========================================
+
+  /**
+   * Inicia sesión en el panel y retorna el JWT/Token firmado
+   */
+  static async login(req: Request, res: Response): Promise<void> {
+    try {
+      const { username, password } = req.body || {};
+      if (!username || !password) {
+        res.status(400).json({ success: false, error: 'Usuario y contraseña requeridos' });
+        return;
+      }
+
+      const user = await TursoService.getAdminUserByUsername(String(username).trim().toLowerCase());
+      if (!user) {
+        res.status(401).json({ success: false, error: 'Credenciales inválidas' });
+        return;
+      }
+
+      if (user.is_active !== 1) {
+        res.status(403).json({ success: false, error: 'Usuario desactivado. Contacte al superadmin.' });
+        return;
+      }
+
+      const isValid = verifyPassword(String(password), user.password_hash || '');
+      if (!isValid) {
+        res.status(401).json({ success: false, error: 'Credenciales inválidas' });
+        return;
+      }
+
+      await TursoService.updateAdminLastLogin(user.id);
+
+      const token = generateSessionToken({
+        id: user.id,
+        username: user.username,
+        role: user.role,
+        name: user.name,
+      });
+
+      res.json({
+        success: true,
+        token,
+        user: {
+          id: user.id,
+          username: user.username,
+          name: user.name,
+          role: user.role,
+        },
+      });
+    } catch (error: any) {
+      logger.error('Error en login:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Cierra sesión
+   */
+  static async logout(_req: Request, res: Response): Promise<void> {
+    res.json({ success: true, message: 'Sesión cerrada exitosamente' });
+  }
+
+  /**
+   * Retorna los datos del usuario autenticado
+   */
+  static async getMe(req: Request, res: Response): Promise<void> {
+    const authReq = req as AuthenticatedRequest;
+    if (!authReq.adminUser) {
+      res.status(401).json({ success: false, error: 'No autenticado' });
+      return;
+    }
+    res.json({ success: true, user: authReq.adminUser });
+  }
+
+  /**
+   * Lista todos los administradores/usuarios del panel
+   */
+  static async getAdminUsers(_req: Request, res: Response): Promise<void> {
+    try {
+      const users = await TursoService.listAdminUsers();
+      res.json({ success: true, users });
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Crea un nuevo usuario para el panel
+   */
+  static async createAdminUser(req: Request, res: Response): Promise<void> {
+    try {
+      const { username, password, name, role } = req.body || {};
+      if (!username || !password || !name || !role) {
+        res.status(400).json({ success: false, error: 'Todos los campos son requeridos (username, password, name, role)' });
+        return;
+      }
+
+      const validRoles = ['superadmin', 'soporte', 'tecnico', 'facturacion'];
+      if (!validRoles.includes(role)) {
+        res.status(400).json({ success: false, error: 'Rol inválido. Permitidos: superadmin, soporte, tecnico, facturacion' });
+        return;
+      }
+
+      const password_hash = hashPassword(String(password));
+      const result = await TursoService.createAdminUser({
+        username: String(username).trim().toLowerCase(),
+        password_hash,
+        name: String(name).trim(),
+        role: role as any,
+      });
+
+      if (result.success) {
+        res.json(result);
+      } else {
+        res.status(400).json(result);
+      }
+    } catch (error: any) {
+      logger.error('Error al crear usuario admin:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Elimina un usuario del panel
+   */
+  static async deleteAdminUser(req: Request, res: Response): Promise<void> {
+    try {
+      const id = parseInt(req.params.id as string, 10);
+      if (isNaN(id)) {
+        res.status(400).json({ success: false, error: 'ID de usuario inválido' });
+        return;
+      }
+
+      const ok = await TursoService.deleteAdminUser(id);
+      if (ok) {
+        res.json({ success: true, message: 'Usuario eliminado exitosamente' });
+      } else {
+        res.status(404).json({ success: false, error: 'Usuario no encontrado' });
+      }
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  // ==========================================
+  // LIVE CHAT & WHATSAPP INTERACTIVO
+  // ==========================================
+
+  /**
+   * Obtiene la lista de conversaciones recientes de WhatsApp
+   */
+  static async getChatConversations(req: Request, res: Response): Promise<void> {
+    try {
+      const limit = parseInt(req.query.limit as string, 10) || 50;
+      const conversations = await TursoService.getRecentChatConversations(limit);
+      res.json({ success: true, conversations });
+    } catch (error: any) {
+      logger.error('Error al obtener conversaciones:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Obtiene el historial de mensajes de un chat específico
+   */
+  static async getChatMessages(req: Request, res: Response): Promise<void> {
+    try {
+      const phone = String(req.params.phone || '');
+      const limit = parseInt(req.query.limit as string, 10) || 80;
+      const messages = await TursoService.getChatMessagesByPhone(phone, limit);
+      const isPaused = BotOrchestrator.estaBotPausado(phone);
+      res.json({ success: true, messages, is_paused: isPaused });
+    } catch (error: any) {
+      logger.error(`Error al obtener mensajes de ${req.params.phone}:`, error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Envía un mensaje manual de WhatsApp y opcionalmente activa el Human Takeover
+   */
+  static async sendManualChatMessage(req: Request, res: Response): Promise<void> {
+    try {
+      const { phone, message, autoPauseMinutes } = req.body || {};
+      if (!phone || !message) {
+        res.status(400).json({ success: false, error: 'Teléfono y mensaje son obligatorios' });
+        return;
+      }
+
+      const cleanPhone = String(phone).trim();
+      const text = String(message).trim();
+
+      // Cancelar cualquier mensaje pendiente de la IA
+      WebhookController.cancelPendingDebounce(cleanPhone);
+
+      // Enviar el mensaje vía Evolution API
+      const sent = await EvolutionService.enviarTexto(cleanPhone, text);
+      if (!sent) {
+        res.status(500).json({ success: false, error: 'No se pudo enviar el mensaje a través de WhatsApp' });
+        return;
+      }
+
+      // Registrar en el historial de Turso
+      await TursoService.logMessage(cleanPhone, 'OUT', text, 'HUMAN_TAKEOVER', 'Mensaje enviado por operador humano');
+
+      // Activar pausa automática del bot por el tiempo indicado (default: 60 minutos)
+      const pauseMins = parseInt(autoPauseMinutes, 10) || 60;
+      BotOrchestrator.activarPausaOperador(cleanPhone, pauseMins, 'Intervención manual por agente humano');
+
+      // Broadcast evento SSE
+      AdminController.broadcastSSE('chat:message', {
+        phone: cleanPhone,
+        direction: 'OUT',
+        message: text,
+        created_at: new Date().toISOString(),
+        is_paused: true,
+      });
+
+      res.json({
+        success: true,
+        message: 'Mensaje enviado exitosamente. Bot pausado para atención humana.',
+        paused_for_minutes: pauseMins,
+      });
+    } catch (error: any) {
+      logger.error('Error al enviar mensaje manual de chat:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Pausa o reactiva el bot para un número de WhatsApp
+   */
+  static async toggleHumanTakeover(req: Request, res: Response): Promise<void> {
+    try {
+      const { phone, pause, minutes } = req.body || {};
+      if (!phone) {
+        res.status(400).json({ success: false, error: 'Número de teléfono requerido' });
+        return;
+      }
+
+      const cleanPhone = String(phone).trim();
+      if (pause === false) {
+        BotOrchestrator.reanudarBot(cleanPhone);
+        AdminController.broadcastSSE('chat:status', { phone: cleanPhone, is_paused: false });
+        res.json({ success: true, is_paused: false, message: `Bot reactivado para ${cleanPhone}` });
+      } else {
+        const mins = parseInt(minutes, 10) || 60;
+        WebhookController.cancelPendingDebounce(cleanPhone);
+        BotOrchestrator.activarPausaOperador(cleanPhone, mins, 'Pausado manualmente desde panel');
+        AdminController.broadcastSSE('chat:status', { phone: cleanPhone, is_paused: true, minutes: mins });
+        res.json({ success: true, is_paused: true, minutes: mins, message: `Bot pausado para ${cleanPhone} por ${mins} min` });
+      }
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Asigna un técnico a un ticket de soporte y actualiza a VISITA_TECNICA
+   */
+  static async assignTicketTechnician(req: Request, res: Response): Promise<void> {
+    try {
+      const folio = String(req.params.folio || '');
+      const { technicianName } = req.body || {};
+
+      if (!technicianName) {
+        res.status(400).json({ success: false, error: 'Nombre del técnico requerido' });
+        return;
+      }
+
+      const ok = await TursoService.assignTicketTechnician(folio, String(technicianName).trim());
+      if (ok) {
+        AdminController.broadcastSSE('tickets:update', { folio, status: 'VISITA_TECNICA', technician: technicianName });
+        res.json({ success: true, message: `Ticket ${folio} asignado a ${technicianName} en Visita Técnica.` });
+      } else {
+        res.status(404).json({ success: false, error: 'Ticket no encontrado' });
+      }
+    } catch (error: any) {
+      logger.error('Error al asignar técnico:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
   /**
    * Obtiene las variables configuradas
    */
@@ -272,16 +607,16 @@ export class AdminController {
   }
 
   /**
-   * Obtiene la lista de tickets de soporte
+   * Obtiene la lista de tickets de soporte (con soporte para vista Kanban detallada)
    */
   static async getTickets(req: Request, res: Response): Promise<void> {
     try {
       const status = req.query.status as string | undefined;
-      const limit = parseInt(req.query.limit as string, 10) || 60;
-      const rawTickets = await TursoService.getTickets(status, limit);
-      const tickets = rawTickets.map((t) => ({
+      const limit = parseInt(req.query.limit as string, 10) || 150;
+      const rawTickets = await TursoService.getAllTicketsDetailed(status, limit);
+      const tickets = rawTickets.map((t: any) => ({
         ...t,
-        bot_paused: BotOrchestrator.estaBotPausado(t.phone),
+        bot_paused: BotOrchestrator.estaBotPausado(String(t.phone)),
       }));
       res.json({ success: true, tickets });
     } catch (error: any) {
@@ -298,14 +633,19 @@ export class AdminController {
       const folio = String(req.params.folio || '');
       const { status, notes } = req.body;
 
-      if (!status || !['ABIERTO', 'EN_PROCESO', 'RESUELTO'].includes(status)) {
-        res.status(400).json({ success: false, error: 'Estatus inválido. Valores permitidos: ABIERTO, EN_PROCESO, RESUELTO' });
+      const validStatuses = ['ABIERTO', 'EN_PROCESO', 'VISITA_TECNICA', 'RESUELTO', 'CANCELADO', 'CERRADO'];
+      if (!status || !validStatuses.includes(status.toUpperCase())) {
+        res.status(400).json({
+          success: false,
+          error: `Estatus inválido. Valores permitidos: ${validStatuses.join(', ')}`,
+        });
         return;
       }
 
-      const ok = await TursoService.updateTicketStatus(folio, status, notes);
+      const ok = await TursoService.updateTicketStatus(folio, status.toUpperCase(), notes);
       if (ok) {
-        res.json({ success: true, message: `Ticket ${folio} actualizado a ${status}` });
+        AdminController.broadcastSSE('tickets:update', { folio, status: status.toUpperCase(), notes });
+        res.json({ success: true, message: `Ticket ${folio} actualizado a ${status.toUpperCase()}` });
       } else {
         res.status(404).json({ success: false, error: 'Ticket no encontrado o no modificado' });
       }

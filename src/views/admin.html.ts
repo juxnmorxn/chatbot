@@ -4,26 +4,41 @@ export function getAdminDashboardHtml(): string {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CloudWareMx - Panel de Control del Chatbot</title>
+  <title>CloudWareMx - Admin SPA Suite</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg-gradient: radial-gradient(circle at 20% 20%, #111827 0%, #030712 100%);
-      --card-bg: rgba(17, 24, 39, 0.7);
+      --bg-base: #030712;
+      --bg-surface: rgba(17, 24, 39, 0.75);
+      --bg-surface-elevated: rgba(31, 41, 55, 0.85);
+      --bg-sidebar: rgba(10, 15, 30, 0.92);
       --card-border: rgba(255, 255, 255, 0.08);
-      --card-hover: rgba(255, 255, 255, 0.12);
+      --card-border-hover: rgba(99, 102, 241, 0.4);
       --primary: #6366f1;
       --primary-hover: #4f46e5;
       --primary-glow: rgba(99, 102, 241, 0.25);
       --accent-cyan: #06b6d4;
       --accent-green: #10b981;
       --accent-amber: #f59e0b;
+      --accent-rose: #f43f5e;
+      --accent-purple: #a855f7;
       --text-main: #f9fafb;
       --text-muted: #9ca3af;
-      --font-main: 'Outfit', sans-serif;
+      --text-dim: #6b7280;
+      --font-main: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
       --font-mono: 'JetBrains Mono', monospace;
+      --sidebar-width: 260px;
+      --sidebar-collapsed-width: 76px;
+      --topbar-height: 64px;
+      --radius-sm: 8px;
+      --radius-md: 14px;
+      --radius-lg: 20px;
+      --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.25);
+      --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.4);
+      --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.6);
+      --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     * {
@@ -33,2329 +48,3043 @@ export function getAdminDashboardHtml(): string {
     }
 
     body {
-      background: var(--bg-gradient);
+      background-color: var(--bg-base);
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.12) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(6, 182, 212, 0.08) 0px, transparent 50%),
+        radial-gradient(at 50% 50%, rgba(16, 185, 129, 0.04) 0px, transparent 50%);
       color: var(--text-main);
       font-family: var(--font-main);
       min-height: 100vh;
-      padding: 24px;
-      line-height: 1.5;
-    }
-
-    .container {
-      max-width: 1200px;
-      margin: 0 auto;
-    }
-
-    /* Header */
-    header {
+      overflow-x: hidden;
       display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding-bottom: 24px;
-      border-bottom: 1px solid var(--card-border);
-      margin-bottom: 28px;
     }
 
-    .brand {
+    /* Custom Scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.2);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--primary);
+    }
+
+    /* Layout */
+    #app-container {
+      display: flex;
+      width: 100%;
+      min-height: 100vh;
+    }
+
+    /* Sidebar */
+    aside#sidebar {
+      width: var(--sidebar-width);
+      background: var(--bg-sidebar);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-right: 1px solid var(--card-border);
+      display: flex;
+      flex-direction: column;
+      position: fixed;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      z-index: 100;
+      transition: var(--transition);
+    }
+
+    aside#sidebar.collapsed {
+      width: var(--sidebar-collapsed-width);
+    }
+
+    .sidebar-header {
+      height: var(--topbar-height);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    .sidebar-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: var(--text-main);
+      overflow: hidden;
+      white-space: nowrap;
+    }
+
+    .brand-logo {
+      width: 40px;
+      height: 40px;
+      border-radius: var(--radius-sm);
+      background: linear-gradient(135deg, var(--primary), var(--accent-cyan));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      box-shadow: 0 4px 16px var(--primary-glow);
+      flex-shrink: 0;
+    }
+
+    .brand-text {
+      display: flex;
+      flex-direction: column;
+      transition: var(--transition);
+    }
+
+    .brand-title {
+      font-weight: 800;
+      font-size: 16px;
+      letter-spacing: -0.3px;
+      background: linear-gradient(90deg, #fff, #9ca3af);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .brand-subtitle {
+      font-size: 10px;
+      color: var(--accent-cyan);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+    }
+
+    #sidebar.collapsed .brand-text {
+      display: none;
+    }
+
+    .sidebar-toggle-btn {
+      background: transparent;
+      border: 1px solid var(--card-border);
+      color: var(--text-muted);
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: var(--transition);
+    }
+
+    .sidebar-toggle-btn:hover {
+      color: var(--text-main);
+      background: rgba(255, 255, 255, 0.05);
+      border-color: var(--primary);
+    }
+
+    #sidebar.collapsed .sidebar-toggle-btn {
+      display: none;
+    }
+
+    .sidebar-nav {
+      flex: 1;
+      padding: 16px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      overflow-y: auto;
+    }
+
+    .nav-category {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-dim);
+      padding: 12px 12px 4px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    #sidebar.collapsed .nav-category {
+      display: none;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      border-radius: var(--radius-sm);
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 13.5px;
+      font-weight: 500;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: var(--transition);
+      position: relative;
+      white-space: nowrap;
+      user-select: none;
+    }
+
+    .nav-item:hover {
+      color: var(--text-main);
+      background: rgba(255, 255, 255, 0.04);
+      border-color: rgba(255, 255, 255, 0.05);
+    }
+
+    .nav-item.active {
+      color: #fff;
+      background: linear-gradient(90deg, rgba(99, 102, 241, 0.2), rgba(6, 182, 212, 0.1));
+      border-color: rgba(99, 102, 241, 0.4);
+      box-shadow: 0 2px 10px rgba(99, 102, 241, 0.15);
+    }
+
+    .nav-item.active::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 6px;
+      bottom: 6px;
+      width: 3px;
+      border-radius: 0 4px 4px 0;
+      background: var(--primary);
+    }
+
+    .nav-icon {
+      font-size: 18px;
+      width: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .nav-badge {
+      margin-left: auto;
+      padding: 2px 7px;
+      font-size: 11px;
+      font-weight: 700;
+      border-radius: 999px;
+      background: rgba(99, 102, 241, 0.25);
+      color: #a5b4fc;
+      border: 1px solid rgba(99, 102, 241, 0.4);
+      font-family: var(--font-mono);
+    }
+
+    .nav-badge.alert-badge {
+      background: rgba(244, 63, 94, 0.2);
+      color: #fda4af;
+      border-color: rgba(244, 63, 94, 0.4);
+      animation: pulse-badge 2s infinite;
+    }
+
+    @keyframes pulse-badge {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.08); }
+    }
+
+    #sidebar.collapsed .nav-badge,
+    #sidebar.collapsed .nav-text {
+      display: none;
+    }
+
+    .sidebar-footer {
+      padding: 14px;
+      border-top: 1px solid var(--card-border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .user-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent-purple), var(--primary));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 14px;
+      color: #fff;
+      flex-shrink: 0;
+    }
+
+    .user-info {
+      flex: 1;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .user-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-main);
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      overflow: hidden;
+    }
+
+    .user-role-badge {
+      font-size: 10px;
+      text-transform: uppercase;
+      color: var(--accent-cyan);
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+
+    #sidebar.collapsed .user-info {
+      display: none;
+    }
+
+    .btn-logout {
+      background: transparent;
+      border: none;
+      color: var(--text-dim);
+      font-size: 16px;
+      cursor: pointer;
+      padding: 6px;
+      border-radius: 6px;
+      transition: var(--transition);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .btn-logout:hover {
+      color: var(--accent-rose);
+      background: rgba(244, 63, 94, 0.1);
+    }
+
+    /* Main Content Area */
+    main#main-content {
+      flex: 1;
+      margin-left: var(--sidebar-width);
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      transition: var(--transition);
+    }
+
+    aside#sidebar.collapsed + main#main-content {
+      margin-left: var(--sidebar-collapsed-width);
+    }
+
+    /* Topbar */
+    header.topbar {
+      height: var(--topbar-height);
+      background: rgba(10, 15, 30, 0.7);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--card-border);
+      position: sticky;
+      top: 0;
+      z-index: 90;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+    }
+
+    .topbar-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .mobile-menu-btn {
+      display: none;
+      background: transparent;
+      border: 1px solid var(--card-border);
+      color: var(--text-main);
+      width: 38px;
+      height: 38px;
+      border-radius: var(--radius-sm);
+      font-size: 20px;
+      cursor: pointer;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .view-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .view-title {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+    }
+
+    .topbar-right {
       display: flex;
       align-items: center;
       gap: 14px;
     }
 
-    .logo-badge {
-      width: 44px;
-      height: 44px;
-      background: linear-gradient(135deg, var(--primary), var(--accent-cyan));
-      border-radius: 12px;
+    .live-status-pill {
       display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 22px;
-      box-shadow: 0 4px 20px var(--primary-glow);
-    }
-
-    h1 {
-      font-size: 24px;
-      font-weight: 700;
-      letter-spacing: -0.5px;
-    }
-
-    .status-pill {
-      display: inline-flex;
       align-items: center;
       gap: 8px;
       padding: 6px 14px;
-      background: rgba(16, 185, 129, 0.12);
-      border: 1px solid rgba(16, 185, 129, 0.3);
       border-radius: 999px;
-      font-size: 13px;
+      font-size: 12px;
+      font-weight: 600;
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.3);
       color: #34d399;
-      font-weight: 500;
     }
 
-    .status-dot {
+    .pulse-dot {
       width: 8px;
       height: 8px;
-      background: #10b981;
       border-radius: 50%;
-      box-shadow: 0 0 10px #10b981;
-      animation: pulse 2s infinite;
+      background: var(--accent-green);
+      box-shadow: 0 0 8px var(--accent-green);
+      animation: pulse-glow 2s infinite;
     }
 
-    @keyframes pulse {
+    @keyframes pulse-glow {
       0%, 100% { opacity: 1; transform: scale(1); }
       50% { opacity: 0.4; transform: scale(0.85); }
     }
 
-    /* Navigation Tabs */
-    .nav-tabs {
-      display: flex;
-      gap: 10px;
-      margin-bottom: 24px;
-      background: rgba(255, 255, 255, 0.03);
-      padding: 6px;
-      border-radius: 14px;
-      border: 1px solid var(--card-border);
-      width: fit-content;
-    }
-
-    .nav-tab {
-      background: transparent;
-      border: none;
-      color: var(--text-muted);
-      padding: 10px 20px;
-      font-size: 14px;
-      font-weight: 600;
-      border-radius: 10px;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      font-family: var(--font-main);
-    }
-
-    .nav-tab.active {
-      background: var(--primary);
-      color: #fff;
-      box-shadow: 0 2px 10px var(--primary-glow);
-    }
-
-    .nav-tab:hover:not(.active) {
-      color: var(--text-main);
-      background: rgba(255, 255, 255, 0.05);
-    }
-
-    /* Content Cards */
-    .tab-pane {
+    /* Page View Container */
+    .view-container {
+      flex: 1;
+      padding: 24px;
+      max-width: 1400px;
+      width: 100%;
+      margin: 0 auto;
       display: none;
-    }
-    .tab-pane.active {
-      display: block;
-      animation: fadeIn 0.3s ease;
+      animation: fadeInView 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
-    @keyframes fadeIn {
+    .view-container.active {
+      display: block;
+    }
+
+    @keyframes fadeInView {
       from { opacity: 0; transform: translateY(6px); }
       to { opacity: 1; transform: translateY(0); }
     }
 
-    .grid-2 {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
-      gap: 20px;
-    }
-
-    .card {
-      background: var(--card-bg);
+    /* UI Cards & Glass Panels */
+    .glass-card {
+      background: var(--bg-surface);
       backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
       border: 1px solid var(--card-border);
-      border-radius: 16px;
-      padding: 24px;
+      border-radius: var(--radius-md);
+      padding: 20px;
+      box-shadow: var(--shadow-sm);
+      transition: var(--transition);
       position: relative;
-      transition: border-color 0.2s ease;
     }
 
-    .card:hover {
-      border-color: var(--card-hover);
+    .glass-card:hover {
+      border-color: var(--card-border-hover);
     }
 
-    .card-header {
+    .grid-metrics {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 18px;
+      margin-bottom: 24px;
+    }
+
+    .metric-card {
       display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 18px;
-    }
-
-    .card-title {
-      display: flex;
-      align-items: center;
+      flex-direction: column;
       gap: 10px;
-      font-size: 17px;
-      font-weight: 600;
     }
 
-    .card-badge {
-      font-size: 11px;
-      padding: 3px 8px;
-      border-radius: 6px;
-      background: rgba(255, 255, 255, 0.06);
+    .metric-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
       color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-
-    /* Form Inputs */
-    .form-group {
-      margin-bottom: 16px;
-    }
-
-    label {
-      display: block;
       font-size: 13px;
       font-weight: 500;
-      color: var(--text-muted);
-      margin-bottom: 6px;
     }
 
-    .input-row {
-      display: flex;
-      gap: 8px;
-    }
-
-    input, select, textarea {
-      width: 100%;
-      background: rgba(0, 0, 0, 0.35);
-      border: 1px solid var(--card-border);
+    .metric-icon-box {
+      width: 36px;
+      height: 36px;
       border-radius: 10px;
-      padding: 10px 14px;
-      color: var(--text-main);
-      font-family: var(--font-main);
-      font-size: 14px;
-      outline: none;
-      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--card-border);
     }
 
-    input.mono {
+    .metric-value {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
       font-family: var(--font-mono);
-      font-size: 13px;
+      color: #fff;
     }
 
-    input:focus, select:focus, textarea:focus {
-      border-color: var(--primary);
-      box-shadow: 0 0 0 3px var(--primary-glow);
+    .metric-footer {
+      font-size: 11.5px;
+      color: var(--text-dim);
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
 
-    /* Buttons */
+    /* Buttons & Form Controls */
     .btn {
       display: inline-flex;
       align-items: center;
       justify-content: center;
       gap: 8px;
-      padding: 10px 18px;
-      border-radius: 10px;
-      font-size: 14px;
+      padding: 9px 16px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
       font-weight: 600;
       cursor: pointer;
-      border: none;
+      border: 1px solid transparent;
+      transition: var(--transition);
+      text-decoration: none;
       font-family: var(--font-main);
-      transition: all 0.2s ease;
-      white-space: nowrap;
+      user-select: none;
+      outline: none;
     }
 
     .btn-primary {
-      background: var(--primary);
+      background: linear-gradient(135deg, var(--primary), #4f46e5);
       color: #fff;
-    }
-    .btn-primary:hover {
-      background: var(--primary-hover);
       box-shadow: 0 4px 14px var(--primary-glow);
+    }
+
+    .btn-primary:hover {
+      background: linear-gradient(135deg, #4f46e5, #4338ca);
       transform: translateY(-1px);
+      box-shadow: 0 6px 18px var(--primary-glow);
     }
 
     .btn-secondary {
-      background: rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.06);
+      border-color: var(--card-border);
       color: var(--text-main);
-      border: 1px solid var(--card-border);
     }
+
     .btn-secondary:hover {
-      background: rgba(255, 255, 255, 0.14);
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.2);
     }
 
-    .btn-cyan {
-      background: rgba(6, 182, 212, 0.15);
-      color: #22d3ee;
-      border: 1px solid rgba(6, 182, 212, 0.3);
-    }
-    .btn-cyan:hover {
-      background: rgba(6, 182, 212, 0.25);
+    .btn-success {
+      background: rgba(16, 185, 129, 0.15);
+      border-color: rgba(16, 185, 129, 0.4);
+      color: #34d399;
     }
 
-    .btn-test {
+    .btn-success:hover {
+      background: rgba(16, 185, 129, 0.25);
+    }
+
+    .btn-danger {
+      background: rgba(244, 63, 94, 0.15);
+      border-color: rgba(244, 63, 94, 0.4);
+      color: #fda4af;
+    }
+
+    .btn-danger:hover {
+      background: rgba(244, 63, 94, 0.25);
+    }
+
+    .btn-sm {
+      padding: 5px 10px;
       font-size: 12px;
-      padding: 6px 12px;
+      border-radius: 6px;
     }
 
-    /* Save Floating Bar */
-    .floating-bar {
-      position: fixed;
-      bottom: 24px;
-      right: 24px;
-      background: rgba(17, 24, 39, 0.9);
-      backdrop-filter: blur(20px);
+    .form-control {
+      width: 100%;
+      background: rgba(0, 0, 0, 0.35);
       border: 1px solid var(--card-border);
-      padding: 12px 20px;
-      border-radius: 14px;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      border-radius: var(--radius-sm);
+      padding: 10px 14px;
+      color: var(--text-main);
+      font-size: 13.5px;
+      font-family: var(--font-main);
+      transition: var(--transition);
+      outline: none;
+    }
+
+    .form-control:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+      background: rgba(0, 0, 0, 0.5);
+    }
+
+    select.form-control {
+      cursor: pointer;
+    }
+
+    .form-group {
       display: flex;
-      align-items: center;
-      gap: 16px;
-      z-index: 100;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 14px;
+    }
+
+    .form-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
 
     /* Tables */
-    .table-container {
+    .table-responsive {
+      width: 100%;
       overflow-x: auto;
+      border-radius: var(--radius-sm);
     }
 
-    table {
+    table.data-table {
       width: 100%;
       border-collapse: collapse;
+      text-align: left;
       font-size: 13px;
     }
 
-    th {
-      text-align: left;
+    table.data-table th {
       padding: 12px 14px;
-      border-bottom: 1px solid var(--card-border);
+      background: rgba(0, 0, 0, 0.3);
       color: var(--text-muted);
       font-weight: 600;
+      border-bottom: 1px solid var(--card-border);
+      text-transform: uppercase;
+      font-size: 11px;
+      letter-spacing: 0.6px;
+      white-space: nowrap;
     }
 
-    td {
+    table.data-table td {
       padding: 12px 14px;
       border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      color: var(--text-main);
+      vertical-align: middle;
     }
 
-    tr:hover td {
-      background: rgba(255, 255, 255, 0.02);
+    table.data-table tbody tr:hover {
+      background: rgba(255, 255, 255, 0.03);
     }
 
-    .pill {
-      display: inline-block;
-      padding: 2px 8px;
+    /* Badges & Status Tags */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
       border-radius: 6px;
       font-size: 11px;
       font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      font-family: var(--font-mono);
     }
-    .pill-green { background: rgba(16, 185, 129, 0.2); color: #34d399; }
-    .pill-red { background: rgba(239, 68, 68, 0.2); color: #f87171; }
-    /* Modern iOS Toggle Switch */
-    .switch {
-      position: relative;
-      display: inline-flex;
+
+    .badge-success { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+    .badge-warning { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+    .badge-danger { background: rgba(244, 63, 94, 0.15); color: #fda4af; border: 1px solid rgba(244, 63, 94, 0.3); }
+    .badge-info { background: rgba(6, 182, 212, 0.15); color: #67e8f9; border: 1px solid rgba(6, 182, 212, 0.3); }
+    .badge-purple { background: rgba(168, 85, 247, 0.15); color: #d8b4fe; border: 1px solid rgba(168, 85, 247, 0.3); }
+
+    /* ==========================================
+       WHATSAPP LIVE CHAT VIEW
+       ========================================== */
+    .chat-layout {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      height: calc(100vh - var(--topbar-height) - 48px);
+      background: var(--bg-surface);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+    }
+
+    .chat-sidebar {
+      border-right: 1px solid var(--card-border);
+      display: flex;
+      flex-direction: column;
+      background: rgba(0, 0, 0, 0.2);
+    }
+
+    .chat-search-header {
+      padding: 14px;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    .chat-threads-list {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .chat-thread-item {
+      display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 12px;
+      padding: 12px 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.03);
       cursor: pointer;
-      user-select: none;
-    }
-
-    .switch input {
-      opacity: 0;
-      width: 0;
-      height: 0;
-      position: absolute;
-    }
-
-    .slider {
+      transition: var(--transition);
       position: relative;
-      width: 38px;
-      height: 22px;
-      background-color: rgba(239, 68, 68, 0.4);
-      border: 1px solid rgba(239, 68, 68, 0.6);
-      border-radius: 22px;
-      transition: all 0.25s ease;
-      display: inline-block;
-      flex-shrink: 0;
     }
 
-    .slider:before {
-      position: absolute;
-      content: "";
-      height: 16px;
-      width: 16px;
-      left: 2px;
-      bottom: 2px;
-      background-color: #f9fafb;
+    .chat-thread-item:hover {
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .chat-thread-item.active {
+      background: rgba(99, 102, 241, 0.15);
+      border-left: 3px solid var(--primary);
+    }
+
+    .thread-avatar {
+      width: 42px;
+      height: 42px;
       border-radius: 50%;
-      transition: all 0.25s ease;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+      background: linear-gradient(135deg, #374151, #1f2937);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--accent-cyan);
+      flex-shrink: 0;
+      border: 1px solid var(--card-border);
     }
 
-    input:checked + .slider {
-      background-color: #10b981;
-      border-color: #059669;
-      box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
+    .thread-content {
+      flex: 1;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
     }
 
-    input:checked + .slider:before {
-      transform: translateX(16px);
-      background-color: #ffffff;
+    .thread-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
     }
 
-    /* Toast */
-    #toast {
-      position: fixed;
-      top: 24px;
-      right: 24px;
-      padding: 12px 20px;
-      background: #10b981;
-      color: #fff;
-      border-radius: 10px;
+    .thread-name {
       font-weight: 600;
-      font-size: 14px;
-      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
-      display: none;
-      z-index: 999;
-      animation: slideIn 0.3s ease;
+      font-size: 13.5px;
+      color: var(--text-main);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
-    @keyframes slideIn {
-      from { transform: translateX(100px); opacity: 0; }
+    .thread-time {
+      font-size: 11px;
+      color: var(--text-dim);
+      font-family: var(--font-mono);
+    }
+
+    .thread-preview {
+      font-size: 12px;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .thread-status-tag {
+      align-self: flex-start;
+      margin-top: 2px;
+      font-size: 9.5px;
+    }
+
+    .chat-main-area {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      background: radial-gradient(circle at 50% 50%, rgba(17, 24, 39, 0.6) 0%, rgba(3, 7, 18, 0.9) 100%);
+    }
+
+    .chat-header-bar {
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--card-border);
+      background: rgba(10, 15, 30, 0.6);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .chat-header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .chat-messages-container {
+      flex: 1;
+      padding: 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .chat-bubble {
+      max-width: 72%;
+      padding: 10px 14px;
+      border-radius: 14px;
+      font-size: 13.5px;
+      line-height: 1.45;
+      position: relative;
+      word-wrap: break-word;
+      animation: fadeInMsg 0.2s ease-out;
+    }
+
+    @keyframes fadeInMsg {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .chat-bubble.in {
+      align-self: flex-start;
+      background: #1f2937;
+      color: #f3f4f6;
+      border-bottom-left-radius: 4px;
+      border: 1px solid var(--card-border);
+    }
+
+    .chat-bubble.out {
+      align-self: flex-end;
+      background: linear-gradient(135deg, #4f46e5, #4338ca);
+      color: #fff;
+      border-bottom-right-radius: 4px;
+      box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);
+    }
+
+    .bubble-meta {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 6px;
+      font-size: 10px;
+      color: rgba(255, 255, 255, 0.6);
+      margin-top: 4px;
+      font-family: var(--font-mono);
+    }
+
+    .chat-input-bar {
+      padding: 14px 20px;
+      border-top: 1px solid var(--card-border);
+      background: rgba(10, 15, 30, 0.8);
+      display: flex;
+      align-items: flex-end;
+      gap: 12px;
+    }
+
+    .chat-input-box {
+      flex: 1;
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-sm);
+      padding: 10px 14px;
+      color: #fff;
+      font-family: var(--font-main);
+      font-size: 13.5px;
+      resize: none;
+      min-height: 42px;
+      max-height: 120px;
+      outline: none;
+    }
+
+    .chat-input-box:focus {
+      border-color: var(--primary);
+    }
+
+    /* ==========================================
+       KANBAN TICKETS BOARD
+       ========================================== */
+    .kanban-board {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      align-items: flex-start;
+    }
+
+    .kanban-column {
+      background: rgba(17, 24, 39, 0.6);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-md);
+      display: flex;
+      flex-direction: column;
+      max-height: calc(100vh - var(--topbar-height) - 100px);
+    }
+
+    .kanban-col-header {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--card-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-weight: 700;
+      font-size: 13px;
+    }
+
+    .kanban-cards-wrap {
+      padding: 12px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-height: 150px;
+    }
+
+    .ticket-card {
+      background: var(--bg-surface-elevated);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-sm);
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      transition: var(--transition);
+      cursor: pointer;
+    }
+
+    .ticket-card:hover {
+      border-color: var(--primary);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    }
+
+    .ticket-card-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .ticket-folio {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--accent-cyan);
+    }
+
+    .ticket-client {
+      font-weight: 600;
+      font-size: 13px;
+      color: #fff;
+    }
+
+    .ticket-issue {
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .ticket-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--text-dim);
+      border-top: 1px solid rgba(255, 255, 255, 0.04);
+      padding-top: 6px;
+      margin-top: 4px;
+    }
+
+    /* ==========================================
+       TOAST NOTIFICATION QUEUE (NO NATIVE ALERTS)
+       ========================================== */
+    #toast-container {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      pointer-events: none;
+    }
+
+    .toast {
+      pointer-events: auto;
+      min-width: 300px;
+      max-width: 420px;
+      background: rgba(17, 24, 39, 0.94);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-sm);
+      padding: 12px 16px;
+      box-shadow: var(--shadow-lg);
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      color: #fff;
+      animation: slideInToast 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+      overflow: hidden;
+    }
+
+    @keyframes slideInToast {
+      from { transform: translateX(100%); opacity: 0; }
       to { transform: translateX(0); opacity: 1; }
+    }
+
+    .toast.hide {
+      animation: slideOutToast 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    }
+
+    @keyframes slideOutToast {
+      from { transform: translateX(0); opacity: 1; }
+      to { transform: translateX(100%); opacity: 0; }
+    }
+
+    .toast-icon {
+      font-size: 18px;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .toast-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .toast-title {
+      font-weight: 700;
+      font-size: 13px;
+    }
+
+    .toast-message {
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+
+    .toast-close {
+      background: transparent;
+      border: none;
+      color: var(--text-dim);
+      font-size: 16px;
+      cursor: pointer;
+      line-height: 1;
+    }
+
+    .toast-progress {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      height: 3px;
+      background: var(--primary);
+      width: 100%;
+      animation: toastProgress 3.5s linear forwards;
+    }
+
+    @keyframes toastProgress {
+      from { width: 100%; }
+      to { width: 0%; }
+    }
+
+    .toast.success { border-color: rgba(16, 185, 129, 0.5); }
+    .toast.success .toast-icon { color: var(--accent-green); }
+    .toast.success .toast-progress { background: var(--accent-green); }
+
+    .toast.error { border-color: rgba(244, 63, 94, 0.5); }
+    .toast.error .toast-icon { color: var(--accent-rose); }
+    .toast.error .toast-progress { background: var(--accent-rose); }
+
+    .toast.warning { border-color: rgba(245, 158, 11, 0.5); }
+    .toast.warning .toast-icon { color: var(--accent-amber); }
+    .toast.warning .toast-progress { background: var(--accent-amber); }
+
+    .toast.info { border-color: rgba(6, 182, 212, 0.5); }
+    .toast.info .toast-icon { color: var(--accent-cyan); }
+    .toast.info .toast-progress { background: var(--accent-cyan); }
+
+    /* ==========================================
+       GLASS MODAL SYSTEM (NO NATIVE ALERTS)
+       ========================================== */
+    .modal-backdrop {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      z-index: 1000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      animation: fadeInBackdrop 0.2s ease-out;
+    }
+
+    .modal-backdrop.show {
+      display: flex;
+    }
+
+    @keyframes fadeInBackdrop {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .modal-box {
+      background: #111827;
+      border: 1px solid var(--card-border-hover);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-lg);
+      width: 100%;
+      max-width: 520px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      animation: scaleUpModal 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    @keyframes scaleUpModal {
+      from { opacity: 0; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    .modal-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--card-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .modal-title {
+      font-weight: 700;
+      font-size: 16px;
+    }
+
+    .modal-close-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-dim);
+      font-size: 20px;
+      cursor: pointer;
+    }
+
+    .modal-body {
+      padding: 20px;
+      overflow-y: auto;
+      max-height: 75vh;
+    }
+
+    .modal-footer {
+      padding: 14px 20px;
+      border-top: 1px solid var(--card-border);
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+      background: rgba(0, 0, 0, 0.2);
+    }
+
+    /* Auth Login Overlay View */
+    #login-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: radial-gradient(circle at 50% 50%, #111827 0%, #030712 100%);
+      z-index: 2000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .login-box {
+      width: 100%;
+      max-width: 400px;
+      background: rgba(17, 24, 39, 0.85);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-lg);
+      padding: 32px;
+      box-shadow: var(--shadow-lg);
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      position: relative;
+    }
+
+    .login-box::before {
+      content: '';
+      position: absolute;
+      top: -1px;
+      left: 20%;
+      right: 20%;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--primary), var(--accent-cyan), transparent);
+    }
+
+    /* Responsive */
+    @media (max-width: 1024px) {
+      .kanban-board {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 768px) {
+      aside#sidebar {
+        transform: translateX(-100%);
+      }
+      aside#sidebar.mobile-open {
+        transform: translateX(0);
+        width: 260px;
+      }
+      main#main-content {
+        margin-left: 0 !important;
+      }
+      .mobile-menu-btn {
+        display: flex;
+      }
+      .chat-layout {
+        grid-template-columns: 1fr;
+      }
+      .chat-sidebar {
+        display: none;
+      }
+      .chat-sidebar.mobile-active {
+        display: flex;
+      }
+      .kanban-board {
+        grid-template-columns: 1fr;
+      }
+      .grid-metrics {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <!-- Header -->
-    <header>
-      <div class="brand">
-        <div class="logo-badge">⚡</div>
-        <div>
-          <h1 id="headerIspName">CloudWareMx</h1>
-          <p style="color: var(--text-muted); font-size: 13px;">Panel Maestro de Configuración y Gestión de APIs</p>
-        </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container"></div>
+
+  <!-- Global Modal Box -->
+  <div id="generic-modal" class="modal-backdrop">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 id="modal-title" class="modal-title">Título</h3>
+        <button class="modal-close-btn" onclick="closeModal()">&times;</button>
       </div>
-      <div class="status-pill">
-        <span class="status-dot"></span>
-        <span id="backendStatus">Turso DB Conectado</span>
+      <div id="modal-body-content" class="modal-body">
+        <!-- Dynamic Content -->
       </div>
-    </header>
-
-    <!-- Navigation Tabs -->
-    <div class="nav-tabs">
-      <button class="nav-tab active" onclick="switchTab('apis', this)">🔑 Conexión y Pagos</button>
-      <button class="nav-tab" onclick="switchTab('technicians', this)" style="border: 1px solid rgba(99, 102, 241, 0.4); background: rgba(99, 102, 241, 0.08); color: #a5b4fc;">👷 Técnicos y PINs</button>
-      <button class="nav-tab" onclick="switchTab('audit', this)" style="border: 1px solid rgba(239, 68, 68, 0.4); background: rgba(239, 68, 68, 0.08); color: #fca5a5;">🔍 Auditoría IPs (SmartOLT vs WispHub)</button>
-      <button class="nav-tab" onclick="switchTab('ipam', this)" style="border: 1px solid rgba(16, 185, 129, 0.4); background: rgba(16, 185, 129, 0.08); color: #6ee7b7;">🌐 Pool de IPs y VLANs (IPAM)</button>
-      <button class="nav-tab" onclick="switchTab('whatsapp', this)">📲 Vincular WhatsApp</button>
-      <button class="nav-tab" onclick="switchTab('tickets', this)">🎫 Mesa de Tickets</button>
-      <button class="nav-tab" onclick="switchTab('sessions', this)">👥 Sesiones en Turso</button>
-      <button class="nav-tab" onclick="switchTab('logs', this)">📜 Historial y Problemas</button>
-      <button class="nav-tab" onclick="switchTab('tester', this)">🧪 Simulador de Bot</button>
-    </div>
-
-    <!-- TAB 1: Configuración de APIs -->
-    <div id="tab-apis" class="tab-pane active">
-      <div class="grid-2">
-        <!-- Evolution API Card -->
-        <div class="card">
-          <div class="card-header">
-            <div class="card-title">📱 Evolution API (WhatsApp)</div>
-            <span class="card-badge">Mensajería</span>
-          </div>
-
-          <div class="form-group">
-            <label>URL del Servidor Evolution</label>
-            <input type="text" id="evolutionUrl" placeholder="https://tu-evolution-api.com o http://localhost:8080">
-          </div>
-
-          <div class="form-group">
-            <label>Súper Clave Secreta Maestra (API Key)</label>
-            <div class="input-row">
-              <input type="text" id="evolutionApiKey" class="mono" placeholder="MI_SUPER_CLAVE_SECRETA_2026">
-              <button type="button" class="btn btn-cyan" onclick="generateSuperKey()" title="Generar una clave altamente segura">⚡ Generar Clave</button>
-            </div>
-            <small style="color: var(--text-muted); font-size: 11px; margin-top: 4px; display: block;">
-              Copia esta clave en tu docker-compose.yml en <code>AUTHENTICATION_API_KEY</code>.
-            </small>
-          </div>
-
-          <div class="form-group">
-            <label>Nombre de la Instancia</label>
-            <input type="text" id="evolutionInstanceName" placeholder="isp-soporte">
-          </div>
-        </div>
-
-        <!-- Groq Cloud Card -->
-        <div class="card">
-          <div class="card-header">
-            <div class="card-title">🧠 Groq Cloud (Traductor IA)</div>
-            <span class="card-badge">Llama 3.1 & Modelos</span>
-          </div>
-
-          <div class="form-group">
-            <label>Groq API Key</label>
-            <input type="password" id="groqApiKey" class="mono" placeholder="gsk_...">
-          </div>
-
-          <div class="form-group">
-            <label>Modelo en Producción</label>
-            <select id="groqModel">
-              <option value="openai/gpt-oss-20b">openai/gpt-oss-20b (Recomendado / Alta Velocidad)</option>
-              <option value="qwen/qwen3.6-27b">qwen/qwen3.6-27b</option>
-              <option value="llama-3.1-8b-instant">llama-3.1-8b-instant</option>
-              <option value="openai/gpt-oss-120b">openai/gpt-oss-120b</option>
-            </select>
-          </div>
-
-          <div style="margin-top: 14px;">
-            <button type="button" class="btn btn-secondary btn-test" onclick="testService('groq')">🩺 Probar Conexión Groq</button>
-          </div>
-        </div>
-
-        <!-- WispHub Card -->
-        <div class="card">
-          <div class="card-header">
-            <div class="card-title">🌐 WispHub API</div>
-            <span class="card-badge">Facturación y Clientes</span>
-          </div>
-
-          <div class="form-group">
-            <label>URL Base de API WispHub</label>
-            <input type="text" id="wisphubUrl" placeholder="https://api.wisphub.io/api">
-          </div>
-
-          <div class="form-group">
-            <label>Token / API Key de WispHub</label>
-            <input type="password" id="wisphubApiKey" class="mono" placeholder="Pega tu token de WispHub aquí">
-          </div>
-
-          <div style="margin-top: 14px; display: flex; gap: 10px; flex-wrap: wrap;">
-            <button type="button" class="btn btn-secondary btn-test" onclick="testService('wisphub')">🩺 Probar Conexión</button>
-            <button type="button" id="btnSyncWh" class="btn btn-cyan" onclick="syncWisphubAction()">🔄 Sincronizar con Turso DB</button>
-          </div>
-
-          <div id="wisphubStatsBox" style="margin-top: 12px; padding: 8px 12px; background: rgba(255,255,255,0.03); border-radius: 6px; font-size: 12px; color: var(--text-muted); border: 1px solid rgba(255,255,255,0.06);">
-            📊 <strong>Clientes en Turso:</strong> <span id="whStatsText">Consultando...</span> (Auto-sync cada 10 min)
-          </div>
-        </div>
-
-        <!-- SmartOLT Card -->
-        <div class="card">
-          <div class="card-header">
-            <div class="card-title">⚡ SmartOLT API</div>
-            <span class="card-badge">Fibra y ONUs</span>
-          </div>
-
-          <div class="form-group">
-            <label>URL de tu SmartOLT</label>
-            <input type="text" id="smartoltUrl" placeholder="https://tu-dominio.smartolt.com/api">
-          </div>
-
-          <div class="form-group">
-            <label>Token de SmartOLT (X-Token)</label>
-            <input type="password" id="smartoltApiKey" class="mono" placeholder="Pega tu X-Token aquí">
-          </div>
-
-          <div style="margin-top: 14px; display: flex; gap: 10px; flex-wrap: wrap;">
-            <button type="button" class="btn btn-secondary btn-test" onclick="testService('smartolt')">🩺 Probar Conexión</button>
-            <button type="button" id="btnSyncOlt" class="btn btn-cyan" onclick="syncSmartOlt()">🔄 Sincronizar con Turso DB</button>
-          </div>
-
-          <div id="smartoltStatsBox" style="margin-top: 12px; padding: 8px 12px; background: rgba(255,255,255,0.03); border-radius: 6px; font-size: 12px; color: var(--text-muted); border: 1px solid rgba(255,255,255,0.06);">
-            📊 <strong>Inventario en Turso:</strong> <span id="oltStatsText">Consultando...</span>
-          </div>
-        </div>
-
-        <!-- ISP Info Card -->
-        <div class="card" style="grid-column: 1 / -1;">
-          <div class="card-header">
-            <div class="card-title">🏢 Configuración General del ISP</div>
-            <span class="card-badge">Personalización</span>
-          </div>
-
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-            <div class="form-group">
-              <label>Nombre Comercial del ISP</label>
-              <input type="text" id="ispName" placeholder="CloudWareMx">
-            </div>
-
-            <div class="form-group">
-              <label>Teléfono de Soporte Humano / Asesor</label>
-              <input type="text" id="soporteHumanoPhone" placeholder="5215512345678">
-            </div>
-          </div>
-        </div>
-
-        <!-- Payment & Schedule Card -->
-        <div class="card" style="grid-column: 1 / -1;">
-          <div class="card-header">
-            <div class="card-title">💳 Datos Bancarios y Horarios de Atención</div>
-            <span class="card-badge">Cobranza y Turnos</span>
-          </div>
-
-          <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 16px;">
-            Estos datos bancarios se enviarán automáticamente a los clientes que soliciten pagar o consulten saldo. El bot les indicará colocar su nombre como concepto y mandar captura de pantalla de su comprobante.
-          </p>
-
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 16px;">
-            <div class="form-group">
-              <label>Banco Receptor</label>
-              <input type="text" id="paymentBank" placeholder="Ej: BBVA México / Banco Azteca / Santander">
-            </div>
-
-            <div class="form-group">
-              <label>Número de Cuenta / CLABE Interbancaria</label>
-              <input type="text" id="paymentAccount" class="mono" placeholder="Ej: 012 180 0000000000 00">
-            </div>
-
-            <div class="form-group">
-              <label>Nombre del Titular / Beneficiario</label>
-              <input type="text" id="paymentBeneficiary" placeholder="Ej: CloudWare Telecomunicaciones S.A.">
-            </div>
-
-            <div class="form-group">
-              <label>Instrucciones Adicionales de Cobro</label>
-              <input type="text" id="paymentNotes" placeholder="Ej: Acepta OXXO y transferencias 24/7">
-            </div>
-
-            <div class="form-group" style="grid-column: 1 / -1;">
-              <label>🔑 Mercado Pago - Access Token (Cobro Dinámico Automático)</label>
-              <input type="password" id="mercadopagoAccessToken" class="mono" placeholder="Ej: APP_USR-xxxxxxxxxxxx o TEST-xxxxxxxxxxxx">
-              <small style="color: var(--text-muted); font-size: 11px;">Al colocar tu Access Token de Mercado Pago, el bot generará automáticamente un <b>link de pago único con el monto y contrato exacto</b> de cada cliente, y reactivará su servicio en cuanto pague.</small>
-            </div>
-
-            <div class="form-group" style="grid-column: 1 / -1;">
-              <label>🛒 Enlace Fijo de Cobro / Mercado Pago Link (Opcional si no usas Access Token)</label>
-              <input type="text" id="paymentMercadopagoUrl" placeholder="Ej: https://mpago.la/tu-link o https://link.mercadopago.com.mx/...">
-              <small style="color: var(--text-muted); font-size: 11px;">Si no colocas Access Token, puedes poner aquí un link fijo de cobro de Mercado Pago.</small>
-            </div>
-          </div>
-
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding-top: 14px; border-top: 1px solid var(--card-border);">
-            <div class="form-group">
-              <label>⏰ Inicio de Horario Laboral de Oficina (Turno)</label>
-              <input type="time" id="workHoursStart" value="09:00">
-              <small style="color: var(--text-muted); font-size: 11px;">Los reportes nocturnos o antes de esta hora se agendan para atenderse a las 9:00 AM.</small>
-            </div>
-
-            <div class="form-group">
-              <label>⏰ Fin de Horario Laboral de Oficina</label>
-              <input type="time" id="workHoursEnd" value="18:00">
-              <small style="color: var(--text-muted); font-size: 11px;">Hora en que concluye el turno regular de atención en oficina.</small>
-            </div>
-          </div>
-        </div>
+      <div id="modal-footer-actions" class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>
+        <button id="modal-confirm-btn" class="btn btn-primary">Confirmar</button>
       </div>
     </div>
+  </div>
 
-    <!-- TAB 2: Auditoría de IPs (SmartOLT vs WispHub) -->
-    <div id="tab-audit" class="tab-pane">
-      <div class="card" style="margin-bottom: 20px;">
-        <div class="card-header" style="flex-wrap: wrap; gap: 12px;">
-          <div>
-            <div class="card-title" style="display: flex; align-items: center; gap: 8px;">
-              <span>🔍 Auditoría de Cruce de IPs (SmartOLT vs WispHub)</span>
-              <span class="card-badge" style="background: rgba(239,68,68,0.2); color: #f87171; border: 1px solid rgba(239,68,68,0.4);">Detección de Discrepancias</span>
-            </div>
-            <p style="color: var(--text-muted); font-size: 13px; margin-top: 4px;">
-              Comparación cruzada 100% de Solo Lectura. Compara la IP asignada en SmartOLT contra la IP registrada en WispHub para el mismo folio o cliente.
-            </p>
-          </div>
-          <div style="display: flex; gap: 8px; align-items: center;">
-            <button class="btn btn-secondary" onclick="loadAuditData(1)">🔄 Refrescar Cruce</button>
-            <button class="btn btn-cyan" id="btnSyncAuditWh" onclick="syncWisphubAction()">📥 Sincronizar WispHub</button>
-          </div>
-        </div>
-
-        <!-- Banner Modo Solo Lectura -->
-        <div style="background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.25); border-radius: 10px; padding: 10px 16px; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; font-size: 13px;">
-          <span style="font-size: 18px;">🛡️</span>
-          <span><strong>Modo 100% Seguro (Solo Lectura):</strong> Este módulo jamás altera nombres ni IPs en SmartOLT ni en WispHub. Toda la auditoría se procesa localmente en las tablas <code>smartolt_onus</code> y <code>wisphub_clients</code> de Turso DB.</span>
-        </div>
-
-        <!-- KPI Metrics Grid -->
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 20px;">
-          <div class="stat-card" style="border-left: 4px solid #ef4444; background: rgba(239, 68, 68, 0.08); padding: 14px; border-radius: 10px; border: 1px solid rgba(239,68,68,0.2); cursor: pointer;" onclick="setAuditFilter('mismatches')">
-            <div style="font-size: 11px; color: #fca5a5; font-weight: 600; text-transform: uppercase;">🔴 Discrepancias de IP</div>
-            <div id="statMismatches" style="font-size: 28px; font-weight: 700; color: #f87171; margin: 4px 0;">-</div>
-            <div style="font-size: 11px; color: var(--text-muted);">Mismo cliente, distinta IP</div>
-          </div>
-
-          <div class="stat-card" style="border-left: 4px solid #10b981; background: rgba(16, 185, 129, 0.08); padding: 14px; border-radius: 10px; border: 1px solid rgba(16,185,129,0.2); cursor: pointer;" onclick="setAuditFilter('matches')">
-            <div style="font-size: 11px; color: #6ee7b7; font-weight: 600; text-transform: uppercase;">🟢 IPs Coincidentes</div>
-            <div id="statMatches" style="font-size: 28px; font-weight: 700; color: #34d399; margin: 4px 0;">-</div>
-            <div style="font-size: 11px; color: var(--text-muted);">IP SmartOLT = IP WispHub</div>
-          </div>
-
-          <div class="stat-card" style="border-left: 4px solid #06b6d4; background: rgba(6, 182, 212, 0.08); padding: 14px; border-radius: 10px; border: 1px solid rgba(6,182,212,0.2);">
-            <div style="font-size: 11px; color: #67e8f9; font-weight: 600; text-transform: uppercase;">📡 ONUs en SmartOLT</div>
-            <div id="statTotalOlt" style="font-size: 28px; font-weight: 700; color: #22d3ee; margin: 4px 0;">-</div>
-            <div style="font-size: 11px; color: var(--text-muted);">Total en base de datos</div>
-          </div>
-
-          <div class="stat-card" style="border-left: 4px solid #818cf8; background: rgba(99, 102, 241, 0.08); padding: 14px; border-radius: 10px; border: 1px solid rgba(99,102,241,0.2);">
-            <div style="font-size: 11px; color: #a5b4fc; font-weight: 600; text-transform: uppercase;">🏢 Clientes WispHub</div>
-            <div id="statTotalWh" style="font-size: 28px; font-weight: 700; color: #818cf8; margin: 4px 0;">-</div>
-            <div style="font-size: 11px; color: var(--text-muted);">Total en base de datos</div>
-          </div>
-
-          <div class="stat-card" style="border-left: 4px solid #f59e0b; background: rgba(245, 158, 11, 0.08); padding: 14px; border-radius: 10px; border: 1px solid rgba(245,158,11,0.2); cursor: pointer;" onclick="setAuditFilter('no_ip')">
-            <div style="font-size: 11px; color: #fcd34d; font-weight: 600; text-transform: uppercase;">⚠️ Sin IP Registrada</div>
-            <div id="statNoIp" style="font-size: 28px; font-weight: 700; color: #fbbf24; margin: 4px 0;">-</div>
-            <div style="font-size: 11px; color: var(--text-muted);">Falta IP en un sistema</div>
-          </div>
-        </div>
-
-        <!-- Filter Controls & Search -->
-        <div style="display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-bottom: 16px; background: rgba(0,0,0,0.25); padding: 12px 16px; border-radius: 12px; border: 1px solid var(--card-border);">
-          <div style="display: flex; gap: 8px; flex-wrap: wrap;" id="auditFilterButtons">
-            <button class="btn btn-secondary btn-test" id="filterBtn-all" onclick="setAuditFilter('all')">📋 Todos</button>
-            <button class="btn btn-secondary btn-test" id="filterBtn-mismatches" style="color: #f87171; border-color: rgba(239,68,68,0.4);" onclick="setAuditFilter('mismatches')">🔴 Solo Discrepancias (Alertas)</button>
-            <button class="btn btn-secondary btn-test" id="filterBtn-matches" style="color: #34d399;" onclick="setAuditFilter('matches')">🟢 IPs Coincidentes</button>
-            <button class="btn btn-secondary btn-test" id="filterBtn-only_olt" onclick="setAuditFilter('only_olt')">📡 Solo SmartOLT</button>
-            <button class="btn btn-secondary btn-test" id="filterBtn-only_wisphub" onclick="setAuditFilter('only_wisphub')">🏢 Solo WispHub</button>
-          </div>
-
-          <div style="display: flex; gap: 8px; min-width: 280px; flex: 1; max-width: 400px;">
-            <input type="text" id="auditSearchInput" placeholder="🔍 Buscar por folio, cliente, IP o serie..." oninput="onAuditSearchChange()" style="padding: 8px 12px; font-size: 13px;">
-          </div>
-        </div>
-
-        <!-- Table Container -->
-        <div class="table-container" style="border: 1px solid var(--card-border); border-radius: 10px; background: rgba(0,0,0,0.2);">
-          <table>
-            <thead>
-              <tr style="background: rgba(255,255,255,0.02);">
-                <th style="width: 80px;">Folio</th>
-                <th>Cliente / Servicio</th>
-                <th style="color: #60a5fa;">🌐 IP WispHub</th>
-                <th style="color: #22d3ee;">⚡ IP SmartOLT</th>
-                <th>Estatus Cruce</th>
-                <th>Estado WispHub</th>
-                <th>Zona / Router</th>
-                <th>Serie ONU</th>
-              </tr>
-            </thead>
-            <tbody id="auditTableBody">
-              <tr>
-                <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 30px;">
-                  ⏳ Cargando datos de auditoría...
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <!-- Pagination Footer -->
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px; flex-wrap: wrap; gap: 10px;">
-          <div style="font-size: 13px; color: var(--text-muted);" id="auditPaginationInfo">
-            Mostrando 0 registros
-          </div>
-          <div style="display: flex; gap: 8px;">
-            <button class="btn btn-secondary btn-test" id="btnAuditPrev" onclick="changeAuditPage(-1)">◀ Anterior</button>
-            <span id="auditPageIndicator" style="display: inline-flex; align-items: center; font-size: 13px; padding: 0 10px; font-family: var(--font-mono);">Pág 1 / 1</span>
-            <button class="btn btn-secondary btn-test" id="btnAuditNext" onclick="changeAuditPage(1)">Siguiente ▶</button>
-          </div>
-        </div>
+  <!-- Login Overlay View (If unauthenticated) -->
+  <div id="login-overlay" style="display: none;">
+    <div class="login-box">
+      <div style="text-align: center;">
+        <div class="brand-logo" style="margin: 0 auto 12px; width: 52px; height: 52px; font-size: 26px;">⚡</div>
+        <h2 style="font-size: 22px; font-weight: 800; letter-spacing: -0.5px;">CloudWare ISP</h2>
+        <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">Panel Administrativo & Gestión del Bot</p>
       </div>
+      <form id="login-form" onsubmit="handleLoginSubmit(event)">
+        <div class="form-group">
+          <label class="form-label">Usuario</label>
+          <input type="text" id="login-username" class="form-control" placeholder="admin" required autocomplete="username">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Contraseña</label>
+          <input type="password" id="login-password" class="form-control" placeholder="••••••••" required autocomplete="current-password">
+        </div>
+        <button type="submit" id="login-btn-submit" class="btn btn-primary" style="width: 100%; margin-top: 10px; padding: 12px;">
+          Ingresar al Panel
+        </button>
+      </form>
     </div>
+  </div>
 
-    <!-- TAB: IPAM & VLANs Pool -->
-    <div id="tab-ipam" class="tab-pane">
-      <div class="card">
-        <div class="card-header">
-          <div>
-            <div class="card-title">🌐 Gestión de Direcciones IP y VLANs (IPAM)</div>
-            <p style="color: var(--text-muted); font-size: 13px; margin-top: 4px;">
-              Monitoreo y cálculo en tiempo real de IPs disponibles para aprovisionamiento de módems en SmartOLT y WispHub.
-            </p>
+  <!-- App Layout Container -->
+  <div id="app-container">
+    
+    <!-- Sidebar Navigation -->
+    <aside id="sidebar">
+      <div class="sidebar-header">
+        <a href="#dashboard" class="sidebar-brand" onclick="navigateTo('dashboard')">
+          <div class="brand-logo">⚡</div>
+          <div class="brand-text">
+            <span class="brand-title">CloudWareMx</span>
+            <span class="brand-subtitle">ISP Command</span>
           </div>
-          <button class="btn btn-secondary btn-test" onclick="loadIpamData()" style="color: #6ee7b7; border-color: rgba(16,185,129,0.4);">
-            🔄 Actualizar IPAM
+        </a>
+        <button class="sidebar-toggle-btn" onclick="toggleSidebar()" title="Colapsar Sidebar">◀</button>
+      </div>
+
+      <nav class="sidebar-nav">
+        <div class="nav-category">Operación</div>
+        <div class="nav-item active" data-view="dashboard" onclick="navigateTo('dashboard')">
+          <span class="nav-icon">📊</span>
+          <span class="nav-text">Dashboard</span>
+        </div>
+        <div class="nav-item" data-view="live-chat" onclick="navigateTo('live-chat')">
+          <span class="nav-icon">💬</span>
+          <span class="nav-text">Live WhatsApp</span>
+          <span id="badge-live-chat" class="nav-badge" style="display: none;">0</span>
+        </div>
+        <div class="nav-item" data-view="tickets" onclick="navigateTo('tickets')">
+          <span class="nav-icon">🎫</span>
+          <span class="nav-text">Mesa de Tickets</span>
+          <span id="badge-tickets-open" class="nav-badge alert-badge" style="display: none;">0</span>
+        </div>
+
+        <div class="nav-category">Red & Gestión</div>
+        <div class="nav-item" data-view="ipam" onclick="navigateTo('ipam')">
+          <span class="nav-icon">🌐</span>
+          <span class="nav-text">IPAM & Pools</span>
+          <span id="badge-unconfigured-onus" class="nav-badge" style="display: none;">0</span>
+        </div>
+        <div class="nav-item" data-view="audit" onclick="navigateTo('audit')">
+          <span class="nav-icon">⚡</span>
+          <span class="nav-text">Auditoría SmartOLT</span>
+        </div>
+        <div class="nav-item" data-view="technicians" onclick="navigateTo('technicians')">
+          <span class="nav-icon">🔧</span>
+          <span class="nav-text">Técnicos & PINs</span>
+        </div>
+
+        <div class="nav-category">Sistema</div>
+        <div class="nav-item" data-view="settings" onclick="navigateTo('settings')">
+          <span class="nav-icon">⚙️</span>
+          <span class="nav-text">Configuración</span>
+        </div>
+        <div class="nav-item" id="nav-item-users" data-view="users" onclick="navigateTo('users')">
+          <span class="nav-icon">👥</span>
+          <span class="nav-text">Usuarios & Roles</span>
+        </div>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div id="user-avatar-badge" class="user-avatar">AD</div>
+        <div class="user-info">
+          <span id="user-display-name" class="user-name">Admin</span>
+          <span id="user-display-role" class="user-role-badge">Superadmin</span>
+        </div>
+        <button class="btn-logout" onclick="handleLogout()" title="Cerrar Sesión">🚪</button>
+      </div>
+    </aside>
+
+    <!-- Main Content Body -->
+    <main id="main-content">
+      
+      <!-- Topbar Header -->
+      <header class="topbar">
+        <div class="topbar-left">
+          <button class="mobile-menu-btn" onclick="toggleMobileMenu()">☰</button>
+          <div class="view-title-wrap">
+            <h2 id="current-view-title" class="view-title">Resumen General</h2>
+          </div>
+        </div>
+        <div class="topbar-right">
+          <div id="whatsapp-live-pill" class="live-status-pill">
+            <span class="pulse-dot"></span>
+            <span id="whatsapp-pill-label">WhatsApp Activo</span>
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="refreshCurrentView()" title="Actualizar datos">
+            🔄 Actualizar
           </button>
         </div>
+      </header>
 
-        <!-- Global IPAM Stat Cards -->
-        <div class="stat-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 24px;">
-          <div class="stat-card" style="border-left: 4px solid #10b981; background: rgba(16, 185, 129, 0.08); padding: 14px; border-radius: 10px; border: 1px solid rgba(16,185,129,0.2);">
-            <div style="font-size: 11px; color: #6ee7b7; font-weight: 600; text-transform: uppercase;">🟢 IPs Disponibles</div>
-            <div id="statIpamAvailable" style="font-size: 28px; font-weight: 700; color: #34d399; margin: 4px 0;">-</div>
-            <div style="font-size: 11px; color: var(--text-muted);">Listas para asignar</div>
-          </div>
-
-          <div class="stat-card" style="border-left: 4px solid #6366f1; background: rgba(99, 102, 241, 0.08); padding: 14px; border-radius: 10px; border: 1px solid rgba(99,102,241,0.2);">
-            <div style="font-size: 11px; color: #a5b4fc; font-weight: 600; text-transform: uppercase;">📡 IPs Ocupadas</div>
-            <div id="statIpamUsed" style="font-size: 28px; font-weight: 700; color: #818cf8; margin: 4px 0;">-</div>
-            <div style="font-size: 11px; color: var(--text-muted);">SmartOLT / WispHub</div>
-          </div>
-
-          <div class="stat-card" style="border-left: 4px solid #06b6d4; background: rgba(6, 182, 212, 0.08); padding: 14px; border-radius: 10px; border: 1px solid rgba(6,182,212,0.2);">
-            <div style="font-size: 11px; color: #67e8f9; font-weight: 600; text-transform: uppercase;">📊 Capacidad Total</div>
-            <div id="statIpamTotal" style="font-size: 28px; font-weight: 700; color: #22d3ee; margin: 4px 0;">-</div>
-            <div style="font-size: 11px; color: var(--text-muted);">12 Subredes /24</div>
-          </div>
-
-          <div class="stat-card" style="border-left: 4px solid #f59e0b; background: rgba(245, 158, 11, 0.08); padding: 14px; border-radius: 10px; border: 1px solid rgba(245,158,11,0.2);">
-            <div style="font-size: 11px; color: #fcd34d; font-weight: 600; text-transform: uppercase;">📈 Ocupación Global</div>
-            <div id="statIpamPercent" style="font-size: 28px; font-weight: 700; color: #fbbf24; margin: 4px 0;">-%</div>
-            <div style="font-size: 11px; color: var(--text-muted);">Promedio de red</div>
-          </div>
-        </div>
-
-        <!-- Section: VLAN Pools Breakdown -->
-        <h3 style="font-size: 16px; margin-bottom: 12px; color: var(--text-main); display: flex; align-items: center; gap: 8px;">
-          <span>⚡ Subredes y Capacidad por VLAN</span>
-        </h3>
-        <div id="ipamPoolsContainer" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin-bottom: 24px;">
-          <div style="color: var(--text-muted); font-size: 13px;">⏳ Cargando subredes...</div>
-        </div>
-
-        <!-- Section: Available IPs Explorer -->
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 14px;">
-          <h3 style="font-size: 16px; color: var(--text-main); display: flex; align-items: center; gap: 8px;">
-            <span>🔍 Explorador de IPs Disponibles</span>
-          </h3>
-
-          <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
-            <select id="ipamVlanSelect" onchange="filterIpamAvailable()" style="background: rgba(255,255,255,0.06); color: var(--text-main); border: 1px solid var(--card-border); border-radius: 8px; padding: 6px 12px; font-size: 13px;">
-              <option value="">Todas las VLANs</option>
-              <option value="510">VLAN 510 (172.19.1.0/24 - Actopan)</option>
-              <option value="520">VLAN 520 (172.19.2.0/24 - Actopan)</option>
-              <option value="530">VLAN 530 (172.19.3.0/24 - Actopan)</option>
-              <option value="540">VLAN 540 (172.19.4.0/24 - Actopan)</option>
-              <option value="550">VLAN 550 (172.19.5.0/24 - Actopan)</option>
-              <option value="560">VLAN 560 (172.19.6.0/24 - Actopan)</option>
-              <option value="570">VLAN 570 (172.19.7.0/24 - Actopan)</option>
-              <option value="580">VLAN 580 (172.19.8.0/24 - Actopan)</option>
-              <option value="590">VLAN 590 (172.19.9.0/24 - Actopan)</option>
-              <option value="600">VLAN 600 (172.19.10.0/24 - Actopan)</option>
-              <option value="610">VLAN 610 (172.19.11.0/24 - Actopan)</option>
-              <option value="800">VLAN 800 (172.16.80.0/24 - San Agustín)</option>
-            </select>
-
-            <input type="text" id="ipamSearchInput" placeholder="Buscar IP (ej: 172.19.1.20)..." oninput="filterIpamAvailable()" style="background: rgba(255,255,255,0.06); color: var(--text-main); border: 1px solid var(--card-border); border-radius: 8px; padding: 6px 12px; font-size: 13px; min-width: 180px;">
-          </div>
-        </div>
-
-        <div class="table-container" style="border: 1px solid var(--card-border); border-radius: 10px; background: rgba(0,0,0,0.2); max-height: 400px; overflow-y: auto;">
-          <table>
-            <thead>
-              <tr style="background: rgba(255,255,255,0.02); position: sticky; top: 0; backdrop-filter: blur(10px); z-index: 2;">
-                <th style="width: 50px;">#</th>
-                <th style="color: #34d399;">🌐 Dirección IP Libre</th>
-                <th>VLAN</th>
-                <th>Gateway</th>
-                <th>Segmento</th>
-                <th>OLT Destino</th>
-                <th>Estado</th>
-                <th style="text-align: right;">Acción</th>
-              </tr>
-            </thead>
-            <tbody id="ipamTableBody">
-              <tr>
-                <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 30px;">
-                  ⏳ Cargando listado de IPs disponibles...
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <div id="ipamCountInfo" style="margin-top: 10px; font-size: 12px; color: var(--text-muted);">
-          Mostrando 0 IPs libres
-        </div>
-
-        <!-- Section: Unconfigured ONUs in SmartOLT -->
-        <div style="margin-top: 28px; border-top: 1px solid var(--card-border); padding-top: 20px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-            <div>
-              <h3 style="font-size: 16px; color: var(--text-main); display: flex; align-items: center; gap: 8px;">
-                <span>📡 ONUs Sin Configurar en SmartOLT (Auto-Activación)</span>
-              </h3>
-              <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
-                Módems detectados en las OLTs listos para ser activados por los técnicos vía WhatsApp usando los <strong>últimos 6 dígitos del SN</strong>.
-              </p>
+      <!-- VIEW 1: DASHBOARD -->
+      <section id="view-dashboard" class="view-container active">
+        <div class="grid-metrics">
+          <div class="glass-card metric-card">
+            <div class="metric-header">
+              <span>ONUs Registradas</span>
+              <div class="metric-icon-box">📡</div>
             </div>
-            <button class="btn btn-secondary btn-test" onclick="loadUnconfiguredOnus()" style="font-size: 12px;">
-              🔄 Refrescar ONUs
-            </button>
+            <div id="metric-onus" class="metric-value">--</div>
+            <div class="metric-footer">SmartOLT DB Sync</div>
+          </div>
+          <div class="glass-card metric-card">
+            <div class="metric-header">
+              <span>Clientes WispHub</span>
+              <div class="metric-icon-box">👥</div>
+            </div>
+            <div id="metric-wisphub" class="metric-value">--</div>
+            <div class="metric-footer">Base Local Turso</div>
+          </div>
+          <div class="glass-card metric-card">
+            <div class="metric-header">
+              <span>Tickets Abiertos</span>
+              <div class="metric-icon-box" style="color: var(--accent-amber);">🎫</div>
+            </div>
+            <div id="metric-tickets" class="metric-value">--</div>
+            <div class="metric-footer">Pendientes de atención</div>
+          </div>
+          <div class="glass-card metric-card">
+            <div class="metric-header">
+              <span>Conflictos IP</span>
+              <div class="metric-icon-box" style="color: var(--accent-rose);">⚠️</div>
+            </div>
+            <div id="metric-mismatch" class="metric-value">--</div>
+            <div class="metric-footer">SmartOLT vs WispHub</div>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 24px;">
+          <div class="glass-card">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+              <h3 style="font-size: 15px; font-weight: 700;">Diagnóstico Rápido de Conectividad</h3>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px;">
+              <button class="btn btn-secondary" onclick="testServiceConnection('turso')">
+                <span>🗄️ Turso DB</span>
+              </button>
+              <button class="btn btn-secondary" onclick="testServiceConnection('smartolt')">
+                <span>🌐 SmartOLT</span>
+              </button>
+              <button class="btn btn-secondary" onclick="testServiceConnection('wisphub')">
+                <span>⚡ WispHub</span>
+              </button>
+              <button class="btn btn-secondary" onclick="testServiceConnection('groq')">
+                <span>🤖 Groq AI</span>
+              </button>
+            </div>
           </div>
 
-          <div class="table-container" style="border: 1px solid var(--card-border); border-radius: 10px; background: rgba(0,0,0,0.2);">
-            <table>
+          <div class="glass-card">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+              <h3 style="font-size: 15px; font-weight: 700;">Acciones de Sincronización</h3>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+              <button class="btn btn-primary" onclick="triggerSmartOltSync(false)">
+                <span>🔄 Sincronizar SmartOLT</span>
+              </button>
+              <button class="btn btn-secondary" onclick="triggerWisphubSync()">
+                <span>🔄 Sincronizar WispHub</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recent Logs Activity -->
+        <div class="glass-card">
+          <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 14px;">Últimas Interacciones del Bot</h3>
+          <div class="table-responsive">
+            <table class="data-table">
               <thead>
-                <tr style="background: rgba(255,255,255,0.02);">
-                  <th>Serie Completo</th>
-                  <th style="color: #38bdf8;">Últimos 6 Dígitos</th>
-                  <th>OLT</th>
-                  <th>Tarjeta / PON</th>
-                  <th>Modelo</th>
-                  <th>Potencia RX (1490)</th>
-                  <th>Estatus</th>
+                <tr>
+                  <th>Hora</th>
+                  <th>Teléfono</th>
+                  <th>Cliente</th>
+                  <th>Flujo</th>
+                  <th>Mensaje</th>
                 </tr>
               </thead>
-              <tbody id="unconfiguredTableBody">
-                <tr>
-                  <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 24px;">
-                    Haz clic en "Refrescar ONUs" o cambia de pestaña para consultar SmartOLT en vivo.
-                  </td>
-                </tr>
+              <tbody id="table-recent-logs-body">
+                <tr><td colspan="5" style="text-align: center; color: var(--text-dim);">Cargando interacciones...</td></tr>
               </tbody>
             </table>
           </div>
         </div>
-      </div>
-    </div>
+      </section>
 
-    <!-- TAB: Vincular WhatsApp -->
-    <div id="tab-whatsapp" class="tab-pane">
-      <div class="card" style="max-width: 680px; margin: 0 auto; text-align: center;">
-        <div class="card-header" style="justify-content: center;">
-          <div class="card-title">📲 Vinculación de WhatsApp (Evolution API)</div>
-        </div>
-        <p style="color: var(--text-muted); font-size: 14px; margin-bottom: 20px;">
-          Escanea este código QR desde tu aplicación de WhatsApp para conectar el bot a tu número.
-        </p>
-
-        <div id="whatsappStatusBox" style="margin-bottom: 20px;">
-          <div style="display: inline-block; padding: 8px 16px; border-radius: 20px; font-weight: 600; font-size: 14px; background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3);">
-            ⏳ Verificando estado...
-          </div>
-        </div>
-
-        <div id="qrContainer" style="background: white; display: inline-block; padding: 16px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); margin-bottom: 24px;">
-          <div style="width: 260px; height: 260px; display: flex; align-items: center; justify-content: center; color: #6b7280; font-size: 13px;">
-            Generando código QR...
-          </div>
-        </div>
-
-        <div style="display: flex; gap: 12px; justify-content: center; margin-bottom: 24px;">
-          <button class="btn btn-secondary" onclick="loadWhatsAppStatus()">🔄 Actualizar QR</button>
-          <button class="btn" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.4);" onclick="disconnectWhatsApp()">⚠️ Desvincular y Regenerar</button>
-        </div>
-
-        <div style="text-align: left; background: rgba(0,0,0,0.25); border-radius: 12px; padding: 16px; border: 1px solid var(--card-border);">
-          <div style="font-weight: 600; font-size: 14px; margin-bottom: 8px; color: var(--text-main);">📋 Instrucciones para vincular:</div>
-          <ol style="margin-left: 20px; color: var(--text-muted); font-size: 13px; line-height: 1.8;">
-            <li>Abre <b>WhatsApp</b> en tu teléfono celular.</li>
-            <li>Entra a <b>Ajustes / Configuración</b> (o los 3 puntos en Android).</li>
-            <li>Toca en <b>Dispositivos vinculados</b> y luego en <b>Vincular un dispositivo</b>.</li>
-            <li>Apunta tu cámara al código QR de arriba para sincronizarlo.</li>
-          </ol>
-        </div>
-      </div>
-    </div>
-
-    <!-- TAB: Mesa de Tickets -->
-    <div id="tab-tickets" class="tab-pane">
-      <div class="card">
-        <div class="card-header">
-          <div>
-            <div class="card-title">🎫 Mesa de Tickets y Reportes Técnicos</div>
-            <p style="color: var(--text-muted); font-size: 13px; margin-top: 4px;">
-              Reportes generados por el bot tras realizar las comprobaciones automáticas con el cliente. Permite al personal aplicar ajustes manuales en SmartOLT y dar seguimiento.
-            </p>
-          </div>
-          <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-            <select id="ticketFilterStatus" onchange="loadTickets()" style="background: rgba(255,255,255,0.06); color: var(--text-main); border: 1px solid var(--card-border); border-radius: 8px; padding: 6px 12px; font-size: 13px;">
-              <option value="TODOS">Todos los Estados</option>
-              <option value="ABIERTO" selected>Solo Abiertos / Pendientes</option>
-              <option value="EN_PROCESO">En Proceso</option>
-              <option value="RESUELTO">Resueltos</option>
-            </select>
-            <button class="btn btn-secondary btn-test" onclick="loadTickets()">🔄 Recargar</button>
-            <button class="btn btn-test" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3);" onclick="clearAllTicketsAction()" title="Vaciar todos los tickets generados en pruebas">🗑️ Vaciar Tickets</button>
-          </div>
-        </div>
-
-        <!-- Metric Stat Cards -->
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 20px;">
-          <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--card-border); border-radius: 12px; padding: 14px;">
-            <div style="color: var(--text-muted); font-size: 12px; font-weight: 500;">Total Histórico</div>
-            <div id="statTotalTickets" style="font-size: 24px; font-weight: 700; color: #fff; margin-top: 4px;">0</div>
-          </div>
-          <div style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 12px; padding: 14px;">
-            <div style="color: #f87171; font-size: 12px; font-weight: 500;">Abiertos / Por Atender</div>
-            <div id="statAbiertosTickets" style="font-size: 24px; font-weight: 700; color: #ef4444; margin-top: 4px;">0</div>
-          </div>
-          <div style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.2); border-radius: 12px; padding: 14px;">
-            <div style="color: #fbbf24; font-size: 12px; font-weight: 500;">⏰ Fuera de Horario (Noche/Madrugada)</div>
-            <div id="statFueraHorarioTickets" style="font-size: 24px; font-weight: 700; color: #f59e0b; margin-top: 4px;">0</div>
-          </div>
-          <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 12px; padding: 14px;">
-            <div style="color: #34d399; font-size: 12px; font-weight: 500;">Resueltos</div>
-            <div id="statResueltosTickets" style="font-size: 24px; font-weight: 700; color: #10b981; margin-top: 4px;">0</div>
-          </div>
-        </div>
-
-        <div class="table-container">
-          <table>
-            <thead>
-              <tr>
-                <th>Folio</th>
-                <th>Fecha / Hora</th>
-                <th>Teléfono</th>
-                <th>Cliente / ONU</th>
-                <th>Problema Reportado</th>
-                <th>Comprobaciones</th>
-                <th>Estado</th>
-                <th>Acción / Notas</th>
-              </tr>
-            </thead>
-            <tbody id="ticketsTableBody">
-              <tr>
-                <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 24px;">Cargando tickets desde Turso DB...</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <!-- TAB 2: Sesiones en Turso -->
-    <div id="tab-sessions" class="tab-pane">
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title">💾 Clientes y Sesiones Persistidas en Turso DB</div>
-          <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-            <button class="btn btn-secondary btn-test" onclick="loadSessions()">🔄 Recargar</button>
-            <button class="btn btn-test" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3);" onclick="clearAllSessionsAction()" title="Borrar todas las sesiones de clientes para iniciar limpio">🗑️ Vaciar Todas las Sesiones</button>
-          </div>
-        </div>
-
-        <div class="table-container">
-          <table>
-            <thead>
-              <tr>
-                <th>Teléfono</th>
-                <th>Cliente</th>
-                <th>Paso / Estado</th>
-                <th>ID ONU</th>
-                <th>Anti-Spam</th>
-                <th>Última Interacción</th>
-                <th>Acción</th>
-              </tr>
-            </thead>
-            <tbody id="sessionsTableBody">
-              <tr>
-                <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 24px;">Cargando sesiones desde Turso...</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <!-- TAB: Historial y Problemas -->
-    <div id="tab-logs" class="tab-pane">
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title">📜 Registro de Conversaciones, Problemas y Soluciones</div>
-          <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-            <button class="btn btn-secondary btn-test" onclick="loadLogs()">🔄 Actualizar Historial</button>
-            <button class="btn btn-test" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3);" onclick="clearAllLogsAction()" title="Vaciar todo el registro de mensajes de prueba">🗑️ Vaciar Historial</button>
-          </div>
-        </div>
-        <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 16px;">
-          Auditoría en tiempo real de cada mensaje entrante y saliente, intenciones clasificadas por IA, fallas detectadas y acciones tomadas en Turso DB.
-        </p>
-        <div style="overflow-x: auto;">
-          <table>
-            <thead>
-              <tr>
-                <th>Hora</th>
-                <th>Teléfono</th>
-                <th>Cliente</th>
-                <th>Tipo</th>
-                <th>Intención</th>
-                <th>Mensaje</th>
-                <th>Acción / Solución</th>
-              </tr>
-            </thead>
-            <tbody id="logsTableBody">
-              <tr>
-                <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 24px;">Cargando historial desde Turso...</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <!-- TAB 3: Simulador -->
-    <div id="tab-tester" class="tab-pane">
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title">💬 Simulador de Mensaje de WhatsApp</div>
-          <span class="card-badge">Pruebas en Vivo</span>
-        </div>
-
-        <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 16px;">
-          Escribe un mensaje como si fueras un usuario de WhatsApp. El sistema consultará a Turso, enviará el texto al traductor de Groq y ejecutará el flujo de diagnóstico.
-        </p>
-
-        <div class="form-group">
-          <label>Número Simulado</label>
-          <input type="text" id="simPhone" value="5215512345678" style="max-width: 250px;">
-        </div>
-
-        <div class="form-group">
-          <label>Mensaje del Cliente</label>
-          <div class="input-row">
-            <input type="text" id="simMessage" placeholder="Ej: hola tengo una luz roja en mi modem no hay internet">
-            <button class="btn btn-primary" onclick="runSimulation()">Enviar Mensaje 🚀</button>
-          </div>
-        </div>
-
-        <div style="display: flex; gap: 8px; margin-top: 10px;">
-          <button class="btn btn-secondary btn-test" onclick="fillSim('tengo foco rojo en el modem')">Foco Rojo</button>
-          <button class="btn btn-secondary btn-test" onclick="fillSim('cuanto debo este mes')">Consultar Saldo</button>
-          <button class="btn btn-secondary btn-test" onclick="fillSim('quiero cancelar las notificaciones')">Cancelar / Baja</button>
-        </div>
-
-        <div class="form-group" style="margin-top: 20px;">
-          <label>Respuesta del Servidor / Webhook</label>
-          <pre id="simResponse" style="background: rgba(0,0,0,0.5); padding: 14px; border-radius: 10px; font-family: var(--font-mono); font-size: 12px; color: #a5f3fc; max-height: 250px; overflow-y: auto;">Esperando mensaje de prueba...</pre>
-        </div>
-      </div>
-    </div>
-
-    <!-- TAB TÉCNICOS AUTORIZADOS Y PINS -->
-    <div id="tab-technicians" class="tab-pane">
-      <!-- KPI Stats -->
-      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 20px;">
-        <div style="background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 12px; padding: 16px;">
-          <div style="font-size: 12px; color: #a5b4fc; text-transform: uppercase; font-weight: 600;">👷 Técnicos Registrados</div>
-          <div id="statTotalTechs" style="font-size: 28px; font-weight: 700; color: #f9fafb; margin-top: 4px;">0</div>
-          <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Guardados en Turso DB</div>
-        </div>
-
-        <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 12px; padding: 16px;">
-          <div style="font-size: 12px; color: #6ee7b7; text-transform: uppercase; font-weight: 600;">🟢 Técnicos Activos</div>
-          <div id="statActiveTechs" style="font-size: 28px; font-weight: 700; color: #34d399; margin-top: 4px;">0</div>
-          <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Con permisos de activación y planes</div>
-        </div>
-
-        <div style="background: rgba(6, 182, 212, 0.1); border: 1px solid rgba(6, 182, 212, 0.3); border-radius: 12px; padding: 16px;">
-          <div style="font-size: 12px; color: #67e8f9; text-transform: uppercase; font-weight: 600;">🔐 Seguridad y PIN</div>
-          <div style="font-size: 16px; font-weight: 700; color: #e0f2fe; margin-top: 6px;">PIN Personal (5 Dígitos)</div>
-          <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Validación automática por WhatsApp</div>
-        </div>
-      </div>
-
-      <!-- Main Card -->
-      <div class="card">
-        <div class="card-header" style="flex-wrap: wrap; gap: 10px;">
-          <div>
-            <div class="card-title">👷 Lista de Técnicos Autorizados para WhatsApp</div>
-            <p style="color: var(--text-muted); font-size: 13px; margin-top: 4px;">
-              Solo los números y PINs registrados en esta lista pueden ejecutar comandos de activación en SmartOLT y cambios de paquetes.
-            </p>
-          </div>
-          <div style="display: flex; gap: 10px;">
-            <button type="button" class="btn btn-primary" onclick="openTechnicianModal()">➕ Registrar Nuevo Técnico</button>
-            <button type="button" class="btn btn-secondary btn-test" onclick="loadTechnicians()">🔄 Refrescar</button>
-          </div>
-        </div>
-
-        <!-- Guía rápida de Comandos -->
-        <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--card-border); border-radius: 10px; padding: 14px; margin-bottom: 20px;">
-          <div style="font-weight: 600; font-size: 13px; color: #38bdf8; margin-bottom: 6px;">💡 Comandos habilitados para los técnicos autorizados en WhatsApp:</div>
-          <div style="font-size: 12px; color: var(--text-muted); line-height: 1.6;">
-            • <strong>Activación en un solo mensaje:</strong> <code style="color: #67e8f9; font-family: var(--font-mono);">activar cliente [SN] [Folio-Nombre] [Plan] [Zona]</code><br>
-            • <strong>Cambio de Paquete en tiempo real:</strong> <code style="color: #67e8f9; font-family: var(--font-mono);">cambiar plan [Folio o SN] a [Nuevo Paquete]</code> <em>(ej: cambiar plan 3000 a 600 megas)</em>
-          </div>
-        </div>
-
-        <!-- Tabla de Técnicos -->
-        <div class="table-container">
-          <table>
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Nombre del Técnico</th>
-                <th>Teléfono WhatsApp</th>
-                <th>PIN (5 Dígitos)</th>
-                <th>Estatus</th>
-                <th>Rol / Permisos</th>
-                <th>Fecha de Alta</th>
-                <th style="text-align: right;">Acciones</th>
-              </tr>
-            </thead>
-            <tbody id="techniciansTableBody">
-              <tr>
-                <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 24px;">⏳ Cargando técnicos desde Turso DB...</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <!-- MODAL REGISTRO / EDICIÓN DE TÉCNICO -->
-    <div id="technicianModal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.75); backdrop-filter: blur(8px); z-index: 1000; align-items: center; justify-content: center; padding: 20px;">
-      <div style="background: #111827; border: 1px solid var(--card-border); border-radius: 16px; width: 100%; max-width: 520px; padding: 24px; box-shadow: 0 20px 50px rgba(0,0,0,0.7);">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px;">
-          <h3 id="modalTechTitle" style="font-size: 18px; font-weight: 700; color: #f9fafb;">➕ Registrar Técnico Autorizado</h3>
-          <button type="button" onclick="closeTechnicianModal()" style="background: transparent; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer;">✕</button>
-        </div>
-
-        <form id="techForm" onsubmit="event.preventDefault(); saveTechnician();">
-          <input type="hidden" id="techId" value="">
-
-          <div class="form-group">
-            <label>Nombre Completo del Técnico *</label>
-            <input type="text" id="techName" placeholder="Ej: Juan Pérez / Técnico Zona 1" required>
-          </div>
-
-          <div class="form-group">
-            <label>Número de WhatsApp (con lada o 10 dígitos) *</label>
-            <input type="text" id="techPhone" class="mono" placeholder="Ej: 7721155543 o 5217721155543" required>
-            <small style="color: var(--text-muted); font-size: 11px;">El bot identificará automáticamente los mensajes provenientes de este número.</small>
-          </div>
-
-          <div class="form-group">
-            <label>PIN Personal de 5 Dígitos *</label>
-            <div class="input-row">
-              <input type="text" id="techPin" class="mono" maxlength="5" placeholder="12345" required style="font-size: 16px; letter-spacing: 2px; font-weight: 700;">
-              <button type="button" class="btn btn-cyan" onclick="generateRandomPin()" title="Generar PIN aleatorio">🎲 Generar PIN</button>
+      <!-- VIEW 2: LIVE WHATSAPP CHAT -->
+      <section id="view-live-chat" class="view-container">
+        <div class="chat-layout">
+          <!-- Left threads list -->
+          <div class="chat-sidebar" id="chat-threads-sidebar">
+            <div class="chat-search-header">
+              <input type="text" id="chat-filter-input" class="form-control" placeholder="Buscar cliente o número..." oninput="filterChatThreads(this.value)">
             </div>
-            <small style="color: var(--text-muted); font-size: 11px;">PIN exclusivo de 5 dígitos numéricos asignado a este técnico.</small>
+            <div id="chat-threads-container" class="chat-threads-list">
+              <!-- Rendered dynamically -->
+            </div>
           </div>
 
-          <div class="form-group">
-            <label>Estado en el Sistema</label>
-            <select id="techActive">
-              <option value="1">🟢 Activo (Autorizado para activar y cambiar planes)</option>
-              <option value="0">🔴 Inactivo (Acceso suspendido)</option>
-            </select>
+          <!-- Right conversation pane -->
+          <div class="chat-main-area">
+            <div id="chat-active-header" class="chat-header-bar" style="display: none;">
+              <div class="chat-header-left">
+                <button class="btn btn-secondary btn-sm" style="display: none;" id="btn-back-to-threads" onclick="toggleMobileChatThreads()">◀ Hilos</button>
+                <div class="thread-avatar" id="active-chat-avatar">📱</div>
+                <div>
+                  <h4 id="active-chat-name" style="font-size: 14px; font-weight: 700;">Seleccione un chat</h4>
+                  <span id="active-chat-phone" style="font-size: 11px; color: var(--text-muted); font-family: var(--font-mono);">--</span>
+                </div>
+              </div>
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <div id="takeover-status-indicator" class="badge badge-success">🤖 Bot Automático</div>
+                <button id="btn-toggle-takeover" class="btn btn-secondary btn-sm" onclick="toggleCurrentChatTakeover()">
+                  ⏸️ Pausar Bot
+                </button>
+              </div>
+            </div>
+
+            <div id="chat-empty-state" style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-dim); gap: 12px;">
+              <span style="font-size: 42px;">💬</span>
+              <p>Selecciona una conversación del panel izquierdo para chatear en tiempo real.</p>
+            </div>
+
+            <div id="chat-messages-wrap" class="chat-messages-container" style="display: none;">
+              <!-- Rendered message bubbles -->
+            </div>
+
+            <div id="chat-input-container" class="chat-input-bar" style="display: none;">
+              <textarea id="chat-text-input" class="chat-input-box" placeholder="Escribe un mensaje... (Enter para enviar, Shift+Enter nueva línea)" rows="1" onkeydown="handleChatInputKeyDown(event)"></textarea>
+              <button class="btn btn-primary" onclick="sendActiveChatMessage()" style="height: 42px; padding: 0 18px;">
+                <span>Enviar</span> 🚀
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 3: KANBAN TICKETS BOARD -->
+      <section id="view-tickets" class="view-container">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+          <div>
+            <h3 style="font-size: 16px; font-weight: 700;">Tablero de Soporte Técnico</h3>
+            <p style="font-size: 12px; color: var(--text-muted);">Mueve y asigna técnicos a los folios generados por el bot.</p>
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="loadTicketsData()">
+            🔄 Recargar Tablero
+          </button>
+        </div>
+
+        <div class="kanban-board">
+          <!-- Column 1: ABIERTO -->
+          <div class="kanban-column">
+            <div class="kanban-col-header" style="border-top: 3px solid var(--accent-amber);">
+              <span>🟡 ABIERTOS</span>
+              <span id="badge-count-abierto" class="badge badge-warning">0</span>
+            </div>
+            <div id="col-tickets-abierto" class="kanban-cards-wrap"></div>
           </div>
 
-          <div class="form-group">
-            <label>Notas / Zona Asignada (Opcional)</label>
-            <input type="text" id="techNotes" placeholder="Ej: Técnico de campo Actopan / San Agustín">
+          <!-- Column 2: EN PROCESO -->
+          <div class="kanban-column">
+            <div class="kanban-col-header" style="border-top: 3px solid var(--accent-cyan);">
+              <span>🔵 EN PROCESO</span>
+              <span id="badge-count-proceso" class="badge badge-info">0</span>
+            </div>
+            <div id="col-tickets-en-proceso" class="kanban-cards-wrap"></div>
           </div>
 
-          <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px;">
-            <button type="button" class="btn btn-secondary" onclick="closeTechnicianModal()">Cancelar</button>
-            <button type="submit" id="btnSaveTech" class="btn btn-primary">💾 Guardar en Turso DB</button>
+          <!-- Column 3: VISITA TÉCNICA -->
+          <div class="kanban-column">
+            <div class="kanban-col-header" style="border-top: 3px solid var(--accent-purple);">
+              <span>🟣 VISITA TÉCNICA</span>
+              <span id="badge-count-visita" class="badge badge-purple">0</span>
+            </div>
+            <div id="col-tickets-visita" class="kanban-cards-wrap"></div>
           </div>
-        </form>
-      </div>
-    </div>
 
-    <!-- Floating Save Bar -->
-    <div class="floating-bar">
-      <span style="font-size: 13px; color: var(--text-muted);">Los cambios se guardan directamente en Turso Cloud.</span>
-      <button class="btn btn-primary" onclick="saveSettings()">💾 Guardar en Turso DB</button>
-    </div>
+          <!-- Column 4: RESUELTO -->
+          <div class="kanban-column">
+            <div class="kanban-col-header" style="border-top: 3px solid var(--accent-green);">
+              <span>🟢 RESUELTOS</span>
+              <span id="badge-count-resuelto" class="badge badge-success">0</span>
+            </div>
+            <div id="col-tickets-resuelto" class="kanban-cards-wrap"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 4: IPAM & POOLS -->
+      <section id="view-ipam" class="view-container">
+        <div class="glass-card" style="margin-bottom: 24px;">
+          <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 14px;">Ocupación de Pools por VLAN</h3>
+          <div id="ipam-pools-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
+            <!-- Rendered pools progress -->
+          </div>
+        </div>
+
+        <div class="glass-card">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+            <div>
+              <h3 style="font-size: 15px; font-weight: 700;">ONUs Nuevas Sin Configurar en SmartOLT</h3>
+              <p style="font-size: 12px; color: var(--text-muted);">Detectadas en el PON para activación y asignación de IP.</p>
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="loadIpamData()">🔄 Refrescar PON</button>
+          </div>
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>OLT</th>
+                  <th>PON</th>
+                  <th>Serial (SN)</th>
+                  <th>Modelo</th>
+                  <th>Acción</th>
+                </tr>
+              </thead>
+              <tbody id="table-unconfigured-onus-body">
+                <tr><td colspan="5" style="text-align: center; color: var(--text-dim);">Buscando ONUs en espera...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 5: AUDITORÍA SMARTOLT VS WISPHUB -->
+      <section id="view-audit" class="view-container">
+        <div class="glass-card" style="margin-bottom: 20px;">
+          <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;">
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;" id="audit-filter-buttons">
+              <button class="btn btn-secondary btn-sm active" onclick="setAuditFilter('all')">Todos</button>
+              <button class="btn btn-danger btn-sm" onclick="setAuditFilter('MISMATCH')">⚠️ Mismatches</button>
+              <button class="btn btn-success btn-sm" onclick="setAuditFilter('MATCH')">✅ Correctos</button>
+              <button class="btn btn-secondary btn-sm" onclick="setAuditFilter('ONLY_SMARTOLT')">Solo SmartOLT</button>
+              <button class="btn btn-secondary btn-sm" onclick="setAuditFilter('ONLY_WISPHUB')">Solo WispHub</button>
+            </div>
+            <input type="text" id="audit-search-input" class="form-control" style="max-width: 260px;" placeholder="Buscar por nombre, IP o SN..." oninput="handleAuditSearch(this.value)">
+          </div>
+        </div>
+
+        <div class="glass-card">
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Cliente</th>
+                  <th>Servicio / Folio</th>
+                  <th>IP SmartOLT</th>
+                  <th>IP WispHub</th>
+                  <th>Estado IP</th>
+                  <th>Plan WispHub</th>
+                </tr>
+              </thead>
+              <tbody id="table-audit-body">
+                <tr><td colspan="6" style="text-align: center; color: var(--text-dim);">Cargando auditoría...</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 16px;">
+            <span id="audit-pagination-info" style="font-size: 12px; color: var(--text-muted);">Página 1</span>
+            <div style="display: flex; gap: 8px;">
+              <button id="btn-audit-prev" class="btn btn-secondary btn-sm" onclick="changeAuditPage(-1)">◀ Anterior</button>
+              <button id="btn-audit-next" class="btn btn-secondary btn-sm" onclick="changeAuditPage(1)">Siguiente ▶</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 6: TÉCNICOS & PINS -->
+      <section id="view-technicians" class="view-container">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+          <div>
+            <h3 style="font-size: 16px; font-weight: 700;">Técnicos de Campo Autorizados</h3>
+            <p style="font-size: 12px; color: var(--text-muted);">Gestiona los PINs de 5 dígitos para consultas y diagnósticos en WhatsApp.</p>
+          </div>
+          <button class="btn btn-primary" onclick="openNewTechnicianModal()">
+            <span>➕ Nuevo Técnico</span>
+          </button>
+        </div>
+
+        <div class="glass-card">
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Nombre</th>
+                  <th>Teléfono WhatsApp</th>
+                  <th>PIN (5 Dígitos)</th>
+                  <th>Rol</th>
+                  <th>Estado</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="table-technicians-body">
+                <tr><td colspan="6" style="text-align: center; color: var(--text-dim);">Cargando técnicos...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 7: CONFIGURACIÓN & INTEGRACIONES -->
+      <section id="view-settings" class="view-container">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+          <!-- Evolution QR & WhatsApp Status -->
+          <div class="glass-card">
+            <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 14px;">Vinculación de WhatsApp (Evolution API)</h3>
+            <div id="evolution-qr-container" style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 220px; background: rgba(0,0,0,0.3); border-radius: var(--radius-sm); margin-bottom: 16px; padding: 16px;">
+              <span style="font-size: 36px; margin-bottom: 8px;">📡</span>
+              <p id="evolution-status-text" style="font-size: 13px; color: var(--text-muted);">Consultando estado de WhatsApp...</p>
+            </div>
+            <div style="display: flex; gap: 10px;">
+              <button class="btn btn-secondary btn-sm" style="flex: 1;" onclick="fetchWhatsAppStatus()">🔄 Refrescar QR</button>
+              <button class="btn btn-danger btn-sm" onclick="disconnectWhatsAppSession()">Desvincular</button>
+            </div>
+          </div>
+
+          <!-- Settings Form -->
+          <div class="glass-card">
+            <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 14px;">Variables de Entorno en Turso DB</h3>
+            <form id="settings-form" onsubmit="handleSaveSettings(event)">
+              <div class="form-group">
+                <label class="form-label">Evolution API URL</label>
+                <input type="text" id="setting-EVOLUTION_URL" class="form-control" placeholder="https://evolution.example.com">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Evolution API Key</label>
+                <input type="password" id="setting-EVOLUTION_API_KEY" class="form-control" placeholder="••••••••">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Groq API Key</label>
+                <input type="password" id="setting-GROQ_API_KEY" class="form-control" placeholder="••••••••">
+              </div>
+              <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 10px;">
+                Guardar Configuraciones
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <!-- Danger Zone -->
+        <div class="glass-card" style="margin-top: 24px; border-color: rgba(244, 63, 94, 0.3);">
+          <h3 style="font-size: 15px; font-weight: 700; color: var(--accent-rose); margin-bottom: 12px;">Zona de Pruebas & Reset</h3>
+          <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">Elimina datos de prueba sin afectar la base de datos de producción.</p>
+          <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+            <button class="btn btn-danger btn-sm" onclick="clearSessionsData()">🗑️ Vaciar Sesiones</button>
+            <button class="btn btn-danger btn-sm" onclick="clearLogsData()">🗑️ Vaciar Historial Logs</button>
+            <button class="btn btn-danger btn-sm" onclick="clearTicketsData()">🗑️ Vaciar Tickets</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 8: USUARIOS & ROLES (RBAC) -->
+      <section id="view-users" class="view-container">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+          <div>
+            <h3 style="font-size: 16px; font-weight: 700;">Administradores del Panel (RBAC)</h3>
+            <p style="font-size: 12px; color: var(--text-muted);">Asigna permisos de superadmin, soporte, técnico o facturación.</p>
+          </div>
+          <button class="btn btn-primary" onclick="openNewAdminUserModal()">
+            <span>➕ Crear Administrador</span>
+          </button>
+        </div>
+
+        <div class="glass-card">
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Usuario</th>
+                  <th>Nombre Completo</th>
+                  <th>Rol</th>
+                  <th>Último Ingreso</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="table-admin-users-body">
+                <tr><td colspan="5" style="text-align: center; color: var(--text-dim);">Cargando usuarios...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+    </main>
   </div>
 
-  <div id="toast">Guardado correctamente</div>
-
+  <!-- SPA Client-Side Application Logic -->
   <script>
-    function switchTab(tabId, el) {
-      document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
-      document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    // State Store
+    const state = {
+      token: localStorage.getItem('cloudware_admin_token') || '',
+      user: null,
+      currentView: 'dashboard',
+      chats: [],
+      activeChatPhone: null,
+      activeChatData: null,
+      tickets: [],
+      audit: { filter: 'all', search: '', page: 1, limit: 30, total: 0 },
+      technicians: [],
+      adminUsers: [],
+      sseConnected: false,
+    };
 
-      const pane = document.getElementById('tab-' + tabId);
-      if (pane) pane.classList.add('active');
+    // ==========================================
+    // TOAST NOTIFICATION ENGINE (Zero native alerts)
+    // ==========================================
+    function showToast(title, message, type = 'info', duration = 3500) {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = 'toast ' + type;
 
-      if (el) {
-        el.classList.add('active');
-      } else if (window.event && window.event.currentTarget) {
-        window.event.currentTarget.classList.add('active');
-      } else {
-        document.querySelectorAll('.nav-tab').forEach(btn => {
-          if (btn.getAttribute('onclick') && btn.getAttribute('onclick').includes("switchTab('" + tabId + "'")) {
-            btn.classList.add('active');
-          }
-        });
+      let icon = 'ℹ️';
+      if (type === 'success') icon = '✅';
+      if (type === 'error') icon = '❌';
+      if (type === 'warning') icon = '⚠️';
+
+      toast.innerHTML = \`
+        <span class="toast-icon">\${icon}</span>
+        <div class="toast-body">
+          <div class="toast-title">\${title}</div>
+          <div class="toast-message">\${message}</div>
+        </div>
+        <button class="toast-close" onclick="this.parentElement.remove()">&times;</button>
+        <div class="toast-progress"></div>
+      \`;
+
+      container.appendChild(toast);
+
+      setTimeout(() => {
+        toast.classList.add('hide');
+        setTimeout(() => toast.remove(), 300);
+      }, duration);
+    }
+
+    // ==========================================
+    // GLASS MODAL ENGINE (Zero native alerts)
+    // ==========================================
+    function openModal(title, htmlContent, onConfirm, confirmText = 'Confirmar', isDanger = false) {
+      const modal = document.getElementById('generic-modal');
+      document.getElementById('modal-title').innerText = title;
+      document.getElementById('modal-body-content').innerHTML = htmlContent;
+
+      const confirmBtn = document.getElementById('modal-confirm-btn');
+      confirmBtn.innerText = confirmText;
+      confirmBtn.className = isDanger ? 'btn btn-danger' : 'btn btn-primary';
+
+      confirmBtn.onclick = async () => {
+        if (onConfirm) {
+          const res = await onConfirm();
+          if (res !== false) closeModal();
+        } else {
+          closeModal();
+        }
+      };
+
+      modal.classList.add('show');
+    }
+
+    function closeModal() {
+      const modal = document.getElementById('generic-modal');
+      modal.classList.remove('show');
+    }
+
+    function showConfirmDialog(title, message, onConfirm, isDanger = true) {
+      const content = \`<p style="font-size: 13.5px; color: var(--text-muted); line-height: 1.5;">\${message}</p>\`;
+      openModal(title, content, onConfirm, 'Sí, Continuar', isDanger);
+    }
+
+    // ==========================================
+    // HTTP CLIENT WITH AUTOMATIC AUTH HEADERS
+    // ==========================================
+    async function apiFetch(url, options = {}) {
+      const headers = {
+        'Content-Type': 'application/json',
+        ...(options.headers || {}),
+      };
+
+      if (state.token) {
+        headers['Authorization'] = 'Bearer ' + state.token;
       }
 
       try {
-        if (tabId === 'technicians') {
-          loadTechnicians();
+        const res = await fetch(url, { ...options, headers });
+        if (res.status === 401) {
+          // Token expired or invalid
+          handleLogout();
+          throw new Error('Sesión expirada. Por favor inicie sesión.');
         }
-        if (tabId === 'audit') {
-          loadAuditData(1);
-          loadWisphubStats();
+        const data = await res.json();
+        return data;
+      } catch (err) {
+        console.error('API Fetch Error:', err);
+        throw err;
+      }
+    }
+
+    // ==========================================
+    // AUTHENTICATION & LOGIN FLOW
+    // ==========================================
+    async function checkAuthSession() {
+      if (!state.token) {
+        showLoginModal();
+        return;
+      }
+
+      try {
+        const res = await apiFetch('/api/admin/auth/me');
+        if (res.success && res.user) {
+          state.user = res.user;
+          updateUserUI();
+          hideLoginModal();
+          initApp();
+        } else {
+          showLoginModal();
         }
-        if (tabId === 'ipam') {
+      } catch {
+        showLoginModal();
+      }
+    }
+
+    function showLoginModal() {
+      document.getElementById('login-overlay').style.display = 'flex';
+    }
+
+    function hideLoginModal() {
+      document.getElementById('login-overlay').style.display = 'none';
+    }
+
+    async function handleLoginSubmit(e) {
+      e.preventDefault();
+      const uInput = document.getElementById('login-username').value.trim();
+      const pInput = document.getElementById('login-password').value.trim();
+      const submitBtn = document.getElementById('login-btn-submit');
+
+      submitBtn.disabled = true;
+      submitBtn.innerText = 'Verificando...';
+
+      try {
+        const res = await fetch('/api/admin/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: uInput, password: pInput }),
+        });
+        const data = await res.json();
+
+        if (data.success && data.token) {
+          state.token = data.token;
+          state.user = data.user;
+          localStorage.setItem('cloudware_admin_token', data.token);
+          updateUserUI();
+          hideLoginModal();
+          showToast('Bienvenido', \`Hola \${data.user.name || data.user.username}\`, 'success');
+          initApp();
+        } else {
+          showToast('Error de Ingreso', data.error || 'Credenciales inválidas', 'error');
+        }
+      } catch (err) {
+        showToast('Error', 'No se pudo contactar al servidor', 'error');
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerText = 'Ingresar al Panel';
+      }
+    }
+
+    function handleLogout() {
+      state.token = '';
+      state.user = null;
+      localStorage.removeItem('cloudware_admin_token');
+      showLoginModal();
+      showToast('Sesión Cerrada', 'Has salido del panel.', 'info');
+    }
+
+    function updateUserUI() {
+      if (!state.user) return;
+      const initials = (state.user.name || state.user.username || 'AD').substring(0, 2).toUpperCase();
+      document.getElementById('user-avatar-badge').innerText = initials;
+      document.getElementById('user-display-name').innerText = state.user.name || state.user.username;
+      document.getElementById('user-display-role').innerText = state.user.role || 'Admin';
+
+      // Hide Users nav item if not superadmin
+      const userNav = document.getElementById('nav-item-users');
+      if (userNav) {
+        userNav.style.display = state.user.role === 'superadmin' ? 'flex' : 'none';
+      }
+    }
+
+    // ==========================================
+    // NAVIGATION & VIEW SWITCHER (Zero Reloads)
+    // ==========================================
+    function navigateTo(viewId) {
+      state.currentView = viewId;
+
+      // Update Nav active classes
+      document.querySelectorAll('.nav-item').forEach(item => {
+        if (item.getAttribute('data-view') === viewId) {
+          item.classList.add('active');
+        } else {
+          item.classList.remove('active');
+        }
+      });
+
+      // Update View Containers
+      document.querySelectorAll('.view-container').forEach(v => {
+        v.classList.remove('active');
+      });
+
+      const target = document.getElementById('view-' + viewId);
+      if (target) target.classList.add('active');
+
+      // Update Topbar Title
+      const titles = {
+        'dashboard': 'Resumen General',
+        'live-chat': 'Live WhatsApp & Human Takeover',
+        'tickets': 'Mesa de Tickets (Kanban)',
+        'ipam': 'IPAM & Gestión de Pools VLAN',
+        'audit': 'Auditoría SmartOLT vs WispHub',
+        'technicians': 'Técnicos Autorizados & PINs',
+        'settings': 'Configuración del Sistema',
+        'users': 'Usuarios & Roles de Acceso',
+      };
+      document.getElementById('current-view-title').innerText = titles[viewId] || 'Panel';
+
+      // Close mobile menu if open
+      document.getElementById('sidebar').classList.remove('mobile-open');
+
+      // Trigger view data refresh
+      loadViewData(viewId);
+    }
+
+    function toggleSidebar() {
+      document.getElementById('sidebar').classList.toggle('collapsed');
+    }
+
+    function toggleMobileMenu() {
+      document.getElementById('sidebar').classList.toggle('mobile-open');
+    }
+
+    function refreshCurrentView() {
+      loadViewData(state.currentView);
+      showToast('Actualizado', 'Datos sincronizados correctamente.', 'info', 2000);
+    }
+
+    function loadViewData(viewId) {
+      switch (viewId) {
+        case 'dashboard':
+          loadDashboardData();
+          break;
+        case 'live-chat':
+          loadLiveChatData();
+          break;
+        case 'tickets':
+          loadTicketsData();
+          break;
+        case 'ipam':
           loadIpamData();
-        }
-        if (tabId === 'whatsapp') loadWhatsAppStatus();
-        if (tabId === 'tickets') loadTickets();
-        if (tabId === 'sessions') loadSessions();
-        if (tabId === 'logs') loadLogs();
-      } catch (e) {
-        console.error('Error al cambiar pestaña:', e);
+          break;
+        case 'audit':
+          loadAuditData();
+          break;
+        case 'technicians':
+          loadTechniciansData();
+          break;
+        case 'settings':
+          loadSettingsData();
+          break;
+        case 'users':
+          loadAdminUsersData();
+          break;
       }
     }
 
-    function showToast(msg, isError = false) {
-      const t = document.getElementById('toast');
-      if (!t) return;
-      t.innerText = msg;
-      t.style.background = isError ? '#ef4444' : '#10b981';
-      t.style.display = 'block';
-      setTimeout(() => { t.style.display = 'none'; }, 3500);
-    }
+    // ==========================================
+    // REAL-TIME SSE (Server-Sent Events) ENGINE
+    // ==========================================
+    function initSSEStream() {
+      if (window.EventSource) {
+        const evtSource = new EventSource('/api/admin/live-stream');
+        
+        evtSource.addEventListener('connected', () => {
+          state.sseConnected = true;
+          document.getElementById('whatsapp-live-pill').style.opacity = '1';
+        });
 
-    async function loadWhatsAppStatus() {
-      const statusBox = document.getElementById('whatsappStatusBox');
-      const qrBox = document.getElementById('qrContainer');
-      if (!statusBox || !qrBox) return;
-
-      statusBox.innerHTML = '<div style="display: inline-block; padding: 8px 16px; border-radius: 20px; font-weight: 600; font-size: 14px; background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3);">⏳ Consultando estado en Evolution API...</div>';
-
-      try {
-        const res = await fetch('/api/whatsapp/status');
-        const data = await res.json();
-
-        if (data.state === 'open') {
-          statusBox.innerHTML = '<div style="display: inline-block; padding: 8px 16px; border-radius: 20px; font-weight: 600; font-size: 14px; background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3);">🟢 WhatsApp Conectado y Operativo</div>';
-          qrBox.innerHTML = '<div style="width: 260px; height: 260px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #10b981; font-size: 14px; font-weight: 600;"><span style="font-size: 48px; margin-bottom: 12px;">✅</span>¡Instancia Vinculada!<br><span style="color: #6b7280; font-weight: normal; font-size: 12px; margin-top: 6px;">Listo para enviar y recibir mensajes</span></div>';
-        } else {
-          statusBox.innerHTML = '<div style="display: inline-block; padding: 8px 16px; border-radius: 20px; font-weight: 600; font-size: 14px; background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3);">🔴 Desconectado (Escanea el QR)</div>';
-          if (data.qr) {
-            qrBox.innerHTML = '<img src="' + data.qr + '" style="width: 260px; height: 260px; border-radius: 8px;" alt="QR Code">';
-          } else {
-            qrBox.innerHTML = '<div style="width: 260px; height: 260px; display: flex; align-items: center; justify-content: center; color: #6b7280; font-size: 13px;">No se pudo cargar el QR. Haz clic en Actualizar QR.</div>';
+        evtSource.addEventListener('chat:message', (e) => {
+          const data = JSON.parse(e.data || '{}');
+          if (state.currentView === 'live-chat') {
+            loadLiveChatData(false);
+            if (state.activeChatPhone && state.activeChatPhone === data.phone) {
+              appendChatMessage(data);
+            }
           }
-        }
-      } catch (err) {
-        statusBox.innerHTML = '<div style="display: inline-block; padding: 8px 16px; border-radius: 20px; font-weight: 600; font-size: 14px; background: rgba(239, 68, 68, 0.15); color: #ef4444;">Error al conectar con Evolution API</div>';
+        });
+
+        evtSource.addEventListener('tickets:update', () => {
+          if (state.currentView === 'tickets') loadTicketsData();
+          loadDashboardBadgeCounters();
+        });
+
+        evtSource.onerror = () => {
+          state.sseConnected = false;
+        };
       }
     }
 
-    async function disconnectWhatsApp() {
-      if (!confirm("¿Estás seguro de que deseas desvincular la sesión actual de WhatsApp? Se generará un nuevo QR para volver a vincular.")) return;
+    // ==========================================
+    // MODULE 1: DASHBOARD
+    // ==========================================
+    async function loadDashboardData() {
       try {
-        const res = await fetch('/api/whatsapp/disconnect', { method: 'POST' });
-        const data = await res.json();
-        if (data.success) {
-          showToast('Sesión desvinculada. Generando nuevo QR...');
-          setTimeout(loadWhatsAppStatus, 1500);
-        } else {
-          showToast('Error: ' + data.error, true);
-        }
-      } catch (err) {
-        showToast('Error al desvincular: ' + err.message, true);
-      }
-    }
-
-    async function loadTickets() {
-      const tbody = document.getElementById('ticketsTableBody');
-      const filter = document.getElementById('ticketFilterStatus')?.value || 'TODOS';
-      try {
-        const [resTickets, resStats] = await Promise.all([
-          fetch('/api/tickets?status=' + encodeURIComponent(filter)),
-          fetch('/api/tickets/stats')
+        const [smartStats, wisphubStats, ticketStats, logsRes] = await Promise.all([
+          apiFetch('/api/smartolt/stats').catch(() => ({ stats: { total_onus: 0 } })),
+          apiFetch('/api/wisphub/stats').catch(() => ({ stats: { total: 0 } })),
+          apiFetch('/api/tickets/stats').catch(() => ({ stats: { abiertos: 0 } })),
+          apiFetch('/api/logs?limit=8').catch(() => ({ logs: [] })),
         ]);
-        const dataTickets = await resTickets.json();
-        const dataStats = await resStats.json();
 
-        if (dataStats.success && dataStats.stats) {
-          const st = dataStats.stats;
-          document.getElementById('statTotalTickets').innerText = st.total || 0;
-          document.getElementById('statAbiertosTickets').innerText = st.abiertos || 0;
-          document.getElementById('statFueraHorarioTickets').innerText = st.fueraHorario || 0;
-          document.getElementById('statResueltosTickets').innerText = st.resueltos || 0;
-        }
+        document.getElementById('metric-onus').innerText = (smartStats.stats?.total_onus || 0).toLocaleString();
+        document.getElementById('metric-wisphub').innerText = (wisphubStats.stats?.total || 0).toLocaleString();
+        document.getElementById('metric-tickets').innerText = (ticketStats.stats?.abiertos || 0).toLocaleString();
 
-        if (dataTickets.success && dataTickets.tickets) {
-          if (dataTickets.tickets.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding: 24px; color: var(--text-muted);">No hay tickets registrados con el filtro actual.</td></tr>';
-            return;
-          }
+        const auditRes = await apiFetch('/api/audit/ip-cross?filter=MISMATCH&limit=1').catch(() => ({ total: 0 }));
+        document.getElementById('metric-mismatch').innerText = (auditRes.total || 0).toLocaleString();
 
-          tbody.innerHTML = dataTickets.tickets.map(t => {
-            const dateStr = t.created_at ? new Date(t.created_at).toLocaleString('es-MX', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-';
-            
-            let statusBadge = '<span class="pill pill-red">🔴 Abierto</span>';
-            if (t.status === 'EN_PROCESO') statusBadge = '<span class="pill pill-amber">🟡 En Proceso</span>';
-            if (t.status === 'RESUELTO') statusBadge = '<span class="pill pill-green">🟢 Resuelto</span>';
-
-            const outBadge = t.is_out_of_hours === 1 ? ' <span class="pill pill-amber" title="Reportado fuera de horario">⏰ 9:00 AM</span>' : '';
-
-            let checksBadges = '';
-            if (t.has_photo === 1) checksBadges += '<span class="pill pill-blue" style="margin-right:4px;">📸 Foto Módem</span>';
-            if (t.has_speedtest === 1) checksBadges += '<span class="pill pill-purple" style="margin-right:4px;">🚀 Speedtest</span>';
-            if (t.all_devices === 1) checksBadges += '<span class="pill pill-amber">📶 Multidispositivo</span>';
-            if (!checksBadges) checksBadges = '<span style="color:var(--text-muted); font-size:11px;">Módem/Luces revisados</span>';
-
-            const clientText = t.client_name ? '<b>' + t.client_name + '</b>' : '<em style="color:var(--text-muted);">No identificado</em>';
-            const onuText = t.onu_id ? '<br><small style="font-family:var(--font-mono); color:var(--text-muted);">' + t.onu_id + '</small>' : '';
-            const notesHtml = t.notes ? '<div style="margin-top: 6px; font-size: 11px; background: rgba(56, 189, 248, 0.12); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 6px; padding: 5px 8px; color: #7dd3fc; max-width: 260px; word-break: break-word; white-space: normal;">' + t.notes + '</div>' : '';
-
-            const isPaused = t.bot_paused && t.bot_paused.pausado;
-            const pauseBadge = isPaused
-              ? '<br><span class="pill pill-purple" style="font-size:10px; margin-top:4px; display:inline-block;">⏸️ Humano (' + t.bot_paused.minutosRestantes + 'm)</span> <a href="javascript:void(0)" onclick="toggleBotPauseAction(&quot;' + t.phone + '&quot;, false)" style="color:#34d399; font-size:11px; margin-left:2px;">▶️ Reactivar</a>'
-              : '<br><a href="javascript:void(0)" onclick="toggleBotPauseAction(&quot;' + t.phone + '&quot;, true)" style="color:var(--text-muted); font-size:11px; display:inline-block; margin-top:3px;">⏸️ Pausar Bot</a>';
-
-            return '<tr>' +
-              '<td style="font-family: var(--font-mono); font-weight: 700; color: #38bdf8;">' + t.folio + '</td>' +
-              '<td style="color: var(--text-muted); font-size: 12px; white-space: nowrap;">' + dateStr + outBadge + '</td>' +
-              '<td style="font-family: var(--font-mono); font-weight: 600;">' + t.phone + pauseBadge + '</td>' +
-              '<td>' + clientText + onuText + '</td>' +
-              '<td style="max-width: 250px; font-size: 13px; word-break: break-word;">' + (t.issue_summary || '') + '</td>' +
-              '<td style="font-size: 11px;">' + checksBadges + '</td>' +
-              '<td>' + statusBadge + '</td>' +
-              '<td>' +
-                '<select onchange="updateTicketStatusAction(&quot;' + t.folio + '&quot;, this.value)" style="background: rgba(255,255,255,0.06); color: var(--text-main); border: 1px solid var(--card-border); border-radius: 6px; padding: 4px 8px; font-size: 12px;">' +
-                  '<option value="" disabled selected>Cambiar Estado...</option>' +
-                  '<option value="ABIERTO">🔴 Marcar Abierto</option>' +
-                  '<option value="EN_PROCESO">🟡 En Atención / Ajuste OLT</option>' +
-                  '<option value="RESUELTO">🟢 Marcar Resuelto</option>' +
-                '</select>' +
-                notesHtml +
-              '</td>' +
-            '</tr>';
-          }).join('');
-        }
-      } catch (err) {
-        tbody.innerHTML = '<tr><td colspan="8" style="color: red; text-align:center;">Error al cargar tickets desde Turso</td></tr>';
-      }
-    }
-
-    async function updateTicketStatusAction(folio, status) {
-      if (!status) return;
-      try {
-        const res = await fetch('/api/tickets/' + folio + '/status', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ status })
-        });
-        const data = await res.json();
-        if (data.success) {
-          showToast('✅ Ticket ' + folio + ' actualizado');
-          loadTickets();
+        // Render Recent Logs Table
+        const tbody = document.getElementById('table-recent-logs-body');
+        if (logsRes.logs && logsRes.logs.length > 0) {
+          tbody.innerHTML = logsRes.logs.map(l => \`
+            <tr>
+              <td style="font-family: var(--font-mono); font-size: 11px; color: var(--text-dim);">\${new Date(l.created_at).toLocaleTimeString()}</td>
+              <td style="font-family: var(--font-mono); font-weight: 600;">\${l.phone}</td>
+              <td>\${l.client_name || '<span style="color: var(--text-dim);">Desconocido</span>'}</td>
+              <td><span class="badge \${l.direction === 'IN' ? 'badge-info' : 'badge-purple'}">\${l.direction === 'IN' ? 'Entrante' : 'Saliente'}</span></td>
+              <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">\${escapeHtml(l.message)}</td>
+            </tr>
+          \`).join('');
         } else {
-          showToast('Error: ' + data.error, true);
+          tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-dim);">Sin registros recientes.</td></tr>';
         }
       } catch (err) {
-        showToast('Error al actualizar ticket', true);
+        console.error('Error loading dashboard:', err);
       }
     }
 
-    async function toggleBotPauseAction(phone, pause) {
+    async function loadDashboardBadgeCounters() {
       try {
-        const res = await fetch('/api/sessions/' + phone + '/toggle-pause', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pause: pause, minutes: 60 })
-        });
-        const data = await res.json();
-        if (data.success) {
-          showToast(data.message);
-          loadTickets();
+        const [ticketStats, ipamRes] = await Promise.all([
+          apiFetch('/api/tickets/stats').catch(() => ({ stats: { abiertos: 0 } })),
+          apiFetch('/api/smartolt/unconfigured').catch(() => ({ count: 0 })),
+        ]);
+
+        const openCount = ticketStats.stats?.abiertos || 0;
+        const bTicket = document.getElementById('badge-tickets-open');
+        if (openCount > 0) {
+          bTicket.innerText = openCount;
+          bTicket.style.display = 'inline-block';
         } else {
-          showToast('Error: ' + data.error, true);
+          bTicket.style.display = 'none';
         }
-      } catch (err) {
-        showToast('Error al modificar estado del bot', true);
-      }
-    }
 
-    async function loadSettings() {
-      try {
-        const res = await fetch('/api/settings');
-        const data = await res.json();
-        if (data.success && data.settings) {
-          const s = data.settings;
-          const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
-          setVal('evolutionUrl', s.evolutionUrl);
-          setVal('evolutionApiKey', s.evolutionApiKey);
-          setVal('evolutionInstanceName', s.evolutionInstanceName);
-          setVal('groqApiKey', s.groqApiKey);
-          setVal('groqModel', s.groqModel || 'openai/gpt-oss-20b');
-          setVal('wisphubUrl', s.wisphubUrl);
-          setVal('wisphubApiKey', s.wisphubApiKey);
-          setVal('smartoltUrl', s.smartoltUrl);
-          setVal('smartoltApiKey', s.smartoltApiKey);
-          setVal('ispName', s.ispName);
-          setVal('soporteHumanoPhone', s.soporteHumanoPhone);
-          setVal('paymentBank', s.paymentBank);
-          setVal('paymentAccount', s.paymentAccount);
-          setVal('paymentBeneficiary', s.paymentBeneficiary);
-          setVal('paymentNotes', s.paymentNotes);
-          setVal('paymentMercadopagoUrl', s.paymentMercadopagoUrl);
-          setVal('mercadopagoAccessToken', s.mercadopagoAccessToken);
-          setVal('workHoursStart', s.workHoursStart || '09:00');
-          setVal('workHoursEnd', s.workHoursEnd || '18:00');
-          const headerEl = document.getElementById('headerIspName');
-          if (headerEl) headerEl.innerText = s.ispName || 'CloudWareMx';
-        }
-      } catch (err) {
-        console.error('Error cargando settings:', err);
-      }
-    }
-
-    async function saveSettings() {
-      const getVal = (id) => { const el = document.getElementById(id); return el ? el.value : ''; };
-      const payload = {
-        EVOLUTION_URL: getVal('evolutionUrl'),
-        EVOLUTION_API_KEY: getVal('evolutionApiKey'),
-        INSTANCE_NAME: getVal('evolutionInstanceName'),
-        GROQ_API_KEY: getVal('groqApiKey'),
-        GROQ_MODEL: getVal('groqModel'),
-        WISPHUB_API_URL: getVal('wisphubUrl'),
-        WISPHUB_API_KEY: getVal('wisphubApiKey'),
-        SMARTOLT_API_URL: getVal('smartoltUrl'),
-        SMARTOLT_API_KEY: getVal('smartoltApiKey'),
-        ISP_NAME: getVal('ispName'),
-        SOPORTE_HUMANO_PHONE: getVal('soporteHumanoPhone'),
-        PAYMENT_BANK: getVal('paymentBank'),
-        PAYMENT_ACCOUNT: getVal('paymentAccount'),
-        PAYMENT_BENEFICIARY: getVal('paymentBeneficiary'),
-        PAYMENT_NOTES: getVal('paymentNotes'),
-        PAYMENT_MERCADOPAGO_URL: getVal('paymentMercadopagoUrl'),
-        MERCADOPAGO_ACCESS_TOKEN: getVal('mercadopagoAccessToken'),
-        WORK_HOURS_START: getVal('workHoursStart'),
-        WORK_HOURS_END: getVal('workHoursEnd'),
-      };
-
-      try {
-        const res = await fetch('/api/settings', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ settings: payload })
-        });
-        const data = await res.json();
-        if (data.success) {
-          showToast('✅ ¡Configuraciones guardadas en Turso DB!');
-          document.getElementById('headerIspName').innerText = payload.ISP_NAME || 'CloudWareMx';
+        const unconfCount = ipamRes.count || 0;
+        const bIpam = document.getElementById('badge-unconfigured-onus');
+        if (unconfCount > 0) {
+          bIpam.innerText = unconfCount;
+          bIpam.style.display = 'inline-block';
         } else {
-          showToast('Error: ' + data.error, true);
+          bIpam.style.display = 'none';
         }
-      } catch (err) {
-        showToast('Fallo al conectar con el servidor', true);
-      }
+      } catch {}
     }
 
-    async function generateSuperKey() {
+    async function testServiceConnection(service) {
+      showToast('Comprobando...', \`Verificando conexión con \${service.toUpperCase()}...\`, 'info', 2000);
       try {
-        const res = await fetch('/api/settings/generate-evolution-key', { method: 'POST' });
-        const data = await res.json();
-        if (data.success && data.masterKey) {
-          document.getElementById('evolutionApiKey').value = data.masterKey;
-          showToast('⚡ Súper Clave Secreta Generada con Éxito');
-        }
-      } catch (err) {
-        showToast('Error al generar clave', true);
-      }
-    }
-
-    async function testService(service) {
-      showToast('Probando ' + service + '...');
-      try {
-        const res = await fetch('/api/test/' + service, { method: 'POST' });
-        const data = await res.json();
-        if (data.success) {
-          showToast('✅ ' + data.message);
+        const res = await apiFetch('/api/test/' + service, { method: 'POST' });
+        if (res.success) {
+          showToast('Conexión Exitosa', res.message || \`\${service} operativo.\`, 'success');
         } else {
-          showToast('⚠️ ' + (data.error || 'Fallo de prueba'), true);
+          showToast('Fallo de Conexión', res.error || 'No respondió el servicio', 'error');
         }
       } catch (err) {
-        showToast('Error de conexión', true);
+        showToast('Error de Red', err.message || 'Error al conectar', 'error');
       }
     }
 
-    async function loadSessions() {
-      const tbody = document.getElementById('sessionsTableBody');
+    async function triggerSmartOltSync(force = false) {
+      showToast('Sincronizando', 'Consultando ONUs en SmartOLT...', 'info');
       try {
-        const res = await fetch('/api/sessions');
-        const data = await res.json();
-        if (data.success && data.sessions) {
-          if (data.sessions.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding: 24px; color: var(--text-muted);">No hay sesiones activas. La base de datos está limpia.</td></tr>';
-            return;
-          }
-
-          tbody.innerHTML = data.sessions.map(s => {
-            const clientText = s.client_name ? s.client_name : '<em style="color:var(--text-muted)">Sin identificar</em>';
-            const optOutBadge = s.opt_out === 1 ? '<span class="pill pill-red">Dado de Baja</span>' : '<span class="pill pill-green">Activo</span>';
-            const dateStr = s.last_interaction ? new Date(s.last_interaction).toLocaleString('es-MX') : '-';
-            const deleteBtn = '<button class="btn btn-test" style="background: rgba(239, 68, 68, 0.12); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.25); padding: 3px 8px; font-size: 11px;" onclick="deleteSessionAction(&quot;' + s.phone + '&quot;)">🗑️ Borrar</button>';
-            return '<tr>' +
-              '<td style="font-family: var(--font-mono); font-weight: 600;">' + s.phone + '</td>' +
-              '<td>' + clientText + '</td>' +
-              '<td><span class="pill pill-blue">' + (s.step || '-') + '</span></td>' +
-              '<td>' + (s.onu_id || '-') + '</td>' +
-              '<td>' + optOutBadge + '</td>' +
-              '<td style="color: var(--text-muted); font-size: 12px;">' + dateStr + '</td>' +
-              '<td>' + deleteBtn + '</td>' +
-            '</tr>';
-          }).join('');
-        }
-      } catch (err) {
-        tbody.innerHTML = '<tr><td colspan="7" style="color: red; text-align:center;">Error al cargar sesiones</td></tr>';
-      }
-    }
-
-    async function clearAllSessionsAction() {
-      if (!confirm('¿Estás seguro de que deseas vaciar todas las sesiones de clientes en Turso? Los usuarios empezarán desde cero en su próximo mensaje.')) return;
-      try {
-        const res = await fetch('/api/sessions/clear-all', { method: 'POST' });
-        const data = await res.json();
-        if (data.success) {
-          showToast('✅ ' + data.message);
-          loadSessions();
+        const res = await apiFetch('/api/smartolt/sync', { method: 'POST', body: JSON.stringify({ force }) });
+        if (res.success) {
+          showToast('Sincronización Completada', \`\${res.count} ONUs procesadas en Turso DB.\`, 'success');
+          loadDashboardData();
         } else {
-          showToast('Error: ' + data.error, true);
+          showToast('Error', res.message || 'Error al sincronizar', 'error');
         }
       } catch (err) {
-        showToast('Error al vaciar sesiones', true);
+        showToast('Error', err.message, 'error');
       }
     }
 
-    async function deleteSessionAction(phone) {
-      if (!confirm('¿Eliminar la sesión del número ' + phone + '?')) return;
+    async function triggerWisphubSync() {
+      showToast('Sincronizando', 'Descargando clientes de WispHub API...', 'info');
       try {
-        const res = await fetch('/api/sessions/' + encodeURIComponent(phone), { method: 'DELETE' });
-        const data = await res.json();
-        if (data.success) {
-          showToast('✅ ' + data.message);
-          loadSessions();
+        const res = await apiFetch('/api/wisphub/sync', { method: 'POST' });
+        if (res.success) {
+          showToast('Sincronización Completada', res.message || 'Clientes sincronizados.', 'success');
+          loadDashboardData();
         } else {
-          showToast('Error: ' + data.error, true);
+          showToast('Error', res.error || 'Error al sincronizar WispHub', 'error');
         }
       } catch (err) {
-        showToast('Error al eliminar sesión', true);
-      }
-    }
-
-    async function clearAllLogsAction() {
-      if (!confirm('¿Estás seguro de que deseas vaciar todo el historial de mensajes de prueba de Turso DB?')) return;
-      try {
-        const res = await fetch('/api/logs/clear-all', { method: 'POST' });
-        const data = await res.json();
-        if (data.success) {
-          showToast('✅ ' + data.message);
-          loadLogs();
-        } else {
-          showToast('Error: ' + data.error, true);
-        }
-      } catch (err) {
-        showToast('Error al vaciar historial', true);
-      }
-    }
-
-    async function clearAllTicketsAction() {
-      if (!confirm('¿Estás seguro de que deseas vaciar todos los tickets de prueba registrados?')) return;
-      try {
-        const res = await fetch('/api/tickets/clear-all', { method: 'POST' });
-        const data = await res.json();
-        if (data.success) {
-          showToast('✅ ' + data.message);
-          loadTickets();
-        } else {
-          showToast('Error: ' + data.error, true);
-        }
-      } catch (err) {
-        showToast('Error al vaciar tickets', true);
-      }
-    }
-
-    async function loadLogs() {
-      const tbody = document.getElementById('logsTableBody');
-      try {
-        const res = await fetch('/api/logs?limit=50');
-        const data = await res.json();
-        if (data.success && data.logs) {
-          if (data.logs.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding: 24px;">No hay mensajes registrados aún en Turso DB.</td></tr>';
-            return;
-          }
-
-          tbody.innerHTML = data.logs.map(l => {
-            const isIncoming = l.direction === 'IN';
-            const badgeType = isIncoming ? '<span class="pill pill-blue">📥 Entrante</span>' : '<span class="pill pill-green">📤 Saliente</span>';
-            const intentBadge = l.intent ? '<span class="pill pill-blue">' + l.intent + '</span>' : '<span style="color:var(--text-muted); font-size:12px;">-</span>';
-            const actionBadge = l.action_taken ? '<span style="font-family:var(--font-mono); font-size:11px; color:#38bdf8;">' + l.action_taken + '</span>' : '<span style="color:var(--text-muted); font-size:12px;">-</span>';
-            const dateStr = l.created_at ? new Date(l.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '-';
-            return '<tr>' +
-              '<td style="color: var(--text-muted); font-size: 12px; white-space: nowrap;">' + dateStr + '</td>' +
-              '<td style="font-family: var(--font-mono); font-weight: 600;">' + l.phone + '</td>' +
-              '<td>' + (l.client_name || '<em style="color:var(--text-muted)">-</em>') + '</td>' +
-              '<td>' + badgeType + '</td>' +
-              '<td>' + intentBadge + '</td>' +
-              '<td style="max-width: 300px; word-break: break-word; font-size: 13px;">' + (l.message || '') + '</td>' +
-              '<td>' + actionBadge + '</td>' +
-            '</tr>';
-          }).join('');
-        }
-      } catch (err) {
-        tbody.innerHTML = '<tr><td colspan="7" style="color: red; text-align:center;">Error al cargar historial</td></tr>';
-      }
-    }
-
-    function fillSim(text) {
-      document.getElementById('simMessage').value = text;
-    }
-
-    async function runSimulation() {
-      const phone = document.getElementById('simPhone').value;
-      const text = document.getElementById('simMessage').value;
-      const out = document.getElementById('simResponse');
-
-      if (!text) return;
-
-      out.innerText = 'Enviando al webhook...';
-
-      const payload = {
-        event: 'messages.upsert',
-        data: {
-          key: { remoteJid: phone + '@s.whatsapp.net', fromMe: false, id: 'SIM_' + Date.now() },
-          pushName: 'Usuario Simulado',
-          message: { conversation: text }
-        }
-      };
-
-      try {
-        const res = await fetch('/webhook', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-        const resJson = await res.json();
-        out.innerText = 'Webhook recibido por el servidor:\\n' + JSON.stringify(resJson, null, 2) + '\\n\\nEl bot ha procesado el mensaje de forma asíncrona.';
-      } catch (err) {
-        out.innerText = 'Error: ' + err.message;
-      }
-    }
-
-    async function loadSmartOltStats() {
-      const el = document.getElementById('oltStatsText');
-      if (!el) return;
-      try {
-        const res = await fetch('/api/smartolt/stats');
-        const data = await res.json();
-        if (data.success && data.stats) {
-          const count = data.stats.count || 0;
-          const last = data.stats.lastSync ? new Date(data.stats.lastSync).toLocaleString('es-MX') : 'Nunca';
-          el.innerHTML = '<strong style="color:var(--cyan);">' + count + ' ONUs registradas</strong> (Último sync: ' + last + ')';
-        } else {
-          el.innerText = 'Sin registros sincronizados aún.';
-        }
-      } catch (e) {
-        el.innerText = 'No se pudo obtener el estado.';
-      }
-    }
-
-    async function syncSmartOlt() {
-      const btn = document.getElementById('btnSyncOlt');
-      const el = document.getElementById('oltStatsText');
-      if (btn) {
-        btn.disabled = true;
-        btn.innerText = '⏳ Sincronizando...';
-      }
-      if (el) el.innerText = 'Descargando ONUs desde SmartOLT...';
-
-      try {
-        const res = await fetch('/api/smartolt/sync', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ force: false })
-        });
-        const data = await res.json();
-        if (data.success) {
-          alert('✅ ' + data.message);
-        } else {
-          alert('⚠️ ' + data.message);
-        }
-        await loadSmartOltStats();
-      } catch (err) {
-        alert('❌ Error al conectar con el servidor: ' + err.message);
-      } finally {
-        if (btn) {
-          btn.disabled = false;
-          btn.innerText = '🔄 Sincronizar con Turso DB';
-        }
+        showToast('Error', err.message, 'error');
       }
     }
 
     // ==========================================
-    // MÓDULO DE AUDITORÍA DE CRUCE DE IPS
+    // MODULE 2: LIVE WHATSAPP CHAT
     // ==========================================
-    let currentAuditPage = 1;
-    let currentAuditFilter = 'all';
-    let currentAuditSearch = '';
-    let auditSearchDebounce = null;
-    let totalAuditPages = 1;
-
-    function setAuditFilter(filterType) {
-      currentAuditFilter = filterType;
-      document.querySelectorAll('#auditFilterButtons button').forEach(b => {
-        b.style.borderColor = '';
-        b.style.boxShadow = '';
-      });
-      const activeBtn = document.getElementById('filterBtn-' + filterType);
-      if (activeBtn) {
-        activeBtn.style.borderColor = 'var(--primary)';
-        activeBtn.style.boxShadow = '0 0 0 2px var(--primary-glow)';
-      }
-      loadAuditData(1);
-    }
-
-    function onAuditSearchChange() {
-      clearTimeout(auditSearchDebounce);
-      auditSearchDebounce = setTimeout(() => {
-        currentAuditSearch = (document.getElementById('auditSearchInput').value || '').trim();
-        loadAuditData(1);
-      }, 300);
-    }
-
-    function changeAuditPage(delta) {
-      const target = currentAuditPage + delta;
-      if (target >= 1 && target <= totalAuditPages) {
-        loadAuditData(target);
-      }
-    }
-
-    async function loadAuditData(page = 1) {
-      currentAuditPage = page;
-      const tbody = document.getElementById('auditTableBody');
-      if (!tbody) return;
-
-      tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 30px;">⏳ Consultando cruce de IPs en Turso DB...</td></tr>';
-
+    async function loadLiveChatData(reselect = true) {
       try {
-        const queryParams = new URLSearchParams({
-          filter: currentAuditFilter,
-          search: currentAuditSearch,
-          page: String(currentAuditPage),
-          limit: '50',
-        });
+        const res = await apiFetch('/api/admin/chats');
+        state.chats = res.conversations || [];
+        renderChatThreads(state.chats);
 
-        const res = await fetch('/api/audit/ip-cross?' + queryParams.toString());
-        const data = await res.json();
-
-        if (!data.success) {
-          tbody.innerHTML = '<tr><td colspan="8" style="color: #f87171; text-align: center; padding: 24px;">❌ Error: ' + (data.error || 'No se pudo cargar la auditoría') + '</td></tr>';
-          return;
-        }
-
-        // Actualizar contadores KPI
-        if (data.summary) {
-          document.getElementById('statMismatches').innerText = data.summary.mismatches || 0;
-          document.getElementById('statMatches').innerText = data.summary.matches || 0;
-          document.getElementById('statTotalOlt').innerText = data.summary.totalSmartOlt || 0;
-          document.getElementById('statTotalWh').innerText = data.summary.totalWisphub || 0;
-          document.getElementById('statNoIp').innerText = data.summary.noIp || 0;
-        }
-
-        totalAuditPages = data.totalPages || 1;
-        document.getElementById('auditPageIndicator').innerText = 'Pág ' + data.page + ' / ' + totalAuditPages;
-        document.getElementById('auditPaginationInfo').innerText = 'Mostrando ' + data.items.length + ' de ' + data.total + ' registros (Filtro: ' + currentAuditFilter + ')';
-        document.getElementById('btnAuditPrev').disabled = currentAuditPage <= 1;
-        document.getElementById('btnAuditNext').disabled = currentAuditPage >= totalAuditPages;
-
-        if (!data.items || data.items.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 30px;">No se encontraron registros con los criterios actuales.</td></tr>';
-          return;
-        }
-
-        tbody.innerHTML = data.items.map(item => {
-          let statusBadge = '';
-          let rowBg = '';
-          if (item.ip_status === 'MISMATCH') {
-            statusBadge = '<span class="pill pill-red" style="font-weight: 700; font-size: 11px;">🔴 IP DIFERENTE</span>';
-            rowBg = 'background: rgba(239, 68, 68, 0.05);';
-          } else if (item.ip_status === 'MATCH') {
-            statusBadge = '<span class="pill pill-green">🟢 IP COINCIDE</span>';
-          } else if (item.ip_status === 'NO_IP') {
-            statusBadge = '<span class="pill pill-amber">⚠️ SIN IP</span>';
-          } else if (item.ip_status === 'ONLY_SMARTOLT') {
-            statusBadge = '<span class="pill pill-blue">📡 SOLO EN SMARTOLT</span>';
-          } else if (item.ip_status === 'ONLY_WISPHUB') {
-            statusBadge = '<span class="pill pill-purple">🏢 SOLO EN WISPHUB</span>';
-          }
-
-          const whIpText = item.wisphub_ip 
-            ? '<span style="font-family: var(--font-mono); font-weight: 600; color: #60a5fa;">' + item.wisphub_ip + '</span>' 
-            : '<span style="color: var(--text-muted); font-size: 11px;">-</span>';
-
-          const oltIpText = item.smartolt_ip 
-            ? '<span style="font-family: var(--font-mono); font-weight: 600; color: #22d3ee;">' + item.smartolt_ip + '</span>' 
-            : '<span style="color: var(--text-muted); font-size: 11px;">-</span>';
-
-          const whEstadoBadge = item.wisphub_estado
-            ? '<span class="pill ' + (item.wisphub_estado.toLowerCase() === 'activo' ? 'pill-green' : 'pill-red') + '">' + item.wisphub_estado + '</span>'
-            : '<span style="color: var(--text-muted); font-size: 11px;">-</span>';
-
-          const clientFull = '<strong>' + (item.cliente || '-') + '</strong><br><small style="color: var(--text-muted);">' + (item.servicio || '') + '</small>';
-
-          return '<tr style="' + rowBg + '">' +
-            '<td style="font-family: var(--font-mono); font-weight: 700; color: #f9fafb;">' + (item.folio || '-') + '</td>' +
-            '<td>' + clientFull + '</td>' +
-            '<td>' + whIpText + '</td>' +
-            '<td>' + oltIpText + '</td>' +
-            '<td>' + statusBadge + '</td>' +
-            '<td>' + whEstadoBadge + '</td>' +
-            '<td style="font-size: 12px; color: var(--text-muted);">' + (item.zona_o_router || '-') + '</td>' +
-            '<td style="font-family: var(--font-mono); font-size: 11px;">' + (item.sn_smartolt || item.sn_wisphub || '-') + '</td>' +
-          '</tr>';
-        }).join('');
-
-      } catch (err) {
-        tbody.innerHTML = '<tr><td colspan="8" style="color: #f87171; text-align: center; padding: 24px;">❌ Error de conexión al servidor: ' + err.message + '</td></tr>';
-      }
-    }
-
-    async function loadWisphubStats() {
-      const el = document.getElementById('whStatsText');
-      if (!el) return;
-      try {
-        const res = await fetch('/api/wisphub/stats');
-        const data = await res.json();
-        if (data.success && data.stats) {
-          const count = data.stats.count || 0;
-          const last = data.stats.lastSync ? new Date(data.stats.lastSync).toLocaleString('es-MX') : 'Nunca';
-          el.innerHTML = '<strong style="color: #818cf8;">' + count + ' clientes registrados</strong> (Último sync: ' + last + ')';
-        } else {
-          el.innerText = 'Sin registros sincronizados aún.';
-        }
-      } catch (e) {
-        el.innerText = 'No se pudo obtener el estado.';
-      }
-    }
-
-    async function syncWisphubAction() {
-      const btnTab1 = document.getElementById('btnSyncWh');
-      const btnAudit = document.getElementById('btnSyncAuditWh');
-      const el = document.getElementById('whStatsText');
-
-      if (btnTab1) { btnTab1.disabled = true; btnTab1.innerText = '⏳ Sincronizando...'; }
-      if (btnAudit) { btnAudit.disabled = true; btnAudit.innerText = '⏳ Sincronizando...'; }
-      if (el) el.innerText = 'Descargando clientes desde WispHub API (Paginado)...';
-
-      try {
-        const res = await fetch('/api/wisphub/sync', { method: 'POST' });
-        const data = await res.json();
-        if (data.success) {
-          showToast('✅ ' + data.message);
-          loadWisphubStats();
-          loadAuditData(currentAuditPage);
-        } else {
-          showToast('❌ Error: ' + (data.error || data.message), true);
+        if (reselect && state.chats.length > 0 && !state.activeChatPhone) {
+          selectChat(state.chats[0].phone);
         }
       } catch (err) {
-        showToast('❌ Error al conectar: ' + err.message, true);
-      } finally {
-        if (btnTab1) { btnTab1.disabled = false; btnTab1.innerText = '🔄 Sincronizar con Turso DB'; }
-        if (btnAudit) { btnAudit.disabled = false; btnAudit.innerText = '📥 Sincronizar WispHub'; }
+        console.error('Error loading chats:', err);
       }
     }
 
-    let allIpamAvailable = [];
-
-    async function loadIpamData() {
-      await Promise.all([loadIpamPools(), loadIpamAvailable(), loadUnconfiguredOnus()]);
-    }
-
-    async function loadIpamPools() {
-      const container = document.getElementById('ipamPoolsContainer');
-      try {
-        const res = await fetch('/api/ipam/pools');
-        const data = await res.json();
-        if (data.success && data.pools) {
-          let totalUsable = 0;
-          let totalUsed = 0;
-          let totalAvailable = 0;
-
-          container.innerHTML = data.pools.map(p => {
-            totalUsable += p.totalUsable;
-            totalUsed += p.usedCount;
-            totalAvailable += p.availableCount;
-
-            const isSanAgustin = p.vlan === '800';
-            const badgeColor = isSanAgustin ? '#c084fc' : '#38bdf8';
-            const barColor = p.usagePercent > 80 ? '#ef4444' : p.usagePercent > 50 ? '#f59e0b' : '#10b981';
-
-            return '<div style="background: rgba(0,0,0,0.3); border: 1px solid var(--card-border); border-radius: 10px; padding: 14px; position: relative; overflow: hidden;">' +
-              '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">' +
-                '<span style="font-weight: 700; font-size: 14px; color: ' + badgeColor + ';">VLAN ' + p.vlan + '</span>' +
-                '<span style="font-size: 11px; font-family: var(--font-mono); color: var(--text-muted);">' + p.segment + '</span>' +
-              '</div>' +
-              '<div style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">' + p.oltName + ' | GW: ' + p.gateway + '</div>' +
-              '<div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px;">' +
-                '<span style="color: #34d399; font-weight: 600;">' + p.availableCount + ' libres</span>' +
-                '<span style="color: var(--text-muted);">' + p.usedCount + ' / ' + p.totalUsable + ' (' + p.usagePercent + '%)</span>' +
-              '</div>' +
-              '<div style="width: 100%; height: 6px; background: rgba(255,255,255,0.08); border-radius: 999px; overflow: hidden;">' +
-                '<div style="width: ' + p.usagePercent + '%; height: 100%; background: ' + barColor + '; border-radius: 999px;"></div>' +
-              '</div>' +
-            '</div>';
-          }).join('');
-
-          const globalPercent = totalUsable > 0 ? Math.round((totalUsed / totalUsable) * 100) : 0;
-          document.getElementById('statIpamAvailable').innerText = totalAvailable;
-          document.getElementById('statIpamUsed').innerText = totalUsed;
-          document.getElementById('statIpamTotal').innerText = totalUsable;
-          document.getElementById('statIpamPercent').innerText = globalPercent + '%';
-        }
-      } catch (err) {
-        if (container) container.innerHTML = '<div style="color: #f87171;">Error al cargar pools de IPAM</div>';
-      }
-    }
-
-    async function loadIpamAvailable() {
-      const tbody = document.getElementById('ipamTableBody');
-      try {
-        const res = await fetch('/api/ipam/available');
-        const data = await res.json();
-        if (data.success && data.available) {
-          allIpamAvailable = data.available;
-          renderIpamTable(allIpamAvailable);
-        }
-      } catch (err) {
-        if (tbody) tbody.innerHTML = '<tr><td colspan="8" style="color: #f87171; text-align: center;">Error al cargar IPs disponibles</td></tr>';
-      }
-    }
-
-    function filterIpamAvailable() {
-      const vlanFilter = document.getElementById('ipamVlanSelect')?.value || '';
-      const search = (document.getElementById('ipamSearchInput')?.value || '').toLowerCase().trim();
-
-      const filtered = allIpamAvailable.filter(item => {
-        const matchVlan = !vlanFilter || item.vlan === vlanFilter;
-        const matchSearch = !search || item.ip.toLowerCase().includes(search) || item.vlan.includes(search) || item.gateway.includes(search);
-        return matchVlan && matchSearch;
-      });
-
-      renderIpamTable(filtered);
-    }
-
-    function renderIpamTable(items) {
-      const tbody = document.getElementById('ipamTableBody');
-      const countInfo = document.getElementById('ipamCountInfo');
-      if (!tbody) return;
-
-      if (countInfo) countInfo.innerText = 'Mostrando ' + items.length + ' IPs libres';
-
-      if (items.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 24px;">No se encontraron IPs disponibles para este filtro.</td></tr>';
+    function renderChatThreads(list) {
+      const container = document.getElementById('chat-threads-container');
+      if (!list || list.length === 0) {
+        container.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-dim); font-size: 13px;">Sin conversaciones activas.</div>';
         return;
       }
 
-      const displayItems = items.slice(0, 150);
-      tbody.innerHTML = displayItems.map((item, idx) => {
-        return '<tr>' +
-          '<td style="color: var(--text-muted); font-family: var(--font-mono);">' + (idx + 1) + '</td>' +
-          '<td style="font-family: var(--font-mono); font-weight: 700; color: #34d399; font-size: 14px;">' + item.ip + '</td>' +
-          '<td><span class="pill pill-blue">VLAN ' + item.vlan + '</span></td>' +
-          '<td style="font-family: var(--font-mono); color: var(--text-muted); font-size: 12px;">' + item.gateway + '</td>' +
-          '<td style="font-family: var(--font-mono); color: var(--text-muted); font-size: 12px;">' + item.segment + '</td>' +
-          '<td style="font-size: 12px;">' + item.olt + '</td>' +
-          '<td><span class="pill pill-green">🟢 Disponible</span></td>' +
-          '<td style="text-align: right;">' +
-            '<button class="btn btn-secondary btn-test" onclick="copyIpToClipboard(&quot;' + item.ip + '&quot;)" style="padding: 4px 10px; font-size: 11px;">📋 Copiar IP</button>' +
-          '</td>' +
-        '</tr>';
+      container.innerHTML = list.map(c => {
+        const isActive = c.phone === state.activeChatPhone ? 'active' : '';
+        const name = c.client_name || c.phone;
+        const initials = name.substring(0, 2).toUpperCase();
+        return \`
+          <div class="chat-thread-item \${isActive}" onclick="selectChat('\${c.phone}')">
+            <div class="thread-avatar">\${initials}</div>
+            <div class="thread-content">
+              <div class="thread-top">
+                <span class="thread-name">\${escapeHtml(name)}</span>
+                <span class="thread-time">\${formatShortTime(c.last_interaction)}</span>
+              </div>
+              <div class="thread-preview">\${escapeHtml(c.last_message || '')}</div>
+              <span class="badge \${c.is_human_paused ? 'badge-warning' : 'badge-info'} thread-status-tag">
+                \${c.is_human_paused ? '⏸️ Humano' : '🤖 Bot'}
+              </span>
+            </div>
+          </div>
+        \`;
       }).join('');
     }
 
-    function copyIpToClipboard(text) {
-      navigator.clipboard.writeText(text).then(() => {
-        showToast('📋 IP ' + text + ' copiada al portapapeles');
-      }).catch(() => {
-        showToast('IP: ' + text);
-      });
+    function filterChatThreads(q) {
+      const term = q.toLowerCase();
+      const filtered = state.chats.filter(c => 
+        (c.client_name && c.client_name.toLowerCase().includes(term)) ||
+        c.phone.includes(term) ||
+        (c.last_message && c.last_message.toLowerCase().includes(term))
+      );
+      renderChatThreads(filtered);
     }
 
-    async function loadUnconfiguredOnus() {
-      const tbody = document.getElementById('unconfiguredTableBody');
-      if (!tbody) return;
-      tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 20px;">⏳ Consultando SmartOLT en tiempo real...</td></tr>';
-      try {
-        const res = await fetch('/api/smartolt/unconfigured');
-        const data = await res.json();
-        if (data.success && data.unconfigured) {
-          if (data.unconfigured.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #34d399; padding: 20px;">✅ No hay ONUs pendientes por autorizar en este momento.</td></tr>';
-            return;
-          }
+    async function selectChat(phone) {
+      state.activeChatPhone = phone;
+      renderChatThreads(state.chats);
 
-          tbody.innerHTML = data.unconfigured.map(onu => {
-            const snSuffix = onu.sn.length >= 6 ? onu.sn.slice(-6) : onu.sn;
-            return '<tr>' +
-              '<td style="font-family: var(--font-mono); font-weight: 600;">' + onu.sn + '</td>' +
-              '<td style="font-family: var(--font-mono); font-weight: 700; color: #38bdf8; font-size: 14px;">' + snSuffix + '</td>' +
-              '<td>' + (onu.olt_name || onu.olt_id) + '</td>' +
-              '<td style="font-family: var(--font-mono); font-size: 12px;">Tarjeta ' + onu.board + ' / PON ' + onu.port + '</td>' +
-              '<td>' + (onu.onu_type_name || onu.onu_type || '-') + '</td>' +
-              '<td style="color: #34d399; font-family: var(--font-mono);">' + (onu.onu_signal_1490 || onu.onu_signal || 'Detectada') + '</td>' +
-              '<td><span class="pill pill-amber">Pendiente</span></td>' +
-            '</tr>';
-          }).join('');
-        }
+      document.getElementById('chat-empty-state').style.display = 'none';
+      document.getElementById('chat-active-header').style.display = 'flex';
+      document.getElementById('chat-messages-wrap').style.display = 'flex';
+      document.getElementById('chat-input-container').style.display = 'flex';
+
+      const chat = state.chats.find(c => c.phone === phone);
+      document.getElementById('active-chat-name').innerText = chat?.client_name || phone;
+      document.getElementById('active-chat-phone').innerText = phone;
+      document.getElementById('active-chat-avatar').innerText = (chat?.client_name || phone).substring(0, 2).toUpperCase();
+
+      updateTakeoverButton(chat?.is_human_paused);
+
+      try {
+        const res = await apiFetch(\`/api/admin/chats/\${encodeURIComponent(phone)}/messages\`);
+        renderChatMessages(res.messages || []);
       } catch (err) {
-        tbody.innerHTML = '<tr><td colspan="7" style="color: #f87171; text-align: center;">Error al consultar ONUs sin configurar</td></tr>';
+        showToast('Error', 'No se pudieron cargar los mensajes', 'error');
       }
     }
 
-    // ==========================================
-    // MÓDULO DE GESTIÓN DE TÉCNICOS Y PINS (TIEMPO REAL)
-    // ==========================================
-    let allTechnicians = [];
-
-    function updateTechniciansKpi() {
-      const total = allTechnicians.length;
-      const active = allTechnicians.filter(t => t.is_active === 1).length;
-      const elTotal = document.getElementById('statTotalTechs');
-      const elActive = document.getElementById('statActiveTechs');
-      if (elTotal) elTotal.innerText = total;
-      if (elActive) elActive.innerText = active;
-    }
-
-    function renderTechniciansTable() {
-      const tbody = document.getElementById('techniciansTableBody');
-      if (!tbody) return;
-
-      updateTechniciansKpi();
-
-      if (allTechnicians.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 30px;">' +
-          'No hay técnicos registrados aún.<br>' +
-          '<button class="btn btn-primary" onclick="openTechnicianModal()" style="margin-top: 10px; font-size: 12px;">➕ Registrar Primer Técnico</button>' +
-        '</td></tr>';
+    function renderChatMessages(messages) {
+      const wrap = document.getElementById('chat-messages-wrap');
+      if (!messages || messages.length === 0) {
+        wrap.innerHTML = '<div style="text-align: center; color: var(--text-dim); margin-top: 40px;">No hay mensajes registrados con este cliente.</div>';
         return;
       }
 
-      tbody.innerHTML = allTechnicians.map(t => {
-        const dateStr = t.created_at ? new Date(t.created_at).toLocaleDateString('es-MX', { year: 'numeric', month: 'short', day: 'numeric' }) : '-';
-        const isActive = t.is_active === 1;
-
-        const cleanPhone = t.phone.replace(/\D/g, '');
-        const waLink = '<a href="https://wa.me/' + cleanPhone + '" target="_blank" style="color: #60a5fa; text-decoration: none; font-family: var(--font-mono); font-weight: 600;">' + t.phone + ' ↗</a>';
-
-        const pinDisplay = '<span style="font-family: var(--font-mono); font-size: 15px; font-weight: 700; color: #fbbf24; background: rgba(245, 158, 11, 0.12); padding: 2px 8px; border-radius: 6px; letter-spacing: 2px;">' + t.pin + '</span> ' +
-          '<button type="button" onclick="copyPinToClipboard(&quot;' + t.pin + '&quot;)" style="background: transparent; border: none; cursor: pointer; font-size: 13px; color: var(--text-muted);" title="Copiar PIN">📋</button>';
-
-        const notesText = t.notes ? '<br><small style="color: var(--text-muted);">' + t.notes + '</small>' : '';
-
-        // Switch interactivo en tiempo real estilo iOS
-        const switchHtml = '<label class="switch" title="Clic para activar o desactivar en tiempo real">' +
-          '<input type="checkbox" ' + (isActive ? 'checked' : '') + ' onchange="toggleTechnicianRealtime(' + t.id + ', this)">' +
-          '<span class="slider"></span>' +
-          '<span id="techStatusText-' + t.id + '" style="font-size: 12px; font-weight: 600; color: ' + (isActive ? '#34d399' : '#f87171') + ';">' +
-            (isActive ? 'Activo' : 'Inactivo') +
-          '</span>' +
-        '</label>';
-
-        return '<tr id="techRow-' + t.id + '">' +
-          '<td style="color: var(--text-muted); font-family: var(--font-mono);">' + t.id + '</td>' +
-          '<td style="font-weight: 700; color: #f9fafb;">' + t.name + notesText + '</td>' +
-          '<td>' + waLink + '</td>' +
-          '<td>' + pinDisplay + '</td>' +
-          '<td>' + switchHtml + '</td>' +
-          '<td><span class="pill pill-blue">' + (t.role || 'TECNICO') + '</span></td>' +
-          '<td style="font-size: 12px; color: var(--text-muted);">' + dateStr + '</td>' +
-          '<td style="text-align: right; white-space: nowrap;">' +
-            '<button class="btn btn-secondary btn-test" onclick="editTechnicianAction(' + t.id + ')" style="padding: 4px 8px; font-size: 11px; margin-right: 4px;">✏️ Editar</button>' +
-            '<button class="btn btn-secondary btn-test" onclick="deleteTechnicianAction(' + t.id + ', &quot;' + t.name + '&quot;)" style="padding: 4px 8px; font-size: 11px; color: #f87171;">🗑️</button>' +
-          '</td>' +
-        '</tr>';
+      wrap.innerHTML = messages.map(m => {
+        const isOut = m.direction === 'OUT';
+        return \`
+          <div class="chat-bubble \${isOut ? 'out' : 'in'}">
+            <div>\${escapeHtml(m.message)}</div>
+            <div class="bubble-meta">
+              <span>\${formatShortTime(m.created_at)}</span>
+              \${isOut ? '<span>✓✓</span>' : ''}
+            </div>
+          </div>
+        \`;
       }).join('');
+
+      wrap.scrollTop = wrap.scrollHeight;
     }
 
-    async function loadTechnicians() {
-      const tbody = document.getElementById('techniciansTableBody');
-      if (!tbody) return;
-      tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--text-muted); padding: 24px;">⏳ Consultando técnicos en Turso DB...</td></tr>';
+    function appendChatMessage(data) {
+      const wrap = document.getElementById('chat-messages-wrap');
+      const isOut = data.direction === 'OUT';
+      const bubble = document.createElement('div');
+      bubble.className = 'chat-bubble ' + (isOut ? 'out' : 'in');
+      bubble.innerHTML = \`
+        <div>\${escapeHtml(data.message)}</div>
+        <div class="bubble-meta">
+          <span>\${formatShortTime(data.created_at || new Date().toISOString())}</span>
+          \${isOut ? '<span>✓✓</span>' : ''}
+        </div>
+      \`;
+      wrap.appendChild(bubble);
+      wrap.scrollTop = wrap.scrollHeight;
+    }
 
-      try {
-        const res = await fetch('/api/technicians');
-        const data = await res.json();
-
-        if (data.success && data.technicians) {
-          allTechnicians = data.technicians;
-          renderTechniciansTable();
-        }
-      } catch (err) {
-        tbody.innerHTML = '<tr><td colspan="8" style="color: #f87171; text-align: center; padding: 24px;">❌ Error al cargar técnicos desde Turso DB</td></tr>';
+    function handleChatInputKeyDown(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendActiveChatMessage();
       }
     }
 
-    async function toggleTechnicianRealtime(id, inputElem) {
-      const isChecked = inputElem.checked;
-      const statusText = document.getElementById('techStatusText-' + id);
-      const tech = allTechnicians.find(t => t.id === id);
+    async function sendActiveChatMessage() {
+      const input = document.getElementById('chat-text-input');
+      const text = input.value.trim();
+      if (!text || !state.activeChatPhone) return;
 
-      // 1. Actualización instantánea en pantalla (Zero lag)
-      if (statusText) {
-        statusText.innerText = isChecked ? 'Activo' : 'Inactivo';
-        statusText.style.color = isChecked ? '#34d399' : '#f87171';
-      }
-      if (tech) {
-        tech.is_active = isChecked ? 1 : 0;
-      }
-      updateTechniciansKpi();
+      input.value = '';
+      appendChatMessage({ message: text, direction: 'OUT' });
 
-      // 2. Guardar en Turso DB en segundo plano
       try {
-        const res = await fetch('/api/technicians/' + id + '/toggle', { method: 'POST' });
-        const data = await res.json();
-        if (data.success) {
-          showToast(isChecked ? '🟢 Técnico "' + (tech?.name || '') + '" activado en Turso' : '⏸️ Técnico "' + (tech?.name || '') + '" desactivado');
+        const res = await apiFetch('/api/admin/chats/send', {
+          method: 'POST',
+          body: JSON.stringify({
+            phone: state.activeChatPhone,
+            message: text,
+            autoPauseMinutes: 60,
+          }),
+        });
+
+        if (res.success) {
+          updateTakeoverButton(true);
         } else {
-          // Revertir si hubo error
-          inputElem.checked = !isChecked;
-          if (statusText) {
-            statusText.innerText = !isChecked ? 'Activo' : 'Inactivo';
-            statusText.style.color = !isChecked ? '#34d399' : '#f87171';
-          }
-          if (tech) tech.is_active = !isChecked ? 1 : 0;
-          updateTechniciansKpi();
-          showToast('❌ Error: ' + data.error, true);
+          showToast('Error', res.error || 'No se pudo enviar el mensaje', 'error');
         }
       } catch (err) {
-        // Revertir
-        inputElem.checked = !isChecked;
-        if (statusText) {
-          statusText.innerText = !isChecked ? 'Activo' : 'Inactivo';
-          statusText.style.color = !isChecked ? '#34d399' : '#f87171';
-        }
-        if (tech) tech.is_active = !isChecked ? 1 : 0;
-        updateTechniciansKpi();
-        showToast('❌ Error de conexión al servidor', true);
+        showToast('Error', err.message, 'error');
       }
     }
 
-    function generateRandomPin() {
-      const pin = Math.floor(10000 + Math.random() * 90000).toString();
-      document.getElementById('techPin').value = pin;
-    }
+    function updateTakeoverButton(isPaused) {
+      const ind = document.getElementById('takeover-status-indicator');
+      const btn = document.getElementById('btn-toggle-takeover');
 
-    function copyPinToClipboard(pin) {
-      navigator.clipboard.writeText(pin).then(() => {
-        showToast('📋 PIN ' + pin + ' copiado');
-      }).catch(() => {
-        showToast('PIN: ' + pin);
-      });
-    }
-
-    function openTechnicianModal(editData = null) {
-      const modal = document.getElementById('technicianModal');
-      const title = document.getElementById('modalTechTitle');
-      const techId = document.getElementById('techId');
-      const techName = document.getElementById('techName');
-      const techPhone = document.getElementById('techPhone');
-      const techPin = document.getElementById('techPin');
-      const techActive = document.getElementById('techActive');
-      const techNotes = document.getElementById('techNotes');
-
-      if (editData) {
-        title.innerText = '✏️ Editar Técnico';
-        techId.value = editData.id;
-        techName.value = editData.name || '';
-        techPhone.value = editData.phone || '';
-        techPin.value = editData.pin || '';
-        techActive.value = String(editData.is_active ?? 1);
-        techNotes.value = editData.notes || '';
+      if (isPaused) {
+        ind.className = 'badge badge-warning';
+        ind.innerText = '⏸️ Operador Humano';
+        btn.innerText = '▶️ Reactivar Bot';
+        btn.className = 'btn btn-success btn-sm';
       } else {
-        title.innerText = '➕ Registrar Nuevo Técnico';
-        techId.value = '';
-        techName.value = '';
-        techPhone.value = '';
-        generateRandomPin();
-        techActive.value = '1';
-        techNotes.value = '';
-      }
-
-      modal.style.display = 'flex';
-    }
-
-    function closeTechnicianModal() {
-      document.getElementById('technicianModal').style.display = 'none';
-    }
-
-    function editTechnicianAction(id) {
-      const tech = allTechnicians.find(t => t.id === id);
-      if (tech) {
-        openTechnicianModal(tech);
+        ind.className = 'badge badge-success';
+        ind.innerText = '🤖 Bot Automático';
+        btn.innerText = '⏸️ Pausar Bot';
+        btn.className = 'btn btn-secondary btn-sm';
       }
     }
 
-    async function saveTechnician() {
-      const id = document.getElementById('techId').value;
-      const name = document.getElementById('techName').value.trim();
-      const phone = document.getElementById('techPhone').value.trim();
-      const pin = document.getElementById('techPin').value.trim();
-      const is_active = parseInt(document.getElementById('techActive').value, 10);
-      const notes = document.getElementById('techNotes').value.trim();
-      const btn = document.getElementById('btnSaveTech');
-
-      if (!name || !phone || !pin) {
-        showToast('Por favor completa nombre, teléfono y PIN', true);
-        return;
-      }
-
-      if (pin.length < 4 || pin.length > 8) {
-        showToast('El PIN debe tener entre 4 y 8 dígitos numéricos', true);
-        return;
-      }
-
-      btn.disabled = true;
-      btn.innerText = 'Guardando en Turso...';
+    async function toggleCurrentChatTakeover() {
+      if (!state.activeChatPhone) return;
+      const chat = state.chats.find(c => c.phone === state.activeChatPhone);
+      const willPause = !chat?.is_human_paused;
 
       try {
-        const payload = { name, phone, pin, is_active, notes, role: 'TECNICO' };
-        const url = id ? ('/api/technicians/' + id + '/update') : '/api/technicians';
-        const method = 'POST';
-
-        const res = await fetch(url, {
-          method,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
+        const res = await apiFetch('/api/admin/chats/takeover', {
+          method: 'POST',
+          body: JSON.stringify({
+            phone: state.activeChatPhone,
+            pause: willPause,
+            minutes: 60,
+          }),
         });
 
-        const data = await res.json();
-        if (data.success) {
-          showToast('✅ ' + (data.message || 'Técnico guardado exitosamente'));
-          closeTechnicianModal();
-          // Actualización en caliente
-          await loadTechnicians();
-        } else {
-          showToast('❌ Error: ' + (data.error || 'No se pudo guardar'), true);
+        if (res.success) {
+          if (chat) chat.is_human_paused = willPause;
+          updateTakeoverButton(willPause);
+          showToast('Modo de Atención', res.message, 'success');
         }
       } catch (err) {
-        showToast('❌ Error de conexión: ' + err.message, true);
-      } finally {
-        btn.disabled = false;
-        btn.innerText = '💾 Guardar en Turso DB';
+        showToast('Error', err.message, 'error');
       }
     }
 
-    async function deleteTechnicianAction(id, name) {
-      if (!confirm('¿Estás seguro de que deseas eliminar al técnico "' + name + '" del sistema?')) return;
+    // ==========================================
+    // MODULE 3: KANBAN TICKETS BOARD
+    // ==========================================
+    async function loadTicketsData() {
       try {
-        // Eliminar fila inmediatamente de pantalla
-        const row = document.getElementById('techRow-' + id);
-        if (row) row.style.opacity = '0.3';
-
-        const res = await fetch('/api/technicians/' + id, { method: 'DELETE' });
-        const data = await res.json();
-        if (data.success) {
-          allTechnicians = allTechnicians.filter(t => t.id !== id);
-          renderTechniciansTable();
-          showToast('✅ Técnico eliminado');
-        } else {
-          if (row) row.style.opacity = '1';
-          showToast('Error: ' + data.error, true);
-        }
+        const res = await apiFetch('/api/tickets?limit=100');
+        state.tickets = res.tickets || [];
+        renderKanbanBoard(state.tickets);
       } catch (err) {
-        showToast('Error al eliminar técnico', true);
+        console.error('Error loading tickets:', err);
       }
     }
 
-    // Inicializar
-    loadSettings();
-    loadSmartOltStats();
-    loadWisphubStats();
-    loadTechnicians();
+    function renderKanbanBoard(tickets) {
+      const cols = {
+        'ABIERTO': document.getElementById('col-tickets-abierto'),
+        'EN_PROCESO': document.getElementById('col-tickets-en-proceso'),
+        'VISITA_TECNICA': document.getElementById('col-tickets-visita'),
+        'RESUELTO': document.getElementById('col-tickets-resuelto'),
+      };
+
+      const counts = { 'ABIERTO': 0, 'EN_PROCESO': 0, 'VISITA_TECNICA': 0, 'RESUELTO': 0 };
+      Object.values(cols).forEach(c => c.innerHTML = '');
+
+      tickets.forEach(t => {
+        const status = (t.status || 'ABIERTO').toUpperCase();
+        const targetCol = cols[status] || cols['ABIERTO'];
+        counts[status] = (counts[status] || 0) + 1;
+
+        const card = document.createElement('div');
+        card.className = 'ticket-card';
+        card.onclick = () => openTicketDetailModal(t);
+
+        card.innerHTML = \`
+          <div class="ticket-card-top">
+            <span class="ticket-folio">\${t.folio}</span>
+            <span class="badge badge-info">\${t.phone}</span>
+          </div>
+          <div class="ticket-client">\${escapeHtml(t.client_name || 'Cliente')}</div>
+          <div class="ticket-issue">\${escapeHtml(t.issue_summary || 'Sin descripción')}</div>
+          <div class="ticket-footer">
+            <span>\${t.assigned_technician_name ? '🔧 ' + escapeHtml(t.assigned_technician_name) : 'Sin asignar'}</span>
+            <span>\${formatShortTime(t.created_at)}</span>
+          </div>
+        \`;
+
+        targetCol.appendChild(card);
+      });
+
+      document.getElementById('badge-count-abierto').innerText = counts['ABIERTO'] || 0;
+      document.getElementById('badge-count-proceso').innerText = counts['EN_PROCESO'] || 0;
+      document.getElementById('badge-count-visita').innerText = counts['VISITA_TECNICA'] || 0;
+      document.getElementById('badge-count-resuelto').innerText = counts['RESUELTO'] || 0;
+    }
+
+    function openTicketDetailModal(t) {
+      const content = \`
+        <div style="display: flex; flex-direction: column; gap: 14px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h4 style="font-size: 16px; font-weight: 700; color: var(--accent-cyan);">Folio \${t.folio}</h4>
+            <span class="badge badge-warning">\${t.status}</span>
+          </div>
+          <p><strong>Cliente:</strong> \${escapeHtml(t.client_name || 'Desconocido')} (\${t.phone})</p>
+          <p><strong>ONU ID / SN:</strong> \${escapeHtml(t.onu_id || 'N/A')}</p>
+          <p><strong>Diagnóstico / Falla:</strong> \${escapeHtml(t.issue_summary || '')}</p>
+          \${t.checks_performed ? \`<p><strong>Pruebas:</strong> \${escapeHtml(t.checks_performed)}</p>\` : ''}
+          <div class="form-group" style="margin-top: 10px;">
+            <label class="form-label">Cambiar Estado</label>
+            <select id="modal-ticket-status-select" class="form-control">
+              <option value="ABIERTO" \${t.status === 'ABIERTO' ? 'selected' : ''}>ABIERTO</option>
+              <option value="EN_PROCESO" \${t.status === 'EN_PROCESO' ? 'selected' : ''}>EN PROCESO</option>
+              <option value="VISITA_TECNICA" \${t.status === 'VISITA_TECNICA' ? 'selected' : ''}>VISITA TÉCNICA</option>
+              <option value="RESUELTO" \${t.status === 'RESUELTO' ? 'selected' : ''}>RESUELTO</option>
+              <option value="CANCELADO" \${t.status === 'CANCELADO' ? 'selected' : ''}>CANCELADO</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Asignar Técnico</label>
+            <input type="text" id="modal-ticket-tech-input" class="form-control" value="\${escapeHtml(t.assigned_technician_name || '')}" placeholder="Nombre del técnico responsable">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Notas de Resolución</label>
+            <textarea id="modal-ticket-notes" class="form-control" rows="2" placeholder="Detalle de solución...">\${escapeHtml(t.resolution_notes || '')}</textarea>
+          </div>
+        </div>
+      \`;
+
+      openModal(\`Detalle del Ticket \${t.folio}\`, content, async () => {
+        const newStatus = document.getElementById('modal-ticket-status-select').value;
+        const newTech = document.getElementById('modal-ticket-tech-input').value.trim();
+        const notes = document.getElementById('modal-ticket-notes').value.trim();
+
+        if (newTech && newTech !== t.assigned_technician_name) {
+          await apiFetch(\`/api/tickets/\${t.folio}/assign\`, {
+            method: 'POST',
+            body: JSON.stringify({ technicianName: newTech }),
+          });
+        }
+
+        const res = await apiFetch(\`/api/tickets/\${t.folio}/status\`, {
+          method: 'POST',
+          body: JSON.stringify({ status: newStatus, notes }),
+        });
+
+        if (res.success) {
+          showToast('Ticket Actualizado', \`Folio \${t.folio} guardado correctamente.\`, 'success');
+          loadTicketsData();
+        } else {
+          showToast('Error', res.error, 'error');
+        }
+      }, 'Guardar Cambios');
+    }
+
+    // ==========================================
+    // MODULE 4: IPAM & POOLS
+    // ==========================================
+    async function loadIpamData() {
+      try {
+        const [poolsRes, unconfRes] = await Promise.all([
+          apiFetch('/api/ipam/pools'),
+          apiFetch('/api/smartolt/unconfigured'),
+        ]);
+
+        const grid = document.getElementById('ipam-pools-grid');
+        if (poolsRes.pools && poolsRes.pools.length > 0) {
+          grid.innerHTML = poolsRes.pools.map(p => {
+            const pct = p.total > 0 ? Math.round((p.used / p.total) * 100) : 0;
+            return \`
+              <div class="glass-card" style="background: rgba(0,0,0,0.3);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                  <span style="font-weight: 700; font-size: 14px;">VLAN \${p.vlan} (\${p.subnet})</span>
+                  <span class="badge badge-info">\${pct}% Ocupado</span>
+                </div>
+                <div style="background: rgba(255,255,255,0.08); height: 8px; border-radius: 4px; overflow: hidden; margin-bottom: 8px;">
+                  <div style="background: linear-gradient(90deg, var(--accent-cyan), var(--primary)); width: \${pct}%; height: 100%;"></div>
+                </div>
+                <div style="display: flex; justify-content: space-between; font-size: 11.5px; color: var(--text-muted); font-family: var(--font-mono);">
+                  <span>Usadas: \${p.used}</span>
+                  <span>Disponibles: \${p.free}</span>
+                  <span>Total: \${p.total}</span>
+                </div>
+              </div>
+            \`;
+          }).join('');
+        }
+
+        const unconfTable = document.getElementById('table-unconfigured-onus-body');
+        if (unconfRes.unconfigured && unconfRes.unconfigured.length > 0) {
+          unconfTable.innerHTML = unconfRes.unconfigured.map(o => \`
+            <tr>
+              <td>\${escapeHtml(o.olt_name || 'OLT')}</td>
+              <td style="font-family: var(--font-mono);">\${o.pon_port || 'PON'}</td>
+              <td style="font-family: var(--font-mono); font-weight: 700; color: var(--accent-cyan);">\${o.sn}</td>
+              <td>\${escapeHtml(o.model || 'ONU')}</td>
+              <td>
+                <button class="btn btn-primary btn-sm" onclick="openAuthorizeOnuModal('\${o.sn}', '\${o.olt_id || 1}')">
+                  ⚡ Aprovisionar
+                </button>
+              </td>
+            </tr>
+          \`).join('');
+        } else {
+          unconfTable.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-dim);">No hay ONUs en espera de configuración en el PON.</td></tr>';
+        }
+      } catch (err) {
+        console.error('Error loading IPAM:', err);
+      }
+    }
+
+    function openAuthorizeOnuModal(sn, oltId) {
+      const content = \`
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <p>Aprovisionar ONU Serial: <strong style="color: var(--accent-cyan);">\${sn}</strong></p>
+          <div class="form-group">
+            <label class="form-label">Nombre del Cliente</label>
+            <input type="text" id="auth-onu-name" class="form-control" placeholder="Ej: Juan Perez" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">VLAN de Servicio</label>
+            <select id="auth-onu-vlan" class="form-control">
+              <option value="99">VLAN 99 (10.99.0.0/24)</option>
+              <option value="60">VLAN 60 (10.60.0.0/24)</option>
+              <option value="100">VLAN 100</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">IP WAN Asignada</label>
+            <input type="text" id="auth-onu-ip" class="form-control" placeholder="Ej: 10.99.0.45" required>
+          </div>
+        </div>
+      \`;
+
+      openModal('Aprovisionar Nueva ONU', content, async () => {
+        const name = document.getElementById('auth-onu-name').value.trim();
+        const vlan = document.getElementById('auth-onu-vlan').value;
+        const ip = document.getElementById('auth-onu-ip').value.trim();
+
+        if (!name || !ip) {
+          showToast('Campos requeridos', 'Ingrese nombre e IP', 'warning');
+          return false;
+        }
+
+        const res = await apiFetch('/api/smartolt/authorize', {
+          method: 'POST',
+          body: JSON.stringify({ sn, olt_id: oltId, name, vlan, ip_address: ip }),
+        });
+
+        if (res.success) {
+          showToast('ONU Aprovisionada', 'ONU registrada exitosamente en SmartOLT.', 'success');
+          loadIpamData();
+        } else {
+          showToast('Error', res.error || 'No se pudo aprovisionar', 'error');
+        }
+      }, 'Aprovisionar en SmartOLT');
+    }
+
+    // ==========================================
+    // MODULE 5: AUDITORÍA SMARTOLT VS WISPHUB
+    // ==========================================
+    async function loadAuditData() {
+      try {
+        const params = new URLSearchParams({
+          filter: state.audit.filter,
+          search: state.audit.search,
+          page: state.audit.page,
+          limit: state.audit.limit,
+        });
+
+        const res = await apiFetch('/api/audit/ip-cross?' + params.toString());
+        state.audit.total = res.total || 0;
+
+        document.getElementById('audit-pagination-info').innerText = \`Mostrando página \${state.audit.page} de \${Math.ceil((res.total || 1) / state.audit.limit)} (\${res.total} registros)\`;
+
+        const tbody = document.getElementById('table-audit-body');
+        if (res.items && res.items.length > 0) {
+          tbody.innerHTML = res.items.map(item => {
+            let statusBadge = '<span class="badge badge-success">MATCH</span>';
+            if (item.ip_status === 'MISMATCH') statusBadge = '<span class="badge badge-danger">MISMATCH</span>';
+            if (item.ip_status === 'ONLY_SMARTOLT') statusBadge = '<span class="badge badge-info">Solo SmartOLT</span>';
+            if (item.ip_status === 'ONLY_WISPHUB') statusBadge = '<span class="badge badge-purple">Solo WispHub</span>';
+            if (item.ip_status === 'NO_IP') statusBadge = '<span class="badge badge-warning">Sin IP</span>';
+
+            return \`
+              <tr>
+                <td style="font-weight: 600;">\${escapeHtml(item.cliente || 'Desconocido')}</td>
+                <td style="font-family: var(--font-mono); font-size: 11px;">\${item.servicio || item.folio || '--'}</td>
+                <td style="font-family: var(--font-mono); color: var(--accent-cyan);">\${item.smartolt_ip || '--'}</td>
+                <td style="font-family: var(--font-mono); color: var(--accent-green);">\${item.wisphub_ip || '--'}</td>
+                <td>\${statusBadge}</td>
+                <td>\${escapeHtml(item.wisphub_plan || '--')}</td>
+              </tr>
+            \`;
+          }).join('');
+        } else {
+          tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-dim);">No se encontraron registros con este filtro.</td></tr>';
+        }
+      } catch (err) {
+        console.error('Error loading audit:', err);
+      }
+    }
+
+    function setAuditFilter(f) {
+      state.audit.filter = f;
+      state.audit.page = 1;
+      document.querySelectorAll('#audit-filter-buttons button').forEach(b => b.classList.remove('active'));
+      event.target.classList.add('active');
+      loadAuditData();
+    }
+
+    function handleAuditSearch(q) {
+      state.audit.search = q.trim();
+      state.audit.page = 1;
+      loadAuditData();
+    }
+
+    function changeAuditPage(dir) {
+      const maxPage = Math.ceil(state.audit.total / state.audit.limit) || 1;
+      const newPage = state.audit.page + dir;
+      if (newPage >= 1 && newPage <= maxPage) {
+        state.audit.page = newPage;
+        loadAuditData();
+      }
+    }
+
+    // ==========================================
+    // MODULE 6: TÉCNICOS AUTORIZADOS & PINS
+    // ==========================================
+    async function loadTechniciansData() {
+      try {
+        const res = await apiFetch('/api/technicians');
+        state.technicians = res.technicians || [];
+        renderTechniciansTable(state.technicians);
+      } catch (err) {
+        console.error('Error loading technicians:', err);
+      }
+    }
+
+    function renderTechniciansTable(techs) {
+      const tbody = document.getElementById('table-technicians-body');
+      if (!techs || techs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-dim);">No hay técnicos registrados.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = techs.map(t => \`
+        <tr>
+          <td style="font-weight: 600;">\${escapeHtml(t.name)}</td>
+          <td style="font-family: var(--font-mono);">\${t.phone}</td>
+          <td style="font-family: var(--font-mono); font-weight: 700; color: var(--accent-amber);">\${t.pin}</td>
+          <td><span class="badge badge-info">\${escapeHtml(t.role || 'Tecnico')}</span></td>
+          <td>
+            <span class="badge \${t.is_active === 1 ? 'badge-success' : 'badge-danger'}">
+              \${t.is_active === 1 ? 'Activo' : 'Inactivo'}
+            </span>
+          </td>
+          <td>
+            <div style="display: flex; gap: 8px;">
+              <button class="btn btn-secondary btn-sm" onclick="toggleTechnicianActive(\${t.id})">
+                \${t.is_active === 1 ? 'Desactivar' : 'Activar'}
+              </button>
+              <button class="btn btn-danger btn-sm" onclick="deleteTechnicianItem(\${t.id}, '\${escapeHtml(t.name)}')">
+                Eliminar
+              </button>
+            </div>
+          </td>
+        </tr>
+      \`).join('');
+    }
+
+    function openNewTechnicianModal() {
+      const content = \`
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <div class="form-group">
+            <label class="form-label">Nombre del Técnico</label>
+            <input type="text" id="tech-new-name" class="form-control" placeholder="Ej: Carlos Ramírez" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Número de WhatsApp (10 o 12 dígitos)</label>
+            <input type="text" id="tech-new-phone" class="form-control" placeholder="521..." required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">PIN de Autorización (5 Dígitos)</label>
+            <input type="text" id="tech-new-pin" class="form-control" maxlength="5" placeholder="12345" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Rol</label>
+            <select id="tech-new-role" class="form-control">
+              <option value="instalador">Instalador de Campo</option>
+              <option value="soporte">Soporte Nivel 2</option>
+              <option value="supervisor">Supervisor de Red</option>
+            </select>
+          </div>
+        </div>
+      \`;
+
+      openModal('Registrar Nuevo Técnico', content, async () => {
+        const name = document.getElementById('tech-new-name').value.trim();
+        const phone = document.getElementById('tech-new-phone').value.trim();
+        const pin = document.getElementById('tech-new-pin').value.trim();
+        const role = document.getElementById('tech-new-role').value;
+
+        if (!name || !phone || !pin || pin.length !== 5) {
+          showToast('Validación', 'Complete todos los campos. El PIN debe tener 5 dígitos.', 'warning');
+          return false;
+        }
+
+        const res = await apiFetch('/api/technicians', {
+          method: 'POST',
+          body: JSON.stringify({ name, phone, pin, role }),
+        });
+
+        if (res.success) {
+          showToast('Técnico Creado', \`\${name} ha sido autorizado con PIN \${pin}.\`, 'success');
+          loadTechniciansData();
+        } else {
+          showToast('Error', res.error, 'error');
+        }
+      }, 'Crear Técnico');
+    }
+
+    async function toggleTechnicianActive(id) {
+      try {
+        const res = await apiFetch(\`/api/technicians/\${id}/toggle\`, { method: 'POST' });
+        if (res.success) {
+          showToast('Estado Modificado', res.message, 'info');
+          loadTechniciansData();
+        }
+      } catch (err) {
+        showToast('Error', err.message, 'error');
+      }
+    }
+
+    function deleteTechnicianItem(id, name) {
+      showConfirmDialog('Eliminar Técnico', \`¿Seguro que deseas eliminar el acceso a \${name}?\`, async () => {
+        const res = await apiFetch(\`/api/technicians/\${id}\`, { method: 'DELETE' });
+        if (res.success) {
+          showToast('Eliminado', 'Técnico eliminado.', 'success');
+          loadTechniciansData();
+        }
+      });
+    }
+
+    // ==========================================
+    // MODULE 7: CONFIGURACIÓN & INTEGRACIONES
+    // ==========================================
+    async function loadSettingsData() {
+      try {
+        const res = await apiFetch('/api/settings');
+        if (res.settings) {
+          Object.keys(res.settings).forEach(k => {
+            const input = document.getElementById('setting-' + k);
+            if (input) input.value = res.settings[k];
+          });
+        }
+        fetchWhatsAppStatus();
+      } catch (err) {
+        console.error('Error loading settings:', err);
+      }
+    }
+
+    async function handleSaveSettings(e) {
+      e.preventDefault();
+      const settings = {
+        EVOLUTION_URL: document.getElementById('setting-EVOLUTION_URL')?.value.trim(),
+        EVOLUTION_API_KEY: document.getElementById('setting-EVOLUTION_API_KEY')?.value.trim(),
+        GROQ_API_KEY: document.getElementById('setting-GROQ_API_KEY')?.value.trim(),
+      };
+
+      try {
+        const res = await apiFetch('/api/settings', {
+          method: 'POST',
+          body: JSON.stringify({ settings }),
+        });
+        if (res.success) {
+          showToast('Guardado', 'Variables actualizadas correctamente en Turso DB.', 'success');
+        } else {
+          showToast('Error', res.error, 'error');
+        }
+      } catch (err) {
+        showToast('Error', err.message, 'error');
+      }
+    }
+
+    async function fetchWhatsAppStatus() {
+      const container = document.getElementById('evolution-qr-container');
+      const text = document.getElementById('evolution-status-text');
+      try {
+        const res = await apiFetch('/api/whatsapp/status');
+        if (res.state === 'open') {
+          container.innerHTML = \`
+            <span style="font-size: 48px; color: var(--accent-green);">✅</span>
+            <h4 style="font-size: 15px; font-weight: 700; margin-top: 8px;">WhatsApp Conectado</h4>
+            <p style="font-size: 12px; color: var(--text-muted);">Instancia activa y recibiendo webhooks.</p>
+          \`;
+          document.getElementById('whatsapp-pill-label').innerText = 'WhatsApp Activo';
+        } else if (res.qr) {
+          container.innerHTML = \`
+            <img src="\${res.qr}" style="width: 180px; height: 180px; border-radius: 8px; background: #fff; padding: 6px;" alt="QR Code">
+            <p style="font-size: 12px; color: var(--text-muted); margin-top: 10px;">Escanea este código desde WhatsApp</p>
+          \`;
+          document.getElementById('whatsapp-pill-label').innerText = 'WhatsApp Desconectado';
+        } else {
+          container.innerHTML = '<p style="color: var(--text-muted);">Instancia de WhatsApp desconectada o cargando...</p>';
+        }
+      } catch (err) {
+        text.innerText = 'No se pudo contactar a Evolution API';
+      }
+    }
+
+    async function disconnectWhatsAppSession() {
+      showConfirmDialog('Desvincular WhatsApp', '¿Deseas cerrar la sesión activa de WhatsApp para regenerar el QR?', async () => {
+        const res = await apiFetch('/api/whatsapp/disconnect', { method: 'POST' });
+        if (res.success) {
+          showToast('WhatsApp Desvinculado', 'Sesión cerrada exitosamente.', 'info');
+          fetchWhatsAppStatus();
+        }
+      });
+    }
+
+    function clearSessionsData() {
+      showConfirmDialog('Vaciar Sesiones', '¿Deseas eliminar todas las sesiones de clientes en memoria de Turso?', async () => {
+        const res = await apiFetch('/api/sessions/clear-all', { method: 'DELETE' });
+        showToast('Sesiones Vaciadas', res.message, 'success');
+        loadDashboardData();
+      });
+    }
+
+    function clearLogsData() {
+      showConfirmDialog('Vaciar Historial', '¿Deseas vaciar todos los logs de conversación de prueba?', async () => {
+        const res = await apiFetch('/api/logs/clear-all', { method: 'DELETE' });
+        showToast('Historial Vaciado', res.message, 'success');
+        loadDashboardData();
+      });
+    }
+
+    function clearTicketsData() {
+      showConfirmDialog('Vaciar Tickets', '¿Deseas eliminar todos los tickets de soporte registrados?', async () => {
+        const res = await apiFetch('/api/tickets/clear-all', { method: 'DELETE' });
+        showToast('Tickets Vaciados', res.message, 'success');
+        loadDashboardData();
+      });
+    }
+
+    // ==========================================
+    // MODULE 8: USUARIOS & ROLES (RBAC)
+    // ==========================================
+    async function loadAdminUsersData() {
+      try {
+        const res = await apiFetch('/api/admin/users');
+        state.adminUsers = res.users || [];
+        renderAdminUsersTable(state.adminUsers);
+      } catch (err) {
+        console.error('Error loading users:', err);
+      }
+    }
+
+    function renderAdminUsersTable(users) {
+      const tbody = document.getElementById('table-admin-users-body');
+      if (!users || users.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-dim);">No hay usuarios registrados.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = users.map(u => \`
+        <tr>
+          <td style="font-family: var(--font-mono); font-weight: 700; color: var(--accent-cyan);">@\${u.username}</td>
+          <td style="font-weight: 600;">\${escapeHtml(u.name)}</td>
+          <td><span class="badge badge-purple">\${u.role}</span></td>
+          <td style="font-family: var(--font-mono); font-size: 11.5px; color: var(--text-dim);">\${u.last_login ? new Date(u.last_login).toLocaleString() : 'Nunca'}</td>
+          <td>
+            \${u.username !== 'admin' ? \`
+              <button class="btn btn-danger btn-sm" onclick="deleteAdminUserItem(\${u.id}, '\${u.username}')">
+                Eliminar
+              </button>
+            \` : '<span style="color: var(--text-dim); font-size: 11px;">Principal</span>'}
+          </td>
+        </tr>
+      \`).join('');
+    }
+
+    function openNewAdminUserModal() {
+      const content = \`
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <div class="form-group">
+            <label class="form-label">Nombre Completo</label>
+            <input type="text" id="user-new-name" class="form-control" placeholder="Ej: Diana Pérez" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Usuario</label>
+            <input type="text" id="user-new-username" class="form-control" placeholder="diana.perez" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Contraseña</label>
+            <input type="password" id="user-new-password" class="form-control" placeholder="••••••••" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Rol de Acceso</label>
+            <select id="user-new-role" class="form-control">
+              <option value="soporte">Soporte Técnico</option>
+              <option value="tecnico">Técnico de Campo</option>
+              <option value="facturacion">Facturación & Cobranza</option>
+              <option value="superadmin">Superadmin</option>
+            </select>
+          </div>
+        </div>
+      \`;
+
+      openModal('Crear Usuario del Panel', content, async () => {
+        const name = document.getElementById('user-new-name').value.trim();
+        const username = document.getElementById('user-new-username').value.trim();
+        const password = document.getElementById('user-new-password').value.trim();
+        const role = document.getElementById('user-new-role').value;
+
+        if (!name || !username || !password) {
+          showToast('Validación', 'Todos los campos son obligatorios', 'warning');
+          return false;
+        }
+
+        const res = await apiFetch('/api/admin/users', {
+          method: 'POST',
+          body: JSON.stringify({ name, username, password, role }),
+        });
+
+        if (res.success) {
+          showToast('Usuario Creado', \`Usuario @\${username} registrado exitosamente.\`, 'success');
+          loadAdminUsersData();
+        } else {
+          showToast('Error', res.message || res.error, 'error');
+        }
+      }, 'Crear Usuario');
+    }
+
+    function deleteAdminUserItem(id, username) {
+      showConfirmDialog('Eliminar Usuario', \`¿Seguro que deseas eliminar al usuario @\${username}?\`, async () => {
+        const res = await apiFetch(\`/api/admin/users/\${id}\`, { method: 'DELETE' });
+        if (res.success) {
+          showToast('Usuario Eliminado', 'El usuario ha sido retirado.', 'success');
+          loadAdminUsersData();
+        }
+      });
+    }
+
+    // ==========================================
+    // UTILITIES
+    // ==========================================
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function formatShortTime(iso) {
+      if (!iso) return '';
+      try {
+        const d = new Date(iso);
+        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      } catch {
+        return '';
+      }
+    }
+
+    // ==========================================
+    // INITIALIZATION
+    // ==========================================
+    function initApp() {
+      initSSEStream();
+      loadViewData(state.currentView);
+      loadDashboardBadgeCounters();
+      setInterval(loadDashboardBadgeCounters, 15000);
+    }
+
+    // Bootstrap
+    window.addEventListener('DOMContentLoaded', () => {
+      checkAuthSession();
+    });
   </script>
 </body>
-</html>`;
+</html>
+`;
 }

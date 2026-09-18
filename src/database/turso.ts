@@ -154,7 +154,41 @@ export async function initTursoDatabase(): Promise<void> {
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_tech_pin ON technicians(pin);`);
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_tech_active ON technicians(is_active);`);
 
-    logger.info('Tablas "sessions", "settings", "conversation_logs", "smartolt_onus", "wisphub_clients", "tickets" y "technicians" listas en Turso.');
+    // Tabla de Usuarios Administradores y Operadores con Roles (RBAC)
+    await client.execute(`
+      CREATE TABLE IF NOT EXISTS admin_users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        name TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'soporte', -- 'superadmin', 'soporte', 'tecnico', 'facturacion'
+        is_active INTEGER DEFAULT 1,
+        created_at TEXT NOT NULL,
+        last_login TEXT
+      );
+    `);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_admin_username ON admin_users(username);`);
+
+    // Migración segura de columnas en tickets
+    try { await client.execute(`ALTER TABLE tickets ADD COLUMN assigned_technician_name TEXT;`); } catch {}
+    try { await client.execute(`ALTER TABLE tickets ADD COLUMN resolution_notes TEXT;`); } catch {}
+    try { await client.execute(`ALTER TABLE tickets ADD COLUMN category TEXT DEFAULT 'FALLA_FIBRA';`); } catch {}
+    try { await client.execute(`ALTER TABLE tickets ADD COLUMN priority TEXT DEFAULT 'MEDIA';`); } catch {}
+
+    // Sembrar superadmin inicial si la tabla está vacía
+    const { hashPassword } = await import('../utils/auth');
+    const existingAdmins = await client.execute(`SELECT COUNT(*) as count FROM admin_users`);
+    if (Number(existingAdmins.rows[0]?.count || 0) === 0) {
+      const initialHash = hashPassword('AdminCloudWare2026!');
+      const now = new Date().toISOString();
+      await client.execute({
+        sql: `INSERT INTO admin_users (username, password_hash, name, role, is_active, created_at) VALUES (?, ?, ?, ?, 1, ?)`,
+        args: ['admin', initialHash, 'Super Administrador', 'superadmin', now],
+      });
+      logger.info('Usuario inicial "admin" (superadmin) creado exitosamente en Turso DB.');
+    }
+
+    logger.info('Tablas "sessions", "settings", "conversation_logs", "smartolt_onus", "wisphub_clients", "tickets", "technicians" y "admin_users" listas en Turso.');
   } catch (error: any) {
     logger.error('Error al inicializar Turso DB:', error?.message || error);
     throw error;

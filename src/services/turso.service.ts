@@ -1409,9 +1409,9 @@ export class TursoService {
   /**
    * Actualiza el estatus y notas de un ticket
    */
-  static async updateTicketStatus(folio: string, status: 'ABIERTO' | 'EN_PROCESO' | 'RESUELTO', notes?: string): Promise<boolean> {
+  static async updateTicketStatus(folio: string, status: string, notes?: string): Promise<boolean> {
     const now = new Date().toISOString();
-    const resolvedAt = status === 'RESUELTO' ? now : null;
+    const resolvedAt = ['RESUELTO', 'CERRADO'].includes(status.toUpperCase()) ? now : null;
 
     try {
       const client = getTursoClient();
@@ -1420,11 +1420,12 @@ export class TursoService {
           UPDATE tickets SET
             status = ?,
             notes = COALESCE(?, notes),
+            resolution_notes = COALESCE(?, resolution_notes),
             updated_at = ?,
-            resolved_at = CASE WHEN ? = 'RESUELTO' THEN ? ELSE resolved_at END
+            resolved_at = COALESCE(?, resolved_at)
           WHERE folio = ?
         `,
-        args: [status, notes || null, now, status, resolvedAt, folio],
+        args: [status.toUpperCase(), notes || null, notes || null, now, resolvedAt, folio],
       });
 
       return res.rowsAffected > 0;
@@ -1783,6 +1784,264 @@ export class TursoService {
       return null;
     }
   }
+
+  // ==========================================
+  // GESTIÓN DE USUARIOS DEL PANEL (RBAC)
+  // ==========================================
+
+  static async getAdminUserByUsername(username: string): Promise<AdminUserRecord | null> {
+    try {
+      const client = getTursoClient();
+      const res = await client.execute({
+        sql: 'SELECT * FROM admin_users WHERE username = ? AND is_active = 1 LIMIT 1',
+        args: [username.toLowerCase().trim()],
+      });
+      if (res.rows.length === 0) return null;
+      const r: any = res.rows[0];
+      return {
+        id: Number(r.id),
+        username: String(r.username),
+        password_hash: String(r.password_hash),
+        name: String(r.name),
+        role: r.role as any,
+        is_active: Number(r.is_active || 1),
+        created_at: String(r.created_at),
+        last_login: r.last_login ? String(r.last_login) : null,
+      };
+    } catch (error: any) {
+      logger.error(`Error al obtener admin user ${username}:`, error?.message || error);
+      return null;
+    }
+  }
+
+  static async getAdminUserById(id: number): Promise<AdminUserRecord | null> {
+    try {
+      const client = getTursoClient();
+      const res = await client.execute({
+        sql: 'SELECT id, username, name, role, is_active, created_at, last_login FROM admin_users WHERE id = ? LIMIT 1',
+        args: [id],
+      });
+      if (res.rows.length === 0) return null;
+      const r: any = res.rows[0];
+      return {
+        id: Number(r.id),
+        username: String(r.username),
+        name: String(r.name),
+        role: r.role as any,
+        is_active: Number(r.is_active || 1),
+        created_at: String(r.created_at),
+        last_login: r.last_login ? String(r.last_login) : null,
+      };
+    } catch (error: any) {
+      logger.error(`Error al obtener admin user #${id}:`, error?.message || error);
+      return null;
+    }
+  }
+
+  static async listAdminUsers(): Promise<Omit<AdminUserRecord, 'password_hash'>[]> {
+    try {
+      const client = getTursoClient();
+      const res = await client.execute('SELECT id, username, name, role, is_active, created_at, last_login FROM admin_users ORDER BY id ASC');
+      return res.rows.map((r: any) => ({
+        id: Number(r.id),
+        username: String(r.username),
+        name: String(r.name),
+        role: r.role as any,
+        is_active: Number(r.is_active || 1),
+        created_at: String(r.created_at),
+        last_login: r.last_login ? String(r.last_login) : null,
+      }));
+    } catch (error: any) {
+      logger.error('Error al listar admin users:', error?.message || error);
+      return [];
+    }
+  }
+
+  static async createAdminUser(data: {
+    username: string;
+    password_hash: string;
+    name: string;
+    role: 'superadmin' | 'soporte' | 'tecnico' | 'facturacion';
+  }): Promise<{ success: boolean; message: string }> {
+    try {
+      const client = getTursoClient();
+      const now = new Date().toISOString();
+      await client.execute({
+        sql: `INSERT INTO admin_users (username, password_hash, name, role, is_active, created_at) VALUES (?, ?, ?, ?, 1, ?)`,
+        args: [data.username.toLowerCase().trim(), data.password_hash, data.name.trim(), data.role, now],
+      });
+      return { success: true, message: `Usuario @${data.username} creado exitosamente.` };
+    } catch (error: any) {
+      const msg = error?.message?.includes('UNIQUE') ? 'El nombre de usuario ya existe.' : (error?.message || 'Error al crear');
+      return { success: false, message: msg };
+    }
+  }
+
+  static async deleteAdminUser(id: number): Promise<boolean> {
+    try {
+      const client = getTursoClient();
+      const res = await client.execute({
+        sql: 'DELETE FROM admin_users WHERE id = ?',
+        args: [id],
+      });
+      return (res.rowsAffected || 0) > 0;
+    } catch (error: any) {
+      logger.error(`Error al eliminar admin user #${id}:`, error?.message || error);
+      return false;
+    }
+  }
+
+  static async updateAdminLastLogin(id: number): Promise<void> {
+    try {
+      const client = getTursoClient();
+      await client.execute({
+        sql: 'UPDATE admin_users SET last_login = ? WHERE id = ?',
+        args: [new Date().toISOString(), id],
+      });
+    } catch {}
+  }
+
+  // ==========================================
+  // GESTIÓN ENRIQUECIDA DE TICKETS & KANBAN
+  // ==========================================
+
+  static async getAllTicketsDetailed(statusFilter?: string, limit: number = 200): Promise<any[]> {
+    try {
+      const client = getTursoClient();
+      let query = `SELECT * FROM tickets`;
+      const args: any[] = [];
+      if (statusFilter && statusFilter !== 'ALL') {
+        query += ` WHERE status = ?`;
+        args.push(statusFilter);
+      }
+      query += ` ORDER BY id DESC LIMIT ?`;
+      args.push(limit);
+
+      const res = await client.execute({ sql: query, args });
+      return res.rows;
+    } catch (error: any) {
+      logger.error('Error al obtener tickets detallados:', error?.message || error);
+      return [];
+    }
+  }
+
+
+
+  static async assignTicketTechnician(folio: string, technicianName: string): Promise<boolean> {
+    try {
+      const client = getTursoClient();
+      const now = new Date().toISOString();
+      const res = await client.execute({
+        sql: `UPDATE tickets SET assigned_technician_name = ?, status = 'VISITA_TECNICA', updated_at = ? WHERE folio = ?`,
+        args: [technicianName, now, folio],
+      });
+      return (res.rowsAffected || 0) > 0;
+    } catch (error: any) {
+      logger.error(`Error al asignar técnico al ticket ${folio}:`, error?.message || error);
+      return false;
+    }
+  }
+
+  // ==========================================
+  // LIVE CHAT & CONVERSACIONES EN TIEMPO REAL
+  // ==========================================
+
+  static async getRecentChatConversations(limit: number = 50): Promise<ChatConversationItem[]> {
+    try {
+      const client = getTursoClient();
+      const query = `
+        SELECT 
+          s.phone,
+          s.client_name,
+          s.onu_id,
+          s.step,
+          s.last_interaction,
+          s.metadata,
+          (
+            SELECT l.message 
+            FROM conversation_logs l 
+            WHERE l.phone = s.phone 
+            ORDER BY l.id DESC 
+            LIMIT 1
+          ) as last_message,
+          (
+            SELECT l.direction 
+            FROM conversation_logs l 
+            WHERE l.phone = s.phone 
+            ORDER BY l.id DESC 
+            LIMIT 1
+          ) as last_direction
+        FROM sessions s
+        ORDER BY s.last_interaction DESC
+        LIMIT ?
+      `;
+      const res = await client.execute({ sql: query, args: [limit] });
+
+      return res.rows.map((r: any) => {
+        let meta: any = {};
+        try { meta = JSON.parse(r.metadata || '{}'); } catch {}
+        return {
+          phone: String(r.phone),
+          client_name: r.client_name ? String(r.client_name) : null,
+          onu_id: r.onu_id ? String(r.onu_id) : null,
+          step: String(r.step || 'CONVERSACIONAL'),
+          last_interaction: String(r.last_interaction || ''),
+          last_message: r.last_message ? String(r.last_message) : '[Sin mensajes previos]',
+          last_direction: (r.last_direction || 'IN') as 'IN' | 'OUT',
+          is_human_paused: Boolean(meta.humanTakeoverUntil && new Date(meta.humanTakeoverUntil).getTime() > Date.now()),
+        };
+      });
+    } catch (error: any) {
+      logger.error('Error al obtener conversaciones recientes:', error?.message || error);
+      return [];
+    }
+  }
+
+  static async getChatMessagesByPhone(phone: string, limit: number = 60): Promise<any[]> {
+    try {
+      const client = getTursoClient();
+      const cleanPhone = phone.replace(/\D/g, '');
+      const last10 = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
+
+      const res = await client.execute({
+        sql: `
+          SELECT * FROM conversation_logs 
+          WHERE phone = ? OR phone LIKE ? 
+          ORDER BY id ASC 
+          LIMIT ?
+        `,
+        args: [phone, `%${last10}`, limit],
+      });
+      return res.rows;
+    } catch (error: any) {
+      logger.error(`Error al obtener mensajes para ${phone}:`, error?.message || error);
+      return [];
+    }
+  }
 }
+
+export interface AdminUserRecord {
+  id: number;
+  username: string;
+  password_hash?: string;
+  name: string;
+  role: 'superadmin' | 'soporte' | 'tecnico' | 'facturacion';
+  is_active: number;
+  created_at: string;
+  last_login: string | null;
+}
+
+export interface ChatConversationItem {
+  phone: string;
+  client_name: string | null;
+  onu_id: string | null;
+  step: string;
+  last_interaction: string;
+  last_message: string;
+  last_direction: 'IN' | 'OUT';
+  is_human_paused: boolean;
+  unread_count?: number;
+}
+
 
 
