@@ -9,7 +9,7 @@ import { config } from '../config/env';
 import { SettingsService } from '../services/settings.service';
 import { Logger } from '../utils/logger';
 import { parseSpintax } from '../utils/spintax';
-import { cleanPersonName, computeNameMatchScore } from '../utils/fuzzy-matcher';
+import { cleanPersonName, computeNameMatchScore, normalizeText } from '../utils/fuzzy-matcher';
 
 const logger = new Logger('BotOrchestrator');
 
@@ -2942,7 +2942,92 @@ export class BotOrchestrator {
     let metaPre: any = {};
     try { metaPre = JSON.parse(session?.metadata || '{}'); } catch {}
 
-    // 0. Clasificar con Groq para detectar si el texto incluye nombre mencionado, queja/problema o ambos
+    // =========================================================================
+    // 0. DESAMBIGUACIÓN CONTEXTUAL POR UBICACIÓN / LOCALIDAD / APELLIDOS
+    // Si la sesión ya tenía candidatos pendientes de desambiguación (pendingCandidates)
+    // =========================================================================
+    if (metaPre.pendingCandidates && Array.isArray(metaPre.pendingCandidates) && metaPre.pendingCandidates.length > 1) {
+      const candidates: Array<any> = metaPre.pendingCandidates;
+      const lowerRaw = rawInput.toLowerCase().trim();
+      const normInput = normalizeText(cleanPersonName(rawInput) || rawInput);
+
+      logger.info(`[Desambiguación Contextual] Evaluando respuesta "${rawInput}" contra ${candidates.length} candidatos previos.`);
+
+      // 1. Filtrar por Ubicación / Comunidad / Zona / Dirección (ej: "De Magdalena", "Magdalena", "Arenal", "Actopan", "Tierras Coloradas", etc.)
+      const matchingByLocation = candidates.filter((c: any) => {
+        const fullLocation = normalizeText(`${c.address || ''} ${c.zone_name || ''} ${c.direccion || ''} ${c.localidad || ''} ${c.ciudad || ''}`);
+        if (!fullLocation) return false;
+        if (normInput && normInput.length >= 3 && fullLocation.includes(normInput)) return true;
+        // Palabras individuales de la entrada (mínimo 3 letras, ignorando conectores)
+        const stopLoc = new Set(['de', 'del', 'la', 'las', 'el', 'los', 'en', 'soy', 'colonia', 'fracc', 'mza', 'calle', 'vivo', 'aqui', 'alla', 'por']);
+        const inputWords = normInput.split(' ').filter(w => w.length >= 3 && !stopLoc.has(w));
+        return inputWords.some(w => fullLocation.includes(w));
+      });
+
+      if (matchingByLocation.length === 1) {
+        const selected = matchingByLocation[0];
+        logger.info(`[Desambiguación Contextual] Candidato único seleccionado por ubicación: "${selected.name}" (${selected.address || selected.zone_name})`);
+
+        const meta = {
+          ...metaPre,
+          speed_profile: selected.speed_profile,
+          zone: selected.zone_name,
+          address: selected.address,
+          sn: selected.sn,
+          pendingCandidates: null,
+          lastSearchTerm: null,
+        };
+
+        const sessionActualizada = await TursoService.upsertSession({
+          phone,
+          client_id: selected.unique_external_id || String(selected.id_servicio || selected.id || ''),
+          service_id: selected.sn || String(selected.id_servicio || selected.id || ''),
+          client_name: selected.name,
+          onu_id: selected.unique_external_id || selected.sn || `ONU-${selected.id_servicio || selected.id}`,
+          metadata: JSON.stringify(meta),
+          step: 'IDENTIFICADO',
+        });
+
+        await this.finalizarIdentificacionYContinuarFlujo(phone, sessionActualizada, metaPre, targetJid);
+        return;
+      }
+
+      // 2. Filtrar por Nombre Completo / Apellidos adicionales proporcionados por el cliente
+      const scoredCandidates = candidates.map((c: any) => {
+        const score = computeNameMatchScore(rawInput, c.name);
+        return { ...c, score };
+      }).filter((c: any) => c.score >= 70);
+
+      if (scoredCandidates.length === 1 || (scoredCandidates.length > 1 && scoredCandidates[0].score >= 85 && scoredCandidates[0].score > scoredCandidates[1].score + 15)) {
+        const selected = scoredCandidates[0];
+        logger.info(`[Desambiguación Contextual] Candidato seleccionado por coincidencia de nombre/apellidos: "${selected.name}"`);
+
+        const meta = {
+          ...metaPre,
+          speed_profile: selected.speed_profile,
+          zone: selected.zone_name,
+          address: selected.address,
+          sn: selected.sn,
+          pendingCandidates: null,
+          lastSearchTerm: null,
+        };
+
+        const sessionActualizada = await TursoService.upsertSession({
+          phone,
+          client_id: selected.unique_external_id || String(selected.id_servicio || selected.id || ''),
+          service_id: selected.sn || String(selected.id_servicio || selected.id || ''),
+          client_name: selected.name,
+          onu_id: selected.unique_external_id || selected.sn || `ONU-${selected.id_servicio || selected.id}`,
+          metadata: JSON.stringify(meta),
+          step: 'IDENTIFICADO',
+        });
+
+        await this.finalizarIdentificacionYContinuarFlujo(phone, sessionActualizada, metaPre, targetJid);
+        return;
+      }
+    }
+
+    // Clasificar con Groq para detectar si el texto incluye nombre mencionado, queja/problema o ambos
     const clasificacion = await GroqService.clasificarMensaje(rawInput, {
       clientName: session?.client_name || null,
       currentStep: 'ESPERANDO_IDENTIFICACION',
@@ -2982,18 +3067,105 @@ export class BotOrchestrator {
     const cleanSearchTerm = cleanPersonName(searchTerm) || searchTerm;
     logger.info(`Buscando coincidencias para identificación de ${phone}: "${rawInput}" (Término búsqueda: "${searchTerm}", Limpio: "${cleanSearchTerm}")`);
 
-    // 1. Intentar búsqueda flexible en Turso DB (Caché local de SmartOLT)
+    // 1. Intentar búsqueda flexible en Turso DB (Caché local de SmartOLT y WispHub)
     try {
-      const coincidenciasOlt = await TursoService.searchOnusFuzzy(cleanSearchTerm, 6);
+      const [coincidenciasOlt, coincidenciasWh] = await Promise.all([
+        TursoService.searchOnusFuzzy(cleanSearchTerm, 6).catch(() => []),
+        TursoService.searchWisphubClientsFuzzy(cleanSearchTerm, 6).catch(() => []),
+      ]);
 
-      if (coincidenciasOlt.length > 0) {
-        const mejorScore = coincidenciasOlt[0].matchScore;
-        // Candidatos con score alto y cercanos al mejor score
-        const candidatosRelevantes = coincidenciasOlt.filter(
-          c => c.matchScore >= 70 && c.matchScore >= (mejorScore - 15)
+      // Unificar candidatos deduplicando
+      const listaUnificada: Array<{
+        unique_external_id: string;
+        id_servicio?: number | string;
+        sn: string;
+        name: string;
+        address?: string;
+        zone_name?: string;
+        speed_profile?: string;
+        phone?: string;
+        matchScore: number;
+        is_wisphub?: boolean;
+      }> = [];
+
+      for (const o of coincidenciasOlt) {
+        listaUnificada.push({
+          unique_external_id: o.unique_external_id,
+          sn: o.sn || '',
+          name: o.name,
+          address: o.address || '',
+          zone_name: o.zone_name || '',
+          speed_profile: o.speed_profile || '',
+          phone: o.phone || '',
+          matchScore: o.matchScore,
+          is_wisphub: false,
+        });
+      }
+
+      for (const w of coincidenciasWh) {
+        const yaExiste = listaUnificada.some(
+          item => (item.sn && w.sn_onu && item.sn.toUpperCase() === w.sn_onu.toUpperCase()) ||
+                  computeNameMatchScore(item.name, w.nombre) >= 90
+        );
+        if (!yaExiste) {
+          listaUnificada.push({
+            unique_external_id: w.sn_onu || `WH-${w.id_servicio}`,
+            id_servicio: w.id_servicio,
+            sn: w.sn_onu || String(w.id_servicio),
+            name: w.nombre,
+            address: w.direccion || '',
+            zone_name: w.router || '',
+            speed_profile: w.plan_internet || '',
+            phone: w.telefono || '',
+            matchScore: w.matchScore,
+            is_wisphub: true,
+          });
+        }
+      }
+
+      // Ordenar por puntaje
+      listaUnificada.sort((a, b) => b.matchScore - a.matchScore);
+
+      if (listaUnificada.length > 0) {
+        const mejorScore = listaUnificada[0].matchScore;
+        const candidatosRelevantes = listaUnificada.filter(
+          c => c.matchScore >= 65 && c.matchScore >= (mejorScore - 15)
         );
 
-        // Agrupar candidatos por persona real (validando que tengan el mismo nombre completo con apellidos)
+        // A. Verificar si hay una COINCIDENCIA EXACTA DIRECTA de Nombre Completo
+        const exactNormQuery = normalizeText(cleanSearchTerm);
+        const exactMatches = candidatosRelevantes.filter(c => {
+          const normCand = normalizeText(cleanPersonName(c.name));
+          return normCand === exactNormQuery;
+        });
+
+        if (exactMatches.length === 1) {
+          const exacto = exactMatches[0];
+          logger.info(`Coincidencia exacta directa de nombre completo encontrada: "${exacto.name}" (Score: ${exacto.matchScore})`);
+
+          const meta = {
+            ...metaPre,
+            speed_profile: exacto.speed_profile,
+            zone: exacto.zone_name,
+            address: exacto.address,
+            sn: exacto.sn,
+          };
+
+          const sessionActualizada = await TursoService.upsertSession({
+            phone,
+            client_id: exacto.unique_external_id || String(exacto.id_servicio || ''),
+            service_id: exacto.sn || String(exacto.id_servicio || ''),
+            client_name: exacto.name,
+            onu_id: exacto.unique_external_id,
+            metadata: JSON.stringify(meta),
+            step: 'IDENTIFICADO',
+          });
+
+          await this.finalizarIdentificacionYContinuarFlujo(phone, sessionActualizada, metaPre, targetJid);
+          return;
+        }
+
+        // B. Agrupar candidatos por persona real (validando nombres completos con apellidos)
         const gruposPorPersona: Array<{ nombrePrincipal: string; servicios: typeof candidatosRelevantes }> = [];
         for (const cand of candidatosRelevantes) {
           const grupoExistente = gruposPorPersona.find(g => 
@@ -3006,25 +3178,38 @@ export class BotOrchestrator {
           }
         }
 
-        // CASO A: Múltiples personas DISTINTAS (homónimos con diferentes apellidos o falta de apellidos)
+        // CASO 1: Múltiples personas DISTINTAS (homónimos)
         if (gruposPorPersona.length > 1) {
           const ejemplosNombres = gruposPorPersona
             .slice(0, 3)
             .map(g => cleanPersonName(g.nombrePrincipal))
             .join('_, _');
 
-          logger.info(`Ambigüedad: se detectaron ${gruposPorPersona.length} personas distintas para "${rawInput}". Solicitando apellidos.`);
+          logger.info(`Ambigüedad: se detectaron ${gruposPorPersona.length} personas distintas para "${rawInput}". Guardando candidatos y solicitando desempate.`);
 
           await TursoService.upsertSession({
             phone,
             step: 'ESPERANDO_IDENTIFICACION',
-            metadata: JSON.stringify(metaPre),
+            metadata: JSON.stringify({
+              ...metaPre,
+              lastSearchTerm: cleanSearchTerm,
+              pendingCandidates: candidatosRelevantes.map(c => ({
+                unique_external_id: c.unique_external_id,
+                id_servicio: c.id_servicio,
+                sn: c.sn,
+                name: c.name,
+                address: c.address,
+                zone_name: c.zone_name,
+                speed_profile: c.speed_profile,
+                phone: c.phone,
+              })),
+            }),
           });
 
           await this.enviarYLoguear(
             phone,
             `Encontramos varias cuentas registradas con ese nombre en nuestro sistema.\n\n` +
-            `Para poder ubicar tu módem con exactitud, por favor indícame tu *Nombre con al menos un apellido* (ejemplo: _${ejemplosNombres}_) o tu *Número de contrato*.`,
+            `Para poder ubicar tu módem con exactitud, por favor indícame tu *Nombre con al menos un apellido* (ejemplo: _${ejemplosNombres}_) o tu *Localidad / Zona*.`,
             'IDENTIFICAR_CLIENTE',
             'SOLICITAR_APELLIDOS_AMBIGUEDAD',
             targetJid
@@ -3032,7 +3217,7 @@ export class BotOrchestrator {
           return;
         }
 
-        // CASO B: Una sola persona con 2 o más servicios en distintas ubicaciones (Multiservicio real)
+        // CASO 2: Una sola persona con 2 o más servicios en distintas ubicaciones
         const personaUnica = gruposPorPersona[0];
         const serviciosPersona = personaUnica?.servicios || candidatosRelevantes;
 
@@ -3083,9 +3268,9 @@ export class BotOrchestrator {
           return;
         }
 
-        // CASO C: Coincidencia única sólida de una sola persona
-        const mejor = serviciosPersona[0] || coincidenciasOlt[0];
-        if (mejor.matchScore >= 70) {
+        // CASO 3: Coincidencia única sólida de una sola persona
+        const mejor = serviciosPersona[0] || listaUnificada[0];
+        if (mejor.matchScore >= 65) {
           const meta = {
             ...metaPre,
             speed_profile: mejor.speed_profile,
@@ -3096,8 +3281,8 @@ export class BotOrchestrator {
 
           const sessionActualizada = await TursoService.upsertSession({
             phone,
-            client_id: mejor.unique_external_id,
-            service_id: mejor.sn,
+            client_id: mejor.unique_external_id || String(mejor.id_servicio || ''),
+            service_id: mejor.sn || String(mejor.id_servicio || ''),
             client_name: mejor.name,
             onu_id: mejor.unique_external_id,
             metadata: JSON.stringify(meta),
@@ -3109,10 +3294,10 @@ export class BotOrchestrator {
         }
       }
     } catch (err: any) {
-      logger.warn(`Error al consultar SmartOLT en Turso durante identificación:`, err?.message || err);
+      logger.warn(`Error durante búsqueda fuzzy de identificación:`, err?.message || err);
     }
 
-    // 2. Intentar buscar en WispHub como alternativa de facturación
+    // 2. Intentar buscar en WispHub API en vivo como alternativa de facturación
     try {
       const coincidencias = await WispHubService.buscarClientePorNombre(searchTerm);
 
