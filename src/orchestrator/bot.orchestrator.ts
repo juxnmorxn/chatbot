@@ -4190,7 +4190,7 @@ ${techInfo}───────────────────────
       ip_address: nextIp.ip,
       netmask: nextIp.netmask,
       gateway: nextIp.gateway,
-      line_profile: 'VLAN', // Modo VLAN obligatorio
+      line_profile: 'VLAN mapping', // Modo VLAN mapping obligatorio
       download_speed_profile_name: profiles.down,
       upload_speed_profile_name: profiles.up,
       zone: targetZone,
@@ -4515,7 +4515,7 @@ ${techInfo}───────────────────────
       ip_address: nextIp.ip,
       netmask: nextIp.netmask,
       gateway: nextIp.gateway,
-      line_profile: 'VLAN',
+      line_profile: 'VLAN mapping',
       download_speed_profile_name: profiles.down,
       upload_speed_profile_name: profiles.up,
       zone: targetZone,

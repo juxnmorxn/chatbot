@@ -754,8 +754,11 @@ export class SmartOLTService {
       form.append('dns1', '8.8.8.8');
       form.append('dns2', '8.8.4.4');
       
-      // Perfiles de velocidad y Line-Profile VLAN obligatorio
-      form.append('line_profile', 'VLAN');
+      // Perfiles de velocidad y Line-Profile VLAN mapping obligatorio
+      form.append('line_profile', 'VLAN mapping');
+      form.append('line_profile_mode', 'VLAN mapping');
+      form.append('line_profile_name', 'VLAN mapping');
+      form.append('custom_line_profile', 'VLAN mapping');
       form.append('download_speed_profile_name', String(payload.download_speed_profile_name || '40MB-DOWN'));
       form.append('upload_speed_profile_name', String(payload.upload_speed_profile_name || '40MB-UP'));
       if (cleanAddress) form.append('address', cleanAddress);
