@@ -8,3 +8,4 @@ yarn-error.log*
 *.log
 evolution_instances/
 evolution_store/
+scratch/
