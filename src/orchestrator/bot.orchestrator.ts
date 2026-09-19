@@ -4583,6 +4583,23 @@ _(O escribe 'cambiar zona', 'cambiar plan' o 'cambiar nombre' si necesitas corre
     let modificado = false;
     let mensajeCambio = '';
 
+    // Extraer folio y nombre actuales de payload.name para preservarlos independientemente
+    let currentFolio = '';
+    let currentCustomerName = '';
+    if (payload.name) {
+      const parts = payload.name.match(/^(\d{1,7})\s*[-_.\s]+\s*(.+)$/);
+      if (parts) {
+        currentFolio = parts[1].trim();
+        currentCustomerName = parts[2].trim();
+      } else if (/^\d{1,7}$/.test(payload.name.trim())) {
+        currentFolio = payload.name.trim();
+        currentCustomerName = '';
+      } else {
+        currentFolio = '';
+        currentCustomerName = payload.name.trim();
+      }
+    }
+
     // 1. Modificar Zona
     if (/(?:cambiar|modificar|poner|ajustar)?\s*zona\s*(?:a|en|:)?\s*(.+)/i.test(rawText) || lower.includes('san jose') || lower.includes('san agustin') || lower.includes('actopan')) {
       let nuevaZona = '';
@@ -4639,16 +4656,62 @@ _(O escribe 'cambiar zona', 'cambiar plan' o 'cambiar nombre' si necesitas corre
       mensajeCambio += `• *Paquete actualizado:* ${numMegas} Megas (${profiles.down})\n`;
     }
 
-    // 3. Modificar Nombre / Folio
-    const matchNombre = rawText.match(/(?:cambiar|modificar|poner|ajustar)?\s*(?:nombre|cliente|folio)\s*(?:a|en|:)?\s*(.+)/i);
-    if (matchNombre && !/(?:zona|plan|paquete|serie|sn)/i.test(matchNombre[1])) {
-      const nuevoNombre = matchNombre[1].trim();
-      payload.name = nuevoNombre;
+    // 3. Modificar Folio
+    const matchFolio = rawText.match(/(?:cambiar|modificar|poner|ajustar)?\s*folio\s*(?:a|en|:)?\s*([a-zA-Z0-9_-]+)/i);
+    if (matchFolio && !/(?:zona|plan|paquete|serie|sn)/i.test(matchFolio[1])) {
+      const nuevoFolio = matchFolio[1].trim();
+      currentFolio = nuevoFolio;
+      if (currentCustomerName) {
+        payload.name = `${currentFolio}-${currentCustomerName}`;
+        mensajeCambio += `• *Folio actualizado:* ${currentFolio} (Nombre conservado: ${currentCustomerName})\n`;
+      } else {
+        payload.name = currentFolio;
+        mensajeCambio += `• *Folio actualizado:* ${currentFolio}\n`;
+      }
       modificado = true;
-      mensajeCambio += `• *Nombre/Folio actualizado:* ${nuevoNombre}\n`;
     }
 
-    // 4. Modificar Serie (SN)
+    // 4. Modificar Nombre / Cliente
+    const matchNombre = rawText.match(/(?:cambiar|modificar|poner|ajustar)?\s*(?:nombre|cliente)\s*(?:a|en|:)?\s*(.+)/i);
+    if (matchNombre && !/(?:zona|plan|paquete|serie|sn)/i.test(matchNombre[1])) {
+      let rawNuevoNombre = matchNombre[1].trim();
+      // Si el texto incluye mención a folio conjunta ej: "y folio 2979", quitarlo para no mezclar
+      rawNuevoNombre = rawNuevoNombre.replace(/(?:y\s+)?folio\s*(?:a|en|:)?\s*[a-zA-Z0-9_-]+/i, '').trim();
+
+      if (rawNuevoNombre) {
+        // Verificar si viene con formato [Folio]-[Nombre] ej: "2979-Juan Perez" o "2979 Juan Perez"
+        const prefixMatch = rawNuevoNombre.match(/^(\d{1,7})\s*[-_.\s]+\s*(.+)$/);
+        if (prefixMatch) {
+          currentFolio = prefixMatch[1].trim();
+          currentCustomerName = cleanPersonName(prefixMatch[2].trim());
+          payload.name = `${currentFolio}-${currentCustomerName}`;
+          mensajeCambio += `• *Folio y Nombre actualizados:* ${payload.name}\n`;
+        } else if (/^\d{1,7}$/.test(rawNuevoNombre)) {
+          // Si pasaron solo números en "cambiar nombre 2979", interpretar como folio para no borrar el nombre
+          currentFolio = rawNuevoNombre;
+          if (currentCustomerName) {
+            payload.name = `${currentFolio}-${currentCustomerName}`;
+            mensajeCambio += `• *Folio actualizado:* ${currentFolio} (Nombre conservado: ${currentCustomerName})\n`;
+          } else {
+            payload.name = currentFolio;
+            mensajeCambio += `• *Folio actualizado:* ${currentFolio}\n`;
+          }
+        } else {
+          // Es solo el nombre del cliente
+          currentCustomerName = cleanPersonName(rawNuevoNombre);
+          if (currentFolio) {
+            payload.name = `${currentFolio}-${currentCustomerName}`;
+            mensajeCambio += `• *Nombre actualizado:* ${currentCustomerName} (Folio conservado: ${currentFolio})\n`;
+          } else {
+            payload.name = currentCustomerName;
+            mensajeCambio += `• *Nombre actualizado:* ${currentCustomerName}\n`;
+          }
+        }
+        modificado = true;
+      }
+    }
+
+    // 5. Modificar Serie (SN)
     const matchSn = rawText.match(/(?:cambiar|modificar|poner|ajustar)?\s*(?:serie|sn|sufijo)\s*(?:a|en|:)?\s*([a-zA-Z0-9]+)/i);
     if (matchSn) {
       const nuevoSuffix = matchSn[1].trim().toUpperCase();
@@ -4707,7 +4770,7 @@ _(O indica otro cambio si es necesario)_`;
     } else {
       await this.enviarYLoguear(
         phone,
-        `⚠️ *No entendí qué dato deseas modificar.*\n\nPuedes escribir:\n• *cambiar zona [San José / Actopan / etc.]*\n• *cambiar plan [40 / 60 / 200 megas]*\n• *cambiar nombre [Nuevo Folio-Nombre]*\n• *cambiar serie [6 dígitos SN]*\n\nO responde *SÍ* para activar tal como está, o *CANCELAR*.`,
+        `⚠️ *No entendí qué dato deseas modificar.*\n\nPuedes escribir:\n• *cambiar folio [Nuevo Folio]*\n• *cambiar nombre [Nuevo Nombre]*\n• *cambiar zona [San José / Actopan / etc.]*\n• *cambiar plan [40 / 60 / 200 megas]*\n• *cambiar serie [6 dígitos SN]*\n\nO responde *SÍ* para activar tal como está, o *CANCELAR*.`,
         'ACTIVACION_TECNICO',
         'MODIFICACION_NO_RECONOCIDA',
         targetJid

@@ -265,7 +265,7 @@ export class WebhookController {
       const lowerText = (extracted.text || '').toLowerCase().trim();
       const isTechAction = Boolean(
         extracted.buttonId?.includes('ACTIVACION') ||
-        /^(?:activar|activaci|alta|aprovisionar|registrar|cambiar plan|cambiar zona|cambiar nombre|cambiar serie|si|sí|confirmar|confirmo|no|cancelar)\b/i.test(lowerText) ||
+        /^(?:activar|activaci|alta|aprovisionar|registrar|cambiar plan|cambiar zona|cambiar nombre|cambiar folio|cambiar cliente|cambiar serie|folio|si|sí|confirmar|confirmo|no|cancelar)\b/i.test(lowerText) ||
         lowerText.startsWith('activar') ||
         lowerText.startsWith('cambiar') ||
         imageAnalysis?.tipo_documento === 'CONTRATO_INSTALACION'
