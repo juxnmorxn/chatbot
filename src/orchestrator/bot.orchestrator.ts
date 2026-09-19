@@ -4228,19 +4228,14 @@ ${techInfo}───────────────────────
 ──────────────────────────────
 ⚠️ *¿Confirmas la activación de este módem en SmartOLT?*
 
-👉 Responde *SÍ* o *CONFIRMAR* para activar.
-👉 Responde *NO* o *CANCELAR* para abortar.`;
+👉 Responde *SÍ* para activar o *NO* para cancelar.`;
 
     await this.enviarYLoguear(
       phone,
       cardMsg,
       'ACTIVACION_TECNICO',
       'ESPERANDO_CONFIRMACION',
-      targetJid,
-      [
-        { id: 'BTN_CONFIRMAR_ACTIVACION', title: '✅ SÍ, Activar Módem' },
-        { id: 'BTN_CANCELAR_ACTIVACION', title: '❌ Cancelar' },
-      ]
+      targetJid
     );
   }
 
@@ -4553,23 +4548,15 @@ ${techInfo}───────────────────────
 ──────────────────────────────
 ⚠️ *¿Confirmas la activación de este módem en SmartOLT?*
 
-👉 Pulsa *SÍ* o responde *CONFIRMAR* para activar.
-👉 O escribe para corregir:
-• *cambiar zona [zona]*
-• *cambiar plan [plan]*
-• *cambiar nombre [nombre]*
-• *cancelar* para abortar.`;
+👉 Responde *SÍ* para activar o *NO* para cancelar.
+_(O escribe 'cambiar zona', 'cambiar plan' o 'cambiar nombre' si necesitas corregir algo)_`;
 
     await this.enviarYLoguear(
       phone,
       cardMsg,
       'ACTIVACION_TECNICO',
       'ESPERANDO_CONFIRMACION_CONTRATO',
-      targetJid,
-      [
-        { id: 'BTN_CONFIRMAR_ACTIVACION', title: '✅ SÍ, Activar Módem' },
-        { id: 'BTN_CANCELAR_ACTIVACION', title: '❌ Cancelar' },
-      ]
+      targetJid
     );
   }
 
@@ -4707,19 +4694,15 @@ ${mensajeCambio}─────────────────────�
 ──────────────────────────────
 ⚠️ *¿Confirmas la activación con estos datos?*
 
-👉 Responde *SÍ* o pulsa el botón para autorizar.
-👉 O indica otro cambio si es necesario.`;
+👉 Responde *SÍ* para autorizar o *NO* para cancelar.
+_(O indica otro cambio si es necesario)_`;
 
       await this.enviarYLoguear(
         phone,
         cardMsg,
         'ACTIVACION_TECNICO',
         'DATOS_MODIFICADOS_CONFIRMACION',
-        targetJid,
-        [
-          { id: 'BTN_CONFIRMAR_ACTIVACION', title: '✅ SÍ, Activar Módem' },
-          { id: 'BTN_CANCELAR_ACTIVACION', title: '❌ Cancelar' },
-        ]
+        targetJid
       );
     } else {
       await this.enviarYLoguear(
