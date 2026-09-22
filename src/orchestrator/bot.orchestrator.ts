@@ -334,12 +334,16 @@ export class BotOrchestrator {
     const bank = SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK', 'BBVA Bancomer');
     const account = SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', '012 180 0152433212 90');
     const beneficiary = SettingsService.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', this.getIspName());
+    const officeWeekday = SettingsService.get('OFFICE_HOURS_WEEKDAY', 'OFFICE_HOURS_WEEKDAY', '9:00 a 18:00 hrs');
+    const officeSaturday = SettingsService.get('OFFICE_HOURS_SATURDAY', 'OFFICE_HOURS_SATURDAY', '9:00 a 15:00 hrs');
+    const officeAddress = SettingsService.get('OFFICE_ADDRESS', 'OFFICE_ADDRESS', '').trim();
     const clientName = this.formatDisplayName(session?.client_name) || 'tu nombre completo';
 
     let txt = `\n🏢 *Pago en Oficina Física:*\n` +
-      `• *Lunes a Viernes:* 9:00 a 18:00 hrs\n` +
-      `• *Sábados:* 9:00 a 15:00 hrs\n\n` +
-      `🏦 *Pago por Transferencia Bancaria:*\n` +
+      `• *Lunes a Viernes:* ${officeWeekday}\n` +
+      `• *Sábados:* ${officeSaturday}\n` +
+      (officeAddress ? `• *Dirección:* ${officeAddress}\n` : '') +
+      `\n🏦 *Pago por Transferencia Bancaria:*\n` +
       `• *Banco:* ${bank}\n` +
       `• *CLABE / Cuenta:* \`${account}\`\n` +
       `• *Titular:* ${beneficiary}\n` +

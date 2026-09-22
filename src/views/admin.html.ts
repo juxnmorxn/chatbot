@@ -5,6 +5,7 @@ export function getAdminDashboardHtml(): string {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CloudWareMx - Admin ISP Control Center</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -928,18 +929,42 @@ export function getAdminDashboardHtml(): string {
     }
 
     .chat-header-bar {
-      padding: 12px 20px;
+      padding: 10px 18px;
       border-bottom: 1px solid var(--card-border);
-      background: rgba(11, 15, 25, 0.6);
+      background: rgba(11, 15, 25, 0.75);
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 12px;
+      min-height: 60px;
     }
 
     .chat-header-left {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 10px;
+      min-width: 0;
+      flex-shrink: 1;
+    }
+
+    .chat-header-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+      flex-wrap: nowrap;
+    }
+
+    .btn-xs {
+      padding: 4px 8px;
+      font-size: 11px;
+      font-weight: 500;
+      border-radius: 6px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      white-space: nowrap;
+      height: 28px;
     }
 
     .chat-messages-container {
@@ -1671,34 +1696,35 @@ export function getAdminDashboardHtml(): string {
           <div class="chat-main-area">
             <div id="chat-active-header" class="chat-header-bar" style="display: none;">
               <div class="chat-header-left">
-                <button class="btn btn-secondary btn-sm" style="display: none;" id="btn-back-to-threads" onclick="toggleMobileChatThreads()">◀ Hilos</button>
+                <button class="btn btn-secondary btn-xs" style="display: none;" id="btn-back-to-threads" onclick="toggleMobileChatThreads()">◀</button>
                 <div class="thread-avatar" id="active-chat-avatar">📱</div>
-                <div>
-                  <div style="display: flex; align-items: center; gap: 8px;">
-                    <h4 id="active-chat-name" style="font-size: 14px; font-weight: 700;">Seleccione un chat</h4>
-                    <span id="active-chat-dept-badge" class="badge badge-info" style="font-size: 10px;">🔧 Soporte</span>
+                <div style="min-width: 0;">
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <h4 id="active-chat-name" style="font-size: 13.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px;">Seleccione un chat</h4>
+                    <span id="active-chat-dept-badge" class="badge badge-info" style="font-size: 9.5px; padding: 2px 6px;">🔧 Soporte</span>
                   </div>
                   <span id="active-chat-phone" style="font-size: 11px; color: var(--text-muted); font-family: var(--font-mono);">--</span>
                 </div>
               </div>
-              <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                <button id="btn-transfer-dept" class="btn btn-secondary btn-sm" onclick="transferCurrentChatDepartment()" title="Transferir al otro departamento">
-                  🔄 Mover a Atención
+              <div class="chat-header-actions">
+                <button id="btn-transfer-dept" class="btn btn-secondary btn-xs" onclick="transferCurrentChatDepartment()" title="Transferir al otro departamento">
+                  🔄 <span id="btn-transfer-dept-text">Mover a Atención</span>
                 </button>
-                <div id="takeover-status-indicator" class="badge badge-success">🤖 Bot Automático</div>
-                <button id="btn-toggle-takeover" class="btn btn-secondary btn-sm" onclick="toggleCurrentChatTakeover()">
-                  Pausar 4h
+                <div id="takeover-status-indicator" class="badge badge-success" style="font-size: 10px; padding: 3px 8px;">🤖 Bot Activo</div>
+                <button id="btn-toggle-takeover" class="btn btn-secondary btn-xs" onclick="toggleCurrentChatTakeover()" title="Pausar bot para atención humana">
+                  ⏸️ Pausar 4h
                 </button>
-                <button class="btn btn-secondary btn-sm" title="Pausar hasta mañana a las 10:00 AM" onclick="pauseCurrentChatUntilMorning()">
-                  🌙 Hasta Mañana
+                <button class="btn btn-secondary btn-xs" title="Pausar hasta mañana a las 10:00 AM" onclick="pauseCurrentChatUntilMorning()">
+                  🌙 Mañana
                 </button>
-                <button class="btn btn-warning btn-sm" title="Finalizar caso y reactivar bot" onclick="closeCurrentChatCase()">
-                  <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"></path></svg>
-                  <span>Cerrar Caso</span>
+                <div style="width: 1px; height: 18px; background: var(--card-border); margin: 0 2px;"></div>
+                <button class="btn btn-warning btn-xs" title="Finalizar caso y reactivar bot" onclick="closeCurrentChatCase()">
+                  <svg class="svg-icon" style="width: 12px; height: 12px;" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"></path></svg>
+                  <span>Cerrar</span>
                 </button>
-                <button class="btn btn-danger btn-sm" title="Borrar conversación y mensajes definitivamente" onclick="deleteCurrentChat()">
-                  <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                  <span>Eliminar Chat</span>
+                <button class="btn btn-danger btn-xs" title="Borrar conversación y mensajes definitivamente" onclick="deleteCurrentChat()">
+                  <svg class="svg-icon" style="width: 12px; height: 12px;" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                  <span>Eliminar</span>
                 </button>
               </div>
             </div>
@@ -2239,31 +2265,37 @@ export function getAdminDashboardHtml(): string {
             </div>
           </div>
 
-          <!-- Card 4: Datos Bancarios BBVA y Transferencias -->
+          <!-- Card 4: Datos Bancarios & Horarios de Oficina Física -->
           <div class="glass-card">
-            <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 14px;">🏦 Datos Bancarios (BBVA / Transferencias)</h3>
+            <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 14px;">🏦 Datos Bancarios & Horarios de Oficina</h3>
             <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">
-              Estos datos se enviarán a los clientes en los avisos de cobro y cuando consulten su saldo en el bot.
+              Información dinámica que el bot entrega a los clientes al consultar saldo o métodos de pago.
             </p>
             <div class="form-group">
               <label class="form-label">Banco</label>
-              <input type="text" id="setting-PAYMENT_BANK" class="form-control" placeholder="BBVA" value="BBVA">
+              <input type="text" id="setting-PAYMENT_BANK" class="form-control" placeholder="BBVA Bancomer" value="BBVA Bancomer">
             </div>
             <div class="form-group">
               <label class="form-label">Número de Cuenta / CLABE Interbancaria (18 dígitos)</label>
-              <input type="text" id="setting-PAYMENT_ACCOUNT" class="form-control" placeholder="012 180 0152433212 90" spellcheck="false">
-            </div>
-            <div class="form-group">
-              <label class="form-label">Convenio CIE BBVA (Opcional)</label>
-              <input type="text" id="setting-PAYMENT_CONVENIO" class="form-control" placeholder="Ej: 1458921" spellcheck="false">
+              <input type="text" id="setting-PAYMENT_ACCOUNT" class="form-control" placeholder="012 180 0152433212 90" value="012 180 0152433212 90" spellcheck="false">
             </div>
             <div class="form-group">
               <label class="form-label">Nombre del Titular / Beneficiario</label>
-              <input type="text" id="setting-PAYMENT_BENEFICIARY" class="form-control" placeholder="CloudWareMx Telecomunicaciones">
+              <input type="text" id="setting-PAYMENT_BENEFICIARY" class="form-control" placeholder="CloudWare Telecomunicaciones" value="CloudWare Telecomunicaciones">
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+              <div class="form-group">
+                <label class="form-label">Horario Lunes a Viernes</label>
+                <input type="text" id="setting-OFFICE_HOURS_WEEKDAY" class="form-control" placeholder="9:00 a 18:00 hrs" value="9:00 a 18:00 hrs">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Horario Sábados</label>
+                <input type="text" id="setting-OFFICE_HOURS_SATURDAY" class="form-control" placeholder="9:00 a 15:00 hrs" value="9:00 a 15:00 hrs">
+              </div>
             </div>
             <div class="form-group">
-              <label class="form-label">Notas o Instrucciones Adicionales</label>
-              <input type="text" id="setting-PAYMENT_NOTES" class="form-control" placeholder="Coloca tu nombre como concepto de pago">
+              <label class="form-label">Dirección de Oficina (Opcional)</label>
+              <input type="text" id="setting-OFFICE_ADDRESS" class="form-control" placeholder="Ej: Av. Principal #123, Actopan, Hgo.">
             </div>
           </div>
         </div>
@@ -2891,16 +2923,16 @@ export function getAdminDashboardHtml(): string {
     function updateChatDeptUI(dept) {
       const isSoporte = (dept || 'ATENCION').toUpperCase() === 'SOPORTE';
       const badge = document.getElementById('active-chat-dept-badge');
-      const transferBtn = document.getElementById('btn-transfer-dept');
+      const transferBtnText = document.getElementById('btn-transfer-dept-text');
       const senderSelect = document.getElementById('chat-sender-instance');
 
       if (badge) {
         badge.className = 'badge ' + (isSoporte ? 'badge-purple' : 'badge-info');
-        badge.innerText = isSoporte ? '🔧 Soporte Técnico' : '💳 Atención al Cliente';
+        badge.innerText = isSoporte ? '🔧 Soporte' : '💳 Atención';
       }
 
-      if (transferBtn) {
-        transferBtn.innerText = isSoporte ? '🔄 Transferir a Atención' : '🔄 Transferir a Soporte';
+      if (transferBtnText) {
+        transferBtnText.innerText = isSoporte ? 'Mover a Atención' : 'Mover a Soporte';
       }
 
       if (senderSelect) {
@@ -3055,15 +3087,15 @@ export function getAdminDashboardHtml(): string {
 
       if (isPaused) {
         ind.className = 'badge badge-warning';
-        const desc = takeover?.descripcion || (takeover?.minutosRestantes ? (takeover.minutosRestantes + 'm restantes') : 'Humano Activo');
-        ind.innerText = '⏸️ Operador (' + desc + ')';
-        btn.innerText = 'Reactivar Bot';
-        btn.className = 'btn btn-success btn-sm';
+        const desc = takeover?.descripcion || (takeover?.minutosRestantes ? (takeover.minutosRestantes + 'm restantes') : 'Pausado');
+        ind.innerText = '⏸️ ' + desc;
+        btn.innerHTML = '▶️ Reactivar';
+        btn.className = 'btn btn-success btn-xs';
       } else {
         ind.className = 'badge badge-success';
-        ind.innerText = '🤖 Bot Automático';
-        btn.innerText = 'Pausar 4h';
-        btn.className = 'btn btn-secondary btn-sm';
+        ind.innerText = '🤖 Bot Activo';
+        btn.innerHTML = '⏸️ Pausar 4h';
+        btn.className = 'btn btn-secondary btn-xs';
       }
     }
 
@@ -4018,9 +4050,10 @@ export function getAdminDashboardHtml(): string {
             NOTIF_INSTANCE_NAME: 'setting-NOTIF_INSTANCE_NAME',
             PAYMENT_BANK: 'setting-PAYMENT_BANK',
             PAYMENT_ACCOUNT: 'setting-PAYMENT_ACCOUNT',
-            PAYMENT_CONVENIO: 'setting-PAYMENT_CONVENIO',
             PAYMENT_BENEFICIARY: 'setting-PAYMENT_BENEFICIARY',
-            PAYMENT_NOTES: 'setting-PAYMENT_NOTES',
+            OFFICE_HOURS_WEEKDAY: 'setting-OFFICE_HOURS_WEEKDAY',
+            OFFICE_HOURS_SATURDAY: 'setting-OFFICE_HOURS_SATURDAY',
+            OFFICE_ADDRESS: 'setting-OFFICE_ADDRESS',
           };
 
           Object.keys(s).forEach(k => {
@@ -4065,11 +4098,12 @@ export function getAdminDashboardHtml(): string {
         NOTIF_DIA_CORTE_ENABLED: document.getElementById('setting-NOTIF_DIA_CORTE_ENABLED')?.checked ? 'true' : 'false',
         NOTIF_SUSPENSION_ENABLED: document.getElementById('setting-NOTIF_SUSPENSION_ENABLED')?.checked ? 'true' : 'false',
         NOTIF_INSTANCE_NAME: document.getElementById('setting-NOTIF_INSTANCE_NAME')?.value || 'atencion',
-        PAYMENT_BANK: document.getElementById('setting-PAYMENT_BANK')?.value.trim() || 'BBVA',
+        PAYMENT_BANK: document.getElementById('setting-PAYMENT_BANK')?.value.trim() || 'BBVA Bancomer',
         PAYMENT_ACCOUNT: document.getElementById('setting-PAYMENT_ACCOUNT')?.value.trim() || '',
-        PAYMENT_CONVENIO: document.getElementById('setting-PAYMENT_CONVENIO')?.value.trim() || '',
         PAYMENT_BENEFICIARY: document.getElementById('setting-PAYMENT_BENEFICIARY')?.value.trim() || '',
-        PAYMENT_NOTES: document.getElementById('setting-PAYMENT_NOTES')?.value.trim() || '',
+        OFFICE_HOURS_WEEKDAY: document.getElementById('setting-OFFICE_HOURS_WEEKDAY')?.value.trim() || '9:00 a 18:00 hrs',
+        OFFICE_HOURS_SATURDAY: document.getElementById('setting-OFFICE_HOURS_SATURDAY')?.value.trim() || '9:00 a 15:00 hrs',
+        OFFICE_ADDRESS: document.getElementById('setting-OFFICE_ADDRESS')?.value.trim() || '',
       };
 
       try {

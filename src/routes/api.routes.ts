@@ -21,6 +21,10 @@ router.get('/panel', (_req, res) => {
   res.send(getAdminDashboardHtml());
 });
 
+router.get('/favicon.ico', (_req, res) => {
+  res.status(204).end();
+});
+
 // ==========================================
 // AUTENTICACIÓN Y ROLES RBAC
 // ==========================================
