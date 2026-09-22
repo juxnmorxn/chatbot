@@ -1815,9 +1815,13 @@ export class BotOrchestrator {
     }
 
     const mensajeReinicio =
-      `Entendido${nombre}. Dado que el detalle ocurre de manera general, acabo de enviar una señal para *reiniciar tu módem remotamente* y refrescar los canales de navegación.\n\n` +
-      `⏳ En un par de minutos tu módem terminará de reiniciar.\n\n` +
-      `Por favor prueba navegar nuevamente. ¿Cómo sientes la conexión? *(Responde "Ya quedó" o "Sigue igual")*`;
+      `Entendido${nombre}. Dado que el detalle ocurre de manera general, acabo de enviar una señal para *reiniciar tu módem remotamente* y refrescar la sesión de conexión.\n\n` +
+      `⏳ *El módem tardará de 1 a 2 minutos en reiniciar y estabilizar sus luces.*\n\n` +
+      `Una vez que vuelvan a encender sus luces en verde/azul, te pedimos realizar esta prueba rápida:\n` +
+      `1️⃣ Conéctate a tu red Wi-Fi **5G** (la que termina en _5G o _Plus) estando a unos pasos de tu módem.\n` +
+      `2️⃣ Haz una prueba de velocidad en [speedtest.net](https://www.speedtest.net) o en la app de Speedtest.\n` +
+      `3️⃣ Envíanos aquí la **captura de pantalla de tu Speedtest** o una **foto de las luces de tu módem**.\n\n` +
+      `Nuestra inteligencia artificial analizará la prueba contra tu paquete contratado para confirmar si tu enlace está al 100% o calibrar tu conexión.`;
 
     await TursoService.upsertSession({
       phone,
@@ -1895,8 +1899,11 @@ export class BotOrchestrator {
 
     const mensajeReinicioEscalonado =
       `Enterado${nombre}. Enviaremos un reinicio a tu módem para refrescar su conexión.\n\n` +
-      `⏳ Tomará un par de minutos. Por favor pruébalo en cuanto vuelvan a fijarse las luces verdes.\n\n` +
-      `¿Lograste navegar correctamente? *(Responde "Ya quedó" o "Sigue igual")*`;
+      `⏳ *Tomará de 1 a 2 minutos en reiniciar y fijar sus luces.*\n\n` +
+      `En cuanto encienda, por favor realiza una prueba rápida para comprobar la navegación:\n` +
+      `1️⃣ Conéctate al Wi-Fi **5G** (que termina en _5G o _Plus) cerca del módem.\n` +
+      `2️⃣ Haz un test en [speedtest.net](https://www.speedtest.net) o app Speedtest.\n` +
+      `3️⃣ Envíanos la **captura de pantalla de la prueba** o foto del módem para analizar la velocidad recibida.`;
 
     await TursoService.upsertSession({
       phone,

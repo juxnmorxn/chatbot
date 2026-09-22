@@ -749,17 +749,53 @@ export class TursoService {
 
   /**
    * Actualiza y vincula el teléfono de un cliente de WispHub en Turso DB cuando el usuario interactúa por WhatsApp
+   * Si ya tiene un teléfono principal, añade los nuevos números a telefonos_adicionales (familiares / líneas secundarias).
    */
   static async updateWisphubClientPhone(idServicio: string | number, phone: string): Promise<boolean> {
     try {
       const client = getTursoClient();
       const cleanPhone = phone.replace(/\D/g, '');
       if (cleanPhone.length < 10) return false;
-      const res = await client.execute({
-        sql: `UPDATE wisphub_clients SET telefono = ?, updated_at = ? WHERE id_servicio = ? AND (telefono IS NULL OR telefono = '' OR LENGTH(telefono) < 10)`,
-        args: [cleanPhone, new Date().toISOString(), Number(idServicio)],
+
+      // 1. Obtener registro actual
+      const current = await client.execute({
+        sql: `SELECT telefono, telefonos_adicionales FROM wisphub_clients WHERE id_servicio = ? LIMIT 1`,
+        args: [Number(idServicio)],
       });
-      return (res.rowsAffected || 0) > 0;
+
+      if (current.rows.length === 0) return false;
+      const row = current.rows[0];
+      const mainPhone = String(row.telefono || '').replace(/\D/g, '');
+      let extraPhones: string[] = [];
+      try {
+        if (row.telefonos_adicionales) {
+          extraPhones = JSON.parse(String(row.telefonos_adicionales));
+        }
+      } catch {
+        extraPhones = String(row.telefonos_adicionales || '').split(',').map(s => s.trim().replace(/\D/g, '')).filter(Boolean);
+      }
+
+      const now = new Date().toISOString();
+
+      if (!mainPhone || mainPhone.length < 10) {
+        // Guardar como teléfono principal
+        await client.execute({
+          sql: `UPDATE wisphub_clients SET telefono = ?, updated_at = ? WHERE id_servicio = ?`,
+          args: [cleanPhone, now, Number(idServicio)],
+        });
+        return true;
+      } else if (mainPhone !== cleanPhone && !extraPhones.includes(cleanPhone)) {
+        // Añadir a teléfonos adicionales (familiares / números secundarios)
+        extraPhones.push(cleanPhone);
+        await client.execute({
+          sql: `UPDATE wisphub_clients SET telefonos_adicionales = ?, updated_at = ? WHERE id_servicio = ?`,
+          args: [JSON.stringify(extraPhones), now, Number(idServicio)],
+        });
+        logger.info(`[Multi-Teléfono] Teléfono adicional ${cleanPhone} vinculado a cliente servicio ${idServicio} (Total asociados: ${extraPhones.length + 1})`);
+        return true;
+      }
+
+      return true;
     } catch (err: any) {
       logger.warn(`No se pudo vincular teléfono en WispHub para servicio ${idServicio}:`, err?.message || err);
       return false;
@@ -784,7 +820,7 @@ export class TursoService {
     try {
       const client = getTursoClient();
 
-      // 1. Búsqueda directa por número de serie o teléfono si aplica
+      // 1. Búsqueda directa por número de serie o teléfono en SmartOLT
       const directMatch = await client.execute({
         sql: `
           SELECT * FROM smartolt_onus 
@@ -807,6 +843,35 @@ export class TursoService {
           olt_name: String(row.olt_name || ''),
           matchScore: 100,
         }));
+      }
+
+      // 1.1 Si la consulta es un teléfono (10 o más dígitos), buscar también en WispHub (teléfono principal o adicionales)
+      const digits = rawQuery.replace(/\D/g, '');
+      if (digits.length >= 10) {
+        const last10 = digits.slice(-10);
+        const whMatch = await client.execute({
+          sql: `
+            SELECT * FROM wisphub_clients 
+            WHERE telefono LIKE ? OR telefonos_adicionales LIKE ? 
+            LIMIT 3
+          `,
+          args: [`%${last10}`, `%${last10}%`],
+        });
+
+        if (whMatch.rows.length > 0) {
+          return whMatch.rows.map((r: any) => ({
+            unique_external_id: String(r.id_servicio),
+            sn: String(r.sn_onu || ''),
+            name: String(r.nombre || ''),
+            name_normalized: String(r.nombre_normalized || ''),
+            phone: String(r.telefono || ''),
+            address: String(r.direccion || ''),
+            zone_name: String(r.servicio || ''),
+            speed_profile: String(r.plan_internet || ''),
+            olt_name: 'WispHub',
+            matchScore: 95,
+          }));
+        }
       }
 
       // 2. Extraer palabras clave de la consulta para filtrar candidatos en SQL

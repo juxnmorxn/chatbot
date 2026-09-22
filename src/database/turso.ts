@@ -134,11 +134,15 @@ export async function initTursoDatabase(): Promise<void> {
     try {
       await client.execute(`ALTER TABLE wisphub_clients ADD COLUMN fecha_corte TEXT;`);
     } catch (_) {}
+    try {
+      await client.execute(`ALTER TABLE wisphub_clients ADD COLUMN telefonos_adicionales TEXT;`);
+    } catch (_) {}
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_wh_nombre_norm ON wisphub_clients(nombre_normalized);`);
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_wh_servicio ON wisphub_clients(servicio);`);
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_wh_ip ON wisphub_clients(ip);`);
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_wh_estado ON wisphub_clients(estado);`);
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_wh_dia_corte ON wisphub_clients(dia_corte);`);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_wh_phone ON wisphub_clients(telefono);`);
 
     // Tabla de Tickets para modificaciones manuales en SmartOLT y seguimiento
     await client.execute(`
