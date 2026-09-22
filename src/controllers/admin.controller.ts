@@ -1102,5 +1102,148 @@ export class AdminController {
       res.status(500).json({ success: false, error: error?.message || error });
     }
   }
+
+  // ==========================================
+  // GESTIÓN DE CLIENTES, MULTI-TELÉFONOS & GEOLOCALIZACIÓN
+  // ==========================================
+
+  /**
+   * Obtiene la lista paginada de clientes con filtros de búsqueda y geolocalización
+   */
+  static async getClients(req: Request, res: Response): Promise<void> {
+    try {
+      const search = String(req.query.search || '');
+      const status = String(req.query.status || 'ALL');
+      const limit = parseInt(String(req.query.limit || '50'), 10);
+      const page = parseInt(String(req.query.page || '1'), 10);
+      const offset = Math.max(0, (page - 1) * limit);
+
+      const data = await TursoService.getClientsDirectory({
+        search,
+        status,
+        limit,
+        offset,
+      });
+
+      res.json({
+        success: true,
+        clients: data.clients,
+        total: data.total,
+        totalActive: data.totalActive,
+        totalSuspended: data.totalSuspended,
+        totalWithGps: data.totalWithGps,
+        totalWithoutGps: data.totalWithoutGps,
+        page,
+        limit,
+      });
+    } catch (error: any) {
+      logger.error('Error al obtener lista de clientes:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Obtiene la ficha completa de un cliente
+   */
+  static async getClientDetail(req: Request, res: Response): Promise<void> {
+    try {
+      const id = String(req.params.id || '');
+      if (!id) {
+        res.status(400).json({ success: false, error: 'ID de cliente requerido' });
+        return;
+      }
+
+      const client = await TursoService.getClientDetail(id);
+      if (!client) {
+        res.status(404).json({ success: false, error: 'Cliente no encontrado' });
+        return;
+      }
+
+      res.json({ success: true, client });
+    } catch (error: any) {
+      logger.error(`Error al obtener detalle de cliente ${req.params.id}:`, error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Actualiza manualmente las coordenadas GPS o Google Maps URL de un cliente
+   */
+  static async updateClientLocation(req: Request, res: Response): Promise<void> {
+    try {
+      const id = String(req.params.id || '');
+      const { lat, lng, url, direccion, notas } = req.body || {};
+
+      if (!id) {
+        res.status(400).json({ success: false, error: 'ID de cliente requerido' });
+        return;
+      }
+
+      const ok = await TursoService.updateClientLocation(id, {
+        lat,
+        lng,
+        url,
+        direccion,
+        notas,
+      });
+
+      if (ok) {
+        // Emitir SSE para actualizar UI en vivo
+        AdminController.broadcastSSE('client:location_updated', {
+          id,
+          lat,
+          lng,
+          url,
+          direccion,
+          updated_at: new Date().toISOString(),
+        });
+
+        res.json({ success: true, message: 'Ubicación y coordenadas actualizadas exitosamente.' });
+      } else {
+        res.status(500).json({ success: false, error: 'No se pudo actualizar la ubicación' });
+      }
+    } catch (error: any) {
+      logger.error(`Error al actualizar ubicación de cliente ${req.params.id}:`, error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Actualiza el teléfono principal y los teléfonos familiares/adicionales de un cliente
+   */
+  static async updateClientPhones(req: Request, res: Response): Promise<void> {
+    try {
+      const id = String(req.params.id || '');
+      const { principal, adicionales } = req.body || {};
+
+      if (!id) {
+        res.status(400).json({ success: false, error: 'ID de cliente requerido' });
+        return;
+      }
+
+      const ok = await TursoService.updateWisphubClientTelefonos(
+        id,
+        principal || '',
+        Array.isArray(adicionales) ? adicionales : []
+      );
+
+      if (ok) {
+        // Emitir SSE
+        AdminController.broadcastSSE('client:phones_updated', {
+          id,
+          principal,
+          adicionales,
+          updated_at: new Date().toISOString(),
+        });
+
+        res.json({ success: true, message: 'Números de teléfono actualizados exitosamente.' });
+      } else {
+        res.status(500).json({ success: false, error: 'No se pudieron actualizar los teléfonos' });
+      }
+    } catch (error: any) {
+      logger.error(`Error al actualizar teléfonos de cliente ${req.params.id}:`, error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
 }
 

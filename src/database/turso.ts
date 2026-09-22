@@ -94,10 +94,10 @@ export async function initTursoDatabase(): Promise<void> {
       );
     `);
 
-    // Migración no destructiva de columna ip_address si no existe en tablas previas
-    try {
-      await client.execute(`ALTER TABLE smartolt_onus ADD COLUMN ip_address TEXT;`);
-    } catch (_) {}
+    // Migración no destructiva de columna ip_address y coordenadas si no existen en smartolt_onus
+    try { await client.execute(`ALTER TABLE smartolt_onus ADD COLUMN ip_address TEXT;`); } catch (_) {}
+    try { await client.execute(`ALTER TABLE smartolt_onus ADD COLUMN coordenadas_gps TEXT;`); } catch (_) {}
+    try { await client.execute(`ALTER TABLE smartolt_onus ADD COLUMN google_maps_url TEXT;`); } catch (_) {}
 
     // Índices para búsquedas rápidas
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_onus_name_norm ON smartolt_onus(name_normalized);`);
@@ -121,6 +121,10 @@ export async function initTursoDatabase(): Promise<void> {
         router TEXT,
         sn_onu TEXT,
         telefono TEXT,
+        telefonos_adicionales TEXT,
+        coordenadas_gps TEXT,
+        google_maps_url TEXT,
+        ubicacion_notas TEXT,
         direccion TEXT,
         dia_corte TEXT,
         fecha_corte TEXT,
@@ -128,15 +132,12 @@ export async function initTursoDatabase(): Promise<void> {
         updated_at TEXT
       );
     `);
-    try {
-      await client.execute(`ALTER TABLE wisphub_clients ADD COLUMN dia_corte TEXT;`);
-    } catch (_) {}
-    try {
-      await client.execute(`ALTER TABLE wisphub_clients ADD COLUMN fecha_corte TEXT;`);
-    } catch (_) {}
-    try {
-      await client.execute(`ALTER TABLE wisphub_clients ADD COLUMN telefonos_adicionales TEXT;`);
-    } catch (_) {}
+    try { await client.execute(`ALTER TABLE wisphub_clients ADD COLUMN dia_corte TEXT;`); } catch (_) {}
+    try { await client.execute(`ALTER TABLE wisphub_clients ADD COLUMN fecha_corte TEXT;`); } catch (_) {}
+    try { await client.execute(`ALTER TABLE wisphub_clients ADD COLUMN telefonos_adicionales TEXT;`); } catch (_) {}
+    try { await client.execute(`ALTER TABLE wisphub_clients ADD COLUMN coordenadas_gps TEXT;`); } catch (_) {}
+    try { await client.execute(`ALTER TABLE wisphub_clients ADD COLUMN google_maps_url TEXT;`); } catch (_) {}
+    try { await client.execute(`ALTER TABLE wisphub_clients ADD COLUMN ubicacion_notas TEXT;`); } catch (_) {}
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_wh_nombre_norm ON wisphub_clients(nombre_normalized);`);
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_wh_servicio ON wisphub_clients(servicio);`);
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_wh_ip ON wisphub_clients(ip);`);
@@ -207,6 +208,8 @@ export async function initTursoDatabase(): Promise<void> {
     try { await client.execute(`ALTER TABLE tickets ADD COLUMN resolution_notes TEXT;`); } catch {}
     try { await client.execute(`ALTER TABLE tickets ADD COLUMN category TEXT DEFAULT 'FALLA_FIBRA';`); } catch {}
     try { await client.execute(`ALTER TABLE tickets ADD COLUMN priority TEXT DEFAULT 'MEDIA';`); } catch {}
+    try { await client.execute(`ALTER TABLE tickets ADD COLUMN coordenadas_gps TEXT;`); } catch {}
+    try { await client.execute(`ALTER TABLE tickets ADD COLUMN google_maps_url TEXT;`); } catch {}
 
     // Sembrar superadmin inicial si la tabla está vacía
     const { hashPassword } = await import('../utils/auth');

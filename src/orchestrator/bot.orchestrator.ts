@@ -50,6 +50,14 @@ export interface IncomingMessageEvent {
   buttonId?: string;
   isMedia?: boolean;
   imageAnalysis?: GroqImageAnalysisResult | null;
+  location?: {
+    latitude?: number;
+    longitude?: number;
+    address?: string;
+    name?: string;
+    url?: string;
+    isLive?: boolean;
+  } | null;
   instanceName?: string;
 }
 
@@ -592,6 +600,12 @@ export class BotOrchestrator {
     // Si está en lista de exclusión y no envió 'ACTIVAR', no molestamos
     if (session?.opt_out === 1) {
       logger.info(`El usuario ${phone} tiene opt_out activo. Ignorando mensaje saliente.`);
+      return;
+    }
+
+    // 2.0 RECEPCIÓN DE UBICACIÓN GPS / GOOGLE MAPS COMPARTIDO (Mapeo automático de clientes)
+    if (event.location && (event.location.latitude || event.location.url)) {
+      await this.procesarUbicacionCliente(phone, event.location, session, targetJid);
       return;
     }
 
@@ -2694,6 +2708,75 @@ export class BotOrchestrator {
       `¿En qué podemos apoyarte el día de hoy con tu servicio de internet? Cuéntame tu duda o reporte.`;
 
     await this.enviarYLoguear(phone, msj, 'DESCONOCIDO', 'IMAGEN_RECIBIDA_CONVERSACIONAL', targetJid);
+  }
+
+  /**
+   * Procesa y registra automáticamente las ubicaciones enviadas por WhatsApp (locationMessage, Google Maps, o tiempo real)
+   */
+  private static async procesarUbicacionCliente(
+    phone: string,
+    loc: { latitude?: number; longitude?: number; address?: string; name?: string; url?: string; isLive?: boolean },
+    session: Session | null,
+    targetJid?: string
+  ): Promise<void> {
+    const lat = loc.latitude;
+    const lng = loc.longitude;
+    const url = loc.url || (lat && lng ? `https://www.google.com/maps?q=${lat},${lng}` : '');
+    const coordsStr = lat && lng ? `${lat},${lng}` : '';
+    const direccion = loc.address || loc.name || '';
+
+    logger.info(`[Ubicación WhatsApp] Procesando ubicación para ${phone}: Coordenadas=${coordsStr}, URL=${url}`);
+
+    // 1. Guardar en base de datos Turso DB (wisphub_clients, smartolt_onus, tickets)
+    await TursoService.updateClientLocation(phone, {
+      lat,
+      lng,
+      url,
+      direccion,
+      notas: loc.name,
+    });
+
+    // 2. Notificar vía SSE al panel de administración en tiempo real
+    try {
+      const { AdminController } = require('../controllers/admin.controller');
+      AdminController.broadcastSSE('chat:location_received', {
+        phone,
+        coords: coordsStr,
+        url,
+        direccion,
+        timestamp: new Date().toISOString(),
+      });
+    } catch {}
+
+    // 3. Buscar nombre del cliente si está registrado
+    let clientName = session?.client_name || '';
+    if (!clientName) {
+      try {
+        const clientDir = await TursoService.getClientsDirectory({ search: phone, limit: 1 });
+        if (clientDir && clientDir.clients && clientDir.clients.length > 0) {
+          clientName = clientDir.clients[0].nombre;
+        }
+      } catch {}
+    }
+    const primerNombre = clientName ? clientName.trim().split(/\s+/)[0] : '';
+    const saludo = primerNombre ? `¡Muchas gracias, *${primerNombre}*!` : `¡Muchas gracias!`;
+
+    // 4. Armar respuesta cordial y confirmar el guardado de la ubicación
+    const mensaje = 
+      `📍 *${saludo} Hemos registrado tu ubicación con éxito.*\n\n` +
+      `✅ Las coordenadas de tu domicilio han quedado guardadas en tu expediente técnico de servicio.\n\n` +
+      `🗺️ *Ubicación:* ${coordsStr || url || 'Enlace de Google Maps'}\n` +
+      (direccion ? `🏠 *Referencia:* ${direccion}\n\n` : `\n`) +
+      `Esto nos permite georreferenciar tu instalación y optimizar el tiempo de llegada en caso de visitas técnicas o soporte en sitio. 🛠️🚗\n\n` +
+      `¿Hay alguna falla que desees reportar o algún otro trámite en el que te podamos apoyar?`;
+
+    await this.enviarYLoguear(
+      phone,
+      mensaje,
+      'UBICACION_REGISTRADA',
+      'UBICACION_GPS_GUARDADA',
+      targetJid
+    );
   }
 
   /**

@@ -15,6 +15,8 @@ export interface SmartOltOnuRecord {
   speed_profile?: string;
   olt_name?: string;
   ip_address?: string;
+  coordenadas_gps?: string;
+  google_maps_url?: string;
   raw_data?: string;
   updated_at?: string;
 }
@@ -33,6 +35,10 @@ export interface WisphubClientRecord {
   router?: string;
   sn_onu?: string;
   telefono?: string;
+  telefonos_adicionales?: string;
+  coordenadas_gps?: string;
+  google_maps_url?: string;
+  ubicacion_notas?: string;
   direccion?: string;
   dia_corte?: string | null;
   fecha_corte?: string | null;
@@ -647,8 +653,9 @@ export class TursoService {
               INSERT INTO wisphub_clients (
                 id_servicio, nombre, nombre_normalized, servicio, ip, estado,
                 estado_facturas, precio_plan, saldo, plan_internet, router,
-                sn_onu, telefono, direccion, dia_corte, fecha_corte, raw_data, updated_at
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                sn_onu, telefono, telefonos_adicionales, coordenadas_gps, google_maps_url, ubicacion_notas,
+                direccion, dia_corte, fecha_corte, raw_data, updated_at
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
               ON CONFLICT(id_servicio) DO UPDATE SET
                 nombre = excluded.nombre,
                 nombre_normalized = excluded.nombre_normalized,
@@ -661,8 +668,12 @@ export class TursoService {
                 plan_internet = excluded.plan_internet,
                 router = excluded.router,
                 sn_onu = excluded.sn_onu,
-                telefono = excluded.telefono,
-                direccion = excluded.direccion,
+                telefono = COALESCE(NULLIF(excluded.telefono, ''), wisphub_clients.telefono),
+                telefonos_adicionales = COALESCE(excluded.telefonos_adicionales, wisphub_clients.telefonos_adicionales),
+                coordenadas_gps = COALESCE(excluded.coordenadas_gps, wisphub_clients.coordenadas_gps),
+                google_maps_url = COALESCE(excluded.google_maps_url, wisphub_clients.google_maps_url),
+                ubicacion_notas = COALESCE(excluded.ubicacion_notas, wisphub_clients.ubicacion_notas),
+                direccion = COALESCE(NULLIF(excluded.direccion, ''), wisphub_clients.direccion),
                 dia_corte = COALESCE(excluded.dia_corte, wisphub_clients.dia_corte),
                 fecha_corte = COALESCE(excluded.fecha_corte, wisphub_clients.fecha_corte),
                 raw_data = excluded.raw_data,
@@ -682,6 +693,10 @@ export class TursoService {
               c.router || '',
               c.sn_onu || '',
               c.telefono || '',
+              c.telefonos_adicionales || null,
+              c.coordenadas_gps || null,
+              c.google_maps_url || null,
+              c.ubicacion_notas || null,
               c.direccion || '',
               diaCorte || null,
               fechaCorte || null,
@@ -799,6 +814,440 @@ export class TursoService {
     } catch (err: any) {
       logger.warn(`No se pudo vincular teléfono en WispHub para servicio ${idServicio}:`, err?.message || err);
       return false;
+    }
+  }
+
+  /**
+   * Actualiza o registra las coordenadas GPS, enlace de Google Maps y dirección de un cliente
+   * Funciona buscando por id_servicio, teléfono (principal o adicional) o número de serie ONU.
+   */
+  static async updateClientLocation(
+    identifier: string | number,
+    loc: {
+      lat?: number | string;
+      lng?: number | string;
+      url?: string;
+      direccion?: string;
+      notas?: string;
+    }
+  ): Promise<boolean> {
+    try {
+      const client = getTursoClient();
+      const now = new Date().toISOString();
+
+      let coordsStr = '';
+      if (loc.lat !== undefined && loc.lng !== undefined && loc.lat !== '' && loc.lng !== '') {
+        coordsStr = `${loc.lat},${loc.lng}`.trim();
+      }
+
+      let mapsUrl = (loc.url || '').trim();
+      if (!mapsUrl && coordsStr) {
+        mapsUrl = `https://www.google.com/maps?q=${coordsStr}`;
+      }
+
+      const idNum = Number(identifier);
+      const isNum = !isNaN(idNum) && idNum > 0;
+      const cleanPhone = String(identifier).replace(/\D/g, '');
+      const rawStr = String(identifier).trim();
+
+      let updatedCount = 0;
+
+      // 1. Actualizar por id_servicio en wisphub_clients
+      if (isNum) {
+        const res = await client.execute({
+          sql: `
+            UPDATE wisphub_clients 
+            SET 
+              coordenadas_gps = COALESCE(NULLIF(?, ''), coordenadas_gps),
+              google_maps_url = COALESCE(NULLIF(?, ''), google_maps_url),
+              ubicacion_notas = COALESCE(NULLIF(?, ''), ubicacion_notas),
+              direccion = COALESCE(NULLIF(?, ''), direccion),
+              updated_at = ?
+            WHERE id_servicio = ?
+          `,
+          args: [coordsStr || null, mapsUrl || null, loc.notas || null, loc.direccion || null, now, idNum],
+        });
+        if ((res.rowsAffected || 0) > 0) updatedCount++;
+      }
+
+      // 2. Actualizar por teléfono en wisphub_clients
+      if (cleanPhone.length >= 10) {
+        const resWh = await client.execute({
+          sql: `
+            UPDATE wisphub_clients 
+            SET 
+              coordenadas_gps = COALESCE(NULLIF(?, ''), coordenadas_gps),
+              google_maps_url = COALESCE(NULLIF(?, ''), google_maps_url),
+              ubicacion_notas = COALESCE(NULLIF(?, ''), ubicacion_notas),
+              direccion = COALESCE(NULLIF(?, ''), direccion),
+              updated_at = ?
+            WHERE telefono LIKE ? OR telefonos_adicionales LIKE ?
+          `,
+          args: [coordsStr || null, mapsUrl || null, loc.notas || null, loc.direccion || null, now, `%${cleanPhone}%`, `%${cleanPhone}%`],
+        });
+        if ((resWh.rowsAffected || 0) > 0) updatedCount++;
+      }
+
+      // 3. Actualizar en smartolt_onus si coincide teléfono o SN
+      if (cleanPhone.length >= 10 || rawStr.length >= 6) {
+        await client.execute({
+          sql: `
+            UPDATE smartolt_onus 
+            SET 
+              coordenadas_gps = COALESCE(NULLIF(?, ''), coordenadas_gps),
+              google_maps_url = COALESCE(NULLIF(?, ''), google_maps_url),
+              updated_at = ?
+            WHERE phone LIKE ? OR sn = ? OR unique_external_id = ?
+          `,
+          args: [coordsStr || null, mapsUrl || null, now, `%${cleanPhone}%`, rawStr.toUpperCase(), rawStr],
+        });
+      }
+
+      // 4. Actualizar tickets abiertos asociados a este teléfono
+      if (cleanPhone.length >= 10) {
+        await client.execute({
+          sql: `
+            UPDATE tickets 
+            SET 
+              coordenadas_gps = COALESCE(NULLIF(?, ''), coordenadas_gps),
+              google_maps_url = COALESCE(NULLIF(?, ''), google_maps_url),
+              updated_at = ?
+            WHERE phone LIKE ? AND status != 'RESUELTO'
+          `,
+          args: [coordsStr || null, mapsUrl || null, now, `%${cleanPhone}%`],
+        });
+      }
+
+      logger.info(`[Ubicación] Georreferencia guardada para identificador "${identifier}": ${coordsStr || mapsUrl}`);
+      return true;
+    } catch (err: any) {
+      logger.error(`Error al actualizar ubicación para ${identifier}:`, err?.message || err);
+      return false;
+    }
+  }
+
+  /**
+   * Actualiza el listado de teléfonos de un cliente (teléfono principal y adicionales/familiares)
+   */
+  static async updateWisphubClientTelefonos(
+    idServicio: string | number,
+    principal: string,
+    adicionales: string[] = []
+  ): Promise<boolean> {
+    try {
+      const client = getTursoClient();
+      const cleanPrincipal = (principal || '').replace(/\D/g, '');
+      const cleanExtras = (adicionales || []).map(p => p.replace(/\D/g, '')).filter(p => p.length >= 10 && p !== cleanPrincipal);
+      const uniqueExtras = Array.from(new Set(cleanExtras));
+      const now = new Date().toISOString();
+
+      await client.execute({
+        sql: `
+          UPDATE wisphub_clients 
+          SET 
+            telefono = ?,
+            telefonos_adicionales = ?,
+            updated_at = ?
+          WHERE id_servicio = ?
+        `,
+        args: [
+          cleanPrincipal || null,
+          uniqueExtras.length > 0 ? JSON.stringify(uniqueExtras) : null,
+          now,
+          Number(idServicio),
+        ],
+      });
+
+      logger.info(`[Teléfonos] Actualizados teléfonos de servicio ${idServicio}: Principal=${cleanPrincipal}, Adicionales=${uniqueExtras.join(', ')}`);
+      return true;
+    } catch (err: any) {
+      logger.error(`Error al actualizar teléfonos de cliente ${idServicio}:`, err?.message || err);
+      return false;
+    }
+  }
+
+  /**
+   * Obtiene el directorio consolidado de clientes con soporte para búsqueda, filtros avanzados y paginación
+   */
+  static async getClientsDirectory(options: {
+    search?: string;
+    status?: string; // 'ALL' | 'ACTIVO' | 'SUSPENDIDO' | 'CON_GPS' | 'SIN_GPS'
+    limit?: number;
+    offset?: number;
+  }): Promise<{
+    clients: any[];
+    total: number;
+    totalActive: number;
+    totalSuspended: number;
+    totalWithGps: number;
+    totalWithoutGps: number;
+  }> {
+    try {
+      const client = getTursoClient();
+      const limit = Math.min(Math.max(Number(options.limit || 50), 1), 200);
+      const offset = Math.max(Number(options.offset || 0), 0);
+      const search = (options.search || '').trim().toLowerCase();
+      const statusFilter = (options.status || 'ALL').toUpperCase();
+
+      // Métricas globales rápidas
+      const metricsRes = await client.execute(`
+        SELECT 
+          COUNT(*) as total,
+          SUM(CASE WHEN LOWER(estado) LIKE '%act%' THEN 1 ELSE 0 END) as total_active,
+          SUM(CASE WHEN LOWER(estado) LIKE '%susp%' OR LOWER(estado) LIKE '%cort%' THEN 1 ELSE 0 END) as total_suspended,
+          SUM(CASE WHEN (coordenadas_gps IS NOT NULL AND LENGTH(coordenadas_gps) > 3) OR (google_maps_url IS NOT NULL AND LENGTH(google_maps_url) > 5) THEN 1 ELSE 0 END) as total_with_gps
+        FROM wisphub_clients
+      `);
+
+      const total = Number(metricsRes.rows[0]?.total || 0);
+      const totalActive = Number(metricsRes.rows[0]?.total_active || 0);
+      const totalSuspended = Number(metricsRes.rows[0]?.total_suspended || 0);
+      const totalWithGps = Number(metricsRes.rows[0]?.total_with_gps || 0);
+      const totalWithoutGps = Math.max(0, total - totalWithGps);
+
+      const whereClauses: string[] = [];
+      const args: any[] = [];
+
+      if (search) {
+        const cleanSearch = search.replace(/[^a-z0-9]/gi, '');
+        const normSearch = normalizeText(search);
+        whereClauses.push(`(
+          LOWER(w.nombre) LIKE ? OR
+          w.nombre_normalized LIKE ? OR
+          w.telefono LIKE ? OR
+          w.telefonos_adicionales LIKE ? OR
+          w.ip LIKE ? OR
+          LOWER(w.sn_onu) LIKE ? OR
+          LOWER(w.direccion) LIKE ? OR
+          LOWER(w.servicio) LIKE ? OR
+          CAST(w.id_servicio AS TEXT) LIKE ?
+        )`);
+        args.push(
+          `%${search}%`,
+          `%${normSearch}%`,
+          `%${cleanSearch}%`,
+          `%${cleanSearch}%`,
+          `%${search}%`,
+          `%${search}%`,
+          `%${search}%`,
+          `%${search}%`,
+          `%${search}%`
+        );
+      }
+
+      if (statusFilter === 'ACTIVO') {
+        whereClauses.push(`LOWER(w.estado) LIKE '%act%'`);
+      } else if (statusFilter === 'SUSPENDIDO') {
+        whereClauses.push(`(LOWER(w.estado) LIKE '%susp%' OR LOWER(w.estado) LIKE '%cort%')`);
+      } else if (statusFilter === 'CON_GPS') {
+        whereClauses.push(`((w.coordenadas_gps IS NOT NULL AND LENGTH(w.coordenadas_gps) > 3) OR (w.google_maps_url IS NOT NULL AND LENGTH(w.google_maps_url) > 5))`);
+      } else if (statusFilter === 'SIN_GPS') {
+        whereClauses.push(`(w.coordenadas_gps IS NULL OR LENGTH(w.coordenadas_gps) <= 3) AND (w.google_maps_url IS NULL OR LENGTH(w.google_maps_url) <= 5)`);
+      }
+
+      const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+
+      // Total filtrado
+      const countSql = `SELECT COUNT(*) as filtered_count FROM wisphub_clients w ${whereSql}`;
+      const countRes = await client.execute({ sql: countSql, args });
+      const filteredTotal = Number(countRes.rows[0]?.filtered_count || 0);
+
+      // Consulta de registros con LEFT JOIN hacia smartolt_onus para complementar SN, potencia y OLT
+      const querySql = `
+        SELECT 
+          w.id_servicio,
+          w.nombre,
+          w.servicio,
+          w.ip,
+          w.estado,
+          w.estado_facturas,
+          w.precio_plan,
+          w.saldo,
+          w.plan_internet,
+          w.router,
+          COALESCE(NULLIF(w.sn_onu, ''), o.sn) as sn_onu,
+          w.telefono,
+          w.telefonos_adicionales,
+          COALESCE(NULLIF(w.coordenadas_gps, ''), o.coordenadas_gps) as coordenadas_gps,
+          COALESCE(NULLIF(w.google_maps_url, ''), o.google_maps_url) as google_maps_url,
+          w.ubicacion_notas,
+          w.direccion,
+          w.dia_corte,
+          w.fecha_corte,
+          w.updated_at,
+          o.unique_external_id as smartolt_id,
+          o.zone_name as zona_smartolt,
+          o.olt_name as olt_smartolt
+        FROM wisphub_clients w
+        LEFT JOIN smartolt_onus o ON (
+          (w.sn_onu IS NOT NULL AND LENGTH(w.sn_onu) >= 6 AND o.sn = w.sn_onu) OR
+          (w.ip IS NOT NULL AND LENGTH(w.ip) >= 7 AND o.ip_address = w.ip)
+        )
+        ${whereSql}
+        ORDER BY w.nombre ASC
+        LIMIT ? OFFSET ?
+      `;
+
+      const rowsRes = await client.execute({
+        sql: querySql,
+        args: [...args, limit, offset],
+      });
+
+      const clients = rowsRes.rows.map(row => {
+        let extraPhones: string[] = [];
+        try {
+          if (row.telefonos_adicionales) {
+            extraPhones = JSON.parse(String(row.telefonos_adicionales));
+          }
+        } catch {
+          extraPhones = String(row.telefonos_adicionales || '')
+            .split(',')
+            .map(s => s.trim().replace(/\D/g, ''))
+            .filter(Boolean);
+        }
+
+        let mapsUrl = String(row.google_maps_url || '').trim();
+        const coords = String(row.coordenadas_gps || '').trim();
+        if (!mapsUrl && coords) {
+          mapsUrl = `https://www.google.com/maps?q=${coords}`;
+        }
+
+        return {
+          id_servicio: row.id_servicio,
+          nombre: String(row.nombre || ''),
+          servicio: String(row.servicio || ''),
+          ip: String(row.ip || ''),
+          estado: String(row.estado || 'Activo'),
+          estado_facturas: String(row.estado_facturas || 'Pagadas'),
+          precio_plan: row.precio_plan,
+          saldo: row.saldo,
+          plan_internet: String(row.plan_internet || ''),
+          router: String(row.router || ''),
+          sn_onu: String(row.sn_onu || ''),
+          telefono_principal: String(row.telefono || '').replace(/\D/g, ''),
+          telefonos_adicionales: extraPhones,
+          coordenadas_gps: coords || null,
+          google_maps_url: mapsUrl || null,
+          ubicacion_notas: row.ubicacion_notas ? String(row.ubicacion_notas) : null,
+          direccion: String(row.direccion || ''),
+          dia_corte: row.dia_corte ? String(row.dia_corte) : null,
+          fecha_corte: row.fecha_corte ? String(row.fecha_corte) : null,
+          smartolt_id: row.smartolt_id ? String(row.smartolt_id) : null,
+          zona_smartolt: row.zona_smartolt ? String(row.zona_smartolt) : null,
+          olt_smartolt: row.olt_smartolt ? String(row.olt_smartolt) : null,
+          updated_at: row.updated_at ? String(row.updated_at) : null,
+        };
+      });
+
+      return {
+        clients,
+        total: filteredTotal,
+        totalActive,
+        totalSuspended,
+        totalWithGps,
+        totalWithoutGps,
+      };
+    } catch (err: any) {
+      logger.error('Error al consultar directorio de clientes:', err?.message || err);
+      return {
+        clients: [],
+        total: 0,
+        totalActive: 0,
+        totalSuspended: 0,
+        totalWithGps: 0,
+        totalWithoutGps: 0,
+      };
+    }
+  }
+
+  /**
+   * Obtiene la ficha detallada de un cliente con su historial de tickets y datos técnicos
+   */
+  static async getClientDetail(idServicio: string | number): Promise<any | null> {
+    try {
+      const client = getTursoClient();
+      const res = await client.execute({
+        sql: `
+          SELECT 
+            w.*,
+            o.unique_external_id as smartolt_id,
+            o.zone_name as zona_smartolt,
+            o.olt_name as olt_smartolt,
+            o.speed_profile as perfil_velocidad
+          FROM wisphub_clients w
+          LEFT JOIN smartolt_onus o ON (
+            (w.sn_onu IS NOT NULL AND LENGTH(w.sn_onu) >= 6 AND o.sn = w.sn_onu) OR
+            (w.ip IS NOT NULL AND LENGTH(w.ip) >= 7 AND o.ip_address = w.ip)
+          )
+          WHERE w.id_servicio = ?
+          LIMIT 1
+        `,
+        args: [Number(idServicio)],
+      });
+
+      if (res.rows.length === 0) return null;
+      const row = res.rows[0];
+
+      let extraPhones: string[] = [];
+      try {
+        if (row.telefonos_adicionales) {
+          extraPhones = JSON.parse(String(row.telefonos_adicionales));
+        }
+      } catch {
+        extraPhones = String(row.telefonos_adicionales || '').split(',').map(s => s.trim().replace(/\D/g, '')).filter(Boolean);
+      }
+
+      const mainPhone = String(row.telefono || '').replace(/\D/g, '');
+      const allPhones = [mainPhone, ...extraPhones].filter(Boolean);
+
+      // Obtener tickets recientes asociados
+      let tickets: any[] = [];
+      if (allPhones.length > 0) {
+        const placeholders = allPhones.map(() => '?').join(',');
+        const tRes = await client.execute({
+          sql: `SELECT * FROM tickets WHERE phone IN (${placeholders}) ORDER BY created_at DESC LIMIT 10`,
+          args: allPhones,
+        });
+        tickets = tRes.rows as any[];
+      }
+
+      let mapsUrl = String(row.google_maps_url || '').trim();
+      const coords = String(row.coordenadas_gps || '').trim();
+      if (!mapsUrl && coords) {
+        mapsUrl = `https://www.google.com/maps?q=${coords}`;
+      }
+
+      return {
+        id_servicio: row.id_servicio,
+        nombre: String(row.nombre || ''),
+        servicio: String(row.servicio || ''),
+        ip: String(row.ip || ''),
+        estado: String(row.estado || 'Activo'),
+        estado_facturas: String(row.estado_facturas || 'Pagadas'),
+        precio_plan: row.precio_plan,
+        saldo: row.saldo,
+        plan_internet: String(row.plan_internet || ''),
+        router: String(row.router || ''),
+        sn_onu: String(row.sn_onu || ''),
+        telefono_principal: mainPhone,
+        telefonos_adicionales: extraPhones,
+        todos_los_telefonos: allPhones,
+        coordenadas_gps: coords || null,
+        google_maps_url: mapsUrl || null,
+        ubicacion_notas: row.ubicacion_notas ? String(row.ubicacion_notas) : null,
+        direccion: String(row.direccion || ''),
+        dia_corte: row.dia_corte ? String(row.dia_corte) : null,
+        fecha_corte: row.fecha_corte ? String(row.fecha_corte) : null,
+        smartolt_id: row.smartolt_id ? String(row.smartolt_id) : null,
+        zona_smartolt: row.zona_smartolt ? String(row.zona_smartolt) : null,
+        olt_smartolt: row.olt_smartolt ? String(row.olt_smartolt) : null,
+        perfil_velocidad: row.perfil_velocidad ? String(row.perfil_velocidad) : null,
+        tickets,
+        updated_at: row.updated_at ? String(row.updated_at) : null,
+      };
+    } catch (err: any) {
+      logger.error(`Error al obtener detalle de cliente ${idServicio}:`, err?.message || err);
+      return null;
     }
   }
 

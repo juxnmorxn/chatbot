@@ -74,6 +74,14 @@ router.get('/api/wisphub/stats', AdminController.getWisphubStats);
 router.get('/api/audit/ip-cross', AdminController.getAuditIpCross);
 
 // ==========================================
+// DIRECTORIO DE CLIENTES, MULTI-TELÉFONOS Y GPS
+// ==========================================
+router.get('/api/admin/clients', AdminController.getClients);
+router.get('/api/admin/clients/:id', AdminController.getClientDetail);
+router.post('/api/admin/clients/:id/location', AdminController.updateClientLocation);
+router.post('/api/admin/clients/:id/phones', AdminController.updateClientPhones);
+
+// ==========================================
 // IPAM & GESTIÓN DE POOLS / VLANS / ONUS
 // ==========================================
 router.get('/api/ipam/pools', AdminController.getIpamPools);

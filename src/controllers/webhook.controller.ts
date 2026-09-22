@@ -262,6 +262,7 @@ export class WebhookController {
         buttonId: extracted.buttonId,
         isMedia: extracted.isMedia,
         imageAnalysis,
+        location: extracted.location || null,
         instanceName: incomingInstance || undefined,
       };
 
@@ -369,7 +370,20 @@ export class WebhookController {
   /**
    * Extrae texto, respuestas de botones, notas de voz, ubicaciones y archivos multimedia de los payloads de WhatsApp
    */
-  private static extractMessageContent(msg: any): { text?: string; buttonId?: string; isMedia?: boolean; isAudio?: boolean } {
+  private static extractMessageContent(msg: any): {
+    text?: string;
+    buttonId?: string;
+    isMedia?: boolean;
+    isAudio?: boolean;
+    location?: {
+      latitude?: number;
+      longitude?: number;
+      address?: string;
+      name?: string;
+      url?: string;
+      isLive?: boolean;
+    };
+  } {
     const message = msg.message || {};
 
     // 1. Botón interactivo tradicional
@@ -406,24 +420,76 @@ export class WebhookController {
       }
     }
 
-    // 4. Mensaje de texto plano
-    if (message.conversation) {
-      return { text: message.conversation };
-    }
-
-    // 5. Mensaje de texto extendido
-    if (message.extendedTextMessage?.text) {
-      return { text: message.extendedTextMessage.text };
-    }
-
-    // 6. Ubicación / GPS compartido por WhatsApp
+    // 4. Ubicación / GPS compartido nativamente por WhatsApp (locationMessage o liveLocationMessage)
     if (message.locationMessage || message.liveLocationMessage) {
       const loc = message.locationMessage || message.liveLocationMessage;
-      const lat = loc.degreesLatitude;
-      const lon = loc.degreesLongitude;
+      const lat = Number(loc.degreesLatitude);
+      const lon = Number(loc.degreesLongitude);
       const addr = loc.address || loc.name || '';
-      const text = `Ubicación GPS: ${lat}, ${lon}${addr ? ` (${addr})` : ''}`;
-      return { text, isMedia: false };
+      const isLive = Boolean(message.liveLocationMessage);
+      const mapsUrl = `https://www.google.com/maps?q=${lat},${lon}`;
+      const text = `Ubicación GPS: ${lat}, ${lon}${addr ? ` (${addr})` : ''} - ${mapsUrl}`;
+
+      return {
+        text,
+        isMedia: false,
+        location: {
+          latitude: lat,
+          longitude: lon,
+          address: addr || undefined,
+          name: loc.name || undefined,
+          url: mapsUrl,
+          isLive,
+        },
+      };
+    }
+
+    // Helper para detectar links o coordenadas en texto
+    const checkTextForLocation = (rawText: string) => {
+      if (!rawText) return null;
+      // 1. Regex para Google Maps links
+      const mapsMatch = rawText.match(/https?:\/\/(?:www\.)?(?:google\.com\/maps[^\s]+|maps\.google\.com[^\s]+|maps\.app\.goo\.gl\/[a-zA-Z0-9_\-]+|goo\.gl\/maps\/[a-zA-Z0-9_\-]+)/i);
+      // 2. Regex para coordenadas numéricas e.g. 19.432608, -99.133209
+      const coordMatch = rawText.match(/(-?\d{1,2}\.\d{4,8})\s*,\s*(-?\d{1,3}\.\d{4,8})/);
+
+      if (mapsMatch || coordMatch) {
+        let lat: number | undefined;
+        let lon: number | undefined;
+        let url = mapsMatch ? mapsMatch[0] : '';
+
+        if (coordMatch) {
+          lat = parseFloat(coordMatch[1]);
+          lon = parseFloat(coordMatch[2]);
+          if (!url && !isNaN(lat) && !isNaN(lon)) {
+            url = `https://www.google.com/maps?q=${lat},${lon}`;
+          }
+        }
+
+        return {
+          latitude: lat,
+          longitude: lon,
+          url: url || undefined,
+        };
+      }
+      return null;
+    };
+
+    // 5. Mensaje de texto plano
+    if (message.conversation) {
+      const detectedLoc = checkTextForLocation(message.conversation);
+      return {
+        text: message.conversation,
+        location: detectedLoc || undefined,
+      };
+    }
+
+    // 6. Mensaje de texto extendido
+    if (message.extendedTextMessage?.text) {
+      const detectedLoc = checkTextForLocation(message.extendedTextMessage.text);
+      return {
+        text: message.extendedTextMessage.text,
+        location: detectedLoc || undefined,
+      };
     }
 
     // 7. Notas de voz y audios de WhatsApp (para transcripción Whisper)
@@ -437,9 +503,11 @@ export class WebhookController {
     // 8. Archivos multimedia (imágenes, documentos para comprobantes de pago o evidencia)
     if (message.imageMessage || message.documentMessage) {
       const caption = message.imageMessage?.caption || message.documentMessage?.caption || '';
+      const detectedLoc = checkTextForLocation(caption);
       return {
         text: caption,
         isMedia: true,
+        location: detectedLoc || undefined,
       };
     }
 

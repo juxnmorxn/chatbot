@@ -1422,6 +1422,13 @@ export function getAdminDashboardHtml(): string {
           <span class="nav-text">Live WhatsApp</span>
           <span id="badge-live-chat" class="nav-badge" style="display: none;">0</span>
         </div>
+        <div class="nav-item" data-view="clients" onclick="navigateTo('clients')" title="Directorio de Clientes & GPS">
+          <span class="nav-icon">
+            <svg class="svg-icon" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M20 8c0 3-4 7-4 7s-4-4-4-7a4 4 0 0 1 8 0z"></path><circle cx="16" cy="8" r="1.5"></circle></svg>
+          </span>
+          <span class="nav-text">Clientes & GPS</span>
+          <span id="badge-clients-total" class="nav-badge" style="display: none;">0</span>
+        </div>
         <div class="nav-item" data-view="tickets" onclick="navigateTo('tickets')" title="Mesa de Tickets">
           <span class="nav-icon">
             <svg class="svg-icon" viewBox="0 0 24 24"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"></path><path d="M13 5v2"></path><path d="M13 17v2"></path><path d="M13 11v2"></path></svg>
@@ -1693,6 +1700,115 @@ export function getAdminDashboardHtml(): string {
                   <span>Enviar</span>
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW: DIRECTORTIO DE CLIENTES & GEOLOCALIZACIÓN GPS -->
+      <section id="view-clients" class="view-container">
+        <!-- Metric Overview Cards -->
+        <div class="grid-metrics">
+          <div class="glass-card metric-card">
+            <div class="metric-header">
+              <span>Total Abonados</span>
+              <div class="metric-icon-box" style="color: var(--primary);">
+                <svg class="svg-icon" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+              </div>
+            </div>
+            <div id="metric-clients-total" class="metric-value">--</div>
+            <div class="metric-footer">Registrados en WispHub</div>
+          </div>
+
+          <div class="glass-card metric-card">
+            <div class="metric-header">
+              <span>Con Ubicación GPS</span>
+              <div class="metric-icon-box" style="color: var(--accent-green);">
+                <svg class="svg-icon" viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+              </div>
+            </div>
+            <div id="metric-clients-with-gps" class="metric-value" style="color: #34d399;">--</div>
+            <div class="metric-footer">Coordenadas y Google Maps listos</div>
+          </div>
+
+          <div class="glass-card metric-card">
+            <div class="metric-header">
+              <span>Sin Coordenadas GPS</span>
+              <div class="metric-icon-box" style="color: var(--accent-amber);">
+                <svg class="svg-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+              </div>
+            </div>
+            <div id="metric-clients-without-gps" class="metric-value" style="color: #fcd34d;">--</div>
+            <div class="metric-footer">Pendientes de enviar ubicación</div>
+          </div>
+
+          <div class="glass-card metric-card">
+            <div class="metric-header">
+              <span>Servicios Activos</span>
+              <div class="metric-icon-box" style="color: #60a5fa;">
+                <svg class="svg-icon" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+              </div>
+            </div>
+            <div id="metric-clients-active" class="metric-value" style="color: #60a5fa;">--</div>
+            <div class="metric-footer">Con servicio activo en línea</div>
+          </div>
+        </div>
+
+        <!-- Filter & Search Toolbar -->
+        <div class="glass-card" style="margin-bottom: 20px; padding: 16px 20px;">
+          <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;">
+            <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center; flex: 1; min-width: 280px;">
+              <div style="position: relative; flex: 1; min-width: 240px; max-width: 440px;">
+                <input type="text" id="input-clients-search" class="form-control" placeholder="Buscar por nombre, teléfono, IP, serie ONU o dirección..." oninput="handleClientsSearchInput(this.value)">
+              </div>
+              <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                <button class="btn btn-primary btn-sm" id="btn-client-filter-all" onclick="setClientsStatusFilter('ALL', this)">Todos</button>
+                <button class="btn btn-secondary btn-sm" id="btn-client-filter-gps" onclick="setClientsStatusFilter('CON_GPS', this)">📍 Con GPS</button>
+                <button class="btn btn-secondary btn-sm" id="btn-client-filter-nogps" onclick="setClientsStatusFilter('SIN_GPS', this)">⚠️ Sin GPS</button>
+                <button class="btn btn-secondary btn-sm" id="btn-client-filter-act" onclick="setClientsStatusFilter('ACTIVO', this)">🟢 Activos</button>
+                <button class="btn btn-secondary btn-sm" id="btn-client-filter-susp" onclick="setClientsStatusFilter('SUSPENDIDO', this)">🔴 Suspendidos</button>
+              </div>
+            </div>
+            <div style="display: flex; gap: 10px;">
+              <button class="btn btn-secondary btn-sm" onclick="triggerWisphubSync()">
+                <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"></path></svg>
+                <span>Sincronizar WispHub</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Table Container -->
+        <div class="glass-card">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 8px;">
+            <h3 style="font-size: 15px; font-weight: 700;">Directorio de Clientes & Geolocalización</h3>
+            <span id="clients-count-label" style="font-size: 12px; color: var(--text-muted);">Cargando clientes...</span>
+          </div>
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Cliente / Servicio</th>
+                  <th>Estado</th>
+                  <th>Corte</th>
+                  <th>Teléfonos (Principal & Familiares)</th>
+                  <th>Ubicación GPS & Google Maps</th>
+                  <th>Datos Técnicos</th>
+                  <th style="text-align: right;">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="table-clients-body">
+                <tr><td colspan="7" style="text-align: center; color: var(--text-dim); padding: 24px;">Cargando listado de clientes...</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Pagination Bar -->
+          <div id="clients-pagination" style="display: flex; align-items: center; justify-content: space-between; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--card-border);">
+            <span id="clients-pagination-info" style="font-size: 12.5px; color: var(--text-dim);">Página 1</span>
+            <div style="display: flex; gap: 8px;">
+              <button id="btn-clients-prev" class="btn btn-secondary btn-sm" onclick="changeClientsPage(-1)">◀ Anterior</button>
+              <button id="btn-clients-next" class="btn btn-secondary btn-sm" onclick="changeClientsPage(1)">Siguiente ▶</button>
             </div>
           </div>
         </div>
@@ -2166,6 +2282,7 @@ export function getAdminDashboardHtml(): string {
       activeChatPhone: null,
       chatDeptFilter: 'all',
       tickets: [],
+      clients: { filter: 'ALL', search: '', page: 1, limit: 25, total: 0, items: [] },
       audit: { filter: 'all', search: '', page: 1, limit: 30, total: 0 },
       provisioning: { filter: 'pending', search: '', page: 1, limit: 30, total: 0 },
       technicians: [],
@@ -2377,6 +2494,7 @@ export function getAdminDashboardHtml(): string {
       const titles = {
         'dashboard': 'Resumen General',
         'live-chat': 'Live WhatsApp & Human Takeover',
+        'clients': 'Directorio de Clientes & Geolocalización GPS',
         'tickets': 'Mesa de Tickets (Kanban)',
         'ipam': 'IPAM & Gestión de Pools VLAN',
         'audit': 'Auditoría SmartOLT vs WispHub',
@@ -2412,6 +2530,7 @@ export function getAdminDashboardHtml(): string {
       switch (viewId) {
         case 'dashboard': loadDashboardData(); break;
         case 'live-chat': loadLiveChatData(); break;
+        case 'clients': loadClientsData(); break;
         case 'tickets': loadTicketsData(); break;
         case 'ipam': loadIpamData(); break;
         case 'audit': loadAuditData(); break;
@@ -2468,6 +2587,22 @@ export function getAdminDashboardHtml(): string {
           }
         });
 
+        evtSource.addEventListener('client:location_updated', () => {
+          if (state.currentView === 'clients') loadClientsData();
+          loadDashboardBadgeCounters();
+        });
+
+        evtSource.addEventListener('client:phones_updated', () => {
+          if (state.currentView === 'clients') loadClientsData();
+        });
+
+        evtSource.addEventListener('chat:location_received', (e) => {
+          const data = JSON.parse(e.data || '{}');
+          showToast('📍 Ubicación Recibida', \`Cliente \${data.phone} compartió su ubicación GPS.\`, 'success', 4000);
+          if (state.currentView === 'clients') loadClientsData();
+          loadDashboardBadgeCounters();
+        });
+
         evtSource.addEventListener('tickets:update', () => {
           if (state.currentView === 'tickets') loadTicketsData();
           loadDashboardBadgeCounters();
@@ -2519,9 +2654,10 @@ export function getAdminDashboardHtml(): string {
 
     async function loadDashboardBadgeCounters() {
       try {
-        const [ticketStats, ipamRes] = await Promise.all([
+        const [ticketStats, ipamRes, clientRes] = await Promise.all([
           apiFetch('/api/tickets/stats').catch(() => ({ stats: { abiertos: 0 } })),
           apiFetch('/api/smartolt/unconfigured').catch(() => ({ count: 0 })),
+          apiFetch('/api/admin/clients?limit=1').catch(() => ({ total: 0 })),
         ]);
 
         const openCount = ticketStats.stats?.abiertos || 0;
@@ -2540,6 +2676,13 @@ export function getAdminDashboardHtml(): string {
           bIpam.style.display = 'inline-block';
         } else {
           bIpam.style.display = 'none';
+        }
+
+        const clientCount = clientRes.total || 0;
+        const bClients = document.getElementById('badge-clients-total');
+        if (bClients && clientCount > 0) {
+          bClients.innerText = clientCount;
+          bClients.style.display = 'inline-block';
         }
       } catch {}
     }
@@ -3885,6 +4028,574 @@ export function getAdminDashboardHtml(): string {
           loadAdminUsersData();
         }
       });
+    }
+
+    // Clientes & Geolocalización GPS Module
+    let clientsSearchDebounce = null;
+
+    async function loadClientsData() {
+      try {
+        const tbody = document.getElementById('table-clients-body');
+        if (!tbody) return;
+
+        const params = new URLSearchParams({
+          search: state.clients.search || '',
+          status: state.clients.filter || 'ALL',
+          page: String(state.clients.page || 1),
+          limit: String(state.clients.limit || 25),
+        });
+
+        const res = await apiFetch('/api/admin/clients?' + params.toString());
+        if (!res.success) {
+          showToast('Error', res.error || 'No se pudieron cargar los clientes.', 'error');
+          return;
+        }
+
+        state.clients.items = res.clients || [];
+        state.clients.total = res.total || 0;
+
+        // Actualizar métricas en tiempo real
+        const elTotal = document.getElementById('metric-clients-total');
+        if (elTotal) elTotal.innerText = Number(res.total || 0).toLocaleString();
+
+        const elWithGps = document.getElementById('metric-clients-with-gps');
+        if (elWithGps) elWithGps.innerText = Number(res.totalWithGps || 0).toLocaleString();
+
+        const elWithoutGps = document.getElementById('metric-clients-without-gps');
+        if (elWithoutGps) elWithoutGps.innerText = Number(res.totalWithoutGps || 0).toLocaleString();
+
+        const elActive = document.getElementById('metric-clients-active');
+        if (elActive) elActive.innerText = Number(res.totalActive || 0).toLocaleString();
+
+        // Actualizar etiqueta de conteo y paginación
+        const countLabel = document.getElementById('clients-count-label');
+        if (countLabel) {
+          const from = state.clients.total > 0 ? (state.clients.page - 1) * state.clients.limit + 1 : 0;
+          const to = Math.min(state.clients.page * state.clients.limit, state.clients.total);
+          countLabel.innerText = \`Mostrando \${from}-\${to} de \${state.clients.total} clientes\`;
+        }
+
+        const pageInfo = document.getElementById('clients-pagination-info');
+        if (pageInfo) {
+          const totalPages = Math.max(1, Math.ceil(state.clients.total / state.clients.limit));
+          pageInfo.innerText = \`Página \${state.clients.page} de \${totalPages}\`;
+        }
+
+        const btnPrev = document.getElementById('btn-clients-prev');
+        if (btnPrev) btnPrev.disabled = state.clients.page <= 1;
+
+        const btnNext = document.getElementById('btn-clients-next');
+        if (btnNext) {
+          const totalPages = Math.max(1, Math.ceil(state.clients.total / state.clients.limit));
+          btnNext.disabled = state.clients.page >= totalPages;
+        }
+
+        renderClientsTable(state.clients.items);
+      } catch (err) {
+        console.error('Error loading clients:', err);
+      }
+    }
+
+    function renderClientsTable(clients) {
+      const tbody = document.getElementById('table-clients-body');
+      if (!tbody) return;
+
+      if (!clients || clients.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-dim); padding: 24px;">No se encontraron clientes con los filtros aplicados.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = clients.map(c => {
+        const isActivo = String(c.estado || '').toLowerCase().includes('act');
+        const estadoBadge = isActivo
+          ? '<span class="badge badge-success">Activo</span>'
+          : '<span class="badge badge-danger">Suspendido</span>';
+
+        const facturasBadge = String(c.estado_facturas || '').toLowerCase().includes('pagad')
+          ? '<span class="badge badge-info" style="font-size: 10px;">Pagadas</span>'
+          : '<span class="badge badge-warning" style="font-size: 10px;">Pendientes</span>';
+
+        // Render Teléfonos (Principal + Adicionales/Familiares)
+        const primaryPhone = c.telefono_principal ? String(c.telefono_principal).replace(/\\D/g, '') : '';
+        const extraPhones = Array.isArray(c.telefonos_adicionales) ? c.telefonos_adicionales : [];
+
+        let phonesHtml = '';
+        if (primaryPhone) {
+          phonesHtml += \`
+            <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 4px;">
+              <span class="badge badge-success" style="font-family: var(--font-mono); font-size: 11px; padding: 3px 8px; cursor: pointer;" title="Teléfono Principal de WhatsApp" onclick="selectChat('\${primaryPhone}'); navigateTo('live-chat');">
+                📱 \${primaryPhone}
+              </span>
+              <a href="https://wa.me/52\${primaryPhone}" target="_blank" class="btn btn-secondary btn-sm" style="padding: 2px 6px; font-size: 10px;" title="Abrir en WhatsApp">
+                💬
+              </a>
+            </div>
+          \`;
+        }
+
+        if (extraPhones.length > 0) {
+          phonesHtml += \`
+            <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px;">
+              \${extraPhones.map(ep => \`
+                <span class="badge badge-purple" style="font-family: var(--font-mono); font-size: 10px; padding: 2px 6px; cursor: pointer;" title="Número adicional / Familiar" onclick="copyToClipboard('\${ep}')">
+                  📞 \${ep}
+                </span>
+              \`).join('')}
+            </div>
+          \`;
+        }
+
+        if (!primaryPhone && extraPhones.length === 0) {
+          phonesHtml = '<span style="color: var(--text-dim); font-size: 11px;">Sin teléfono</span>';
+        }
+
+        phonesHtml += \`
+          <button class="btn btn-secondary btn-sm" style="padding: 2px 6px; font-size: 10px; margin-top: 2px;" onclick='openClientPhonesModal(\${JSON.stringify(c).replace(/'/g, "&apos;")})'>
+            ✏️ Teléfonos
+          </button>
+        \`;
+
+        // Render Ubicación & GPS
+        let gpsHtml = '';
+        const coords = c.coordenadas_gps;
+        const mapsUrl = c.google_maps_url || (coords ? \`https://www.google.com/maps?q=\${coords}\` : '');
+
+        if (coords || mapsUrl) {
+          gpsHtml = \`
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span class="badge badge-success" style="font-family: var(--font-mono); font-size: 11px; padding: 2px 6px;">
+                  📍 \${coords || 'GPS'}
+                </span>
+                <a href="\${mapsUrl || '#'}" target="_blank" class="btn btn-primary btn-sm" style="padding: 3px 8px; font-size: 10.5px; text-decoration: none;" title="Abrir en Google Maps">
+                  🗺️ Maps
+                </a>
+              </div>
+              \${c.direccion ? \`<span style="font-size: 11px; color: var(--text-dim); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="\${escapeHtml(c.direccion)}">🏠 \${escapeHtml(c.direccion)}</span>\` : ''}
+              <button class="btn btn-secondary btn-sm" style="padding: 2px 6px; font-size: 10px; align-self: flex-start;" onclick='openClientLocationModal(\${JSON.stringify(c).replace(/'/g, "&apos;")})'>
+                ✏️ Editar GPS
+              </button>
+            </div>
+          \`;
+        } else {
+          gpsHtml = \`
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+              <span class="badge badge-warning" style="font-size: 10px; padding: 2px 6px;">
+                ⚠️ Sin ubicación GPS
+              </span>
+              \${c.direccion ? \`<span style="font-size: 11px; color: var(--text-dim); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="\${escapeHtml(c.direccion)}">\${escapeHtml(c.direccion)}</span>\` : ''}
+              <button class="btn btn-secondary btn-sm" style="padding: 2px 6px; font-size: 10.5px; align-self: flex-start;" onclick='openClientLocationModal(\${JSON.stringify(c).replace(/'/g, "&apos;")})'>
+                📍 Asignar GPS
+              </button>
+            </div>
+          \`;
+        }
+
+        // Datos Técnicos (IP, SN ONU, Plan, Router)
+        const techHtml = \`
+          <div style="display: flex; flex-direction: column; gap: 2px; font-size: 11.5px;">
+            <div><span style="color: var(--text-dim);">IP:</span> <span style="font-family: var(--font-mono); font-weight: 600;">\${c.ip || '--'}</span></div>
+            <div><span style="color: var(--text-dim);">SN:</span> <span style="font-family: var(--font-mono); color: var(--accent-cyan); font-weight: 600;">\${c.sn_onu || '--'}</span></div>
+            <div><span style="color: var(--text-dim);">Plan:</span> <span>\${escapeHtml(c.plan_internet || '--')}</span></div>
+          </div>
+        \`;
+
+        return \`
+          <tr>
+            <td>
+              <div style="display: flex; flex-direction: column; gap: 2px;">
+                <div style="font-weight: 700; font-size: 13.5px; color: #fff;">\${escapeHtml(c.nombre)}</div>
+                <div style="font-size: 11px; color: var(--text-muted); display: flex; align-items: center; gap: 6px;">
+                  <span style="font-family: var(--font-mono); color: var(--primary);">#\${c.id_servicio}</span>
+                  <span>\${escapeHtml(c.servicio || '')}</span>
+                </div>
+              </div>
+            </td>
+            <td>
+              <div style="display: flex; flex-direction: column; gap: 4px;">
+                \${estadoBadge}
+                \${facturasBadge}
+              </div>
+            </td>
+            <td>
+              <span class="badge badge-purple" style="font-size: 11px;">
+                Día \${c.dia_corte || '--'}
+              </span>
+            </td>
+            <td>\${phonesHtml}</td>
+            <td>\${gpsHtml}</td>
+            <td>\${techHtml}</td>
+            <td style="text-align: right;">
+              <div style="display: flex; gap: 6px; justify-content: flex-end;">
+                <button class="btn btn-secondary btn-sm" onclick="openClientDetailModal(\${c.id_servicio})" title="Ver Expediente Completo">
+                  👁️ Ficha
+                </button>
+                \${primaryPhone ? \`
+                  <button class="btn btn-primary btn-sm" onclick="selectChat('\${primaryPhone}'); navigateTo('live-chat');" title="Abrir Chat WhatsApp">
+                    💬 Chat
+                  </button>
+                \` : ''}
+              </div>
+            </td>
+          </tr>
+        \`;
+      }).join('');
+    }
+
+    function handleClientsSearchInput(val) {
+      if (clientsSearchDebounce) clearTimeout(clientsSearchDebounce);
+      clientsSearchDebounce = setTimeout(() => {
+        state.clients.search = (val || '').trim();
+        state.clients.page = 1;
+        loadClientsData();
+      }, 300);
+    }
+
+    function setClientsStatusFilter(status, btn) {
+      state.clients.filter = status;
+      state.clients.page = 1;
+
+      document.querySelectorAll('#view-clients .btn-sm').forEach(b => {
+        if (b.id && b.id.startsWith('btn-client-filter-')) {
+          b.classList.remove('btn-primary');
+          b.classList.add('btn-secondary');
+        }
+      });
+
+      if (btn) {
+        btn.classList.remove('btn-secondary');
+        btn.classList.add('btn-primary');
+      }
+
+      loadClientsData();
+    }
+
+    function changeClientsPage(delta) {
+      const totalPages = Math.max(1, Math.ceil(state.clients.total / state.clients.limit));
+      const newPage = state.clients.page + delta;
+      if (newPage >= 1 && newPage <= totalPages) {
+        state.clients.page = newPage;
+        loadClientsData();
+      }
+    }
+
+    // Modal para Editar o Asignar Ubicación GPS
+    function openClientLocationModal(client) {
+      const coords = client.coordenadas_gps || '';
+      let lat = '';
+      let lng = '';
+      if (coords && coords.includes(',')) {
+        const parts = coords.split(',');
+        lat = parts[0].trim();
+        lng = parts[1].trim();
+      }
+
+      const content = \`
+        <div style="display: flex; flex-direction: column; gap: 14px;">
+          <div style="padding: 10px 14px; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--card-border); border-radius: var(--radius-sm);">
+            <div style="font-weight: 700; color: #fff;">\${escapeHtml(client.nombre)}</div>
+            <div style="font-size: 11.5px; color: var(--text-dim); margin-top: 2px;">Servicio #\${client.id_servicio} &bull; \${escapeHtml(client.servicio || '')}</div>
+          </div>
+
+          <div style="background: rgba(99, 102, 241, 0.08); border: 1px dashed var(--primary); border-radius: var(--radius-sm); padding: 12px;">
+            <label class="form-label" style="color: var(--primary);">Pegar Enlace de Google Maps (Recomendado)</label>
+            <input type="text" id="loc-input-maps-url" class="form-control" placeholder="https://maps.app.goo.gl/... o https://maps.google.com/?q=..." value="\${client.google_maps_url || ''}" oninput="handleMapsUrlPaste(this.value)">
+            <span style="font-size: 11px; color: var(--text-dim); margin-top: 4px; display: block;">Si pegas un link de Google Maps, las coordenadas se extraerán automáticamente.</span>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div class="form-group">
+              <label class="form-label">Latitud</label>
+              <input type="text" id="loc-input-lat" class="form-control" placeholder="Ej: 20.123456" value="\${lat}">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Longitud</label>
+              <input type="text" id="loc-input-lng" class="form-control" placeholder="Ej: -98.765432" value="\${lng}">
+            </div>
+          </div>
+
+          <button type="button" class="btn btn-secondary btn-sm" onclick="getCurrentDeviceGeolocation()" style="align-self: flex-start;">
+            📍 Obtener mi ubicación actual
+          </button>
+
+          <div class="form-group">
+            <label class="form-label">Dirección / Referencias del Domicilio</label>
+            <textarea id="loc-input-direccion" class="form-control" rows="2" placeholder="Calle, número, colonia, color de fachada, portón o referencias...">\${escapeHtml(client.direccion || '')}</textarea>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Notas Adicionales de Acceso</label>
+            <input type="text" id="loc-input-notas" class="form-control" placeholder="Ej: Casa de 2 pisos portón café junto a la tienda" value="\${escapeHtml(client.ubicacion_notas || '')}">
+          </div>
+        </div>
+      \`;
+
+      openModal('Asignar / Editar Ubicación GPS', content, async () => {
+        const latVal = document.getElementById('loc-input-lat').value.trim();
+        const lngVal = document.getElementById('loc-input-lng').value.trim();
+        const urlVal = document.getElementById('loc-input-maps-url').value.trim();
+        const dirVal = document.getElementById('loc-input-direccion').value.trim();
+        const notVal = document.getElementById('loc-input-notas').value.trim();
+
+        const res = await apiFetch(\`/api/admin/clients/\${client.id_servicio}/location\`, {
+          method: 'POST',
+          body: JSON.stringify({
+            lat: latVal,
+            lng: lngVal,
+            url: urlVal,
+            direccion: dirVal,
+            notas: notVal,
+          }),
+        });
+
+        if (res.success) {
+          showToast('Ubicación Guardada', 'Coordenadas y datos actualizados correctamente.', 'success');
+          loadClientsData();
+          loadDashboardBadgeCounters();
+        } else {
+          showToast('Error', res.error || 'No se pudo guardar la ubicación.', 'error');
+        }
+      }, 'Guardar Ubicación');
+    }
+
+    function handleMapsUrlPaste(url) {
+      if (!url) return;
+      const coordMatch = url.match(/(-?\\d{1,2}\\.\\d{4,8})\\s*,\\s*(-?\\d{1,3}\\.\\d{4,8})/);
+      if (coordMatch) {
+        document.getElementById('loc-input-lat').value = coordMatch[1];
+        document.getElementById('loc-input-lng').value = coordMatch[2];
+      }
+    }
+
+    function getCurrentDeviceGeolocation() {
+      if (!navigator.geolocation) {
+        showToast('No Compatible', 'Tu navegador no soporta geolocalización.', 'warning');
+        return;
+      }
+      showToast('Obteniendo GPS', 'Leyendo posición del dispositivo...', 'info', 2000);
+      navigator.geolocation.getCurrentPosition(
+        pos => {
+          document.getElementById('loc-input-lat').value = pos.coords.latitude.toFixed(6);
+          document.getElementById('loc-input-lng').value = pos.coords.longitude.toFixed(6);
+          const mapsUrl = \`https://www.google.com/maps?q=\${pos.coords.latitude.toFixed(6)},\${pos.coords.longitude.toFixed(6)}\`;
+          document.getElementById('loc-input-maps-url').value = mapsUrl;
+          showToast('Ubicación Detectada', 'Coordenadas cargadas en los campos.', 'success');
+        },
+        err => {
+          showToast('Error GPS', err.message || 'No se pudo obtener la posición.', 'error');
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    }
+
+    // Modal para Gestión de Múltiples Teléfonos (Principal & Familiares)
+    function openClientPhonesModal(client) {
+      const mainPhone = client.telefono_principal ? String(client.telefono_principal).replace(/\\D/g, '') : '';
+      const extraPhones = Array.isArray(client.telefonos_adicionales) ? client.telefonos_adicionales : [];
+
+      const content = \`
+        <div style="display: flex; flex-direction: column; gap: 14px;">
+          <div style="padding: 10px 14px; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--card-border); border-radius: var(--radius-sm);">
+            <div style="font-weight: 700; color: #fff;">\${escapeHtml(client.nombre)}</div>
+            <div style="font-size: 11.5px; color: var(--text-dim); margin-top: 2px;">Servicio #\${client.id_servicio} &bull; \${escapeHtml(client.servicio || '')}</div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Teléfono Principal de WhatsApp</label>
+            <input type="text" id="phones-input-main" class="form-control" placeholder="10 dígitos (ej. 7711234567)" value="\${mainPhone}">
+            <span style="font-size: 11px; color: var(--text-dim); margin-top: 4px; display: block;">Número primario para recordatorios automáticos de pago y avisos de corte.</span>
+          </div>
+
+          <div>
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+              <label class="form-label" style="margin-bottom: 0;">Números Adicionales / Familiares</label>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="addClientPhoneRow('')" style="padding: 3px 8px; font-size: 11px;">
+                + Añadir Familiar
+              </button>
+            </div>
+            <div id="phones-extra-container" style="display: flex; flex-direction: column; gap: 8px;">
+              \${extraPhones.map((p, idx) => \`
+                <div class="phone-extra-row" style="display: flex; gap: 8px; align-items: center;">
+                  <input type="text" class="form-control phone-extra-input" placeholder="Teléfono familiar (10 dígitos)" value="\${p}">
+                  <button type="button" class="btn btn-danger btn-sm" onclick="this.parentElement.remove()" style="padding: 6px 10px;">✕</button>
+                </div>
+              \`).join('')}
+            </div>
+            <span style="font-size: 11px; color: var(--text-dim); margin-top: 6px; display: block;">Si un cliente o sus familiares reportan desde diferentes números, todos quedarán vinculados al mismo contrato de internet.</span>
+          </div>
+        </div>
+      \`;
+
+      openModal('Gestionar Teléfonos de Contacto', content, async () => {
+        const mainVal = document.getElementById('phones-input-main').value.trim().replace(/\\D/g, '');
+        const extraInputs = document.querySelectorAll('.phone-extra-input');
+        const extraVals = [];
+        extraInputs.forEach(inp => {
+          const val = inp.value.trim().replace(/\\D/g, '');
+          if (val && val.length >= 10 && val !== mainVal) {
+            extraVals.push(val);
+          }
+        });
+
+        const res = await apiFetch(\`/api/admin/clients/\${client.id_servicio}/phones\`, {
+          method: 'POST',
+          body: JSON.stringify({
+            principal: mainVal,
+            adicionales: extraVals,
+          }),
+        });
+
+        if (res.success) {
+          showToast('Teléfonos Actualizados', 'Números de contacto guardados exitosamente.', 'success');
+          loadClientsData();
+        } else {
+          showToast('Error', res.error || 'No se pudieron actualizar los teléfonos.', 'error');
+        }
+      }, 'Guardar Teléfonos');
+    }
+
+    function addClientPhoneRow(val = '') {
+      const container = document.getElementById('phones-extra-container');
+      if (!container) return;
+      const row = document.createElement('div');
+      row.className = 'phone-extra-row';
+      row.style = 'display: flex; gap: 8px; align-items: center;';
+      row.innerHTML = \`
+        <input type="text" class="form-control phone-extra-input" placeholder="Teléfono familiar (10 dígitos)" value="\${val}">
+        <button type="button" class="btn btn-danger btn-sm" onclick="this.parentElement.remove()" style="padding: 6px 10px;">✕</button>
+      \`;
+      container.appendChild(row);
+    }
+
+    // Modal para Ver Ficha Completa del Cliente
+    async function openClientDetailModal(idServicio) {
+      showToast('Consultando Ficha', 'Obteniendo datos completos del cliente...', 'info', 1500);
+      try {
+        const res = await apiFetch(\`/api/admin/clients/\${idServicio}\`);
+        if (!res.success || !res.client) {
+          showToast('Error', 'No se encontró la información del cliente.', 'error');
+          return;
+        }
+
+        const c = res.client;
+        const coords = c.coordenadas_gps || '';
+        const mapsUrl = c.google_maps_url || (coords ? \`https://www.google.com/maps?q=\${coords}\` : '');
+
+        const content = \`
+          <div style="display: flex; flex-direction: column; gap: 16px;">
+            <!-- Header Summary -->
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; padding: 14px; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--card-border); border-radius: var(--radius-md);">
+              <div>
+                <h3 style="font-size: 16px; font-weight: 800; color: #fff;">\${escapeHtml(c.nombre)}</h3>
+                <div style="font-size: 12px; color: var(--text-muted); margin-top: 3px;">
+                  Servicio #\${c.id_servicio} &bull; \${escapeHtml(c.servicio || '')}
+                </div>
+              </div>
+              <div style="display: flex; gap: 6px;">
+                <span class="badge \${String(c.estado).toLowerCase().includes('act') ? 'badge-success' : 'badge-danger'}">
+                  \${c.estado}
+                </span>
+                <span class="badge badge-purple">
+                  Corte Día \${c.dia_corte || '--'}
+                </span>
+              </div>
+            </div>
+
+            <!-- Grid Details -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <div class="glass-card" style="padding: 12px;">
+                <div style="font-size: 11px; color: var(--text-dim); text-transform: uppercase; font-weight: 700; margin-bottom: 6px;">💳 Facturación & Plan</div>
+                <div style="font-size: 13px;"><strong>Plan:</strong> \${escapeHtml(c.plan_internet || '--')}</div>
+                <div style="font-size: 13px;"><strong>Precio:</strong> $\${c.precio_plan || 0} MXN</div>
+                <div style="font-size: 13px;"><strong>Saldo Adeudo:</strong> $\${c.saldo || 0} MXN</div>
+                <div style="font-size: 13px;"><strong>Facturas:</strong> \${c.estado_facturas || 'Pagadas'}</div>
+              </div>
+
+              <div class="glass-card" style="padding: 12px;">
+                <div style="font-size: 11px; color: var(--text-dim); text-transform: uppercase; font-weight: 700; margin-bottom: 6px;">🔧 Red & SmartOLT</div>
+                <div style="font-size: 13px;"><strong>IP Asignada:</strong> <span style="font-family: var(--font-mono);">\${c.ip || '--'}</span></div>
+                <div style="font-size: 13px;"><strong>Serie ONU:</strong> <span style="font-family: var(--font-mono); color: var(--accent-cyan);">\${c.sn_onu || '--'}</span></div>
+                <div style="font-size: 13px;"><strong>Zona / OLT:</strong> \${escapeHtml(c.zona_smartolt || c.router || '--')}</div>
+                <div style="font-size: 13px;"><strong>Perfil Velocidad:</strong> \${escapeHtml(c.perfil_velocidad || '--')}</div>
+              </div>
+            </div>
+
+            <!-- Ubicación GPS -->
+            <div class="glass-card" style="padding: 12px;">
+              <div style="font-size: 11px; color: var(--text-dim); text-transform: uppercase; font-weight: 700; margin-bottom: 6px;">📍 Geolocalización & Domicilio</div>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <div>
+                  <strong>Coordenadas:</strong>
+                  <span style="font-family: var(--font-mono); color: \${coords ? '#34d399' : 'var(--text-dim)'}; margin-left: 6px;">
+                    \${coords || 'Sin coordenadas registradas'}
+                  </span>
+                </div>
+                \${mapsUrl ? \`
+                  <a href="\${mapsUrl}" target="_blank" class="btn btn-primary btn-sm" style="padding: 3px 10px; font-size: 11px; text-decoration: none;">
+                    🗺️ Abrir en Google Maps
+                  </a>
+                \` : ''}
+              </div>
+              <div style="font-size: 12.5px; color: var(--text-main); margin-top: 4px;">
+                <strong>Dirección:</strong> \${escapeHtml(c.direccion || 'Sin dirección registrada')}
+              </div>
+              \${c.ubicacion_notas ? \`
+                <div style="font-size: 12px; color: var(--accent-cyan); margin-top: 4px;">
+                  <strong>Notas de acceso:</strong> \${escapeHtml(c.ubicacion_notas)}
+                </div>
+              \` : ''}
+            </div>
+
+            <!-- Teléfonos de Contacto -->
+            <div class="glass-card" style="padding: 12px;">
+              <div style="font-size: 11px; color: var(--text-dim); text-transform: uppercase; font-weight: 700; margin-bottom: 6px;">📱 Teléfonos Vinculados</div>
+              <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                \${c.telefono_principal ? \`
+                  <span class="badge badge-success" style="font-family: var(--font-mono); font-size: 12px; padding: 4px 10px;">
+                    Principal: \${c.telefono_principal}
+                  </span>
+                \` : ''}
+                \${(c.telefonos_adicionales || []).map(p => \`
+                  <span class="badge badge-purple" style="font-family: var(--font-mono); font-size: 11.5px; padding: 4px 10px;">
+                    Familiar: \${p}
+                  </span>
+                \`).join('')}
+              </div>
+            </div>
+
+            <!-- Tickets de Soporte Asociados -->
+            <div>
+              <div style="font-size: 12px; font-weight: 700; color: #fff; margin-bottom: 8px;">Historial de Reportes & Tickets (\${(c.tickets || []).length})</div>
+              \${(c.tickets && c.tickets.length > 0) ? \`
+                <div style="display: flex; flex-direction: column; gap: 6px; max-height: 180px; overflow-y: auto;">
+                  \${c.tickets.map(t => \`
+                    <div style="padding: 8px 12px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--card-border); border-radius: var(--radius-sm); display: flex; justify-content: space-between; align-items: center;">
+                      <div>
+                        <span style="font-weight: 700; font-family: var(--font-mono); color: var(--primary);">#\${t.folio}</span>
+                        <span style="margin-left: 8px; font-size: 12px;">\${escapeHtml(t.issue_summary)}</span>
+                      </div>
+                      <span class="badge \${t.status === 'ABIERTO' ? 'badge-warning' : (t.status === 'RESUELTO' ? 'badge-success' : 'badge-info')}">
+                        \${t.status}
+                      </span>
+                    </div>
+                  \`).join('')}
+                </div>
+              \` : '<div style="font-size: 12px; color: var(--text-dim);">Sin reportes de falla registrados para este cliente.</div>'}
+            </div>
+          </div>
+        \`;
+
+        openModal('Ficha de Abonado', content, null, 'Cerrar');
+      } catch (err) {
+        showToast('Error', 'No se pudo abrir la ficha del cliente.', 'error');
+      }
+    }
+
+    function copyToClipboard(text) {
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(text);
+        showToast('Copiado', \`Teléfono \${text} copiado al portapapeles.\`, 'info', 1800);
+      }
     }
 
     // Utilities
