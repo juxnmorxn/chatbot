@@ -34,6 +34,8 @@ export interface WisphubClientRecord {
   sn_onu?: string;
   telefono?: string;
   direccion?: string;
+  dia_corte?: string | null;
+  fecha_corte?: string | null;
   raw_data?: string;
   updated_at?: string;
 }
@@ -71,6 +73,8 @@ export interface Session {
   metadata: string | null;
   human_takeover_until?: string | null;
   human_takeover_status?: string | null;
+  department?: 'SOPORTE' | 'ATENCION' | string | null;
+  last_instance?: string | null;
 }
 
 export interface TicketRecord {
@@ -170,6 +174,8 @@ export class TursoService {
         metadata: row.metadata ? String(row.metadata) : null,
         human_takeover_until: row.human_takeover_until ? String(row.human_takeover_until) : null,
         human_takeover_status: row.human_takeover_status ? String(row.human_takeover_status) : 'BOT',
+        department: (row.department ? String(row.department) : 'SOPORTE') as 'SOPORTE' | 'ATENCION',
+        last_instance: row.last_instance ? String(row.last_instance) : null,
       };
     } catch (error: any) {
       logger.error(`Error al obtener sesión de ${phone}:`, error?.message || error);
@@ -196,14 +202,16 @@ export class TursoService {
       metadata: data.metadata ?? existing?.metadata ?? null,
       human_takeover_until: data.human_takeover_until !== undefined ? data.human_takeover_until : (existing?.human_takeover_until ?? null),
       human_takeover_status: data.human_takeover_status ?? existing?.human_takeover_status ?? 'BOT',
+      department: data.department ?? existing?.department ?? 'SOPORTE',
+      last_instance: data.last_instance ?? existing?.last_instance ?? null,
     };
 
     try {
       const client = getTursoClient();
       await client.execute({
         sql: `
-          INSERT INTO sessions (phone, step, client_id, service_id, client_name, onu_id, opt_out, last_interaction, metadata, human_takeover_until, human_takeover_status)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO sessions (phone, step, client_id, service_id, client_name, onu_id, opt_out, last_interaction, metadata, human_takeover_until, human_takeover_status, department, last_instance)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(phone) DO UPDATE SET
             step = excluded.step,
             client_id = COALESCE(excluded.client_id, sessions.client_id),
@@ -214,7 +222,9 @@ export class TursoService {
             last_interaction = excluded.last_interaction,
             metadata = COALESCE(excluded.metadata, sessions.metadata),
             human_takeover_until = excluded.human_takeover_until,
-            human_takeover_status = excluded.human_takeover_status
+            human_takeover_status = excluded.human_takeover_status,
+            department = COALESCE(excluded.department, sessions.department),
+            last_instance = COALESCE(excluded.last_instance, sessions.last_instance)
         `,
         args: [
           merged.phone,
@@ -228,6 +238,8 @@ export class TursoService {
           merged.metadata ?? null,
           merged.human_takeover_until ?? null,
           merged.human_takeover_status ?? 'BOT',
+          merged.department ?? 'SOPORTE',
+          merged.last_instance ?? null,
         ],
       });
 
@@ -235,6 +247,51 @@ export class TursoService {
     } catch (error: any) {
       logger.error(`Error al actualizar sesión de ${data.phone}:`, error?.message || error);
       return merged;
+    }
+  }
+
+  /**
+   * Reasigna o transfiere el departamento de una sesión (ej. 'SOPORTE' o 'ATENCION')
+   */
+  static async updateDepartment(phone: string, department: 'SOPORTE' | 'ATENCION'): Promise<void> {
+    try {
+      const client = getTursoClient();
+      const now = new Date().toISOString();
+      await client.execute({
+        sql: `
+          INSERT INTO sessions (phone, department, last_interaction)
+          VALUES (?, ?, ?)
+          ON CONFLICT(phone) DO UPDATE SET
+            department = excluded.department,
+            last_interaction = excluded.last_interaction
+        `,
+        args: [phone, department, now],
+      });
+      logger.info(`Departamento de ${phone} transferido a: ${department}`);
+    } catch (error: any) {
+      logger.error(`Error al actualizar departamento de ${phone}:`, error?.message || error);
+    }
+  }
+
+  /**
+   * Actualiza la última instancia de WhatsApp utilizada para un cliente
+   */
+  static async updateLastInstance(phone: string, instanceName: string): Promise<void> {
+    try {
+      const client = getTursoClient();
+      const now = new Date().toISOString();
+      await client.execute({
+        sql: `
+          INSERT INTO sessions (phone, last_instance, last_interaction)
+          VALUES (?, ?, ?)
+          ON CONFLICT(phone) DO UPDATE SET
+            last_instance = excluded.last_instance,
+            last_interaction = excluded.last_interaction
+        `,
+        args: [phone, instanceName, now],
+      });
+    } catch (error: any) {
+      logger.error(`Error al actualizar last_instance de ${phone}:`, error?.message || error);
     }
   }
 
@@ -328,24 +385,25 @@ export class TursoService {
   }
 
   /**
-   * Registra un mensaje entrante o saliente con su intención y acción tomada
+   * Registra un mensaje entrante o saliente con su intención, acción tomada e instancia
    */
   static async logMessage(
     phone: string,
     direction: 'IN' | 'OUT',
     message: string,
     intent: string | null = null,
-    actionTaken: string | null = null
+    actionTaken: string | null = null,
+    instanceName?: string | null
   ): Promise<void> {
     try {
       const client = getTursoClient();
       const now = new Date().toISOString();
       await client.execute({
         sql: `
-          INSERT INTO conversation_logs (phone, direction, message, intent, action_taken, created_at)
-          VALUES (?, ?, ?, ?, ?, ?)
+          INSERT INTO conversation_logs (phone, direction, message, intent, action_taken, instance_name, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
         `,
-        args: [phone, direction, message, intent, actionTaken, now],
+        args: [phone, direction, message, intent, actionTaken, instanceName || null, now],
       });
     } catch (error: any) {
       logger.error(`Error al registrar log de conversación para ${phone}:`, error?.message || error);
@@ -560,13 +618,29 @@ export class TursoService {
         const batch = clients.slice(i, i + batchSize);
         const statements = batch.map(c => {
           const normName = normalizeText(c.nombre || '');
+          let diaCorte = c.dia_corte || '';
+          let fechaCorte = c.fecha_corte || '';
+
+          if (!diaCorte && c.raw_data) {
+            try {
+              const raw = JSON.parse(c.raw_data);
+              fechaCorte = raw.fecha_corte || '';
+              if (fechaCorte) {
+                const parts = fechaCorte.split(/[-/]/);
+                if (parts.length === 3) {
+                  diaCorte = String(parseInt(parts[2], 10) || parts[2]);
+                }
+              }
+            } catch {}
+          }
+
           return {
             sql: `
               INSERT INTO wisphub_clients (
                 id_servicio, nombre, nombre_normalized, servicio, ip, estado,
                 estado_facturas, precio_plan, saldo, plan_internet, router,
-                sn_onu, telefono, direccion, raw_data, updated_at
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                sn_onu, telefono, direccion, dia_corte, fecha_corte, raw_data, updated_at
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
               ON CONFLICT(id_servicio) DO UPDATE SET
                 nombre = excluded.nombre,
                 nombre_normalized = excluded.nombre_normalized,
@@ -581,6 +655,8 @@ export class TursoService {
                 sn_onu = excluded.sn_onu,
                 telefono = excluded.telefono,
                 direccion = excluded.direccion,
+                dia_corte = COALESCE(excluded.dia_corte, wisphub_clients.dia_corte),
+                fecha_corte = COALESCE(excluded.fecha_corte, wisphub_clients.fecha_corte),
                 raw_data = excluded.raw_data,
                 updated_at = excluded.updated_at
             `,
@@ -599,6 +675,8 @@ export class TursoService {
               c.sn_onu || '',
               c.telefono || '',
               c.direccion || '',
+              diaCorte || null,
+              fechaCorte || null,
               c.raw_data || '',
               now,
             ],
@@ -614,6 +692,50 @@ export class TursoService {
     } catch (error: any) {
       logger.error('Error al guardar clientes de WispHub en Turso DB:', error?.message || error);
       throw error;
+    }
+  }
+
+  /**
+   * Obtiene clientes candidatos para notificaciones automáticas de cobranza según fecha de corte o estado
+   */
+  static async getNotificationCandidates(
+    type: 'RECORDATORIO_PREVIO' | 'DIA_CORTE' | 'SUSPENSION',
+    diasAnticipacion: number = 3
+  ): Promise<WisphubClientRecord[]> {
+    try {
+      const client = getTursoClient();
+      const now = new Date();
+      // Calcular día objetivo en hora local México
+      const nowMx = new Date(now.toLocaleString('en-US', { timeZone: 'America/Mexico_City' }));
+      const currentDay = nowMx.getDate();
+
+      if (type === 'SUSPENSION') {
+        const res = await client.execute(`
+          SELECT * FROM wisphub_clients 
+          WHERE LOWER(estado) LIKE '%susp%' OR LOWER(estado) LIKE '%cort%' OR LOWER(estado_facturas) LIKE '%pend%'
+          LIMIT 200
+        `);
+        return res.rows as any[];
+      }
+
+      const targetDay = type === 'RECORDATORIO_PREVIO' ? (currentDay + diasAnticipacion) : currentDay;
+      const targetDayStr = String(targetDay);
+      const targetDayPadded = targetDayStr.padStart(2, '0');
+
+      const res = await client.execute({
+        sql: `
+          SELECT * FROM wisphub_clients 
+          WHERE (dia_corte = ? OR dia_corte = ? OR fecha_corte LIKE ?)
+            AND telefono IS NOT NULL AND LENGTH(telefono) >= 10
+          LIMIT 300
+        `,
+        args: [targetDayStr, targetDayPadded, `%-${targetDayPadded}`],
+      });
+
+      return res.rows as any[];
+    } catch (err: any) {
+      logger.error(`Error al obtener candidatos para ${type}:`, err?.message || err);
+      return [];
     }
   }
 
@@ -2088,6 +2210,8 @@ export class TursoService {
           s.metadata,
           s.human_takeover_until,
           s.human_takeover_status,
+          s.department,
+          s.last_instance,
           (
             SELECT l.message 
             FROM conversation_logs l 
@@ -2125,6 +2249,8 @@ export class TursoService {
           is_human_paused: isPaused,
           human_takeover_until: untilIso,
           human_takeover_status: r.human_takeover_status ? String(r.human_takeover_status) : (isPaused ? 'OPERATOR_ACTIVE' : 'BOT'),
+          department: (r.department ? String(r.department) : 'ATENCION') as 'SOPORTE' | 'ATENCION',
+          last_instance: r.last_instance ? String(r.last_instance) : null,
         };
       });
     } catch (error: any) {
@@ -2178,8 +2304,11 @@ export interface ChatConversationItem {
   is_human_paused: boolean;
   human_takeover_until?: string | null;
   human_takeover_status?: string | null;
+  department?: 'SOPORTE' | 'ATENCION' | string;
+  last_instance?: string | null;
   unread_count?: number;
 }
+
 
 
 

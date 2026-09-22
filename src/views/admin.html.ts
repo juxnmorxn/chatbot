@@ -1627,7 +1627,12 @@ export function getAdminDashboardHtml(): string {
         <div class="chat-layout">
           <div class="chat-sidebar" id="chat-threads-sidebar">
             <div class="chat-search-header">
-              <input type="text" id="chat-filter-input" class="form-control" placeholder="Buscar cliente o número..." oninput="filterChatThreads(this.value)">
+              <input type="text" id="chat-filter-input" class="form-control" placeholder="Buscar cliente o número..." oninput="filterChatThreads(this.value)" style="margin-bottom: 8px;">
+              <div style="display: flex; gap: 4px;">
+                <button class="btn btn-secondary btn-sm active" id="btn-filter-dept-all" style="flex:1; padding:4px 6px; font-size:11px;" onclick="setChatDeptFilter('all', this)">Todos</button>
+                <button class="btn btn-secondary btn-sm" id="btn-filter-dept-soporte" style="flex:1; padding:4px 6px; font-size:11px;" onclick="setChatDeptFilter('SOPORTE', this)">🔧 Soporte</button>
+                <button class="btn btn-secondary btn-sm" id="btn-filter-dept-atencion" style="flex:1; padding:4px 6px; font-size:11px;" onclick="setChatDeptFilter('ATENCION', this)">💳 Atención</button>
+              </div>
             </div>
             <div id="chat-threads-container" class="chat-threads-list"></div>
           </div>
@@ -1638,11 +1643,17 @@ export function getAdminDashboardHtml(): string {
                 <button class="btn btn-secondary btn-sm" style="display: none;" id="btn-back-to-threads" onclick="toggleMobileChatThreads()">◀ Hilos</button>
                 <div class="thread-avatar" id="active-chat-avatar">📱</div>
                 <div>
-                  <h4 id="active-chat-name" style="font-size: 14px; font-weight: 700;">Seleccione un chat</h4>
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <h4 id="active-chat-name" style="font-size: 14px; font-weight: 700;">Seleccione un chat</h4>
+                    <span id="active-chat-dept-badge" class="badge badge-info" style="font-size: 10px;">🔧 Soporte</span>
+                  </div>
                   <span id="active-chat-phone" style="font-size: 11px; color: var(--text-muted); font-family: var(--font-mono);">--</span>
                 </div>
               </div>
               <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                <button id="btn-transfer-dept" class="btn btn-secondary btn-sm" onclick="transferCurrentChatDepartment()" title="Transferir al otro departamento">
+                  🔄 Mover a Atención
+                </button>
                 <div id="takeover-status-indicator" class="badge badge-success">🤖 Bot Automático</div>
                 <button id="btn-toggle-takeover" class="btn btn-secondary btn-sm" onclick="toggleCurrentChatTakeover()">
                   Pausar 4h
@@ -1664,12 +1675,24 @@ export function getAdminDashboardHtml(): string {
 
             <div id="chat-messages-wrap" class="chat-messages-container" style="display: none;"></div>
 
-            <div id="chat-input-container" class="chat-input-bar" style="display: none;">
-              <textarea id="chat-text-input" class="chat-input-box" placeholder="Escribe un mensaje... (Enter para enviar, Shift+Enter para nueva línea)" rows="1" onkeydown="handleChatInputKeyDown(event)"></textarea>
-              <button class="btn btn-primary" onclick="sendActiveChatMessage()" style="height: 42px; padding: 0 18px;">
-                <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-                <span>Enviar</span>
-              </button>
+            <div id="chat-input-container" class="chat-input-bar" style="display: none; flex-direction: column; gap: 6px;">
+              <div style="display: flex; align-items: center; justify-content: space-between; padding: 0 4px; font-size: 11.5px; color: var(--text-muted);">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span>Remitente de WhatsApp:</span>
+                  <select id="chat-sender-instance" class="form-control" style="font-size: 11px; padding: 3px 8px; height: auto; width: auto; background: rgba(0,0,0,0.4);">
+                    <option value="atencion">💳 Atención (WhatsApp 1)</option>
+                    <option value="soporte">🔧 Soporte (WhatsApp 2)</option>
+                  </select>
+                </div>
+                <span style="font-size: 10.5px; color: var(--text-dim);">Enter para enviar</span>
+              </div>
+              <div style="display: flex; gap: 10px; width: 100%;">
+                <textarea id="chat-text-input" class="chat-input-box" placeholder="Escribe un mensaje... (Enter para enviar, Shift+Enter para nueva línea)" rows="1" onkeydown="handleChatInputKeyDown(event)" style="flex: 1;"></textarea>
+                <button class="btn btn-primary" onclick="sendActiveChatMessage()" style="height: 42px; padding: 0 18px;">
+                  <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                  <span>Enviar</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1941,8 +1964,8 @@ export function getAdminDashboardHtml(): string {
 
       <!-- VIEW 7: CONFIGURACIÓN & INTEGRACIONES -->
       <section id="view-settings" class="view-container">
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-          <!-- Evolution QR & WhatsApp Status -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 20px;">
+          <!-- Card 1: Evolution QR & WhatsApp Status -->
           <div class="glass-card">
             <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 14px;">Vinculación de WhatsApp (Evolution API)</h3>
             <div id="evolution-qr-container" style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 220px; background: rgba(0,0,0,0.3); border-radius: var(--radius-sm); margin-bottom: 16px; padding: 16px;">
@@ -1955,50 +1978,134 @@ export function getAdminDashboardHtml(): string {
             </div>
           </div>
 
-            <!-- Settings Form -->
-            <div class="glass-card">
-              <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 14px;">Variables de Entorno en Turso DB</h3>
-              <form id="settings-form" onsubmit="handleSaveSettings(event)" autocomplete="off">
-                <div class="form-group">
-                  <label class="form-label">Evolution API URL</label>
-                  <input type="text" id="setting-EVOLUTION_URL" class="form-control" placeholder="https://evolution.example.com" autocomplete="off" spellcheck="false">
+          <!-- Card 2: APIs y Credenciales -->
+          <div class="glass-card">
+            <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 14px;">Credenciales & Grupo de Activaciones</h3>
+            <div class="form-group">
+              <label class="form-label">Evolution API URL</label>
+              <input type="text" id="setting-EVOLUTION_URL" class="form-control" placeholder="https://evolution.example.com" autocomplete="off" spellcheck="false">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Evolution API Key</label>
+              <input type="password" id="setting-EVOLUTION_API_KEY" class="form-control" placeholder="••••••••" autocomplete="new-password">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Groq API Key</label>
+              <input type="password" id="setting-GROQ_API_KEY" class="form-control" placeholder="••••••••" autocomplete="new-password">
+            </div>
+            <div class="form-group" style="background: rgba(16, 185, 129, 0.05); border: 1px dashed rgba(16, 185, 129, 0.3); border-radius: var(--radius-sm); padding: 12px; margin-top: 14px;">
+              <label class="form-label" style="display: flex; align-items: center; justify-content: space-between;">
+                <span>📢 Grupo de Activaciones (WhatsApp)</span>
+                <span id="group-linked-badge" class="badge badge-success" style="display: none; font-size: 10px;">Vinculado</span>
+              </label>
+              <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                <input type="text" id="setting-ACTIVATIONS_GROUP_JID" class="form-control" placeholder="https://chat.whatsapp.com/... o 1203630...@g.us">
+                <button type="button" class="btn btn-secondary btn-sm" style="white-space: nowrap;" onclick="handleResolveGroupLink()" id="btn-resolve-group">
+                  🔗 Vincular
+                </button>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <select id="select-active-groups" class="form-control" style="font-size: 12px; flex: 1;" onchange="handleSelectExistingGroup(this.value)">
+                  <option value="">-- O seleccionar de grupos activos --</option>
+                </select>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="fetchWhatsAppGroups()" title="Refrescar lista">🔄</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 3: Automatizaciones y Avisos de Cobranza (Switches) -->
+          <div class="glass-card">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
+              <h3 style="font-size: 15px; font-weight: 700;">🔔 Automatizaciones de Cobranza</h3>
+              <span class="badge badge-info" style="font-size: 10px;">Anti-Spam Activo</span>
+            </div>
+            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">
+              Activa o apaga los avisos automáticos para evitar saturar el WhatsApp de tus clientes.
+            </p>
+
+            <div style="display: flex; flex-direction: column; gap: 14px;">
+              <!-- Switch 1: Recordatorio Previo -->
+              <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(0,0,0,0.25); padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid var(--card-border);">
+                <div>
+                  <div style="font-size: 13px; font-weight: 600;">📅 Recordatorio Preventivo</div>
+                  <div style="font-size: 11px; color: var(--text-dim);">Avisa cordialmente antes de la fecha límite</div>
                 </div>
-                <div class="form-group">
-                  <label class="form-label">Evolution API Key</label>
-                  <input type="password" id="setting-EVOLUTION_API_KEY" class="form-control" placeholder="••••••••" autocomplete="new-password">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <input type="number" id="setting-NOTIF_RECORDATORIO_PREVIO_DIAS" class="form-control" style="width: 54px; text-align: center; padding: 4px; font-size: 12px;" min="1" max="15" value="3" title="Días antes de corte">
+                  <span style="font-size: 11px; color: var(--text-muted);">días</span>
+                  <input type="checkbox" id="setting-NOTIF_RECORDATORIO_PREVIO_ENABLED" style="transform: scale(1.3); cursor: pointer;" checked>
                 </div>
-                <div class="form-group">
-                  <label class="form-label">Groq API Key</label>
-                  <input type="password" id="setting-GROQ_API_KEY" class="form-control" placeholder="••••••••" autocomplete="new-password">
+              </div>
+
+              <!-- Switch 2: Día de Corte -->
+              <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(0,0,0,0.25); padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid var(--card-border);">
+                <div>
+                  <div style="font-size: 13px; font-weight: 600;">⚠️ Aviso el Mismo Día de Corte</div>
+                  <div style="font-size: 11px; color: var(--text-dim);">Recomendado apagado si ya envías el previo</div>
                 </div>
-              <div class="form-group" style="background: rgba(16, 185, 129, 0.05); border: 1px dashed rgba(16, 185, 129, 0.3); border-radius: var(--radius-sm); padding: 12px; margin-top: 14px;">
-                <label class="form-label" style="display: flex; align-items: center; justify-content: space-between;">
-                  <span>📢 Grupo de Activaciones (WhatsApp)</span>
-                  <span id="group-linked-badge" class="badge badge-success" style="display: none; font-size: 10px;">Vinculado</span>
-                </label>
-                <div style="display: flex; gap: 8px; margin-bottom: 8px;">
-                  <input type="text" id="setting-ACTIVATIONS_GROUP_JID" class="form-control" placeholder="https://chat.whatsapp.com/... o 1203630...@g.us">
-                  <button type="button" class="btn btn-secondary btn-sm" style="white-space: nowrap;" onclick="handleResolveGroupLink()" id="btn-resolve-group">
-                    🔗 Vincular Enlace
-                  </button>
+                <input type="checkbox" id="setting-NOTIF_DIA_CORTE_ENABLED" style="transform: scale(1.3); cursor: pointer;">
+              </div>
+
+              <!-- Switch 3: Suspensión -->
+              <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(0,0,0,0.25); padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid var(--card-border);">
+                <div>
+                  <div style="font-size: 13px; font-weight: 600;">🔴 Aviso de Servicio Suspendido</div>
+                  <div style="font-size: 11px; color: var(--text-dim);">Informa al cliente con datos bancarios para reconectar</div>
                 </div>
-                <div style="display: flex; align-items: center; gap: 8px; margin-top: 6px;">
-                  <select id="select-active-groups" class="form-control" style="font-size: 12px; flex: 1;" onchange="handleSelectExistingGroup(this.value)">
-                    <option value="">-- O seleccionar de grupos activos en WhatsApp --</option>
-                  </select>
-                  <button type="button" class="btn btn-secondary btn-sm" onclick="fetchWhatsAppGroups()" title="Refrescar lista de grupos de WhatsApp">
-                    🔄
-                  </button>
-                </div>
-                <small style="font-size: 11px; color: var(--text-muted); display: block; margin-top: 8px;">
-                  💡 El bot enviará aquí el reporte automático al activar cada módem: <code>&lt;Nombre&gt; &lt;IP&gt; &lt;Zona&gt; LISTO</code>.
+                <input type="checkbox" id="setting-NOTIF_SUSPENSION_ENABLED" style="transform: scale(1.3); cursor: pointer;" checked>
+              </div>
+
+              <!-- Selector Instancia de Cobro -->
+              <div class="form-group" style="margin-bottom: 0;">
+                <label class="form-label">WhatsApp Remitente de Cobranza</label>
+                <select id="setting-NOTIF_INSTANCE_NAME" class="form-control" style="font-size: 12px;">
+                  <option value="atencion">💳 Instancia Atención al Cliente (atencion)</option>
+                  <option value="soporte">🔧 Instancia Soporte Técnico (soporte)</option>
+                </select>
+                <small style="font-size: 11px; color: var(--text-dim); margin-top: 4px; display: block;">
+                  Las respuestas de los clientes ingresarán a la bandeja de Atención/Cobranza.
                 </small>
               </div>
-              <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 10px;">
-                Guardar Configuraciones
+
+              <button type="button" class="btn btn-secondary btn-sm" onclick="runBillingCycleManual()" style="margin-top: 4px;">
+                🚀 Probar / Disparar Lote de Cobranza Ahora
               </button>
-            </form>
+            </div>
           </div>
+
+          <!-- Card 4: Datos Bancarios BBVA y Transferencias -->
+          <div class="glass-card">
+            <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 14px;">🏦 Datos Bancarios (BBVA / Transferencias)</h3>
+            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">
+              Estos datos se enviarán a los clientes en los avisos de cobro y cuando consulten su saldo en el bot.
+            </p>
+            <div class="form-group">
+              <label class="form-label">Banco</label>
+              <input type="text" id="setting-PAYMENT_BANK" class="form-control" placeholder="BBVA" value="BBVA">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Número de Cuenta / CLABE Interbancaria (18 dígitos)</label>
+              <input type="text" id="setting-PAYMENT_ACCOUNT" class="form-control" placeholder="012 180 0152433212 90" spellcheck="false">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Convenio CIE BBVA (Opcional)</label>
+              <input type="text" id="setting-PAYMENT_CONVENIO" class="form-control" placeholder="Ej: 1458921" spellcheck="false">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Nombre del Titular / Beneficiario</label>
+              <input type="text" id="setting-PAYMENT_BENEFICIARY" class="form-control" placeholder="CloudWareMx Telecomunicaciones">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Notas o Instrucciones Adicionales</label>
+              <input type="text" id="setting-PAYMENT_NOTES" class="form-control" placeholder="Coloca tu nombre como concepto de pago">
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top: 20px; display: flex; justify-content: flex-end;">
+          <button type="button" class="btn btn-primary" onclick="handleSaveAllSettingsManual()" style="padding: 12px 28px; font-size: 14px;">
+            💾 Guardar Todas las Configuraciones
+          </button>
         </div>
 
         <!-- Danger Zone (Superadmin Only) -->
@@ -2057,6 +2164,7 @@ export function getAdminDashboardHtml(): string {
       currentView: 'dashboard',
       chats: [],
       activeChatPhone: null,
+      chatDeptFilter: 'all',
       tickets: [],
       audit: { filter: 'all', search: '', page: 1, limit: 30, total: 0 },
       provisioning: { filter: 'pending', search: '', page: 1, limit: 30, total: 0 },
@@ -2346,6 +2454,19 @@ export function getAdminDashboardHtml(): string {
           }
         });
 
+        evtSource.addEventListener('chat:department', (e) => {
+          const data = JSON.parse(e.data || '{}');
+          if (state.currentView === 'live-chat') {
+            const chat = state.chats.find(c => c.phone === data.phone);
+            if (chat) {
+              chat.department = data.department;
+              if (state.activeChatPhone === data.phone) {
+                updateChatDeptUI(data.department);
+              }
+            }
+            filterChatThreads(document.getElementById('chat-filter-input')?.value || '');
+          }
+        });
 
         evtSource.addEventListener('tickets:update', () => {
           if (state.currentView === 'tickets') loadTicketsData();
@@ -2472,7 +2593,7 @@ export function getAdminDashboardHtml(): string {
       try {
         const res = await apiFetch('/api/admin/chats');
         state.chats = res.conversations || [];
-        renderChatThreads(state.chats);
+        filterChatThreads(document.getElementById('chat-filter-input')?.value || '');
 
         if (reselect && state.chats.length > 0 && !state.activeChatPhone) {
           selectChat(state.chats[0].phone);
@@ -2482,10 +2603,23 @@ export function getAdminDashboardHtml(): string {
       }
     }
 
+    function setChatDeptFilter(dept, btn) {
+      state.chatDeptFilter = dept;
+      document.querySelectorAll('#chat-threads-sidebar .chat-search-header .btn').forEach(b => {
+        b.classList.remove('btn-primary');
+        b.classList.add('btn-secondary');
+      });
+      if (btn) {
+        btn.classList.remove('btn-secondary');
+        btn.classList.add('btn-primary');
+      }
+      filterChatThreads(document.getElementById('chat-filter-input')?.value || '');
+    }
+
     function renderChatThreads(list) {
       const container = document.getElementById('chat-threads-container');
       if (!list || list.length === 0) {
-        container.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-dim); font-size: 13px;">Sin conversaciones activas.</div>';
+        container.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-dim); font-size: 13px;">Sin conversaciones en este departamento.</div>';
         return;
       }
 
@@ -2493,6 +2627,11 @@ export function getAdminDashboardHtml(): string {
         const isActive = c.phone === state.activeChatPhone ? 'active' : '';
         const name = c.client_name || c.phone;
         const initials = name.substring(0, 2).toUpperCase();
+        const dept = (c.department || 'ATENCION').toUpperCase();
+        const deptBadgeClass = dept === 'SOPORTE' ? 'badge-purple' : 'badge-info';
+        const deptLabel = dept === 'SOPORTE' ? '🔧 Soporte' : '💳 Atención';
+        const instanceLabel = c.last_instance ? \`<span style="font-size: 9px; color: var(--text-dim); margin-left: 4px;">(\${c.last_instance})</span>\` : '';
+
         return \`
           <div class="chat-thread-item \${isActive}" onclick="selectChat('\${c.phone}')">
             <div class="thread-avatar">\${initials}</div>
@@ -2502,9 +2641,15 @@ export function getAdminDashboardHtml(): string {
                 <span class="thread-time">\${formatShortTime(c.last_interaction)}</span>
               </div>
               <div class="thread-preview">\${escapeHtml(c.last_message || '')}</div>
-              <span class="badge \${c.is_human_paused ? 'badge-warning' : 'badge-info'}" style="align-self: flex-start; margin-top: 2px; font-size: 9.5px;">
-                \${c.is_human_paused ? '⏸️ Humano' : '🤖 Bot'}
-              </span>
+              <div style="display: flex; gap: 4px; align-items: center; margin-top: 4px;">
+                <span class="badge \${deptBadgeClass}" style="font-size: 9.5px; padding: 2px 6px;">
+                  \${deptLabel}
+                </span>
+                <span class="badge \${c.is_human_paused ? 'badge-warning' : 'badge-success'}" style="font-size: 9.5px; padding: 2px 6px;">
+                  \${c.is_human_paused ? '⏸️ Humano' : '🤖 Bot'}
+                </span>
+                \${instanceLabel}
+              </div>
             </div>
           </div>
         \`;
@@ -2512,18 +2657,46 @@ export function getAdminDashboardHtml(): string {
     }
 
     function filterChatThreads(q) {
-      const term = q.toLowerCase();
-      const filtered = state.chats.filter(c => 
-        (c.client_name && c.client_name.toLowerCase().includes(term)) ||
-        c.phone.includes(term) ||
-        (c.last_message && c.last_message.toLowerCase().includes(term))
-      );
+      const term = (q || '').toLowerCase();
+      let filtered = state.chats;
+      
+      if (state.chatDeptFilter && state.chatDeptFilter !== 'all') {
+        filtered = filtered.filter(c => (c.department || 'ATENCION').toUpperCase() === state.chatDeptFilter.toUpperCase());
+      }
+
+      if (term) {
+        filtered = filtered.filter(c => 
+          (c.client_name && c.client_name.toLowerCase().includes(term)) ||
+          c.phone.includes(term) ||
+          (c.last_message && c.last_message.toLowerCase().includes(term))
+        );
+      }
       renderChatThreads(filtered);
+    }
+
+    function updateChatDeptUI(dept) {
+      const isSoporte = (dept || 'ATENCION').toUpperCase() === 'SOPORTE';
+      const badge = document.getElementById('active-chat-dept-badge');
+      const transferBtn = document.getElementById('btn-transfer-dept');
+      const senderSelect = document.getElementById('chat-sender-instance');
+
+      if (badge) {
+        badge.className = 'badge ' + (isSoporte ? 'badge-purple' : 'badge-info');
+        badge.innerText = isSoporte ? '🔧 Soporte Técnico' : '💳 Atención al Cliente';
+      }
+
+      if (transferBtn) {
+        transferBtn.innerText = isSoporte ? '🔄 Transferir a Atención' : '🔄 Transferir a Soporte';
+      }
+
+      if (senderSelect) {
+        senderSelect.value = isSoporte ? 'soporte' : 'atencion';
+      }
     }
 
     async function selectChat(phone) {
       state.activeChatPhone = phone;
-      renderChatThreads(state.chats);
+      filterChatThreads(document.getElementById('chat-filter-input')?.value || '');
 
       document.getElementById('chat-empty-state').style.display = 'none';
       document.getElementById('chat-active-header').style.display = 'flex';
@@ -2533,6 +2706,13 @@ export function getAdminDashboardHtml(): string {
       const chat = state.chats.find(c => c.phone === phone);
       document.getElementById('active-chat-name').innerText = chat?.client_name || phone;
       document.getElementById('active-chat-phone').innerText = phone;
+      
+      updateChatDeptUI(chat?.department || 'ATENCION');
+      if (chat?.last_instance) {
+        const senderSelect = document.getElementById('chat-sender-instance');
+        if (senderSelect) senderSelect.value = chat.last_instance;
+      }
+
       updateTakeoverButton(chat?.is_human_paused);
 
       try {
@@ -2543,6 +2723,31 @@ export function getAdminDashboardHtml(): string {
         }
       } catch (err) {
         showToast('Error', 'No se pudieron cargar los mensajes', 'error');
+      }
+    }
+
+    async function transferCurrentChatDepartment() {
+      if (!state.activeChatPhone) return;
+      const chat = state.chats.find(c => c.phone === state.activeChatPhone);
+      const currentDept = (chat?.department || 'ATENCION').toUpperCase();
+      const newDept = currentDept === 'ATENCION' ? 'SOPORTE' : 'ATENCION';
+
+      try {
+        const res = await apiFetch('/api/admin/chats/' + encodeURIComponent(state.activeChatPhone) + '/department', {
+          method: 'POST',
+          body: JSON.stringify({ department: newDept }),
+        });
+
+        if (res.success) {
+          if (chat) chat.department = newDept;
+          updateChatDeptUI(newDept);
+          filterChatThreads(document.getElementById('chat-filter-input')?.value || '');
+          showToast('Transferencia Realizada', \`Chat asignado a \${newDept === 'SOPORTE' ? 'Soporte Técnico' : 'Atención al Cliente'}\`, 'success');
+        } else {
+          showToast('Error', res.error || 'No se pudo transferir el chat', 'error');
+        }
+      } catch (err) {
+        showToast('Error', err.message, 'error');
       }
     }
 
@@ -2597,6 +2802,8 @@ export function getAdminDashboardHtml(): string {
       const text = input.value.trim();
       if (!text || !state.activeChatPhone) return;
 
+      const instanceName = document.getElementById('chat-sender-instance')?.value || undefined;
+
       input.value = '';
       appendChatMessage({ message: text, direction: 'OUT' });
 
@@ -2607,14 +2814,18 @@ export function getAdminDashboardHtml(): string {
             phone: state.activeChatPhone,
             message: text,
             mode: '4h',
+            instanceName,
           }),
         });
 
         if (res.success) {
           updateTakeoverButton(true, res.takeover);
           const chat = state.chats.find(c => c.phone === state.activeChatPhone);
-          if (chat) chat.is_human_paused = true;
-          renderChatThreads(state.chats);
+          if (chat) {
+            chat.is_human_paused = true;
+            if (instanceName) chat.last_instance = instanceName;
+          }
+          filterChatThreads(document.getElementById('chat-filter-input')?.value || '');
         } else {
           showToast('Error', res.error || 'No se pudo enviar el mensaje', 'error');
         }
@@ -3323,6 +3534,7 @@ export function getAdminDashboardHtml(): string {
       try {
         const res = await apiFetch('/api/settings');
         if (res.settings) {
+          const s = res.settings;
           const keyMap = {
             evolutionUrl: 'setting-EVOLUTION_URL',
             evolutionApiKey: 'setting-EVOLUTION_API_KEY',
@@ -3332,19 +3544,92 @@ export function getAdminDashboardHtml(): string {
             EVOLUTION_API_KEY: 'setting-EVOLUTION_API_KEY',
             GROQ_API_KEY: 'setting-GROQ_API_KEY',
             ACTIVATIONS_GROUP_JID: 'setting-ACTIVATIONS_GROUP_JID',
+            NOTIF_RECORDATORIO_PREVIO_DIAS: 'setting-NOTIF_RECORDATORIO_PREVIO_DIAS',
+            NOTIF_INSTANCE_NAME: 'setting-NOTIF_INSTANCE_NAME',
+            PAYMENT_BANK: 'setting-PAYMENT_BANK',
+            PAYMENT_ACCOUNT: 'setting-PAYMENT_ACCOUNT',
+            PAYMENT_CONVENIO: 'setting-PAYMENT_CONVENIO',
+            PAYMENT_BENEFICIARY: 'setting-PAYMENT_BENEFICIARY',
+            PAYMENT_NOTES: 'setting-PAYMENT_NOTES',
           };
-          Object.keys(res.settings).forEach(k => {
+
+          Object.keys(s).forEach(k => {
             const targetId = keyMap[k] || ('setting-' + k);
             const input = document.getElementById(targetId);
-            if (input && res.settings[k] !== undefined && res.settings[k] !== null) {
-              input.value = res.settings[k];
+            if (input && s[k] !== undefined && s[k] !== null) {
+              input.value = s[k];
             }
           });
+
+          // Switches booleanos
+          const chkPrevio = document.getElementById('setting-NOTIF_RECORDATORIO_PREVIO_ENABLED');
+          if (chkPrevio) chkPrevio.checked = s.NOTIF_RECORDATORIO_PREVIO_ENABLED === 'true' || s.NOTIF_RECORDATORIO_PREVIO_ENABLED === true || s.NOTIF_RECORDATORIO_PREVIO_ENABLED === '1';
+
+          const chkCorte = document.getElementById('setting-NOTIF_DIA_CORTE_ENABLED');
+          if (chkCorte) chkCorte.checked = s.NOTIF_DIA_CORTE_ENABLED === 'true' || s.NOTIF_DIA_CORTE_ENABLED === true || s.NOTIF_DIA_CORTE_ENABLED === '1';
+
+          const chkSuspension = document.getElementById('setting-NOTIF_SUSPENSION_ENABLED');
+          if (chkSuspension) chkSuspension.checked = s.NOTIF_SUSPENSION_ENABLED === 'true' || s.NOTIF_SUSPENSION_ENABLED === true || s.NOTIF_SUSPENSION_ENABLED === '1';
         }
         fetchWhatsAppStatus();
         fetchWhatsAppGroups();
       } catch (err) {
         console.error('Error loading settings:', err);
+      }
+    }
+
+    async function handleSaveAllSettingsManual() {
+      const evoUrl = document.getElementById('setting-EVOLUTION_URL')?.value.trim();
+      if (evoUrl && !evoUrl.startsWith('http://') && !evoUrl.startsWith('https://')) {
+        showToast('URL Inválida', 'Evolution API URL debe comenzar con http:// o https://', 'warning');
+        return;
+      }
+
+      const settings = {
+        EVOLUTION_URL: evoUrl,
+        EVOLUTION_API_KEY: document.getElementById('setting-EVOLUTION_API_KEY')?.value.trim() || '',
+        GROQ_API_KEY: document.getElementById('setting-GROQ_API_KEY')?.value.trim() || '',
+        ACTIVATIONS_GROUP_JID: document.getElementById('setting-ACTIVATIONS_GROUP_JID')?.value.trim() || '',
+        NOTIF_RECORDATORIO_PREVIO_ENABLED: document.getElementById('setting-NOTIF_RECORDATORIO_PREVIO_ENABLED')?.checked ? 'true' : 'false',
+        NOTIF_RECORDATORIO_PREVIO_DIAS: document.getElementById('setting-NOTIF_RECORDATORIO_PREVIO_DIAS')?.value || '3',
+        NOTIF_DIA_CORTE_ENABLED: document.getElementById('setting-NOTIF_DIA_CORTE_ENABLED')?.checked ? 'true' : 'false',
+        NOTIF_SUSPENSION_ENABLED: document.getElementById('setting-NOTIF_SUSPENSION_ENABLED')?.checked ? 'true' : 'false',
+        NOTIF_INSTANCE_NAME: document.getElementById('setting-NOTIF_INSTANCE_NAME')?.value || 'atencion',
+        PAYMENT_BANK: document.getElementById('setting-PAYMENT_BANK')?.value.trim() || 'BBVA',
+        PAYMENT_ACCOUNT: document.getElementById('setting-PAYMENT_ACCOUNT')?.value.trim() || '',
+        PAYMENT_CONVENIO: document.getElementById('setting-PAYMENT_CONVENIO')?.value.trim() || '',
+        PAYMENT_BENEFICIARY: document.getElementById('setting-PAYMENT_BENEFICIARY')?.value.trim() || '',
+        PAYMENT_NOTES: document.getElementById('setting-PAYMENT_NOTES')?.value.trim() || '',
+      };
+
+      try {
+        const res = await apiFetch('/api/settings', {
+          method: 'POST',
+          body: JSON.stringify({ settings }),
+        });
+        if (res.success) {
+          showToast('Configuraciones Guardadas', 'Parámetros y switches actualizados en Turso DB.', 'success');
+        } else {
+          showToast('Error', res.error || 'No se pudieron guardar los ajustes', 'error');
+        }
+      } catch (err) {
+        showToast('Error', err.message, 'error');
+      }
+    }
+
+    async function runBillingCycleManual() {
+      showToast('Disparando Lote', 'Ejecutando ciclo de verificación y avisos de cobranza...', 'info');
+      try {
+        const res = await apiFetch('/api/notifications/run-billing-cycle', { method: 'POST' });
+        if (res.success) {
+          const stats = res.stats || {};
+          const msg = \`Recordatorios: \${stats.preventivos || 0} enviados | Cortes: \${stats.dia_corte || 0} | Suspensiones: \${stats.suspensiones || 0}\`;
+          showToast('Ciclo de Cobranza Ejecutado', msg, 'success', 5000);
+        } else {
+          showToast('Error', res.error || 'Fallo en la ejecución del ciclo', 'error');
+        }
+      } catch (err) {
+        showToast('Error', err.message, 'error');
       }
     }
 
@@ -3365,12 +3650,7 @@ export function getAdminDashboardHtml(): string {
         });
         if (res.success && res.jid) {
           if (input) input.value = res.jid;
-          const badge = document.getElementById('group-linked-badge');
-          if (badge) {
-            badge.style.display = 'inline-block';
-            badge.innerText = res.name || 'Vinculado';
-          }
-          showToast('¡Grupo Vinculado!', res.message || 'Grupo guardado exitosamente.', 'success');
+          showToast('¡Grupo Vinculado!', res.message || 'Grupo vinculado exitosamente.', 'success');
           fetchWhatsAppGroups();
         } else {
           showToast('Error', res.error || 'No se pudo vincular el grupo.', 'error');
@@ -3378,7 +3658,7 @@ export function getAdminDashboardHtml(): string {
       } catch (err) {
         showToast('Error', err.message, 'error');
       } finally {
-        if (btn) btn.innerHTML = '🔗 Vincular Enlace';
+        if (btn) btn.innerHTML = '🔗 Vincular';
       }
     }
 
@@ -3400,42 +3680,7 @@ export function getAdminDashboardHtml(): string {
       if (!jid) return;
       const input = document.getElementById('setting-ACTIVATIONS_GROUP_JID');
       if (input) input.value = jid;
-      const badge = document.getElementById('group-linked-badge');
-      if (badge) {
-        badge.style.display = 'inline-block';
-        badge.innerText = 'Seleccionado';
-      }
-      showToast('Grupo Seleccionado', 'Haz clic en "Guardar Configuraciones" para aplicar.', 'info');
-    }
-
-    async function handleSaveSettings(e) {
-      e.preventDefault();
-      const evoUrl = document.getElementById('setting-EVOLUTION_URL')?.value.trim();
-      if (evoUrl && !evoUrl.startsWith('http://') && !evoUrl.startsWith('https://')) {
-        showToast('URL Inválida', 'Evolution API URL debe comenzar con http:// o https://', 'warning');
-        return;
-      }
-
-      const settings = {
-        EVOLUTION_URL: evoUrl,
-        EVOLUTION_API_KEY: document.getElementById('setting-EVOLUTION_API_KEY')?.value.trim(),
-        GROQ_API_KEY: document.getElementById('setting-GROQ_API_KEY')?.value.trim(),
-        ACTIVATIONS_GROUP_JID: document.getElementById('setting-ACTIVATIONS_GROUP_JID')?.value.trim(),
-      };
-
-      try {
-        const res = await apiFetch('/api/settings', {
-          method: 'POST',
-          body: JSON.stringify({ settings }),
-        });
-        if (res.success) {
-          showToast('Guardado', 'Variables actualizadas correctamente en Turso DB.', 'success');
-        } else {
-          showToast('Error', res.error, 'error');
-        }
-      } catch (err) {
-        showToast('Error', err.message, 'error');
-      }
+      showToast('Grupo Seleccionado', 'Haz clic en "Guardar Todas las Configuraciones" para aplicar.', 'info');
     }
 
     async function fetchWhatsAppStatus() {

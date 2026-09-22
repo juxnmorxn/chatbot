@@ -23,14 +23,22 @@ export interface AppSettings {
   ispName?: string;
   soporteHumanoPhone?: string;
   activationsGroupJid?: string;
-  // Pagos y Cobranza
+  // Pagos y Cobranza (BBVA / Transferencias / Mercado Pago)
   paymentBank?: string;
   paymentAccount?: string;
+  paymentConvenio?: string;
   paymentBeneficiary?: string;
   paymentNotes?: string;
   paymentMercadopagoUrl?: string;
   mercadopagoAccessToken?: string;
   mercadopagoPublicKey?: string;
+  // Automatizaciones y Notificaciones de Cobro
+  notifRecordatorioPrevioEnabled?: string;
+  notifRecordatorioPrevioDias?: string;
+  notifDiaCorteEnabled?: string;
+  notifSuspensionEnabled?: string;
+  notifInstanceName?: string;
+  soporteInstanceName?: string;
   // Horario Laboral de Oficina
   workHoursStart?: string;
   workHoursEnd?: string;
@@ -158,13 +166,20 @@ export class SettingsService {
       ispName: this.get('ISP_NAME', 'ISP_NAME', 'CloudWareMx'),
       soporteHumanoPhone: this.get('SOPORTE_HUMANO_PHONE', 'SOPORTE_HUMANO_PHONE', ''),
       activationsGroupJid: this.get('ACTIVATIONS_GROUP_JID', 'ACTIVATIONS_GROUP_JID', this.get('GRUPO_ACTIVACIONES', 'GRUPO_ACTIVACIONES', '')),
-      paymentBank: this.get('PAYMENT_BANK', 'PAYMENT_BANK', ''),
+      paymentBank: this.get('PAYMENT_BANK', 'PAYMENT_BANK', 'BBVA'),
       paymentAccount: this.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', ''),
+      paymentConvenio: this.get('PAYMENT_CONVENIO', 'PAYMENT_CONVENIO', ''),
       paymentBeneficiary: this.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', ''),
       paymentNotes: this.get('PAYMENT_NOTES', 'PAYMENT_NOTES', ''),
       paymentMercadopagoUrl: this.get('PAYMENT_MERCADOPAGO_URL', 'MERCADOPAGO_URL', ''),
       mercadopagoAccessToken: this.get('MERCADOPAGO_ACCESS_TOKEN', 'MERCADOPAGO_ACCESS_TOKEN', ''),
       mercadopagoPublicKey: this.get('MERCADOPAGO_PUBLIC_KEY', 'MERCADOPAGO_PUBLIC_KEY', ''),
+      notifRecordatorioPrevioEnabled: this.get('NOTIF_RECORDATORIO_PREVIO_ENABLED', 'NOTIF_RECORDATORIO_PREVIO_ENABLED', 'true'),
+      notifRecordatorioPrevioDias: this.get('NOTIF_RECORDATORIO_PREVIO_DIAS', 'NOTIF_RECORDATORIO_PREVIO_DIAS', '3'),
+      notifDiaCorteEnabled: this.get('NOTIF_DIA_CORTE_ENABLED', 'NOTIF_DIA_CORTE_ENABLED', 'false'),
+      notifSuspensionEnabled: this.get('NOTIF_SUSPENSION_ENABLED', 'NOTIF_SUSPENSION_ENABLED', 'true'),
+      notifInstanceName: this.get('NOTIF_INSTANCE_NAME', 'NOTIF_INSTANCE_NAME', 'atencion'),
+      soporteInstanceName: this.get('SOPORTE_INSTANCE_NAME', 'SOPORTE_INSTANCE_NAME', 'soporte'),
       workHoursStart: this.get('WORK_HOURS_START', 'WORK_HOURS_START', '09:00'),
       workHoursEnd: this.get('WORK_HOURS_END', 'WORK_HOURS_END', '18:00'),
     };

@@ -46,6 +46,12 @@ export async function initTursoDatabase(): Promise<void> {
     try {
       await client.execute(`ALTER TABLE sessions ADD COLUMN human_takeover_status TEXT DEFAULT 'BOT';`);
     } catch (_) {}
+    try {
+      await client.execute(`ALTER TABLE sessions ADD COLUMN department TEXT DEFAULT 'SOPORTE';`);
+    } catch (_) {}
+    try {
+      await client.execute(`ALTER TABLE sessions ADD COLUMN last_instance TEXT;`);
+    } catch (_) {}
 
     await client.execute(`
       CREATE TABLE IF NOT EXISTS settings (
@@ -66,6 +72,10 @@ export async function initTursoDatabase(): Promise<void> {
         created_at TEXT NOT NULL
       );
     `);
+
+    try {
+      await client.execute(`ALTER TABLE conversation_logs ADD COLUMN instance_name TEXT;`);
+    } catch (_) {}
 
     await client.execute(`
       CREATE TABLE IF NOT EXISTS smartolt_onus (
@@ -112,14 +122,23 @@ export async function initTursoDatabase(): Promise<void> {
         sn_onu TEXT,
         telefono TEXT,
         direccion TEXT,
+        dia_corte TEXT,
+        fecha_corte TEXT,
         raw_data TEXT,
         updated_at TEXT
       );
     `);
+    try {
+      await client.execute(`ALTER TABLE wisphub_clients ADD COLUMN dia_corte TEXT;`);
+    } catch (_) {}
+    try {
+      await client.execute(`ALTER TABLE wisphub_clients ADD COLUMN fecha_corte TEXT;`);
+    } catch (_) {}
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_wh_nombre_norm ON wisphub_clients(nombre_normalized);`);
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_wh_servicio ON wisphub_clients(servicio);`);
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_wh_ip ON wisphub_clients(ip);`);
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_wh_estado ON wisphub_clients(estado);`);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_wh_dia_corte ON wisphub_clients(dia_corte);`);
 
     // Tabla de Tickets para modificaciones manuales en SmartOLT y seguimiento
     await client.execute(`

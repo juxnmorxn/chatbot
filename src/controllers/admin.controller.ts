@@ -241,11 +241,46 @@ export class AdminController {
       res.json({
         success: true,
         messages,
+        session,
         is_paused: isPaused.pausado,
         takeover: isPaused,
       });
     } catch (error: any) {
       logger.error(`Error al obtener mensajes de ${req.params.phone}:`, error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Reasigna o transfiere una conversación a otro departamento (SOPORTE | ATENCION)
+   */
+  static async transferChatDepartment(req: Request, res: Response): Promise<void> {
+    try {
+      const phone = String(req.params.phone || req.body?.phone || '').trim();
+      const department = String(req.body?.department || 'SOPORTE').toUpperCase() as 'SOPORTE' | 'ATENCION';
+      if (!phone) {
+        res.status(400).json({ success: false, error: 'Teléfono requerido' });
+        return;
+      }
+      await TursoService.updateDepartment(phone, department);
+      AdminController.broadcastSSE('chat:department', { phone, department });
+      res.json({ success: true, department, message: `Chat transferido a ${department}` });
+    } catch (error: any) {
+      logger.error('Error al transferir departamento:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Dispara el ciclo de recordatorios de cobranza automáticos respetando los switches
+   */
+  static async runBillingNotifications(req: Request, res: Response): Promise<void> {
+    try {
+      const { NotificationService } = await import('../services/notification.service');
+      const result = await NotificationService.ejecutarRecordatoriosPreventivos();
+      res.json({ success: true, result });
+    } catch (error: any) {
+      logger.error('Error al ejecutar recordatorios de cobranza:', error?.message || error);
       res.status(500).json({ success: false, error: error?.message || error });
     }
   }
