@@ -211,6 +211,26 @@ export async function initTursoDatabase(): Promise<void> {
     try { await client.execute(`ALTER TABLE tickets ADD COLUMN coordenadas_gps TEXT;`); } catch {}
     try { await client.execute(`ALTER TABLE tickets ADD COLUMN google_maps_url TEXT;`); } catch {}
 
+    // Tabla de Pools y VLANs IPAM dinámicas
+    await client.execute(`
+      CREATE TABLE IF NOT EXISTS ipam_vlan_pools (
+        vlan TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        segment TEXT NOT NULL,
+        gateway TEXT NOT NULL,
+        netmask TEXT DEFAULT '255.255.255.0',
+        start_host INTEGER DEFAULT 2,
+        end_host INTEGER DEFAULT 253,
+        olt_id TEXT,
+        olt_name TEXT,
+        is_active INTEGER DEFAULT 1,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_ipam_vlan ON ipam_vlan_pools(vlan);`);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_ipam_segment ON ipam_vlan_pools(segment);`);
+
     // Sembrar superadmin inicial si la tabla está vacía
     const { hashPassword } = await import('../utils/auth');
     const existingAdmins = await client.execute(`SELECT COUNT(*) as count FROM admin_users`);
@@ -224,7 +244,7 @@ export async function initTursoDatabase(): Promise<void> {
       logger.info('Usuario inicial "admin" (superadmin) creado exitosamente en Turso DB.');
     }
 
-    logger.info('Tablas "sessions", "settings", "conversation_logs", "smartolt_onus", "wisphub_clients", "tickets", "technicians" y "admin_users" listas en Turso.');
+    logger.info('Tablas "sessions", "settings", "conversation_logs", "smartolt_onus", "wisphub_clients", "tickets", "technicians", "admin_users" e "ipam_vlan_pools" listas en Turso.');
   } catch (error: any) {
     logger.error('Error al inicializar Turso DB:', error?.message || error);
     throw error;

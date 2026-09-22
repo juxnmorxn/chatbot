@@ -1506,7 +1506,7 @@ export function getAdminDashboardHtml(): string {
           </div>
         </div>
         <div class="topbar-right">
-          <div id="whatsapp-live-pill" class="live-status-pill">
+          <div id="whatsapp-live-pill" class="live-status-pill" style="cursor: pointer;" onclick="openWhatsAppInstancesModal()" title="Gestionar números e instancias de WhatsApp (Clic para ver)">
             <span class="pulse-dot"></span>
             <span id="whatsapp-pill-label">WhatsApp Activo</span>
           </div>
@@ -1872,8 +1872,27 @@ export function getAdminDashboardHtml(): string {
       <!-- VIEW 4: IPAM & POOLS -->
       <section id="view-ipam" class="view-container">
         <div class="glass-card" style="margin-bottom: 24px;">
-          <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 14px;">Ocupación de Pools por VLAN</h3>
-          <div id="ipam-pools-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;"></div>
+          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
+            <div>
+              <h3 style="font-size: 16px; font-weight: 700;">Ocupación de Pools por VLAN & Subredes</h3>
+              <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Segmentos asignados, gateways y capacidad de direccionamiento en tiempo real.</p>
+            </div>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+              <button class="btn btn-primary btn-sm" onclick="openCreateVlanModal()">
+                <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                <span>➕ Nueva VLAN / Pool</span>
+              </button>
+              <button class="btn btn-secondary btn-sm" onclick="triggerAutoDiscoverVlans()" title="Escanear base de datos y detectar subredes faltantes automáticamente">
+                <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                <span>🔍 Auto-Detectar Subredes</span>
+              </button>
+              <button class="btn btn-secondary btn-sm" onclick="loadIpamData()" title="Refrescar ocupación">
+                <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"></path></svg>
+                <span>Actualizar</span>
+              </button>
+            </div>
+          </div>
+          <div id="ipam-pools-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px;"></div>
         </div>
 
         <div class="glass-card">
@@ -2081,16 +2100,23 @@ export function getAdminDashboardHtml(): string {
       <!-- VIEW 7: CONFIGURACIÓN & INTEGRACIONES -->
       <section id="view-settings" class="view-container">
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 20px;">
-          <!-- Card 1: Evolution QR & WhatsApp Status -->
+          <!-- Card 1: WhatsApp Multi-Instance & Multi-Number Hub -->
           <div class="glass-card">
-            <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 14px;">Vinculación de WhatsApp (Evolution API)</h3>
-            <div id="evolution-qr-container" style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 220px; background: rgba(0,0,0,0.3); border-radius: var(--radius-sm); margin-bottom: 16px; padding: 16px;">
-              <svg class="svg-icon" style="width: 44px; height: 44px; margin-bottom: 8px; color: var(--accent-cyan);" viewBox="0 0 24 24"><path d="M5 12.55a11 11 0 0 1 14.08 0"></path><path d="M1.42 9a16 16 0 0 1 21.16 0"></path><path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path><line x1="12" y1="20" x2="12.01" y2="20"></line></svg>
-              <p id="evolution-status-text" style="font-size: 13px; color: var(--text-muted);">Consultando estado de WhatsApp...</p>
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+              <h3 style="font-size: 15px; font-weight: 700;">📱 Números de WhatsApp (Multi-Instancia)</h3>
+              <button class="btn btn-primary btn-sm" onclick="openNewWhatsAppInstanceModal()">
+                <span>➕ Conectar Nuevo Número</span>
+              </button>
             </div>
-            <div style="display: flex; gap: 10px;">
-              <button class="btn btn-secondary btn-sm" style="flex: 1;" onclick="fetchWhatsAppStatus()">Refrescar QR</button>
-              <button class="btn btn-danger btn-sm" onclick="disconnectWhatsAppSession()">Desvincular</button>
+            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">
+              Vincula múltiples números de WhatsApp con Evolution API para soporte, atención o cobranza.
+            </p>
+            <div id="evolution-instances-list" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px;">
+              <div style="text-align: center; color: var(--text-dim); padding: 16px;">Cargando instancias de WhatsApp...</div>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button class="btn btn-secondary btn-sm" style="flex: 1;" onclick="fetchWhatsAppInstancesList()">🔄 Refrescar Números</button>
+              <button class="btn btn-secondary btn-sm" onclick="openWhatsAppInstancesModal()">⚙️ Gestor Avanzado</button>
             </div>
           </div>
 
@@ -3208,24 +3234,62 @@ export function getAdminDashboardHtml(): string {
             const free = p.availableCount ?? p.free ?? Math.max(0, total - used);
             const pct = p.usagePercent ?? (total > 0 ? Math.round((used / total) * 100) : 0);
             const subnet = p.segment ?? p.subnet ?? p.name ?? '';
-            const badgeClass = pct > 80 ? 'badge-danger' : (pct > 50 ? 'badge-warning' : 'badge-info');
+            const gateway = p.gateway || '';
+            const olt = p.oltName || 'OLT';
+            const badgeClass = pct > 85 ? 'badge-danger' : (pct > 60 ? 'badge-warning' : 'badge-success');
+            const safeName = (p.name || '').replace(/'/g, "\\'");
+            const safeSubnet = subnet.replace(/'/g, "\\'");
+            const safeGateway = gateway.replace(/'/g, "\\'");
+            const safeOlt = olt.replace(/'/g, "\\'");
+
             return \`
-              <div class="glass-card" style="background: rgba(0,0,0,0.3);">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                  <span style="font-weight: 700; font-size: 14px; color: var(--text-main);">VLAN \${p.vlan} (\${escapeHtml(subnet)})</span>
-                  <span class="badge \${badgeClass}">\${pct}% Ocupado</span>
+              <div class="glass-card" style="background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.08); display: flex; flex-direction: column; justify-content: space-between;">
+                <div>
+                  <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                    <div>
+                      <div style="font-weight: 700; font-size: 15px; color: var(--accent-cyan);">VLAN \${escapeHtml(p.vlan)}</div>
+                      <div style="font-size: 12px; color: var(--text-muted);">\${escapeHtml(p.name || subnet)}</div>
+                    </div>
+                    <span class="badge \${badgeClass}">\${pct}% Ocupado</span>
+                  </div>
+
+                  <div style="font-family: var(--font-mono); font-size: 11.5px; color: var(--text-dim); margin-bottom: 10px; background: rgba(0,0,0,0.25); padding: 6px 10px; border-radius: var(--radius-sm);">
+                    <div>🌐 <strong>Subred:</strong> \${escapeHtml(subnet)}</div>
+                    <div>🚪 <strong>Gateway:</strong> \${escapeHtml(gateway || '172.19.x.254')}</div>
+                    <div>📡 <strong>OLT:</strong> \${escapeHtml(olt)}</div>
+                  </div>
+
+                  <div style="background: rgba(255,255,255,0.08); height: 8px; border-radius: 4px; overflow: hidden; margin-bottom: 8px;">
+                    <div style="background: linear-gradient(90deg, var(--accent-cyan), var(--primary)); width: \${Math.min(100, pct)}%; height: 100%;"></div>
+                  </div>
+
+                  <div style="display: flex; justify-content: space-between; font-size: 11.5px; color: var(--text-muted); font-family: var(--font-mono); margin-bottom: 12px;">
+                    <span>Usadas: <strong style="color: var(--text-main);">\${used}</strong></span>
+                    <span>Libres: <strong style="color: var(--accent-green);">\${free}</strong></span>
+                    <span>Total: <strong>\${total}</strong></span>
+                  </div>
                 </div>
-                <div style="background: rgba(255,255,255,0.08); height: 8px; border-radius: 4px; overflow: hidden; margin-bottom: 8px;">
-                  <div style="background: linear-gradient(90deg, var(--accent-cyan), var(--primary)); width: \${Math.min(100, pct)}%; height: 100%;"></div>
-                </div>
-                <div style="display: flex; justify-content: space-between; font-size: 11.5px; color: var(--text-muted); font-family: var(--font-mono);">
-                  <span>Usadas: <strong style="color: var(--text-main);">\${used}</strong></span>
-                  <span>Disponibles: <strong style="color: var(--accent-green);">\${free}</strong></span>
-                  <span>Total: <strong>\${total}</strong></span>
+
+                <div style="display: flex; gap: 6px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 10px;">
+                  <button class="btn btn-secondary btn-sm" style="flex: 1; font-size: 11px; padding: 4px 8px;" onclick="viewAvailableIps('\${p.vlan}')" title="Ver IPs libres disponibles para asignar">
+                    👁️ IPs Libres
+                  </button>
+                  <button class="btn btn-secondary btn-sm" style="font-size: 11px; padding: 4px 8px;" onclick="openEditVlanModal('\${p.vlan}', '\${safeName}', '\${safeSubnet}', '\${safeGateway}', '\${safeOlt}')" title="Editar parámetros de esta VLAN">
+                    ✏️
+                  </button>
+                  <button class="btn btn-danger btn-sm" style="font-size: 11px; padding: 4px 8px;" onclick="deleteVlanPool('\${p.vlan}')" title="Eliminar pool VLAN">
+                    🗑️
+                  </button>
                 </div>
               </div>
             \`;
           }).join('');
+        } else {
+          grid.innerHTML = \`
+            <div style="grid-column: 1 / -1; text-align: center; padding: 30px; color: var(--text-dim);">
+              No hay pools registrados. Haz clic en <strong>➕ Nueva VLAN / Pool</strong> o <strong>🔍 Auto-Detectar Subredes</strong>.
+            </div>
+          \`;
         }
 
         const unconfTable = document.getElementById('table-unconfigured-onus-body');
@@ -3233,11 +3297,11 @@ export function getAdminDashboardHtml(): string {
           unconfTable.innerHTML = unconfRes.unconfigured.map(o => \`
             <tr>
               <td>\${escapeHtml(o.olt_name || 'OLT')}</td>
-              <td style="font-family: var(--font-mono);">\${o.pon_port || 'PON'}</td>
+              <td style="font-family: var(--font-mono);">\${o.pon_port || o.port || 'PON'}</td>
               <td style="font-family: var(--font-mono); font-weight: 700; color: var(--accent-cyan);">\${o.sn}</td>
-              <td>\${escapeHtml(o.model || 'ONU')}</td>
+              <td>\${escapeHtml(o.model || o.onu_type_name || 'ONU')}</td>
               <td>
-                <button class="btn btn-primary btn-sm" onclick="openAuthorizeOnuModal('\${o.sn}', '\${o.olt_id || 1}')">
+                <button class="btn btn-primary btn-sm" onclick="openAuthorizeOnuModal('\${o.sn}', '\${o.olt_id || 3}')">
                   Aprovisionar
                 </button>
               </td>
@@ -3248,6 +3312,168 @@ export function getAdminDashboardHtml(): string {
         }
       } catch (err) {
         console.error('Error loading IPAM:', err);
+      }
+    }
+
+    function openCreateVlanModal(existingData = null) {
+      const isEdit = Boolean(existingData && existingData.vlan);
+      const title = isEdit ? \`Editar Pool VLAN \${existingData.vlan}\` : '➕ Agregar Nueva VLAN / Pool';
+      
+      const vlanVal = existingData?.vlan || '';
+      const nameVal = existingData?.name || '';
+      const segVal = existingData?.segment || '172.19.12.0/24';
+      const gwVal = existingData?.gateway || '172.19.12.254';
+      const oltVal = existingData?.oltName || 'OLT5800-Actopan';
+
+      const content = \`
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <div class="form-group">
+            <label class="form-label">ID de VLAN (Número)</label>
+            <input type="text" id="vlan-form-id" class="form-control" placeholder="Ej: 620 o 700" value="\${escapeHtml(vlanVal)}" \${isEdit ? 'readonly' : ''} required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Nombre Descriptivo</label>
+            <input type="text" id="vlan-form-name" class="form-control" placeholder="Ej: 620 - Internet Actopan Norte" value="\${escapeHtml(nameVal)}" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Segmento de Red CIDR (/24)</label>
+            <input type="text" id="vlan-form-segment" class="form-control" placeholder="Ej: 172.19.12.0/24" value="\${escapeHtml(segVal)}" oninput="autoFillGateway(this.value)" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Gateway por Defecto</label>
+            <input type="text" id="vlan-form-gateway" class="form-control" placeholder="Ej: 172.19.12.254" value="\${escapeHtml(gwVal)}" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">OLT Asignada</label>
+            <select id="vlan-form-olt" class="form-control">
+              <option value="3" \${oltVal.includes('Actopan') ? 'selected' : ''}>OLT5800-Actopan (ID 3)</option>
+              <option value="2" \${oltVal.includes('SanAgustin') ? 'selected' : ''}>OLT-SanAgustin (ID 2)</option>
+            </select>
+          </div>
+        </div>
+      \`;
+
+      openModal(title, content, async () => {
+        const vlan = document.getElementById('vlan-form-id').value.trim();
+        const name = document.getElementById('vlan-form-name').value.trim();
+        const segment = document.getElementById('vlan-form-segment').value.trim();
+        const gateway = document.getElementById('vlan-form-gateway').value.trim();
+        const oltSelect = document.getElementById('vlan-form-olt');
+        const oltId = oltSelect.value;
+        const oltName = oltSelect.options[oltSelect.selectedIndex].text.split('(')[0].trim();
+
+        if (!vlan || !segment || !gateway) {
+          showToast('Campos requeridos', 'VLAN, Segmento y Gateway son obligatorios', 'warning');
+          return false;
+        }
+
+        const res = await apiFetch('/api/ipam/pools', {
+          method: 'POST',
+          body: JSON.stringify({ vlan, name: name || \`\${vlan} - Internet\`, segment, gateway, oltId, oltName }),
+        });
+
+        if (res.success) {
+          showToast('VLAN Guardada', res.message || 'Pool VLAN configurado exitosamente.', 'success');
+          loadIpamData();
+        } else {
+          showToast('Error', res.error || 'No se pudo guardar la VLAN', 'error');
+        }
+      }, isEdit ? 'Guardar Cambios' : 'Crear Pool VLAN');
+    }
+
+    function autoFillGateway(segmentStr) {
+      const clean = (segmentStr || '').trim();
+      const match = clean.match(/^(\d+\.\d+\.\d+)\.0\/24$/);
+      if (match) {
+        const gwInput = document.getElementById('vlan-form-gateway');
+        if (gwInput && (!gwInput.value || gwInput.value.endsWith('.254'))) {
+          gwInput.value = \`\${match[1]}.254\`;
+        }
+      }
+    }
+
+    function openEditVlanModal(vlan, name, segment, gateway, oltName) {
+      openCreateVlanModal({ vlan, name, segment, gateway, oltName });
+    }
+
+    async function deleteVlanPool(vlan) {
+      showConfirmDialog(
+        \`Eliminar Pool VLAN \${vlan}\`,
+        \`¿Estás seguro de que deseas eliminar el pool de la VLAN \${vlan}? Las ONUs existentes no se borrarán, pero dejará de mostrarse en el IPAM.\`,
+        async () => {
+          const res = await apiFetch(\`/api/ipam/pools/\${encodeURIComponent(vlan)}\`, { method: 'DELETE' });
+          if (res.success) {
+            showToast('Pool Eliminado', \`VLAN \${vlan} eliminada del IPAM.\`, 'info');
+            loadIpamData();
+          } else {
+            showToast('Error', res.error || 'No se pudo eliminar el pool', 'error');
+          }
+        }
+      );
+    }
+
+    async function triggerAutoDiscoverVlans() {
+      showToast('Escaneando Red', 'Buscando subredes y VLANs en la base de datos de ONUs...', 'info');
+      try {
+        const res = await apiFetch('/api/ipam/pools/auto-discover', { method: 'POST' });
+        if (res.success) {
+          showToast('Auto-Descubrimiento Listo', \`Se sincronizaron \${res.count || 0} pools y subredes en total.\`, 'success', 4000);
+          loadIpamData();
+        } else {
+          showToast('Error', res.error || 'Error al auto-descubrir', 'error');
+        }
+      } catch (err) {
+        showToast('Error', err.message, 'error');
+      }
+    }
+
+    async function viewAvailableIps(vlan) {
+      try {
+        const res = await apiFetch(\`/api/ipam/available?vlan=\${encodeURIComponent(vlan)}\`);
+        const ips = res.available || [];
+        
+        let tableRows = '';
+        if (ips.length > 0) {
+          tableRows = ips.slice(0, 100).map(i => \`
+            <tr>
+              <td style="font-family: var(--font-mono); font-weight: 700; color: var(--accent-green);">\${i.ip}</td>
+              <td style="font-family: var(--font-mono);">\${i.gateway}</td>
+              <td>\${i.segment}</td>
+              <td>
+                <button class="btn btn-secondary btn-sm" onclick="navigator.clipboard.writeText('\${i.ip}'); showToast('Copiada', 'IP \${i.ip} copiada al portapapeles', 'info', 2000);">
+                  📋 Copiar
+                </button>
+              </td>
+            </tr>
+          \`).join('');
+        } else {
+          tableRows = '<tr><td colspan="4" style="text-align: center; color: var(--accent-amber);">No hay IPs libres disponibles en este pool (100% Ocupado).</td></tr>';
+        }
+
+        const content = \`
+          <div>
+            <p style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">
+              Mostrando las primeras 100 IPs libres disponibles calculadas en tiempo real para <strong>VLAN \${vlan}</strong> (Total libres: \${ips.length}):
+            </p>
+            <div class="table-responsive" style="max-height: 380px; overflow-y: auto;">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>IP Disponible</th>
+                    <th>Gateway</th>
+                    <th>Subred</th>
+                    <th>Acción</th>
+                  </tr>
+                </thead>
+                <tbody>\${tableRows}</tbody>
+              </table>
+            </div>
+          </div>
+        \`;
+
+        openModal(\`IPs Disponibles - VLAN \${vlan}\`, content, null, 'Cerrar');
+      } catch (err) {
+        showToast('Error', 'No se pudieron cargar las IPs libres', 'error');
       }
     }
 
@@ -3826,40 +4052,332 @@ export function getAdminDashboardHtml(): string {
       showToast('Grupo Seleccionado', 'Haz clic en "Guardar Todas las Configuraciones" para aplicar.', 'info');
     }
 
-    async function fetchWhatsAppStatus() {
-      const container = document.getElementById('evolution-qr-container');
-      const text = document.getElementById('evolution-status-text');
+    // WhatsApp Multi-Instance & Multi-Number Management
+    let qrPollInterval = null;
+
+    async function fetchWhatsAppInstancesList() {
+      const container = document.getElementById('evolution-instances-list');
+      if (!container) return;
+
       try {
-        const res = await apiFetch('/api/whatsapp/status');
-        if (res.state === 'open') {
+        const res = await apiFetch('/api/whatsapp/instances');
+        const instances = res.instances || [];
+
+        if (instances.length === 0) {
           container.innerHTML = \`
-            <svg class="svg-icon" style="width: 48px; height: 48px; color: var(--accent-green); margin-bottom: 8px;" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-            <h4 style="font-size: 15px; font-weight: 700;">WhatsApp Conectado</h4>
-            <p style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">Instancia activa y recibiendo mensajes.</p>
+            <div style="text-align: center; padding: 20px; color: var(--text-dim); background: rgba(0,0,0,0.2); border-radius: var(--radius-sm);">
+              No hay instancias configuradas en Evolution API.
+              <div style="margin-top: 10px;">
+                <button class="btn btn-primary btn-sm" onclick="openNewWhatsAppInstanceModal()">➕ Conectar Primer Número</button>
+              </div>
+            </div>
           \`;
-          document.getElementById('whatsapp-pill-label').innerText = 'WhatsApp Activo';
-        } else if (res.qr) {
-          container.innerHTML = \`
-            <img src="\${res.qr}" style="width: 180px; height: 180px; border-radius: 8px; background: #fff; padding: 6px;" alt="QR Code">
-            <p style="font-size: 12px; color: var(--text-muted); margin-top: 10px;">Escanea este código desde WhatsApp</p>
+          return;
+        }
+
+        let hasActiveOpen = false;
+        container.innerHTML = instances.map(inst => {
+          const isOpen = inst.connectionStatus === 'open';
+          if (isOpen && inst.isActive) hasActiveOpen = true;
+          const statusBadge = isOpen 
+            ? '<span class="badge badge-success">🟢 Conectado</span>' 
+            : (inst.connectionStatus === 'connecting' ? '<span class="badge badge-warning">🟡 Conectando</span>' : '<span class="badge badge-danger">🔴 Desconectado</span>');
+          
+          const phoneDisplay = inst.phone ? \`+52 \${inst.phone.slice(-10)}\` : 'Sin número vinculado';
+          const safeName = inst.name.replace(/'/g, "\\'");
+
+          return \`
+            <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(0,0,0,0.3); padding: 12px 14px; border-radius: var(--radius-sm); border: 1px solid \${inst.isActive ? 'var(--primary)' : 'var(--card-border)'};">
+              <div style="display: flex; align-items: center; gap: 12px;">
+                <div style="width: 36px; height: 36px; border-radius: 50%; background: \${isOpen ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'}; display: flex; align-items: center; justify-content: center; font-size: 18px;">
+                  \${isOpen ? '📱' : '📵'}
+                </div>
+                <div>
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <strong style="font-size: 13.5px; color: var(--text-main);">\${escapeHtml(inst.name)}</strong>
+                    \${inst.isActive ? '<span class="badge badge-primary" style="font-size: 10px;">BOT ACTIVO</span>' : ''}
+                  </div>
+                  <div style="font-size: 12px; color: var(--text-muted); font-family: var(--font-mono);">
+                    \${escapeHtml(phoneDisplay)} \${inst.profileName ? \`(\${escapeHtml(inst.profileName)})\` : ''}
+                  </div>
+                </div>
+              </div>
+
+              <div style="display: flex; align-items: center; gap: 8px;">
+                \${statusBadge}
+                \${!isOpen ? \`
+                  <button class="btn btn-primary btn-sm" style="font-size: 11px; padding: 4px 8px;" onclick="openInstanceQrModal('\${safeName}')" title="Escanear código QR para conectar">
+                    📲 Vincular QR
+                  </button>
+                \` : ''}
+                \${!inst.isActive ? \`
+                  <button class="btn btn-secondary btn-sm" style="font-size: 11px; padding: 4px 8px;" onclick="selectActiveWhatsAppInstance('\${safeName}')" title="Usar esta línea para las respuestas del Chatbot">
+                    ⭐ Activar
+                  </button>
+                \` : ''}
+                \${isOpen ? \`
+                  <button class="btn btn-danger btn-sm" style="font-size: 11px; padding: 4px 8px;" onclick="disconnectWhatsAppInstance('\${safeName}')" title="Desconectar sesión">
+                    🔌
+                  </button>
+                \` : ''}
+                <button class="btn btn-secondary btn-sm" style="font-size: 11px; padding: 4px 8px;" onclick="syncInstanceWebhook('\${safeName}')" title="Re-sincronizar webhook hacia el chatbot">
+                  🔄
+                </button>
+              </div>
+            </div>
           \`;
-          document.getElementById('whatsapp-pill-label').innerText = 'WhatsApp Desconectado';
-        } else {
-          container.innerHTML = '<p style="color: var(--text-muted);">Instancia desconectada o esperando QR...</p>';
+        }).join('');
+
+        // Actualizar píldora de estado superior
+        const pillLabel = document.getElementById('whatsapp-pill-label');
+        if (pillLabel) {
+          pillLabel.innerText = hasActiveOpen ? 'WhatsApp Activo' : 'WhatsApp Desconectado';
         }
       } catch (err) {
-        text.innerText = 'No se pudo contactar a Evolution API';
+        container.innerHTML = '<div style="color: var(--accent-amber); padding: 10px;">No se pudo contactar a Evolution API. Revisa la URL y API Key.</div>';
       }
     }
 
-    async function disconnectWhatsAppSession() {
-      showConfirmDialog('Desvincular WhatsApp', '¿Deseas cerrar la sesión activa de WhatsApp?', async () => {
-        const res = await apiFetch('/api/whatsapp/disconnect', { method: 'POST' });
-        if (res.success) {
-          showToast('Desvinculado', 'Sesión cerrada.', 'info');
-          fetchWhatsAppStatus();
+    async function fetchWhatsAppStatus() {
+      return fetchWhatsAppInstancesList();
+    }
+
+    function openNewWhatsAppInstanceModal() {
+      const content = \`
+        <div style="display: flex; flex-direction: column; gap: 14px;">
+          <p style="font-size: 13px; color: var(--text-muted);">
+            Ingresa un nombre para identificar esta nueva línea de WhatsApp (ej: <strong>soporte-linea2</strong>, <strong>ventas-actopan</strong>, <strong>cobranza</strong>):
+          </p>
+          <div class="form-group">
+            <label class="form-label">Nombre de la Instancia</label>
+            <input type="text" id="new-instance-name" class="form-control" placeholder="ej: soporte-linea2" autocomplete="off" spellcheck="false" required>
+            <div style="font-size: 11px; color: var(--text-dim); margin-top: 4px;">Usa solo letras minúsculas, números o guiones.</div>
+          </div>
+        </div>
+      \`;
+
+      openModal('➕ Vincular Nuevo Número de WhatsApp', content, async () => {
+        const nameInput = document.getElementById('new-instance-name');
+        const name = (nameInput?.value || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
+        if (!name) {
+          showToast('Nombre inválido', 'Por favor ingresa un nombre para la instancia', 'warning');
+          return false;
         }
-      });
+
+        showToast('Creando Instancia', \`Registrando "\${name}" en Evolution API...\`, 'info');
+        const res = await apiFetch('/api/whatsapp/instances', {
+          method: 'POST',
+          body: JSON.stringify({ name }),
+        });
+
+        if (res.success) {
+          showToast('Instancia Creada', res.message || 'Instancia creada exitosamente.', 'success');
+          fetchWhatsAppInstancesList();
+          setTimeout(() => {
+            openInstanceQrModal(name);
+          }, 400);
+        } else {
+          showToast('Error', res.message || res.error || 'No se pudo crear la instancia', 'error');
+        }
+      }, 'Crear & Generar QR');
+    }
+
+    async function openInstanceQrModal(instanceName) {
+      clearInterval(qrPollInterval);
+
+      const content = \`
+        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 280px; text-align: center;">
+          <div id="instance-qr-display" style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
+            <div class="spinner" style="margin-bottom: 12px;"></div>
+            <p style="font-size: 13px; color: var(--text-muted);">Generando código QR para <strong>\${escapeHtml(instanceName)}</strong>...</p>
+          </div>
+          <div style="font-size: 12px; color: var(--text-dim); margin-top: 14px; max-width: 320px;">
+            Abre WhatsApp en tu teléfono ➔ Dispositivos vinculados ➔ Vincular dispositivo y escanea este código.
+          </div>
+          <div style="margin-top: 14px; display: flex; gap: 8px;">
+            <button class="btn btn-secondary btn-sm" onclick="loadInstanceQr('\${instanceName}')">🔄 Refrescar Código</button>
+          </div>
+        </div>
+      \`;
+
+      openModal(\`Vincular WhatsApp - \${instanceName}\`, content, () => {
+        clearInterval(qrPollInterval);
+      }, 'Listo / Cerrar');
+
+      await loadInstanceQr(instanceName);
+
+      // Polling de verificación cada 4 segundos mientras el modal está abierto
+      qrPollInterval = setInterval(async () => {
+        try {
+          const res = await apiFetch(\`/api/whatsapp/instances/\${encodeURIComponent(instanceName)}/qr\`);
+          if (res.state === 'open') {
+            clearInterval(qrPollInterval);
+            const display = document.getElementById('instance-qr-display');
+            if (display) {
+              display.innerHTML = \`
+                <svg class="svg-icon" style="width: 56px; height: 56px; color: var(--accent-green); margin-bottom: 10px;" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                <h4 style="font-size: 16px; font-weight: 700; color: var(--accent-green);">¡WhatsApp Vinculado con Éxito!</h4>
+                <p style="font-size: 13px; color: var(--text-muted); margin-top: 6px;">La línea está conectada y lista para recibir y enviar mensajes.</p>
+              \`;
+            }
+            showToast('Conectado', \`Instancia \${instanceName} vinculada exitosamente.\`, 'success');
+            fetchWhatsAppInstancesList();
+          }
+        } catch {}
+      }, 4000);
+    }
+
+    async function loadInstanceQr(instanceName) {
+      const display = document.getElementById('instance-qr-display');
+      if (!display) return;
+
+      try {
+        const res = await apiFetch(\`/api/whatsapp/instances/\${encodeURIComponent(instanceName)}/qr\`);
+        if (res.state === 'open') {
+          clearInterval(qrPollInterval);
+          display.innerHTML = \`
+            <svg class="svg-icon" style="width: 56px; height: 56px; color: var(--accent-green); margin-bottom: 10px;" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+            <h4 style="font-size: 16px; font-weight: 700; color: var(--accent-green);">WhatsApp Conectado</h4>
+            <p style="font-size: 13px; color: var(--text-muted); margin-top: 6px;">Esta instancia ya se encuentra activa.</p>
+          \`;
+          fetchWhatsAppInstancesList();
+        } else if (res.qr) {
+          const qrSrc = res.qr.startsWith('data:') ? res.qr : \`data:image/png;base64,\${res.qr}\`;
+          display.innerHTML = \`
+            <img src="\${qrSrc}" style="width: 200px; height: 200px; border-radius: 8px; background: #fff; padding: 8px; box-shadow: 0 4px 14px rgba(0,0,0,0.4);" alt="QR WhatsApp">
+            \${res.pairingCode ? \`<div style="margin-top: 10px; font-family: var(--font-mono); font-size: 14px; font-weight: 700; color: var(--accent-cyan);">Código de emparejamiento: \${res.pairingCode}</div>\` : ''}
+          \`;
+        } else {
+          display.innerHTML = \`
+            <p style="color: var(--accent-amber);">Esperando código QR de Evolution API...</p>
+            <button class="btn btn-secondary btn-sm" style="margin-top: 10px;" onclick="loadInstanceQr('\${instanceName}')">Intentar de nuevo</button>
+          \`;
+        }
+      } catch (err) {
+        display.innerHTML = '<p style="color: var(--accent-danger);">Error al solicitar código QR a Evolution API.</p>';
+      }
+    }
+
+    async function selectActiveWhatsAppInstance(instanceName) {
+      showConfirmDialog(
+        'Activar Instancia Principal',
+        \`¿Deseas activar <strong>\${instanceName}</strong> como el número principal de WhatsApp para las respuestas del Chatbot?\`,
+        async () => {
+          const res = await apiFetch(\`/api/whatsapp/instances/\${encodeURIComponent(instanceName)}/select\`, { method: 'POST' });
+          if (res.success) {
+            showToast('Instancia Activada', res.message || \`\${instanceName} es ahora la línea activa.\`, 'success');
+            fetchWhatsAppInstancesList();
+          } else {
+            showToast('Error', res.error || 'No se pudo seleccionar la instancia', 'error');
+          }
+        }
+      );
+    }
+
+    async function disconnectWhatsAppInstance(instanceName) {
+      showConfirmDialog(
+        'Desvincular WhatsApp',
+        \`¿Deseas cerrar la sesión de WhatsApp en la instancia <strong>\${instanceName}</strong>?\`,
+        async () => {
+          const res = await apiFetch(\`/api/whatsapp/instances/\${encodeURIComponent(instanceName)}/disconnect\`, { method: 'POST' });
+          if (res.success) {
+            showToast('Desvinculado', \`Instancia \${instanceName} desvinculada.\`, 'info');
+            fetchWhatsAppInstancesList();
+          } else {
+            showToast('Error', res.error || 'Error al desvincular', 'error');
+          }
+        }
+      );
+    }
+
+    async function syncInstanceWebhook(instanceName) {
+      showToast('Sincronizando', \`Re-configurando webhook para \${instanceName}...\`, 'info');
+      try {
+        const res = await apiFetch(\`/api/whatsapp/instances/\${encodeURIComponent(instanceName)}/sync-webhook\`, { method: 'POST' });
+        if (res.webhookOk) {
+          showToast('Webhook Sincronizado', \`Webhook de \${instanceName} enlazado con éxito hacia /webhook.\`, 'success');
+        } else {
+          showToast('Aviso', 'Se envió la petición de sincronización a Evolution API.', 'info');
+        }
+        fetchWhatsAppInstancesList();
+      } catch (err) {
+        showToast('Error', err.message, 'error');
+      }
+    }
+
+    function openWhatsAppInstancesModal() {
+      const content = \`
+        <div style="display: flex; flex-direction: column; gap: 14px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <p style="font-size: 13px; color: var(--text-muted); margin: 0;">
+              Líneas y números de teléfono conectados a la plataforma:
+            </p>
+            <button class="btn btn-primary btn-sm" onclick="openNewWhatsAppInstanceModal()">
+              ➕ Nuevo Número
+            </button>
+          </div>
+          <div id="modal-evolution-instances-list" style="display: flex; flex-direction: column; gap: 10px; max-height: 380px; overflow-y: auto;">
+            <div style="text-align: center; color: var(--text-dim); padding: 20px;">Cargando lista de instancias...</div>
+          </div>
+        </div>
+      \`;
+
+      openModal('📱 Gestor de Números e Instancias de WhatsApp', content, null, 'Cerrar');
+
+      // Cargar lista dentro del modal
+      setTimeout(async () => {
+        const modalContainer = document.getElementById('modal-evolution-instances-list');
+        if (!modalContainer) return;
+
+        try {
+          const res = await apiFetch('/api/whatsapp/instances');
+          const instances = res.instances || [];
+
+          if (instances.length === 0) {
+            modalContainer.innerHTML = '<div style="text-align:center; padding: 20px; color: var(--text-dim);">No hay instancias registradas.</div>';
+            return;
+          }
+
+          modalContainer.innerHTML = instances.map(inst => {
+            const isOpen = inst.connectionStatus === 'open';
+            const statusBadge = isOpen 
+              ? '<span class="badge badge-success">🟢 Conectado</span>' 
+              : '<span class="badge badge-danger">🔴 Desconectado</span>';
+            const phoneDisplay = inst.phone ? \`+52 \${inst.phone.slice(-10)}\` : 'Sin número vinculado';
+            const safeName = inst.name.replace(/'/g, "\\'");
+
+            return \`
+              <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(0,0,0,0.3); padding: 12px; border-radius: var(--radius-sm); border: 1px solid \${inst.isActive ? 'var(--primary)' : 'var(--card-border)'};">
+                <div>
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <strong style="font-size: 14px;">\${escapeHtml(inst.name)}</strong>
+                    \${inst.isActive ? '<span class="badge badge-primary">ACTIVO</span>' : ''}
+                  </div>
+                  <div style="font-size: 12px; color: var(--text-muted); font-family: var(--font-mono);">
+                    \${escapeHtml(phoneDisplay)}
+                  </div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  \${statusBadge}
+                  \${!isOpen ? \`
+                    <button class="btn btn-primary btn-sm" onclick="openInstanceQrModal('\${safeName}')">📲 QR</button>
+                  \` : ''}
+                  \${!inst.isActive ? \`
+                    <button class="btn btn-secondary btn-sm" onclick="selectActiveWhatsAppInstance('\${safeName}')">⭐ Activar</button>
+                  \` : ''}
+                  <button class="btn btn-secondary btn-sm" onclick="syncInstanceWebhook('\${safeName}')" title="Re-sincronizar webhook">🔄</button>
+                </div>
+              </div>
+            \`;
+          }).join('');
+        } catch (err) {
+          modalContainer.innerHTML = '<div style="color: var(--accent-danger); padding: 10px;">Error al cargar instancias.</div>';
+        }
+      }, 100);
+    }
+
+    async function disconnectWhatsAppSession() {
+      return disconnectWhatsAppInstance('isp-soporte');
     }
 
     function clearSessionsData() {

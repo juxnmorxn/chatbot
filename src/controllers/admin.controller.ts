@@ -678,7 +678,7 @@ export class AdminController {
     try {
       const url = SettingsService.get('EVOLUTION_URL', 'EVOLUTION_URL', config.evolution.url).replace(/\/+$/, '');
       const apiKey = SettingsService.get('EVOLUTION_API_KEY', 'EVOLUTION_API_KEY', config.evolution.apiKey);
-      const instance = config.evolution.instanceName;
+      const instance = SettingsService.get('INSTANCE_NAME', 'INSTANCE_NAME', config.evolution.instanceName);
 
       await axios.delete(`${url}/instance/logout/${instance}`, {
         headers: { apikey: apiKey },
@@ -688,6 +688,121 @@ export class AdminController {
       res.json({ success: true, message: 'Sesión desvinculada exitosamente' });
     } catch (error: any) {
       res.status(500).json({ success: false, error: error?.response?.data || error?.message || error });
+    }
+  }
+
+  /**
+   * Obtiene la lista de todas las instancias / números de WhatsApp disponibles
+   */
+  static async getWhatsAppInstances(_req: Request, res: Response): Promise<void> {
+    try {
+      const instances = await EvolutionService.fetchAllInstances();
+      res.json({ success: true, count: instances.length, instances });
+    } catch (error: any) {
+      logger.error('Error al listar instancias WhatsApp:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Crea una nueva instancia de WhatsApp para vincular otro número
+   */
+  static async createWhatsAppInstance(req: Request, res: Response): Promise<void> {
+    try {
+      const { name } = req.body || {};
+      if (!name) {
+        res.status(400).json({ success: false, error: 'El nombre de la instancia es obligatorio' });
+        return;
+      }
+      const result = await EvolutionService.createInstance(name);
+      if (result.success) {
+        res.json(result);
+      } else {
+        res.status(400).json(result);
+      }
+    } catch (error: any) {
+      logger.error('Error al crear instancia WhatsApp:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Obtiene el código QR de una instancia específica
+   */
+  static async getWhatsAppInstanceQr(req: Request, res: Response): Promise<void> {
+    try {
+      const instance = String(req.params.instance || '').trim();
+      const qrData = await EvolutionService.getInstanceQr(instance);
+      res.json({ success: true, instance, ...qrData });
+    } catch (error: any) {
+      logger.error(`Error al obtener QR de instancia ${req.params.instance}:`, error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Selecciona una instancia como la principal activa para el bot
+   */
+  static async selectWhatsAppInstance(req: Request, res: Response): Promise<void> {
+    try {
+      const instance = String(req.params.instance || '').trim();
+      if (!instance) {
+        res.status(400).json({ success: false, error: 'Nombre de instancia requerido' });
+        return;
+      }
+      await SettingsService.set('INSTANCE_NAME', instance);
+      await EvolutionService.verifyAndEnableWebhook(instance);
+      res.json({ success: true, message: `Instancia "${instance}" seleccionada como activa para el chatbot.` });
+    } catch (error: any) {
+      logger.error(`Error al seleccionar instancia ${req.params.instance}:`, error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Desconecta (logout) una instancia de WhatsApp
+   */
+  static async disconnectWhatsAppInstance(req: Request, res: Response): Promise<void> {
+    try {
+      const instance = String(req.params.instance || '').trim();
+      const ok = await EvolutionService.disconnectInstance(instance);
+      if (ok) {
+        res.json({ success: true, message: `Instancia "${instance}" desvinculada exitosamente.` });
+      } else {
+        res.status(400).json({ success: false, error: 'No se pudo desvincular la instancia' });
+      }
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Elimina completamente una instancia de WhatsApp de Evolution API
+   */
+  static async deleteWhatsAppInstance(req: Request, res: Response): Promise<void> {
+    try {
+      const instance = String(req.params.instance || '').trim();
+      const ok = await EvolutionService.deleteInstance(instance);
+      if (ok) {
+        res.json({ success: true, message: `Instancia "${instance}" eliminada de Evolution API.` });
+      } else {
+        res.status(400).json({ success: false, error: 'No se pudo eliminar la instancia' });
+      }
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Re-sincroniza el webhook de una instancia específica
+   */
+  static async syncInstanceWebhook(req: Request, res: Response): Promise<void> {
+    try {
+      const instance = String(req.params.instance || '').trim();
+      const resWebhook = await EvolutionService.verifyAndEnableWebhook(instance);
+      res.json({ success: true, instance, ...resWebhook });
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error?.message || error });
     }
   }
 
@@ -901,6 +1016,73 @@ export class AdminController {
       res.json({ success: true, pools });
     } catch (error: any) {
       logger.error('Error al obtener resumen de pools IPAM:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Guarda o actualiza un pool de VLAN en IPAM
+   */
+  static async saveIpamPool(req: Request, res: Response): Promise<void> {
+    try {
+      const { vlan, name, segment, gateway, netmask, startHost, endHost, oltId, oltName } = req.body || {};
+      if (!vlan || !segment || !gateway) {
+        res.status(400).json({ success: false, error: 'VLAN, Segmento CIDR y Gateway son requeridos.' });
+        return;
+      }
+      const ok = await IpamService.saveVlanPool({
+        vlan,
+        name,
+        segment,
+        gateway,
+        netmask,
+        startHost,
+        endHost,
+        oltId,
+        oltName,
+      });
+      if (ok) {
+        res.json({ success: true, message: `Pool VLAN ${vlan} (${segment}) guardado exitosamente.` });
+      } else {
+        res.status(500).json({ success: false, error: 'No se pudo guardar el pool' });
+      }
+    } catch (error: any) {
+      logger.error('Error al guardar pool IPAM:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Elimina un pool de VLAN en IPAM
+   */
+  static async deleteIpamPool(req: Request, res: Response): Promise<void> {
+    try {
+      const vlan = String(req.params.vlan || '').trim();
+      if (!vlan) {
+        res.status(400).json({ success: false, error: 'VLAN requerida' });
+        return;
+      }
+      const ok = await IpamService.deleteVlanPool(vlan);
+      if (ok) {
+        res.json({ success: true, message: `Pool VLAN ${vlan} eliminado exitosamente.` });
+      } else {
+        res.status(400).json({ success: false, error: 'No se pudo eliminar el pool' });
+      }
+    } catch (error: any) {
+      logger.error(`Error al eliminar pool VLAN ${req.params.vlan}:`, error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Auto-descubre subredes a partir de ONUs y clientes WispHub en base de datos
+   */
+  static async autoDiscoverIpamPools(_req: Request, res: Response): Promise<void> {
+    try {
+      const pools = await IpamService.getPoolSummary();
+      res.json({ success: true, message: 'Auto-descubrimiento de subredes completado.', count: pools.length, pools });
+    } catch (error: any) {
+      logger.error('Error en auto-descubrimiento IPAM:', error?.message || error);
       res.status(500).json({ success: false, error: error?.message || error });
     }
   }

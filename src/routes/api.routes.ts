@@ -58,6 +58,13 @@ router.post('/api/settings/generate-evolution-key', AdminController.generateEvol
 router.get('/api/sessions', AdminController.getSessions);
 router.get('/api/logs', AdminController.getLogs);
 router.get('/api/whatsapp/status', AdminController.getWhatsAppStatus);
+router.get('/api/whatsapp/instances', AdminController.getWhatsAppInstances);
+router.post('/api/whatsapp/instances', AdminController.createWhatsAppInstance);
+router.get('/api/whatsapp/instances/:instance/qr', AdminController.getWhatsAppInstanceQr);
+router.post('/api/whatsapp/instances/:instance/select', AdminController.selectWhatsAppInstance);
+router.post('/api/whatsapp/instances/:instance/disconnect', AdminController.disconnectWhatsAppInstance);
+router.delete('/api/whatsapp/instances/:instance', AdminController.deleteWhatsAppInstance);
+router.post('/api/whatsapp/instances/:instance/sync-webhook', AdminController.syncInstanceWebhook);
 router.post('/api/whatsapp/disconnect', AdminController.disconnectWhatsApp);
 router.post('/api/whatsapp/resolve-group', AdminController.resolveWhatsAppGroup);
 router.get('/api/whatsapp/groups', AdminController.getWhatsAppGroups);
@@ -85,6 +92,9 @@ router.post('/api/admin/clients/:id/phones', AdminController.updateClientPhones)
 // IPAM & GESTIÓN DE POOLS / VLANS / ONUS
 // ==========================================
 router.get('/api/ipam/pools', AdminController.getIpamPools);
+router.post('/api/ipam/pools', AdminController.saveIpamPool);
+router.delete('/api/ipam/pools/:vlan', AdminController.deleteIpamPool);
+router.post('/api/ipam/pools/auto-discover', AdminController.autoDiscoverIpamPools);
 router.get('/api/ipam/available', AdminController.getIpamAvailable);
 router.get('/api/smartolt/unconfigured', AdminController.getSmartOltUnconfigured);
 router.post('/api/smartolt/authorize', AdminController.authorizeSmartOltOnu);

@@ -405,5 +405,182 @@ export class EvolutionService {
       return [];
     }
   }
+  static async fetchAllInstances(): Promise<Array<{
+    name: string;
+    connectionStatus: string;
+    ownerJid: string | null;
+    phone: string | null;
+    profileName: string | null;
+    profilePictureUrl: string | null;
+    isActive: boolean;
+    updatedAt?: string;
+  }>> {
+    try {
+      const api = this.getApi();
+      const currentActive = this.getInstanceName();
+      const res = await api.get('/instance/fetchInstances', { timeout: 8000 });
+      const rawList = Array.isArray(res.data) ? res.data : (res.data?.instances || res.data?.response || []);
+      
+      const instances = rawList.map((inst: any) => {
+        const name = String(inst.instance?.instanceName || inst.name || inst.instanceName || '');
+        const state = String(inst.instance?.state || inst.connectionStatus || inst.state || 'close').toLowerCase();
+        const ownerJid = inst.instance?.owner || inst.owner || inst.ownerJid || null;
+        let phone: string | null = null;
+        if (ownerJid) {
+          phone = String(ownerJid).split('@')[0].replace(/\D/g, '');
+        }
+        const profileName = inst.instance?.profileName || inst.profileName || null;
+        const profilePictureUrl = inst.instance?.profilePictureUrl || inst.profilePictureUrl || inst.profilePicUrl || null;
+        
+        return {
+          name,
+          connectionStatus: state,
+          ownerJid: ownerJid ? String(ownerJid) : null,
+          phone,
+          profileName: profileName ? String(profileName) : null,
+          profilePictureUrl: profilePictureUrl ? String(profilePictureUrl) : null,
+          isActive: name.toLowerCase() === currentActive.toLowerCase(),
+          updatedAt: inst.instance?.updatedAt || inst.updatedAt || undefined,
+        };
+      }).filter((item: any) => Boolean(item.name));
+
+      // Si la lista vino vacía pero tenemos la instancia activa configurada, agregarla como fallback
+      if (instances.length === 0 && currentActive) {
+        const { state } = await this.verifyAndEnableWebhook(currentActive);
+        instances.push({
+          name: currentActive,
+          connectionStatus: state,
+          ownerJid: null,
+          phone: null,
+          profileName: 'Instancia Principal',
+          profilePictureUrl: null,
+          isActive: true,
+        });
+      }
+
+      return instances;
+    } catch (err: any) {
+      logger.warn('Error al obtener lista de instancias Evolution API:', err?.response?.data || err?.message || err);
+      // Fallback a instancia activa
+      const currentActive = this.getInstanceName();
+      return [{
+        name: currentActive,
+        connectionStatus: 'close',
+        ownerJid: null,
+        phone: null,
+        profileName: 'Instancia Principal',
+        profilePictureUrl: null,
+        isActive: true,
+      }];
+    }
+  }
+
+  /**
+   * Crea una nueva instancia de WhatsApp en Evolution API y sincroniza su webhook automáticamente
+   */
+  static async createInstance(name: string): Promise<{ success: boolean; instance?: any; message: string }> {
+    const cleanName = String(name || '').trim().replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase();
+    if (!cleanName) {
+      return { success: false, message: 'El nombre de la instancia es inválido (solo letras, números y guiones).' };
+    }
+
+    try {
+      const api = this.getApi();
+      const res = await api.post('/instance/create', {
+        instanceName: cleanName,
+        qrcode: true,
+        integration: 'WHATSAPP-BAILEYS',
+      });
+
+      // Configurar webhook inmediatamente en la nueva instancia
+      await this.verifyAndEnableWebhook(cleanName);
+
+      logger.info(`Nueva instancia WhatsApp "${cleanName}" creada exitosamente en Evolution API.`);
+      return {
+        success: true,
+        instance: res.data?.instance || res.data,
+        message: `Instancia "${cleanName}" creada. Escanea el código QR con WhatsApp para vincularla.`,
+      };
+    } catch (err: any) {
+      const errorMsg = err?.response?.data?.message || err?.message || 'Error al crear instancia en Evolution API';
+      logger.error(`Error al crear instancia "${cleanName}":`, errorMsg);
+      return { success: false, message: Array.isArray(errorMsg) ? errorMsg.join(', ') : String(errorMsg) };
+    }
+  }
+
+  /**
+   * Obtiene el código QR base64 para vincular una instancia específica
+   */
+  static async getInstanceQr(name?: string): Promise<{ state: string; qr: string | null; pairingCode?: string | null }> {
+    const instance = name || this.getInstanceName();
+    try {
+      const api = this.getApi();
+      let state = 'close';
+      try {
+        const stateRes = await api.get(`/instance/connectionState/${instance}`, { timeout: 4000 });
+        state = stateRes.data?.instance?.state || 'close';
+      } catch {}
+
+      if (state === 'open') {
+        return { state: 'open', qr: null };
+      }
+
+      const qrRes = await api.get(`/instance/connect/${instance}`, { timeout: 6000 });
+      const qr = qrRes.data?.base64 || qrRes.data?.code || null;
+      const pairingCode = qrRes.data?.pairingCode || null;
+
+      return { state, qr, pairingCode };
+    } catch (err: any) {
+      logger.warn(`No se pudo obtener QR para instancia "${instance}":`, err?.response?.data || err?.message || err);
+      return { state: 'close', qr: null };
+    }
+  }
+
+  /**
+   * Desconecta (logout) una instancia de WhatsApp
+   */
+  static async disconnectInstance(name?: string): Promise<boolean> {
+    const instance = name || this.getInstanceName();
+    try {
+      const api = this.getApi();
+      await api.delete(`/instance/logout/${instance}`, { timeout: 6000 });
+      logger.info(`Instancia "${instance}" desvinculada exitosamente.`);
+      return true;
+    } catch (err: any) {
+      logger.warn(`Error al desvincular instancia "${instance}":`, err?.response?.data || err?.message || err);
+      return false;
+    }
+  }
+
+  /**
+   * Elimina completamente una instancia de Evolution API
+   */
+  static async deleteInstance(name: string): Promise<boolean> {
+    const cleanName = String(name || '').trim();
+    if (!cleanName) return false;
+    try {
+      const api = this.getApi();
+      await api.delete(`/instance/delete/${cleanName}`, { timeout: 6000 });
+      logger.info(`Instancia "${cleanName}" eliminada de Evolution API.`);
+      return true;
+    } catch (err: any) {
+      logger.warn(`Error al eliminar instancia "${cleanName}":`, err?.response?.data || err?.message || err);
+      return false;
+    }
+  }
+
+  /**
+   * Reinicia una instancia en Evolution API
+   */
+  static async restartInstance(name?: string): Promise<boolean> {
+    const instance = name || this.getInstanceName();
+    try {
+      const api = this.getApi();
+      await api.post(`/instance/restart/${instance}`, {}, { timeout: 6000 });
+      return true;
+    } catch {
+      return false;
+    }
+  }
 }
 
