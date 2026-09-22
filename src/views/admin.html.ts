@@ -1875,14 +1875,10 @@ export function getAdminDashboardHtml(): string {
           <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
             <div>
               <h3 style="font-size: 16px; font-weight: 700;">Ocupación de Pools por VLAN & Subredes</h3>
-              <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Segmentos asignados, gateways y capacidad de direccionamiento en tiempo real.</p>
+              <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Detección 100% automática de subredes, gateways y cálculo de capacidad en tiempo real.</p>
             </div>
             <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-              <button class="btn btn-primary btn-sm" onclick="openCreateVlanModal()">
-                <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                <span>➕ Nueva VLAN / Pool</span>
-              </button>
-              <button class="btn btn-secondary btn-sm" onclick="triggerAutoDiscoverVlans()" title="Escanear base de datos y detectar subredes faltantes automáticamente">
+              <button class="btn btn-secondary btn-sm" onclick="triggerAutoDiscoverVlans()" title="Escanear base de datos y detectar nuevas subredes de ONUs automáticamente">
                 <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
                 <span>🔍 Auto-Detectar Subredes</span>
               </button>
@@ -3270,15 +3266,9 @@ export function getAdminDashboardHtml(): string {
                   </div>
                 </div>
 
-                <div style="display: flex; gap: 6px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 10px;">
-                  <button class="btn btn-secondary btn-sm" style="flex: 1; font-size: 11px; padding: 4px 8px;" onclick="viewAvailableIps('\${p.vlan}')" title="Ver IPs libres disponibles para asignar">
-                    👁️ IPs Libres
-                  </button>
-                  <button class="btn btn-secondary btn-sm" style="font-size: 11px; padding: 4px 8px;" onclick="openEditVlanModal('\${p.vlan}', '\${safeName}', '\${safeSubnet}', '\${safeGateway}', '\${safeOlt}')" title="Editar parámetros de esta VLAN">
-                    ✏️
-                  </button>
-                  <button class="btn btn-danger btn-sm" style="font-size: 11px; padding: 4px 8px;" onclick="deleteVlanPool('\${p.vlan}')" title="Eliminar pool VLAN">
-                    🗑️
+                <div style="border-top: 1px solid rgba(255,255,255,0.06); padding-top: 10px;">
+                  <button class="btn btn-secondary btn-sm" style="width: 100%; font-size: 11.5px; padding: 5px 8px;" onclick="viewAvailableIps('\${p.vlan}')" title="Ver IPs libres disponibles para asignar">
+                    👁️ Ver IPs Disponibles
                   </button>
                 </div>
               </div>
@@ -3287,7 +3277,7 @@ export function getAdminDashboardHtml(): string {
         } else {
           grid.innerHTML = \`
             <div style="grid-column: 1 / -1; text-align: center; padding: 30px; color: var(--text-dim);">
-              No hay pools registrados. Haz clic en <strong>➕ Nueva VLAN / Pool</strong> o <strong>🔍 Auto-Detectar Subredes</strong>.
+              No hay pools registrados. Haz clic en <strong>🔍 Auto-Detectar Subredes</strong> o sincroniza SmartOLT.
             </div>
           \`;
         }
