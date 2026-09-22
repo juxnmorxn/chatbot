@@ -263,8 +263,30 @@ export class AdminController {
         return;
       }
       await TursoService.updateDepartment(phone, department);
-      AdminController.broadcastSSE('chat:department', { phone, department });
-      res.json({ success: true, department, message: `Chat transferido a ${department}` });
+
+      // Cancelar cualquier debounce pendiente de la IA y pausar bot en modo Human Takeover por defecto (240m)
+      WebhookController.cancelPendingDebounce(phone);
+      const takeoverRes = await BotOrchestrator.activarPausaOperador(
+        phone,
+        240,
+        `Transferencia manual al departamento de ${department === 'SOPORTE' ? 'Soporte Técnico' : 'Atención al Cliente'}`,
+        'OPERATOR_ACTIVE'
+      );
+
+      AdminController.broadcastSSE('chat:department', {
+        phone,
+        department,
+        is_paused: true,
+        takeover: takeoverRes,
+      });
+
+      res.json({
+        success: true,
+        department,
+        is_paused: true,
+        takeover: takeoverRes,
+        message: `Chat transferido a ${department === 'SOPORTE' ? 'Soporte Técnico' : 'Atención al Cliente'}. Bot pausado para atención humana.`,
+      });
     } catch (error: any) {
       logger.error('Error al transferir departamento:', error?.message || error);
       res.status(500).json({ success: false, error: error?.message || error });
@@ -413,10 +435,16 @@ export class AdminController {
   }
 
   /**
-   * Elimina completamente la conversación (sesión y mensajes) de un teléfono
+   * Elimina completamente la conversación (sesión y mensajes) de un teléfono (Solo Superadmin)
    */
   static async deleteChatConversation(req: Request, res: Response): Promise<void> {
     try {
+      const authUser = (req as AuthenticatedRequest).adminUser;
+      if (authUser && authUser.role !== 'superadmin') {
+        res.status(403).json({ success: false, error: 'Acceso denegado: solo el superadministrador puede eliminar conversaciones.' });
+        return;
+      }
+
       const phone = String(req.params.phone || req.body?.phone || '').trim();
       if (!phone) {
         res.status(400).json({ success: false, error: 'Teléfono requerido' });

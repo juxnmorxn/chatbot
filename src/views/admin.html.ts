@@ -799,12 +799,14 @@ export function getAdminDashboardHtml(): string {
     /* Live Chat View */
     .chat-layout {
       display: grid;
-      grid-template-columns: 320px 1fr;
+      grid-template-columns: 340px 1fr;
       height: calc(100vh - var(--topbar-height) - 48px);
+      max-height: calc(100vh - var(--topbar-height) - 48px);
       background: var(--bg-surface);
       border: 1px solid var(--card-border);
       border-radius: var(--radius-md);
       overflow: hidden;
+      position: relative;
     }
 
     .chat-sidebar {
@@ -812,18 +814,24 @@ export function getAdminDashboardHtml(): string {
       display: flex;
       flex-direction: column;
       background: rgba(0, 0, 0, 0.2);
+      height: 100%;
+      min-height: 0;
+      min-width: 0;
+      overflow: hidden;
     }
 
     .chat-search-header {
       padding: 14px;
       border-bottom: 1px solid var(--card-border);
+      flex-shrink: 0;
     }
 
     .chat-threads-list {
-      flex: 1;
+      flex: 1 1 auto;
       overflow-y: auto;
       display: flex;
       flex-direction: column;
+      min-height: 0;
     }
 
     .chat-thread-item {
@@ -925,18 +933,24 @@ export function getAdminDashboardHtml(): string {
       display: flex;
       flex-direction: column;
       height: 100%;
+      min-height: 0;
+      min-width: 0;
+      overflow: hidden;
+      position: relative;
       background: radial-gradient(circle at 50% 50%, rgba(17, 24, 39, 0.6) 0%, rgba(9, 13, 22, 0.95) 100%);
     }
 
     .chat-header-bar {
       padding: 10px 18px;
       border-bottom: 1px solid var(--card-border);
-      background: rgba(11, 15, 25, 0.75);
+      background: rgba(11, 15, 25, 0.85);
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 12px;
       min-height: 60px;
+      flex-shrink: 0;
+      z-index: 5;
     }
 
     .chat-header-left {
@@ -968,8 +982,9 @@ export function getAdminDashboardHtml(): string {
     }
 
     .chat-messages-container {
-      flex: 1;
-      padding: 20px;
+      flex: 1 1 auto;
+      min-height: 0;
+      padding: 18px 20px;
       overflow-y: auto;
       display: flex;
       flex-direction: column;
@@ -977,7 +992,7 @@ export function getAdminDashboardHtml(): string {
     }
 
     .chat-bubble {
-      max-width: 72%;
+      max-width: 75%;
       padding: 10px 14px;
       border-radius: 14px;
       font-size: 13.5px;
@@ -1020,12 +1035,15 @@ export function getAdminDashboardHtml(): string {
     }
 
     .chat-input-bar {
-      padding: 14px 20px;
+      padding: 12px 18px;
       border-top: 1px solid var(--card-border);
-      background: rgba(11, 15, 25, 0.85);
+      background: rgba(11, 15, 25, 0.95);
       display: flex;
-      align-items: flex-end;
-      gap: 12px;
+      flex-direction: column;
+      gap: 6px;
+      flex-shrink: 0;
+      position: relative;
+      z-index: 5;
     }
 
     .chat-input-box {
@@ -1372,16 +1390,45 @@ export function getAdminDashboardHtml(): string {
       .kanban-board { grid-template-columns: repeat(2, 1fr); }
     }
 
+    @media (max-width: 900px) {
+      .chat-layout {
+        grid-template-columns: 1fr;
+        height: calc(100vh - var(--topbar-height) - 20px);
+        max-height: calc(100vh - var(--topbar-height) - 20px);
+      }
+      .chat-sidebar {
+        display: flex;
+        width: 100%;
+      }
+      .chat-main-area {
+        display: none;
+      }
+      .chat-layout.mobile-chat-active .chat-sidebar {
+        display: none;
+      }
+      .chat-layout.mobile-chat-active .chat-main-area {
+        display: flex;
+        width: 100%;
+      }
+      .btn-back-to-threads {
+        display: inline-flex !important;
+      }
+      .chat-header-actions {
+        gap: 4px;
+      }
+      .chat-header-actions .btn-xs span:not(.badge) {
+        display: none;
+      }
+    }
+
     @media (max-width: 768px) {
       aside#sidebar { transform: translateX(-100%); }
       aside#sidebar.mobile-open { transform: translateX(0); width: 260px; }
       main#main-content { margin-left: 0 !important; }
       .mobile-menu-btn { display: flex; }
-      .chat-layout { grid-template-columns: 1fr; }
-      .chat-sidebar { display: none; }
-      .chat-sidebar.mobile-active { display: flex; }
       .kanban-board { grid-template-columns: 1fr; }
       .grid-metrics { grid-template-columns: 1fr 1fr; }
+      .view-container { padding: 12px; }
     }
 
     @media (max-width: 480px) {
@@ -1696,7 +1743,7 @@ export function getAdminDashboardHtml(): string {
           <div class="chat-main-area">
             <div id="chat-active-header" class="chat-header-bar" style="display: none;">
               <div class="chat-header-left">
-                <button class="btn btn-secondary btn-xs" style="display: none;" id="btn-back-to-threads" onclick="toggleMobileChatThreads()">◀</button>
+                <button class="btn btn-secondary btn-xs btn-back-to-threads" style="display: none;" id="btn-back-to-threads" onclick="toggleMobileChatThreads()" title="Volver a lista de chats">◀ Volver</button>
                 <div class="thread-avatar" id="active-chat-avatar">📱</div>
                 <div style="min-width: 0;">
                   <div style="display: flex; align-items: center; gap: 6px;">
@@ -1712,17 +1759,17 @@ export function getAdminDashboardHtml(): string {
                 </button>
                 <div id="takeover-status-indicator" class="badge badge-success" style="font-size: 10px; padding: 3px 8px;">🤖 Bot Activo</div>
                 <button id="btn-toggle-takeover" class="btn btn-secondary btn-xs" onclick="toggleCurrentChatTakeover()" title="Pausar bot para atención humana">
-                  ⏸️ Pausar 4h
+                  ⏸️ <span>Pausar 4h</span>
                 </button>
                 <button class="btn btn-secondary btn-xs" title="Pausar hasta mañana a las 10:00 AM" onclick="pauseCurrentChatUntilMorning()">
-                  🌙 Mañana
+                  🌙 <span>Mañana</span>
                 </button>
                 <div style="width: 1px; height: 18px; background: var(--card-border); margin: 0 2px;"></div>
                 <button class="btn btn-warning btn-xs" title="Finalizar caso y reactivar bot" onclick="closeCurrentChatCase()">
                   <svg class="svg-icon" style="width: 12px; height: 12px;" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"></path></svg>
                   <span>Cerrar</span>
                 </button>
-                <button class="btn btn-danger btn-xs" title="Borrar conversación y mensajes definitivamente" onclick="deleteCurrentChat()">
+                <button id="btn-delete-active-chat" class="btn btn-danger btn-xs" style="display: none;" title="Borrar conversación y mensajes definitivamente (Superadmin)" onclick="deleteCurrentChat()">
                   <svg class="svg-icon" style="width: 12px; height: 12px;" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                   <span>Eliminar</span>
                 </button>
@@ -2551,6 +2598,23 @@ export function getAdminDashboardHtml(): string {
       if (dangerZone) {
         dangerZone.style.display = isSuper ? 'block' : 'none';
       }
+
+      const btnDeleteActive = document.getElementById('btn-delete-active-chat');
+      if (btnDeleteActive) {
+        btnDeleteActive.style.display = isSuper ? 'inline-flex' : 'none';
+      }
+
+      // Preseleccionar pestaña de departamento según el rol del usuario
+      if (!state.chatDeptFilter || state.chatDeptFilter === 'all') {
+        const role = (state.user.role || '').toLowerCase();
+        if (role === 'soporte') {
+          setChatDeptFilter('SOPORTE');
+        } else if (role === 'atencion' || role === 'facturacion') {
+          setChatDeptFilter('ATENCION');
+        } else {
+          setChatDeptFilter('all');
+        }
+      }
     }
 
 
@@ -2658,9 +2722,11 @@ export function getAdminDashboardHtml(): string {
         evtSource.addEventListener('chat:deleted', (e) => {
           const data = JSON.parse(e.data || '{}');
           if (data.phone) {
-            state.chats = state.chats.filter(c => c.phone !== data.phone && c.phone !== data.phone.replace(/\D/g, ''));
-            if (state.activeChatPhone === data.phone || state.activeChatPhone?.replace(/\D/g, '') === data.phone.replace(/\D/g, '')) {
+            const cleanPhone = data.phone.replace(/\D/g, '');
+            state.chats = state.chats.filter(c => c.phone !== data.phone && c.phone !== cleanPhone);
+            if (state.activeChatPhone === data.phone || state.activeChatPhone?.replace(/\D/g, '') === cleanPhone) {
               state.activeChatPhone = null;
+              document.querySelector('.chat-layout')?.classList.remove('mobile-chat-active');
               document.getElementById('chat-empty-state').style.display = 'flex';
               document.getElementById('chat-active-header').style.display = 'none';
               document.getElementById('chat-messages-wrap').style.display = 'none';
@@ -2676,12 +2742,21 @@ export function getAdminDashboardHtml(): string {
         evtSource.addEventListener('chat:department', (e) => {
           const data = JSON.parse(e.data || '{}');
           if (state.currentView === 'live-chat') {
-            const chat = state.chats.find(c => c.phone === data.phone);
+            const cleanPhone = data.phone ? data.phone.replace(/\D/g, '') : '';
+            const chat = state.chats.find(c => c.phone === data.phone || (cleanPhone && c.phone.replace(/\D/g, '') === cleanPhone));
             if (chat) {
               chat.department = data.department;
-              if (state.activeChatPhone === data.phone) {
-                updateChatDeptUI(data.department);
+              if (data.is_paused !== undefined) {
+                chat.is_human_paused = data.is_paused;
               }
+              if (state.activeChatPhone === data.phone || (cleanPhone && state.activeChatPhone?.replace(/\D/g, '') === cleanPhone)) {
+                updateChatDeptUI(data.department);
+                if (data.is_paused !== undefined) {
+                  updateTakeoverButton(data.is_paused, data.takeover);
+                }
+              }
+            } else {
+              loadLiveChatData(false);
             }
             filterChatThreads(document.getElementById('chat-filter-input')?.value || '');
           }
@@ -2849,14 +2924,22 @@ export function getAdminDashboardHtml(): string {
     function setChatDeptFilter(dept, btn) {
       state.chatDeptFilter = dept;
       document.querySelectorAll('#chat-threads-sidebar .chat-search-header .btn').forEach(b => {
-        b.classList.remove('btn-primary');
+        b.classList.remove('btn-primary', 'active');
         b.classList.add('btn-secondary');
       });
-      if (btn) {
-        btn.classList.remove('btn-secondary');
-        btn.classList.add('btn-primary');
+      const activeBtn = btn || document.getElementById('btn-filter-dept-' + (dept ? dept.toLowerCase() : 'all'));
+      if (activeBtn) {
+        activeBtn.classList.remove('btn-secondary');
+        activeBtn.classList.add('btn-primary', 'active');
       }
       filterChatThreads(document.getElementById('chat-filter-input')?.value || '');
+    }
+
+    function toggleMobileChatThreads() {
+      const layout = document.querySelector('.chat-layout');
+      if (layout) {
+        layout.classList.remove('mobile-chat-active');
+      }
     }
 
     function renderChatThreads(list) {
@@ -2866,6 +2949,8 @@ export function getAdminDashboardHtml(): string {
         return;
       }
 
+      const isSuperAdmin = state.user?.role === 'superadmin';
+
       container.innerHTML = list.map(c => {
         const isActive = c.phone === state.activeChatPhone ? 'active' : '';
         const name = c.client_name || c.phone;
@@ -2874,6 +2959,10 @@ export function getAdminDashboardHtml(): string {
         const deptBadgeClass = dept === 'SOPORTE' ? 'badge-purple' : 'badge-info';
         const deptLabel = dept === 'SOPORTE' ? '🔧 Soporte' : '💳 Atención';
         const instanceLabel = c.last_instance ? \`<span style="font-size: 9px; color: var(--text-dim); margin-left: 4px;">(\${c.last_instance})</span>\` : '';
+        const deleteBtnHtml = isSuperAdmin ? \`
+            <button class="btn-thread-delete" title="Eliminar conversación" onclick="deleteChatThread(event, '\${c.phone}')">
+              <svg class="svg-icon" style="width: 13px; height: 13px;" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+            </button>\` : '';
 
         return \`
           <div class="chat-thread-item \${isActive}" onclick="selectChat('\${c.phone}')">
@@ -2894,9 +2983,7 @@ export function getAdminDashboardHtml(): string {
                 \${instanceLabel}
               </div>
             </div>
-            <button class="btn-thread-delete" title="Eliminar conversación" onclick="deleteChatThread(event, '\${c.phone}')">
-              <svg class="svg-icon" style="width: 13px; height: 13px;" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-            </button>
+            \${deleteBtnHtml}
           </div>
         \`;
       }).join('');
@@ -2942,6 +3029,7 @@ export function getAdminDashboardHtml(): string {
 
     async function selectChat(phone) {
       state.activeChatPhone = phone;
+      document.querySelector('.chat-layout')?.classList.add('mobile-chat-active');
       filterChatThreads(document.getElementById('chat-filter-input')?.value || '');
 
       document.getElementById('chat-empty-state').style.display = 'none';
@@ -2985,10 +3073,16 @@ export function getAdminDashboardHtml(): string {
         });
 
         if (res.success) {
-          if (chat) chat.department = newDept;
+          if (chat) {
+            chat.department = newDept;
+            chat.is_human_paused = true;
+          }
           updateChatDeptUI(newDept);
+          if (res.takeover) {
+            updateTakeoverButton(true, res.takeover);
+          }
           filterChatThreads(document.getElementById('chat-filter-input')?.value || '');
-          showToast('Transferencia Realizada', \`Chat asignado a \${newDept === 'SOPORTE' ? 'Soporte Técnico' : 'Atención al Cliente'}\`, 'success');
+          showToast('Transferencia Realizada', \`Chat asignado a \${newDept === 'SOPORTE' ? 'Soporte Técnico' : 'Atención al Cliente'}. Bot pausado para atención humana.\`, 'success');
         } else {
           showToast('Error', res.error || 'No se pudo transferir el chat', 'error');
         }
@@ -3214,6 +3308,7 @@ export function getAdminDashboardHtml(): string {
           
           if (state.activeChatPhone === phone || state.activeChatPhone?.replace(/\D/g, '') === cleanPhone) {
             state.activeChatPhone = null;
+            document.querySelector('.chat-layout')?.classList.remove('mobile-chat-active');
             document.getElementById('chat-empty-state').style.display = 'flex';
             document.getElementById('chat-active-header').style.display = 'none';
             document.getElementById('chat-messages-wrap').style.display = 'none';
