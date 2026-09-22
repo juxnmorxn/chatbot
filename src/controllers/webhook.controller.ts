@@ -151,6 +151,9 @@ export class WebhookController {
         return;
       }
 
+      // Nombre de la instancia en Evolution API ('soporte', 'atencion', etc.)
+      const incomingInstance: string = (payload?.instance || payload?.data?.instance || payload?.sender || '').trim();
+
       // El mensaje puede venir en payload.data o payload directo
       const data = payload?.data || payload;
       const messageObj = Array.isArray(data) ? data[0] : data;
@@ -181,7 +184,7 @@ export class WebhookController {
         const phone = WebhookController.extractPhone(key, data);
         const extracted = WebhookController.extractMessageContent(messageObj);
         const textOperador = (extracted.text || '').toLowerCase().trim();
-        logger.info(`[Human Takeover] Mensaje de operador detectado para ${phone}: "${extracted.text || ''}"`);
+        logger.info(`[Human Takeover] Mensaje de operador detectado para ${phone} (Instancia: ${incomingInstance || 'default'}): "${extracted.text || ''}"`);
 
         // Cancelamos cualquier respuesta automática pendiente en la cola de espera
         WebhookController.cancelPendingDebounce(phone);
@@ -226,7 +229,7 @@ export class WebhookController {
       // --- MANEJO DE NOTAS DE VOZ / AUDIOS CON GROQ WHISPER ---
       if (extracted.isAudio) {
         logger.info(`[Audio recibido] Descargando nota de voz de ${phone} para transcripción con Groq Whisper...`);
-        const media = await EvolutionService.getBase64FromMedia(messageObj);
+        const media = await EvolutionService.getBase64FromMedia(messageObj, incomingInstance || undefined);
         if (media && media.buffer) {
           const trans = await GroqService.transcribirAudio(media.buffer, media.mimeType);
           if (trans) {
@@ -240,7 +243,7 @@ export class WebhookController {
       let imageAnalysis: any = null;
       if (extracted.isMedia && !extracted.isAudio) {
         logger.info(`[Imagen recibida] Descargando imagen de ${phone} para análisis visual con Groq Vision...`);
-        const media = await EvolutionService.getBase64FromMedia(messageObj);
+        const media = await EvolutionService.getBase64FromMedia(messageObj, incomingInstance || undefined);
         if (media && media.buffer) {
           imageAnalysis = await GroqService.analizarImagen(media.buffer, media.mimeType);
         }
@@ -259,6 +262,7 @@ export class WebhookController {
         buttonId: extracted.buttonId,
         isMedia: extracted.isMedia,
         imageAnalysis,
+        instanceName: incomingInstance || undefined,
       };
 
       // Si es un clic de botón, archivo multimedia, mensaje de técnico o comando de activación/técnico, procesamos de inmediato sin debounce
@@ -268,6 +272,7 @@ export class WebhookController {
         /^(?:activar|activaci|alta|aprovisionar|registrar|cambiar plan|cambiar zona|cambiar nombre|cambiar folio|cambiar cliente|cambiar serie|folio|si|sí|confirmar|confirmo|no|cancelar)\b/i.test(lowerText) ||
         lowerText.startsWith('activar') ||
         lowerText.startsWith('cambiar') ||
+        imageAnalysis?.tipo === 'CONTRATO_INSTALACION' ||
         imageAnalysis?.tipo_documento === 'CONTRATO_INSTALACION'
       );
 
@@ -307,7 +312,7 @@ export class WebhookController {
 
       // Si es mensaje de texto o audio transcrito de un cliente residencial:
       // 1. Activar estado "Escribiendo..." (composing) en WhatsApp para simulación humana
-      EvolutionService.enviarPresencia(phone, 'composing', 5000).catch(() => {});
+      EvolutionService.enviarPresencia(phone, 'composing', 5000, incomingInstance || undefined).catch(() => {});
 
       // 2. Programar en el búfer de debounce (5 segundos para agrupar ráfagas y dar ventana al operador)
       WebhookController.scheduleDebouncedMessage(incomingEvent);

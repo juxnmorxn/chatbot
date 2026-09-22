@@ -267,8 +267,9 @@ export class AdminController {
       // Cancelar cualquier mensaje pendiente de la IA
       WebhookController.cancelPendingDebounce(cleanPhone);
 
-      // Enviar el mensaje vía Evolution API
-      const sent = await EvolutionService.enviarTexto(cleanPhone, text);
+      // Enviar el mensaje vía Evolution API en la instancia correspondiente
+      const instance = (req.body.instanceName || BotOrchestrator.getActiveInstance(cleanPhone) || '').trim();
+      const sent = await EvolutionService.enviarTexto(cleanPhone, text, { instanceName: instance || undefined });
       if (!sent) {
         res.status(500).json({ success: false, error: 'No se pudo enviar el mensaje a través de WhatsApp' });
         return;

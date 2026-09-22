@@ -48,6 +48,16 @@ export interface ContratoInstalacionDatos {
   wifi_password: string | null;
 }
 
+export interface ActivacionModificacionesParsed {
+  nuevo_nombre?: string | null;
+  nuevo_folio?: string | null;
+  nueva_zona?: string | null;
+  nuevo_plan?: string | null;
+  nuevo_sn?: string | null;
+  confirmar?: boolean;
+  cancelar?: boolean;
+}
+
 export interface GroqImageAnalysisResult {
   tipo: 'COMPROBANTE_PAGO' | 'SPEEDTEST' | 'MODEM_LUCES' | 'CONTRATO_INSTALACION' | 'OTRO';
   descripcion: string;
@@ -106,16 +116,14 @@ Tu objetivo es examinar la imagen recibida y clasificarla estrictamente en una d
    - Extrae con máxima fidelidad:
      * folio: número de folio del contrato (ej: "2977" en FOLIO:2977).
      * cliente: Nombre completo del suscriptor/titular (ej: "Enrique Mejía Evaristo").
-     * sn: Número de serie exacto del equipo (en la casilla "Número de Serie").
-       ATENCIÓN CRÍTICA: En módems Huawei, la serie impresa es un código hexadecimal de 16 caracteres que comienza con "48575443" (que equivale a HWTC) seguido de 8 caracteres hexadecimales (0-9, A-F) como "474B4484" o "686173B6".
-       Ten sumo cuidado: NO confundas la letra "B" con el número "8", ni "O" con "0", ni "I" con "1", ni "G" con "6". Verifica que transcribas los 16 caracteres exactos sin omitir dígitos.
-     * modelo: Modelo del equipo (ej: "EG8041V5", "HG8145X6-10", "HG8145V5", "ZTE-F660", etc.).
+     * modelo: Modelo del equipo si aparece (ej: "EG8041V5", "HG8145X6-10", "HG8145V5", "ZTE-F660", etc.).
      * paquete: Paquete marcado con X o seleccionado (ej: "40 MB", "60 MB", "200 MB", "400 MB", "600 MB").
      * direccion: Calle y número exterior/interior (ej: "carretera salida a la estancia s/n").
-     * colonia: Colonia o localidad (ej: "Eulalio Ángeles Martínez").
-     * municipio_zona: Municipio o zona de instalación (ej: "Actopan", "San Agustín", "San José").
+     * colonia: Colonia o localidad anotada (ej: "Eulalio Ángeles Martínez", "Ojo de Agua", "El Meje", "El Arenal", "Centro").
+     * municipio_zona: Municipio o zona de instalación (ej: "Actopan", "El Arenal", "San Agustín Tlaxiaca", "San José", "Santiago de Anaya").
      * telefono: Número de teléfono fijo o móvil (ej: "7721891087").
      * wifi_password: Clave o contraseña anotada (ej: "BZ6yMmYE").
+     * sn: null (el número de serie será capturado manualmente por el técnico).
 
 2. "SPEEDTEST":
    - Captura de pantalla de test de velocidad (Speedtest por Ookla, Fast.com, Google Speedtest, etc.).
@@ -501,5 +509,56 @@ Contexto actual del cliente:
       telefono_mencionado: null,
       resumen_queja: text.slice(0, 50),
     };
+  }
+
+  /**
+   * Extrae modificaciones de parámetros de activación (nombre, folio, zona, plan, SN)
+   * o confirmación/cancelación desde texto conversacional utilizando Groq.
+   */
+  static async extraerModificacionesActivacion(texto: string): Promise<ActivacionModificacionesParsed> {
+    try {
+      const groq = this.getClient();
+      const systemPrompt = `
+Eres un asistente que analiza mensajes de técnicos de telecomunicaciones en campo durante la activación o modificación de un módem.
+El técnico puede solicitar modificar parámetros de la activación en curso o confirmar/cancelar.
+Parámetros posibles a extraer:
+- "nuevo_nombre": Si el técnico pide cambiar o corregir el nombre del cliente (ej: "cambiar nombre a Pedro Gómez", "el nombre es Pedro Gómez", "ponle Pedro Gómez", "nombre Pedro Gómez"). Devuelve SOLO el nombre de la persona (sin el folio).
+- "nuevo_folio": Si el técnico pide cambiar o corregir el folio (ej: "cambiar folio 2980", "el folio es 2980", "folio: 2980", "folio 3012"). Devuelve SOLO el número o código de folio.
+- "nueva_zona": Si pide cambiar la zona o municipio (ej: "cambiar zona a El Arenal", "es en El Arenal", "zona Actopan", "San Agustín", "San José").
+- "nuevo_plan": Si pide cambiar el paquete o megas (ej: "cambiar a 60 megas", "plan 100", "paquete 40m", "60 megas"). Devuelve ej: "60M" o "60 Megas".
+- "nuevo_sn": Si proporciona o cambia la serie o terminación SN del módem (ej: "474B4484", "serie 474B4484", "sn 474B4484", "el módem es 474B4484", "686173B6"). Devuelve el código alfanumérico limpio.
+- "confirmar": true si el mensaje es una confirmación para autorizar/activar (ej: "sí", "si", "confirmar", "activar", "adelante", "dale", "ok", "listo").
+- "cancelar": true si solicita cancelar o abortar (ej: "no", "cancelar", "cancela", "abortar", "rechazar").
+
+Devuelve EXCLUSIVAMENTE un JSON válido con esta estructura:
+{
+  "nuevo_nombre": string | null,
+  "nuevo_folio": string | null,
+  "nueva_zona": string | null,
+  "nuevo_plan": string | null,
+  "nuevo_sn": string | null,
+  "confirmar": boolean,
+  "cancelar": boolean
+}
+`.trim();
+
+      const response = await groq.chat.completions.create({
+        model: SettingsService.get('GROQ_MODEL', 'GROQ_MODEL', config.groq.model),
+        response_format: { type: 'json_object' },
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: texto },
+        ],
+        temperature: 0.1,
+        max_tokens: 200,
+      });
+
+      const content = response.choices[0]?.message?.content;
+      if (!content) return {};
+      return JSON.parse(content) as ActivacionModificacionesParsed;
+    } catch (error: any) {
+      logger.warn('Error al extraer modificaciones con Groq:', error?.message || error);
+      return {};
+    }
   }
 }

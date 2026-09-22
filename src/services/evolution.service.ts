@@ -73,10 +73,11 @@ export class EvolutionService {
   static async enviarTexto(
     phone: string,
     mensajeRaw: string,
-    opciones: { delayMin?: number; delayMax?: number; isBroadcast?: boolean; instant?: boolean } = {}
+    opciones: { delayMin?: number; delayMax?: number; isBroadcast?: boolean; instant?: boolean; instanceName?: string } = {}
   ): Promise<boolean> {
     const recipient = this.formatRecipient(phone);
     const mensaje = parseSpintax(mensajeRaw);
+    const instance = opciones.instanceName || this.getInstanceName();
 
     // Regla Anti-Ban: Jitter de 8 a 15 segundos si es difusión, o de 1.2 a 2.5s si es interactivo regular
     // En modo instantáneo (técnicos / activaciones) no se añade retraso artificial
@@ -84,16 +85,15 @@ export class EvolutionService {
       // Modo instantáneo directo para técnicos
     } else if (opciones.isBroadcast) {
       const waitTime = Math.floor(Math.random() * (15000 - 8000 + 1)) + 8000;
-      logger.info(`[Anti-Ban] Aplicando jitter de difusión: ${waitTime}ms para ${recipient}`);
+      logger.info(`[Anti-Ban] Aplicando jitter de difusión: ${waitTime}ms para ${recipient} (Instancia: ${instance})`);
       await new Promise((r) => setTimeout(r, waitTime));
     } else if (opciones.delayMin !== 0 || opciones.delayMax !== 0) {
       await randomDelay(opciones.delayMin || 1200, opciones.delayMax || 2500);
     }
 
     try {
-      logger.info(`Enviando mensaje de texto a ${recipient}${opciones.instant ? ' (Modo Instantáneo)' : ''}`);
+      logger.info(`Enviando mensaje de texto a ${recipient} vía [${instance}]${opciones.instant ? ' (Modo Instantáneo)' : ''}`);
       const api = this.getApi();
-      const instance = this.getInstanceName();
       const response = await api.post(`/message/sendText/${instance}`, {
         number: recipient,
         text: mensaje,
@@ -110,7 +110,7 @@ export class EvolutionService {
 
       return true;
     } catch (error: any) {
-      logger.error(`Error al enviar mensaje a ${recipient}:`, error?.response?.data || error?.message || error);
+      logger.error(`Error al enviar mensaje a ${recipient} en instancia [${instance}]:`, error?.response?.data || error?.message || error);
       return false;
     }
   }
@@ -139,11 +139,11 @@ export class EvolutionService {
   /**
    * Envía presencia a WhatsApp ('composing' = escribiendo..., 'paused' = pausa)
    */
-  static async enviarPresencia(phone: string, presence: 'composing' | 'paused' = 'composing', delayMs: number = 3000): Promise<boolean> {
+  static async enviarPresencia(phone: string, presence: 'composing' | 'paused' = 'composing', delayMs: number = 3000, instanceName?: string): Promise<boolean> {
     const recipient = this.formatRecipient(phone);
+    const instance = instanceName || this.getInstanceName();
     try {
       const api = this.getApi();
-      const instance = this.getInstanceName();
       await api.post(`/chat/sendPresence/${instance}`, {
         number: recipient,
         presence,
@@ -164,7 +164,7 @@ export class EvolutionService {
     textoPrincipal: string,
     botones: BotButton[],
     pieDePagina: string = 'CloudWareMx Soporte Automático',
-    opciones: { delayMin?: number; delayMax?: number; isBroadcast?: boolean; instant?: boolean } = {}
+    opciones: { delayMin?: number; delayMax?: number; isBroadcast?: boolean; instant?: boolean; instanceName?: string } = {}
   ): Promise<boolean> {
     const recipient = this.formatRecipient(phone);
     const texto = parseSpintax(textoPrincipal);
@@ -176,14 +176,15 @@ export class EvolutionService {
 
     const mensajeCompleto = `${texto}\n\n${opcionesTexto}\n\n_${pieDePagina}_\n_Por favor responde con el número de tu opción (ej. 1, 2 o 3) o describe tu duda._`;
 
-    logger.info(`Enviando menú estructurado a ${recipient}: ${botones.map((b) => b.title).join(' | ')}`);
+    const instance = opciones.instanceName || this.getInstanceName();
+    logger.info(`Enviando menú estructurado a ${recipient} vía [${instance}]: ${botones.map((b) => b.title).join(' | ')}`);
     return this.enviarTexto(recipient, mensajeCompleto, opciones);
   }
 
   /**
    * Descarga el archivo base64 de un mensaje multimedia (audio, imagen o documento) desde Evolution API
    */
-  static async getBase64FromMedia(messageObj: any): Promise<{ buffer: Buffer; mimeType: string; base64: string } | null> {
+  static async getBase64FromMedia(messageObj: any, instanceName?: string): Promise<{ buffer: Buffer; mimeType: string; base64: string } | null> {
     try {
       // 1. Si el payload del webhook ya incluye base64 directo
       const directBase64 = messageObj.base64 || messageObj.message?.base64;
@@ -199,8 +200,8 @@ export class EvolutionService {
 
       // 2. Si no, consultar el endpoint de descarga de Evolution API
       const api = this.getApi();
-      const instance = this.getInstanceName();
-      logger.info(`Solicitando base64 de archivo multimedia para mensaje a Evolution API...`);
+      const instance = instanceName || this.getInstanceName();
+      logger.info(`Solicitando base64 de archivo multimedia para mensaje a Evolution API [${instance}]...`);
 
       const response = await api.post(`/chat/getBase64FromMediaMessage/${instance}`, {
         message: messageObj,
@@ -230,10 +231,10 @@ export class EvolutionService {
   /**
    * Verifica el estado de la instancia en Evolution API y re-habilita el webhook
    */
-  static async verifyAndEnableWebhook(webhookBaseUrl?: string): Promise<{ state: string; webhookOk: boolean }> {
+  static async verifyAndEnableWebhook(instanceName?: string, webhookBaseUrl?: string): Promise<{ state: string; webhookOk: boolean }> {
     const url = SettingsService.get('EVOLUTION_URL', 'EVOLUTION_URL', config.evolution.url).replace(/\/+$/, '');
     const apiKey = SettingsService.get('EVOLUTION_API_KEY', 'EVOLUTION_API_KEY', config.evolution.apiKey);
-    const instance = this.getInstanceName();
+    const instance = instanceName || this.getInstanceName();
 
     if (!apiKey || apiKey.includes('tu_api_key')) {
       return { state: 'unconfigured', webhookOk: false };
@@ -267,14 +268,14 @@ export class EvolutionService {
           },
         });
         webhookOk = true;
-        logger.info(`Webhook de Evolution API re-sincronizado exitosamente hacia: ${targetUrl} (Estado WhatsApp: ${state})`);
+        logger.info(`Webhook de Evolution API re-sincronizado exitosamente hacia: ${targetUrl} (Instancia: ${instance}, Estado WhatsApp: ${state})`);
       } catch (e: any) {
-        logger.warn('No se pudo re-sincronizar webhook en Evolution:', e?.response?.data || e?.message || e);
+        logger.warn(`No se pudo re-sincronizar webhook en Evolution para [${instance}]:`, e?.response?.data || e?.message || e);
       }
 
       return { state, webhookOk };
     } catch (err: any) {
-      logger.error('Error al verificar Evolution API:', err?.message || err);
+      logger.error(`Error al verificar Evolution API en instancia [${instance}]:`, err?.message || err);
       return { state: 'error', webhookOk: false };
     }
   }
@@ -291,7 +292,7 @@ export class EvolutionService {
   /**
    * Consulta la información de un grupo mediante enlace de invitación o código y opcionalmente une al bot
    */
-  static async resolveAndJoinGroupInvite(linkOrCode: string): Promise<{ success: boolean; jid?: string; name?: string; message?: string }> {
+  static async resolveAndJoinGroupInvite(linkOrCode: string, instanceName?: string): Promise<{ success: boolean; jid?: string; name?: string; message?: string }> {
     const clean = (linkOrCode || '').trim();
 
     // Si ya es un JID directo (ej: 1203630XXXXX@g.us)
@@ -310,7 +311,7 @@ export class EvolutionService {
     }
 
     const api = this.getApi();
-    const instance = this.getInstanceName();
+    const instance = instanceName || this.getInstanceName();
 
     try {
       let groupJid = '';
@@ -326,7 +327,7 @@ export class EvolutionService {
         groupJid = d?.id || d?.jid || d?.groupId || '';
         groupName = d?.subject || d?.name || 'Grupo Activaciones';
       } catch (err: any) {
-        logger.warn(`No se pudo obtener inviteInfo para "${code}":`, err?.response?.data || err?.message);
+        logger.warn(`No se pudo obtener inviteInfo para "${code}" en [${instance}]:`, err?.response?.data || err?.message);
       }
 
       // 2. Unir a la instancia al grupo si no está unida
@@ -347,7 +348,7 @@ export class EvolutionService {
 
       // 3. Si aún no tenemos el JID, consultar la lista de grupos activos
       if (!groupJid) {
-        const allGroups = await this.fetchAllGroups();
+        const allGroups = await this.fetchAllGroups(instance);
         const found = allGroups.find(
           (g) => (groupName && g.subject.toLowerCase() === groupName.toLowerCase()) || g.subject.toLowerCase().includes('activac')
         );
@@ -362,7 +363,7 @@ export class EvolutionService {
           success: true,
           jid: groupJid,
           name: groupName || 'Grupo Activaciones',
-          message: `Grupo "${groupName || groupJid}" vinculado exitosamente.`,
+          message: `Grupo "${groupName || groupJid}" vinculado exitosamente en instancia [${instance}].`,
         };
       }
 
@@ -382,10 +383,10 @@ export class EvolutionService {
   /**
    * Obtiene la lista de todos los grupos donde la instancia de WhatsApp es miembro
    */
-  static async fetchAllGroups(): Promise<Array<{ id: string; subject: string; size?: number }>> {
+  static async fetchAllGroups(instanceName?: string): Promise<Array<{ id: string; subject: string; size?: number }>> {
     try {
       const api = this.getApi();
-      const instance = this.getInstanceName();
+      const instance = instanceName || this.getInstanceName();
       const res = await api.get(`/group/fetchAllGroups/${instance}`, {
         params: { getParticipants: false },
         timeout: 8000,

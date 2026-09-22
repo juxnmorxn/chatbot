@@ -1,5 +1,5 @@
 import { TursoService, Session } from '../services/turso.service';
-import { GroqService, GroqClassificationResult, GroqImageAnalysisResult, ContratoInstalacionDatos } from '../services/groq.service';
+import { GroqService, GroqClassificationResult, GroqImageAnalysisResult, ContratoInstalacionDatos, ActivacionModificacionesParsed } from '../services/groq.service';
 import { WispHubService, WispHubCliente } from '../services/wisphub.service';
 import { SmartOLTService, SmartOltStatusResult, getSmartOltSpeedProfiles, AuthorizeOnuPayload } from '../services/smartolt.service';
 import { MercadoPagoService } from '../services/mercadopago.service';
@@ -50,6 +50,7 @@ export interface IncomingMessageEvent {
   buttonId?: string;
   isMedia?: boolean;
   imageAnalysis?: GroqImageAnalysisResult | null;
+  instanceName?: string;
 }
 
 export class BotOrchestrator {
@@ -58,6 +59,8 @@ export class BotOrchestrator {
     { id: 'BTN_FALLA', title: '🔧 Reportar Falla' },
     { id: 'BTN_ASESOR', title: '👤 Hablar con Asesor' },
   ];
+
+  private static activeInstanceByPhone = new Map<string, string>();
 
   private static humanTakeoverMap = new Map<string, {
     untilMs: number;
@@ -390,6 +393,14 @@ export class BotOrchestrator {
   }
 
   /**
+   * Obtiene la instancia de Evolution API asignada activamente a un teléfono
+   */
+  static getActiveInstance(phone: string): string {
+    const clean = phone.replace(/\D/g, '');
+    return this.activeInstanceByPhone.get(clean) || this.activeInstanceByPhone.get(phone) || EvolutionService.getInstanceName();
+  }
+
+  /**
    * Envía un mensaje y lo registra automáticamente en la tabla conversation_logs de Turso
    */
   private static async enviarYLoguear(
@@ -399,10 +410,14 @@ export class BotOrchestrator {
     accion: string | null = null,
     targetJid?: string,
     botones?: BotButton[],
-    instantOverride?: boolean
+    instantOverride?: boolean,
+    instanceName?: string
   ): Promise<boolean> {
     const textoFinal = parseSpintax(mensaje);
     const dest = targetJid || phone;
+    const cleanKey = phone.replace(/\D/g, '');
+    const instance = instanceName || (targetJid && this.activeInstanceByPhone.get(targetJid)) || this.activeInstanceByPhone.get(cleanKey) || this.activeInstanceByPhone.get(phone) || EvolutionService.getInstanceName();
+
     const esTecnico = instantOverride ?? (
       intencion === 'ACTIVACION_TECNICO' ||
       intencion === 'CAMBIO_PAQUETE_TECNICO' ||
@@ -412,9 +427,9 @@ export class BotOrchestrator {
     );
     let ok = false;
     if (botones && botones.length > 0) {
-      ok = await EvolutionService.enviarBotones(dest, textoFinal, botones, undefined, { instant: esTecnico });
+      ok = await EvolutionService.enviarBotones(dest, textoFinal, botones, undefined, { instant: esTecnico, instanceName: instance });
     } else {
-      ok = await EvolutionService.enviarTexto(dest, textoFinal, { instant: esTecnico });
+      ok = await EvolutionService.enviarTexto(dest, textoFinal, { instant: esTecnico, instanceName: instance });
     }
     await TursoService.logMessage(phone, 'OUT', textoFinal, intencion, accion);
     return ok;
@@ -429,8 +444,17 @@ export class BotOrchestrator {
     const targetJid = event.remoteJid || phone;
     const rawText = (event.text || '').trim();
     const buttonId = event.buttonId;
+    const instance = (event.instanceName || EvolutionService.getInstanceName()).trim();
 
-    logger.info(`Procesando mensaje de ${phone} (Destino WhatsApp: ${targetJid}): "${rawText}"`);
+    // Registrar la instancia activa para este teléfono
+    const cleanPhone = phone.replace(/\D/g, '');
+    this.activeInstanceByPhone.set(cleanPhone, instance);
+    this.activeInstanceByPhone.set(phone, instance);
+    if (event.remoteJid) {
+      this.activeInstanceByPhone.set(event.remoteJid, instance);
+    }
+
+    logger.info(`Procesando mensaje de ${phone} en instancia [${instance}] (Destino WhatsApp: ${targetJid}): "${rawText}"`);
 
     // 0. Obtener sesión de Turso DB
     let session = await TursoService.getSession(phone);
@@ -449,10 +473,12 @@ export class BotOrchestrator {
       lowerMsg.startsWith('alta') ||
       lowerMsg.startsWith('aprovisionar') ||
       lowerMsg.startsWith('registrar') ||
+      (event.imageAnalysis as any)?.tipo === 'CONTRATO_INSTALACION' ||
       (event.imageAnalysis as any)?.tipo_documento === 'CONTRATO_INSTALACION';
 
     const esPasoTecnicoEnCurso = session?.step?.startsWith('ACTIVACION_') ||
-      session?.step === 'PENDIENTE_CONFIRMACION_ACTIVACION_ONU';
+      session?.step === 'PENDIENTE_CONFIRMACION_ACTIVACION_ONU' ||
+      session?.step === 'PENDIENTE_SN_ACTIVACION';
 
     const esAccionTecnica = esComandoActivacion || esComandoCambioPaquete || esPasoTecnicoEnCurso;
 
@@ -582,8 +608,8 @@ export class BotOrchestrator {
       return;
     }
 
-    // C. Confirmación de activación pendiente (SÍ / NO / Modificaciones / Botones)
-    if (session?.step === 'PENDIENTE_CONFIRMACION_ACTIVACION_ONU') {
+    // C. Confirmación de activación pendiente (SÍ / NO / Modificaciones / Botones / Dígitos SN)
+    if (session?.step === 'PENDIENTE_CONFIRMACION_ACTIVACION_ONU' || session?.step === 'PENDIENTE_SN_ACTIVACION') {
       const esConfirmacion = buttonId === 'BTN_CONFIRMAR_ACTIVACION' ||
         /^(si|sí|confirmar|confirmo|adelante|autorizar|dale|ok|1|activar)\b/i.test(lowerMsg);
       const esCancelacion = buttonId === 'BTN_CANCELAR_ACTIVACION' ||
@@ -598,7 +624,7 @@ export class BotOrchestrator {
         return;
       }
 
-      // Si no es confirmación ni cancelación, procesar como modificación en caliente
+      // Si no es confirmación ni cancelación, procesar como modificación en caliente / entrada de SN
       await this.procesarModificacionActivacionEnCaliente(phone, rawText, session, targetJid);
       return;
     }
@@ -3719,6 +3745,78 @@ export class BotOrchestrator {
   ];
 
   /**
+   * Resuelve una zona oficial de SmartOLT a partir de localidad, colonia, municipio y dirección.
+   * Si la localidad o comunidad no se encuentra en el catálogo oficial de SmartOLT,
+   * asigna automáticamente por defecto el Municipio correspondiente (ej: "Actopan", "El Arenal", "San Agustin Tlaxiaca", "San Jose Tepenene")
+   * evitando que se generen zonas no registradas en la OLT.
+   */
+  public static resolverZonaOMunicipio(
+    localidad?: string | null,
+    colonia?: string | null,
+    municipio?: string | null,
+    direccion?: string | null
+  ): string {
+    const combined = `${localidad || ''} ${colonia || ''} ${municipio || ''} ${direccion || ''}`.toLowerCase();
+    const cleanCombined = normalizeText(combined);
+
+    // 1. Verificar primero si coincide exactamente con alguna zona específica del catálogo de SmartOLT
+    for (const item of this.SMARTOLT_ZONES) {
+      // Omitir los municipios genéricos en la primera pasada para dar prioridad a comunidades específicas (ej: Chicavasco, Bothibaji)
+      if (['Actopan', 'El Arenal', 'San Agustin Tlaxiaca', 'San Jose Tepenene'].includes(item.name)) {
+        continue;
+      }
+      for (const alias of item.aliases) {
+        const cleanAlias = normalizeText(alias);
+        const regex = new RegExp(`\\b${cleanAlias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+        if (regex.test(cleanCombined)) {
+          return item.name;
+        }
+      }
+    }
+
+    // 2. Si no coincide con una comunidad registrada, asignar el Municipio correspondiente por defecto:
+    if (
+      cleanCombined.includes('arenal') ||
+      cleanCombined.includes('el arenal') ||
+      cleanCombined.includes('ojo de agua') ||
+      cleanCombined.includes('san jeronimo') ||
+      cleanCombined.includes('bocja') ||
+      cleanCombined.includes('meje')
+    ) {
+      return 'El Arenal';
+    }
+
+    if (
+      cleanCombined.includes('san agustin') ||
+      cleanCombined.includes('tlaxiaca') ||
+      cleanCombined.includes('san agustin tlaxiaca')
+    ) {
+      return 'San Agustin Tlaxiaca';
+    }
+
+    if (
+      cleanCombined.includes('san jose') ||
+      cleanCombined.includes('tepenene')
+    ) {
+      return 'San Jose Tepenene';
+    }
+
+    if (
+      cleanCombined.includes('santiago') ||
+      cleanCombined.includes('zaragoza')
+    ) {
+      return 'zaragoza- santiago';
+    }
+
+    if (cleanCombined.includes('actopan')) {
+      return 'Actopan';
+    }
+
+    // 3. Por defecto absoluto para localidades no reconocidas: Municipio de Actopan
+    return 'Actopan';
+  }
+
+  /**
    * Parsea los datos del comando de un solo mensaje para activación de clientes:
    * Formato: "activar cliente [6 dígitos SN] [Folio-Nombre] [Plan] [Zona]"
    */
@@ -4147,7 +4245,7 @@ ${techInfo}───────────────────────
       String(unconfigured.olt_id) === '2' ||
       (unconfigured.olt_name || '').toLowerCase().includes('san agustin');
 
-    const targetZone = isSanAgustin ? 'San Agustin Tlaxiaca' : (parsed.zone || 'Actopan');
+    const targetZone = isSanAgustin ? 'San Agustin Tlaxiaca' : this.resolverZonaOMunicipio(parsed.zone);
     const targetOltId = isSanAgustin ? '2' : '3';
     const targetOltName = isSanAgustin ? 'OLT-SanAgustin' : 'OLT5800-Actopan';
     const defaultVlan = isSanAgustin ? '800' : '510';
@@ -4383,7 +4481,9 @@ ${techInfo}───────────────────────
   }
 
   /**
-   * Procesa la activación automática extrayendo los datos del contrato fotografiado con IA
+   * Procesa la extracción de datos del contrato fotografiado con IA (Folio, Cliente, Zona/Municipio, Plan, Dirección).
+   * Asigna automáticamente por defecto el Municipio si la comunidad no está registrada en SmartOLT.
+   * Solicita inmediatamente al técnico los dígitos del SN del módem para realizar la búsqueda en SmartOLT.
    */
   private static async procesarActivacionPorContrato(
     phone: string,
@@ -4392,142 +4492,40 @@ ${techInfo}───────────────────────
     session: Session | null,
     targetJid?: string
   ): Promise<void> {
-    logger.info(`[Activación Contrato] Procesando foto de contrato para ${phone}: Folio=${datos.folio}, Cliente=${datos.cliente}, SN=${datos.sn}`);
+    logger.info(`[Activación Contrato] Procesando foto de contrato para ${phone}: Folio=${datos.folio}, Cliente=${datos.cliente}`);
 
-    // Normalizar Número de Serie (ej: 48575443... -> HWTC...)
-    let rawSn = (datos.sn || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-    if (rawSn.startsWith('48575443')) {
-      rawSn = 'HWTC' + rawSn.substring(8);
-    } else if (rawSn.startsWith('5A544547')) {
-      rawSn = 'ZTEG' + rawSn.substring(8);
-    }
-
-    // Sufijo para búsqueda en SmartOLT (últimos 6 caracteres)
-    const suffix = rawSn.length >= 6 ? rawSn.slice(-6) : rawSn;
-
-    // Normalizar nombre de cliente
-    let clientName = (datos.cliente || '').trim();
+    // 1. Extraer y normalizar Folio y Cliente
     const folio = (datos.folio || '').trim();
-    if (folio && !clientName.startsWith(folio)) {
-      clientName = `${folio}-${clientName}`;
+    let rawCliente = cleanPersonName(datos.cliente || '').trim();
+    if (folio && rawCliente && rawCliente.startsWith(folio)) {
+      rawCliente = rawCliente.replace(new RegExp(`^${folio}\\s*[-_.]*\\s*`, 'i'), '').trim();
     }
-    if (!clientName) {
-      clientName = folio ? `Folio-${folio}` : 'Cliente-Nuevo';
-    }
+    const clientName = rawCliente || (folio ? `Folio-${folio}` : 'Cliente-Nuevo');
 
-    // Normalizar plan
-    const planRaw = (datos.paquete || '40MB').toUpperCase().replace(/\s+/g, '');
-    const profiles = getSmartOltSpeedProfiles(planRaw);
-    const planDisplay = planRaw.replace(/MB|M/i, ' Megas');
-
-    // Normalizar zona
-    const ubicacion = `${datos.colonia || ''} ${datos.municipio_zona || ''} ${datos.direccion || ''}`.toLowerCase();
-    const isSanAgustin = ubicacion.includes('san agustin') || ubicacion.includes('san agustín');
-    const isSanJose = ubicacion.includes('san jose') || ubicacion.includes('san josé');
-    
-    let targetZone = 'Actopan';
-    if (isSanAgustin) targetZone = 'San Agustin Tlaxiaca';
-    else if (isSanJose) targetZone = 'San José';
-    else if (datos.colonia) targetZone = `Actopan (${datos.colonia})`;
-
-    const targetOltId = isSanAgustin ? '2' : '3';
-    const targetOltName = isSanAgustin ? 'OLT-SanAgustin' : 'OLT5800-Actopan';
-    const defaultVlan = isSanAgustin ? '800' : '510';
-
-    await this.enviarYLoguear(
-      phone,
-      `📸 *Contrato detectado por IA (Folio ${folio || 'S/F'})*\n🔍 Buscando módem con serie *${rawSn || suffix}* en SmartOLT...`,
-      'ACTIVACION_TECNICO',
-      'BUSCANDO_ONU_CONTRATO',
-      targetJid
+    // 2. Resolver Zona o Municipio por defecto (ej: Actopan, El Arenal, San Agustín Tlaxiaca, San José Tepenene)
+    const targetZone = this.resolverZonaOMunicipio(
+      datos.colonia,
+      datos.municipio_zona,
+      datos.municipio_zona,
+      datos.direccion
     );
 
-    // 1. Buscar ONU en SmartOLT
-    let unconfigured = suffix ? await SmartOLTService.findUnconfiguredOnuBySnSuffix(suffix) : null;
+    // 3. Normalizar Plan y Perfiles
+    const planRaw = (datos.paquete || '40MB').toUpperCase().replace(/\s+/g, '');
+    const planDisplay = planRaw.replace(/MB|M/i, ' Megas');
 
-    if (!unconfigured) {
-      let metaObj: any = {};
-      try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
-      metaObj.pendingContract = datos;
-      await TursoService.upsertSession({
-        phone,
-        step: 'CONVERSACIONAL',
-        metadata: JSON.stringify(metaObj),
-      });
-
-      const noFoundMsg = `📋 *DATOS EXTRAÍDOS DEL CONTRATO (FOTO)*
-──────────────────────────────
-• *Folio:* *${folio || 'N/A'}*
-• *Cliente:* *${clientName}*
-• *Serie (SN):* *${rawSn || 'No detectada'}*
-• *Modelo:* *${datos.modelo || 'EG8041V5'}*
-• *Paquete:* *${planDisplay}*
-• *Zona / Dirección:* *${targetZone}* (${datos.direccion || 'Domicilio'})
-──────────────────────────────
-⚠️ *El módem ${rawSn} aún no aparece conectado en SmartOLT.*
-
-💡 *Por favor verifica:*
-1. Que la fibra óptica esté bien conectada y el LED PON encendido o parpadeando.
-2. En cuanto esté listo, escribe *activar cliente ${suffix || rawSn}* o reenvía la foto.`;
-
-      await this.enviarYLoguear(phone, noFoundMsg, 'ACTIVACION_TECNICO', 'ONU_CONTRATO_NO_ENCONTRADA', targetJid);
-      return;
-    }
-
-    // 2. Asignar IP libre en IPAM
-    let nextIp = await IpamService.getNextAvailableIp(defaultVlan, targetOltId);
-    if (!nextIp && targetOltId === '3') {
-      for (const v of ['520', '530', '540', '550', '560', '570', '580', '590', '600', '610']) {
-        nextIp = await IpamService.getNextAvailableIp(v, '3');
-        if (nextIp) break;
-      }
-    }
-
-    if (!nextIp) {
-      await this.enviarYLoguear(
-        phone,
-        `⚠️ *Atención:* No se encontraron IPs disponibles en el pool de la OLT *${targetOltName}*. Contacta al administrador.`,
-        'ACTIVACION_TECNICO',
-        'SIN_IPS_DISPONIBLES',
-        targetJid
-      );
-      return;
-    }
-
-    // 3. Preparar payload de autorización
-    const onuModel = SmartOLTService.normalizeOnuType(datos.modelo || unconfigured.onu_type_name || unconfigured.onu_type, unconfigured.sn);
-
-    const payload: AuthorizeOnuPayload = {
-      olt_id: unconfigured.olt_id || targetOltId,
-      pon_type: unconfigured.pon_type || 'gpon',
-      board: unconfigured.board,
-      port: unconfigured.port,
-      sn: unconfigured.sn,
-      onu_type: onuModel,
-      name: clientName,
-      onu_mode: 'Routing',
-      vlan: nextIp.vlan,
-      ip_address: nextIp.ip,
-      netmask: nextIp.netmask,
-      gateway: nextIp.gateway,
-      line_profile: 'VLAN mapping',
-      download_speed_profile_name: profiles.down,
-      upload_speed_profile_name: profiles.up,
-      zone: targetZone,
-      comment: `Activado por Foto de Contrato Folio ${folio} (${phone})`,
-    };
-
-    const signalText = unconfigured.onu_signal_1490 || unconfigured.onu_signal || 'Detectada';
-
+    // 4. Guardar borrador en la sesión para esperar los dígitos del SN del técnico
     let metaObj: any = {};
     try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
-    metaObj.pendingActivation = payload;
-    metaObj.pendingActivationDetails = {
-      snSuffix: unconfigured.sn.slice(-6),
-      oltName: targetOltName,
-      zone: targetZone,
-      signal: signalText,
-      model: onuModel,
+    metaObj.pendingActivation = null;
+    metaObj.pendingActivationDetails = null;
+    metaObj.pendingContractDraft = {
+      folio: folio || null,
+      cliente: clientName,
+      zona: targetZone,
+      paquete: planRaw,
+      direccion: datos.direccion || '',
+      modelo: datos.modelo || 'EG8041V5',
     };
 
     await TursoService.upsertSession({
@@ -4536,32 +4534,30 @@ ${techInfo}───────────────────────
       metadata: JSON.stringify(metaObj),
     });
 
-    const cardMsg = `📋 *DATOS EXTRAÍDOS DEL CONTRATO (FOTO)*
+    const cardDraftMsg = `📸 *CONTRATO DETECTADO POR IA*
 ──────────────────────────────
-• *Folio / Cliente:* *${clientName}*
-• *Zona:* *${targetZone}*
+• *Folio:* *${folio || 'S/F'}*
+• *Cliente:* *${clientName}*
+• *Zona / Municipio:* *${targetZone}*
 • *Paquete:* *${planDisplay}*
-• *Serie (SN):* *${unconfigured.sn}* (${onuModel})
-• *Nivel Óptico:* *${signalText}*
-• *IP Asignada:* *${nextIp.ip}* (VLAN ${nextIp.vlan})
 • *Dirección:* ${datos.direccion || 'Registrada en contrato'}
 ──────────────────────────────
-⚠️ *¿Confirmas la activación de este módem en SmartOLT?*
+👉 *Por favor escribe los últimos dígitos del SN del módem* (ej: *474B4484* o *4484*) para buscarlo en SmartOLT y activarlo.
 
-👉 Responde *SÍ* para activar o *NO* para cancelar.
-_(O escribe 'cambiar zona', 'cambiar plan' o 'cambiar nombre' si necesitas corregir algo)_`;
+_(O puedes corregir datos: 'cambiar nombre [nombre]', 'cambiar folio [folio]', 'cambiar zona [zona]', 'cambiar plan [megas]')_`;
 
     await this.enviarYLoguear(
       phone,
-      cardMsg,
+      cardDraftMsg,
       'ACTIVACION_TECNICO',
-      'ESPERANDO_CONFIRMACION_CONTRATO',
+      'CONTRATO_EXTRAIDO_ESPERANDO_SN',
       targetJid
     );
   }
 
   /**
-   * Permite al técnico modificar cualquier parámetro en caliente antes de confirmar la activación
+   * Permite al técnico modificar cualquier parámetro en caliente o proporcionar el SN del módem
+   * antes de confirmar la activación, sin romper el flujo conversacional.
    */
   private static async procesarModificacionActivacionEnCaliente(
     phone: string,
@@ -4571,51 +4567,263 @@ _(O escribe 'cambiar zona', 'cambiar plan' o 'cambiar nombre' si necesitas corre
   ): Promise<void> {
     let metaObj: any = {};
     try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
-    let payload: AuthorizeOnuPayload = metaObj.pendingActivation;
+    let payload: AuthorizeOnuPayload | null = metaObj.pendingActivation || null;
     let details = metaObj.pendingActivationDetails || {};
+    let draft = metaObj.pendingContractDraft || null;
 
-    if (!payload) {
+    if (!payload && !draft) {
       await TursoService.upsertSession({ phone, step: 'CONVERSACIONAL' });
+      await this.enviarYLoguear(
+        phone,
+        `⚠️ No tienes ninguna activación en curso. Puedes enviar una foto de contrato o escribir *activar cliente [SN] [Folio-Nombre]* para iniciar.`,
+        'ACTIVACION_TECNICO',
+        'SIN_ACTIVACION_PENDIENTE',
+        targetJid
+      );
       return;
     }
 
     const lower = rawText.toLowerCase().trim();
-    let modificado = false;
-    let mensajeCambio = '';
 
-    // Extraer folio y nombre actuales de payload.name para preservarlos independientemente
-    let currentFolio = '';
-    let currentCustomerName = '';
-    if (payload.name) {
-      const parts = payload.name.match(/^(\d{1,7})\s*[-_.\s]+\s*(.+)$/);
-      if (parts) {
-        currentFolio = parts[1].trim();
-        currentCustomerName = parts[2].trim();
-      } else if (/^\d{1,7}$/.test(payload.name.trim())) {
-        currentFolio = payload.name.trim();
-        currentCustomerName = '';
+    // 0. Comprobar cancelación explícita
+    if (/^(no|cancelar|cancelo|rechazar|abortar|0)$/i.test(lower)) {
+      metaObj.pendingActivation = null;
+      metaObj.pendingActivationDetails = null;
+      metaObj.pendingContractDraft = null;
+      await TursoService.upsertSession({
+        phone,
+        step: 'CONVERSACIONAL',
+        metadata: JSON.stringify(metaObj),
+      });
+
+      await this.enviarYLoguear(
+        phone,
+        `❌ *Activación cancelada.* No se realizaron modificaciones en la OLT.`,
+        'ACTIVACION_TECNICO',
+        'ACTIVACION_CANCELADA',
+        targetJid
+      );
+      return;
+    }
+
+    // 0.1 Comprobar confirmación explícita
+    if (/^(si|sí|confirmar|confirmo|adelante|autorizar|dale|ok|1|activar)$/i.test(lower)) {
+      if (payload && payload.sn && payload.ip_address) {
+        await this.procesarConfirmacionActivacionOnu(phone, session, targetJid, true);
+        return;
       } else {
-        currentFolio = '';
-        currentCustomerName = payload.name.trim();
+        await this.enviarYLoguear(
+          phone,
+          `⚠️ *Falta vincular el módem.*\n\nPor favor escribe los últimos dígitos del SN del equipo (ej: *474B4484* o *4484*) para autorizarlo.`,
+          'ACTIVACION_TECNICO',
+          'FALTA_SN_CONFIRMACION',
+          targetJid
+        );
+        return;
       }
     }
 
-    // 1. Modificar Zona
-    if (/(?:cambiar|modificar|poner|ajustar)?\s*zona\s*(?:a|en|:)?\s*(.+)/i.test(rawText) || lower.includes('san jose') || lower.includes('san agustin') || lower.includes('actopan')) {
-      let nuevaZona = '';
-      const match = rawText.match(/(?:cambiar|modificar|poner|ajustar)?\s*zona\s*(?:a|en|:)?\s*(.+)/i);
-      if (match) {
-        nuevaZona = match[1].trim();
-      } else if (lower.includes('san jose') || lower.includes('san josé')) {
-        nuevaZona = 'San José';
-      } else if (lower.includes('san agustin') || lower.includes('san agustín')) {
-        nuevaZona = 'San Agustín';
-      } else if (lower.includes('actopan')) {
-        nuevaZona = 'Actopan';
+    // Extraer valores actuales de payload o draft
+    let currentFolio = '';
+    let currentCustomerName = '';
+    let currentZone = 'Actopan';
+    let currentPlan = '40M';
+    let currentAddress = '';
+    let currentModel = 'EG8041V5';
+
+    if (payload) {
+      currentZone = payload.zone || 'Actopan';
+      currentPlan = payload.download_speed_profile_name || '40M';
+      currentModel = payload.onu_type || 'EG8041V5';
+      if (payload.name) {
+        const parts = payload.name.match(/^(\d{1,7})\s*[-_.\s]+\s*(.+)$/);
+        if (parts) {
+          currentFolio = parts[1].trim();
+          currentCustomerName = parts[2].trim();
+        } else if (/^\d{1,7}$/.test(payload.name.trim())) {
+          currentFolio = payload.name.trim();
+        } else {
+          currentCustomerName = payload.name.trim();
+        }
+      }
+    } else if (draft) {
+      currentFolio = (draft.folio || '').trim();
+      currentCustomerName = (draft.cliente || '').trim();
+      currentZone = draft.zona || 'Actopan';
+      currentPlan = draft.paquete || '40MB';
+      currentAddress = draft.direccion || '';
+      currentModel = draft.modelo || 'EG8041V5';
+    }
+
+    let modificado = false;
+    let mensajeCambio = '';
+
+    // 1. Detección de Serie / SN del módem
+    // Formatos: "474B4484", "4484", "sn 474B4484", "serie 474B4484", "es el 474B4484", "HWTC474B4484", "686173B6"
+    let detectedSn = '';
+    const matchSnExplicit = rawText.match(/(?:cambiar|modificar|poner|ajustar|es\s+el|es|el|la)?\s*(?:serie|sn|sufijo|modem|módem|onu|equipo)\s*(?:a|en|es|:)?\s*([A-Za-z0-9]+)/i);
+    const matchHexDirect = rawText.trim().match(/^(?:(?:es\s+(?:el\s+)?|el\s+)?(?:HWTC|ZTEG|48575443|5A544547)?|HWTC|ZTEG|48575443|5A544547)?([A-Fa-f0-9]{4,16})$/i);
+
+    if (matchSnExplicit && !/(?:nombre|folio|zona|plan|paquete)/i.test(matchSnExplicit[1])) {
+      detectedSn = matchSnExplicit[1].trim();
+    } else if (matchHexDirect && !/^(?:si|no|ok|plan|zona|mega|megas|mb)$/i.test(rawText.trim())) {
+      detectedSn = matchHexDirect[1].trim();
+    }
+
+    if (detectedSn) {
+      let cleanSuffix = detectedSn.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (cleanSuffix.startsWith('48575443')) cleanSuffix = 'HWTC' + cleanSuffix.substring(8);
+      else if (cleanSuffix.startsWith('5A544547')) cleanSuffix = 'ZTEG' + cleanSuffix.substring(8);
+      if (cleanSuffix.length > 6 && !cleanSuffix.startsWith('HWTC') && !cleanSuffix.startsWith('ZTEG')) {
+        cleanSuffix = cleanSuffix.slice(-6);
       }
 
-      if (nuevaZona) {
-        const isSanAgustin = nuevaZona.toLowerCase().includes('san agustin') || nuevaZona.toLowerCase().includes('san agustín');
+      await this.enviarYLoguear(
+        phone,
+        `🔍 Buscando módem con serie *${cleanSuffix}* en SmartOLT...`,
+        'ACTIVACION_TECNICO',
+        'BUSCANDO_ONU_MODIFICACION',
+        targetJid
+      );
+
+      const unconfigured = await SmartOLTService.findUnconfiguredOnuBySnSuffix(cleanSuffix);
+
+      if (unconfigured) {
+        const isSanAgustin = currentZone.toLowerCase().includes('san agustin') ||
+          String(unconfigured.olt_id) === '2' ||
+          (unconfigured.olt_name || '').toLowerCase().includes('san agustin');
+
+        const targetOltId = isSanAgustin ? '2' : '3';
+        const targetOltName = isSanAgustin ? 'OLT-SanAgustin' : 'OLT5800-Actopan';
+        const defaultVlan = isSanAgustin ? '800' : '510';
+
+        let nextIp = await IpamService.getNextAvailableIp(defaultVlan, targetOltId);
+        if (!nextIp && targetOltId === '3') {
+          for (const v of ['520', '530', '540', '550', '560', '570', '580', '590', '600', '610']) {
+            nextIp = await IpamService.getNextAvailableIp(v, '3');
+            if (nextIp) break;
+          }
+        }
+
+        if (nextIp) {
+          const onuModel = SmartOLTService.normalizeOnuType(unconfigured.onu_type_name || unconfigured.onu_type, unconfigured.sn);
+          const profiles = getSmartOltSpeedProfiles(currentPlan);
+          const fullName = currentFolio
+            ? (currentCustomerName ? `${currentFolio}-${currentCustomerName}` : `Folio-${currentFolio}`)
+            : (currentCustomerName || 'Cliente-Nuevo');
+
+          payload = {
+            olt_id: unconfigured.olt_id || targetOltId,
+            pon_type: unconfigured.pon_type || 'gpon',
+            board: unconfigured.board,
+            port: unconfigured.port,
+            sn: unconfigured.sn,
+            onu_type: onuModel,
+            name: fullName,
+            onu_mode: 'Routing',
+            vlan: nextIp.vlan,
+            ip_address: nextIp.ip,
+            netmask: nextIp.netmask,
+            gateway: nextIp.gateway,
+            line_profile: 'VLAN mapping',
+            download_speed_profile_name: profiles.down,
+            upload_speed_profile_name: profiles.up,
+            zone: currentZone,
+            comment: `Activado vía Bot WhatsApp por técnico (${phone})`,
+          };
+
+          const signalText = unconfigured.onu_signal_1490 || unconfigured.onu_signal || 'Detectada';
+          details = {
+            snSuffix: unconfigured.sn.slice(-6),
+            oltName: targetOltName,
+            zone: currentZone,
+            signal: signalText,
+            model: onuModel,
+          };
+
+          draft = null;
+          modificado = true;
+          mensajeCambio += `• *Módem vinculado:* ${unconfigured.sn} (${onuModel}, Señal: ${signalText})\n• *IP asignada:* ${nextIp.ip} (VLAN ${nextIp.vlan})\n`;
+        } else {
+          mensajeCambio += `⚠️ No se encontraron IPs disponibles en la OLT ${targetOltName}.\n`;
+        }
+      } else {
+        await this.enviarYLoguear(
+          phone,
+          `⚠️ *Módem no encontrado en SmartOLT*\n\nNo se localizó ninguna ONU sin configurar con serie/terminación *${cleanSuffix}*.\n\n💡 *Verifica:*\n1. Que el cable de fibra esté conectado (LED PON verde en el módem).\n2. Que el módem esté encendido.\n3. Reintenta escribiendo los dígitos correctos del SN (ej: *${cleanSuffix}*).`,
+          'ACTIVACION_TECNICO',
+          'ONU_NO_ENCONTRADA_MODIFICACION',
+          targetJid
+        );
+        return;
+      }
+    }
+
+    // 2. Modificar Nombre / Cliente (conserva el Folio intacto)
+    const matchNombre = rawText.match(/(?:cambiar|modificar|poner|ajustar|el|corregir)?\s*(?:nombre|cliente)\s*(?:a|en|es|:)?\s*(.+)/i);
+    if (matchNombre && !/(?:zona|plan|paquete|serie|sn|folio)/i.test(matchNombre[1])) {
+      let rawNuevoNombre = matchNombre[1].trim();
+      rawNuevoNombre = rawNuevoNombre.replace(/(?:y\s+)?folio\s*(?:a|en|es|:)?\s*[a-zA-Z0-9_-]+/i, '').trim();
+
+      if (rawNuevoNombre) {
+        const prefixMatch = rawNuevoNombre.match(/^(\d{1,7})\s*[-_.\s]+\s*(.+)$/);
+        if (prefixMatch) {
+          currentFolio = prefixMatch[1].trim();
+          currentCustomerName = cleanPersonName(prefixMatch[2].trim());
+        } else if (/^\d{1,7}$/.test(rawNuevoNombre)) {
+          currentFolio = rawNuevoNombre;
+        } else {
+          currentCustomerName = cleanPersonName(rawNuevoNombre);
+        }
+
+        const fullUpdatedName = currentFolio
+          ? (currentCustomerName ? `${currentFolio}-${currentCustomerName}` : `Folio-${currentFolio}`)
+          : currentCustomerName;
+
+        if (payload) {
+          payload.name = fullUpdatedName;
+        }
+        if (draft) {
+          draft.cliente = currentCustomerName;
+          draft.folio = currentFolio || draft.folio;
+        }
+
+        modificado = true;
+        mensajeCambio += `• *Nombre actualizado:* ${currentCustomerName}${currentFolio ? ` (Folio conservado: ${currentFolio})` : ''}\n`;
+      }
+    }
+
+    // 3. Modificar Folio (conserva el Nombre del Cliente intacto)
+    const matchFolio = rawText.match(/(?:cambiar|modificar|poner|ajustar|el|corregir)?\s*folio\s*(?:a|en|es|:)?\s*([a-zA-Z0-9_-]+)/i);
+    if (matchFolio && !/(?:zona|plan|paquete|serie|sn|nombre)/i.test(matchFolio[1])) {
+      const nuevoFolio = matchFolio[1].trim();
+      currentFolio = nuevoFolio;
+
+      const fullUpdatedName = currentCustomerName
+        ? `${currentFolio}-${currentCustomerName}`
+        : currentFolio;
+
+      if (payload) {
+        payload.name = fullUpdatedName;
+      }
+      if (draft) {
+        draft.folio = currentFolio;
+      }
+
+      modificado = true;
+      mensajeCambio += `• *Folio actualizado:* ${currentFolio}${currentCustomerName ? ` (Nombre conservado: ${currentCustomerName})` : ''}\n`;
+    }
+
+    // 4. Modificar Zona o Municipio
+    const matchZona = rawText.match(/(?:cambiar|modificar|poner|ajustar|en|es\s+en)?\s*zona\s*(?:a|en|es|:)?\s*(.+)/i) ||
+      (lower.includes('san jose') || lower.includes('san agustin') || lower.includes('actopan') || lower.includes('arenal') ? [rawText, rawText] : null);
+
+    if (matchZona && !matchNombre && !matchFolio && !detectedSn) {
+      const nuevaZona = this.resolverZonaOMunicipio(matchZona[1].trim());
+      currentZone = nuevaZona;
+
+      if (payload) {
+        const isSanAgustin = nuevaZona.toLowerCase().includes('san agustin');
         const targetOltId = isSanAgustin ? '2' : '3';
         const targetOltName = isSanAgustin ? 'OLT-SanAgustin' : 'OLT5800-Actopan';
 
@@ -4637,117 +4845,122 @@ _(O escribe 'cambiar zona', 'cambiar plan' o 'cambiar nombre' si necesitas corre
           details.zone = nuevaZona;
           details.oltName = targetOltName;
           modificado = true;
-          mensajeCambio += `• *Zona actualizada:* ${nuevaZona} (OLT: ${targetOltName}, IP: ${nextIp.ip}, VLAN: ${nextIp.vlan})\n`;
-        } else {
-          mensajeCambio += `⚠️ No se encontraron IPs disponibles en el pool para la zona ${nuevaZona}.\n`;
+          mensajeCambio += `• *Zona/Municipio actualizado:* ${nuevaZona} (OLT: ${targetOltName}, IP: ${nextIp.ip})\n`;
         }
+      } else if (draft) {
+        draft.zona = nuevaZona;
+        modificado = true;
+        mensajeCambio += `• *Zona/Municipio actualizado:* ${nuevaZona}\n`;
       }
     }
 
-    // 2. Modificar Plan / Paquete
-    const matchPlan = rawText.match(/(?:cambiar|modificar|poner|ajustar)?\s*(?:paquete|plan|velocidad|megas)\s*(?:a|en|:)?\s*(\d+)/i) ||
-                      rawText.match(/^(\d+)\s*(?:megas|mb|m)\b/i);
+    // 5. Modificar Plan / Paquete
+    const matchPlan = rawText.match(/(?:cambiar|modificar|poner|ajustar)?\s*(?:paquete|plan|velocidad|megas)\s*(?:a|en|es|:)?\s*(\d+)/i) ||
+      rawText.match(/^(\d+)\s*(?:megas|mb|m)\b/i);
     if (matchPlan) {
       const numMegas = matchPlan[1];
       const profiles = getSmartOltSpeedProfiles(`${numMegas}MB`);
-      payload.download_speed_profile_name = profiles.down;
-      payload.upload_speed_profile_name = profiles.up;
+      currentPlan = `${numMegas}MB`;
+
+      if (payload) {
+        payload.download_speed_profile_name = profiles.down;
+        payload.upload_speed_profile_name = profiles.up;
+      }
+      if (draft) {
+        draft.paquete = `${numMegas}MB`;
+      }
+
       modificado = true;
       mensajeCambio += `• *Paquete actualizado:* ${numMegas} Megas (${profiles.down})\n`;
     }
 
-    // 3. Modificar Folio
-    const matchFolio = rawText.match(/(?:cambiar|modificar|poner|ajustar)?\s*folio\s*(?:a|en|:)?\s*([a-zA-Z0-9_-]+)/i);
-    if (matchFolio && !/(?:zona|plan|paquete|serie|sn)/i.test(matchFolio[1])) {
-      const nuevoFolio = matchFolio[1].trim();
-      currentFolio = nuevoFolio;
-      if (currentCustomerName) {
-        payload.name = `${currentFolio}-${currentCustomerName}`;
-        mensajeCambio += `• *Folio actualizado:* ${currentFolio} (Nombre conservado: ${currentCustomerName})\n`;
-      } else {
-        payload.name = currentFolio;
+    // 6. Fallback NLU con IA de Groq si el mensaje es conversacional y no encajó en regex
+    if (!modificado && rawText.length >= 4) {
+      const aiMod = await GroqService.extraerModificacionesActivacion(rawText);
+
+      if (aiMod.cancelar) {
+        metaObj.pendingActivation = null;
+        metaObj.pendingActivationDetails = null;
+        metaObj.pendingContractDraft = null;
+        await TursoService.upsertSession({ phone, step: 'CONVERSACIONAL', metadata: JSON.stringify(metaObj) });
+        await this.enviarYLoguear(phone, `❌ *Activación cancelada.*`, 'ACTIVACION_TECNICO', 'ACTIVACION_CANCELADA', targetJid);
+        return;
+      }
+
+      if (aiMod.confirmar) {
+        if (payload && payload.sn && payload.ip_address) {
+          await this.procesarConfirmacionActivacionOnu(phone, session, targetJid, true);
+          return;
+        } else {
+          await this.enviarYLoguear(phone, `⚠️ *Falta vincular el módem.*\nPor favor escribe los últimos dígitos del SN del equipo para autorizarlo.`, 'ACTIVACION_TECNICO', 'FALTA_SN', targetJid);
+          return;
+        }
+      }
+
+      if (aiMod.nuevo_nombre) {
+        currentCustomerName = cleanPersonName(aiMod.nuevo_nombre);
+        const fullUpdatedName = currentFolio ? `${currentFolio}-${currentCustomerName}` : currentCustomerName;
+        if (payload) payload.name = fullUpdatedName;
+        if (draft) draft.cliente = currentCustomerName;
+        modificado = true;
+        mensajeCambio += `• *Nombre actualizado:* ${currentCustomerName}\n`;
+      }
+
+      if (aiMod.nuevo_folio) {
+        currentFolio = aiMod.nuevo_folio.trim();
+        const fullUpdatedName = currentCustomerName ? `${currentFolio}-${currentCustomerName}` : currentFolio;
+        if (payload) payload.name = fullUpdatedName;
+        if (draft) draft.folio = currentFolio;
+        modificado = true;
         mensajeCambio += `• *Folio actualizado:* ${currentFolio}\n`;
       }
-      modificado = true;
-    }
 
-    // 4. Modificar Nombre / Cliente
-    const matchNombre = rawText.match(/(?:cambiar|modificar|poner|ajustar)?\s*(?:nombre|cliente)\s*(?:a|en|:)?\s*(.+)/i);
-    if (matchNombre && !/(?:zona|plan|paquete|serie|sn)/i.test(matchNombre[1])) {
-      let rawNuevoNombre = matchNombre[1].trim();
-      // Si el texto incluye mención a folio conjunta ej: "y folio 2979", quitarlo para no mezclar
-      rawNuevoNombre = rawNuevoNombre.replace(/(?:y\s+)?folio\s*(?:a|en|:)?\s*[a-zA-Z0-9_-]+/i, '').trim();
+      if (aiMod.nueva_zona) {
+        const nuevaZona = this.resolverZonaOMunicipio(aiMod.nueva_zona);
+        currentZone = nuevaZona;
+        if (payload) payload.zone = nuevaZona;
+        if (draft) draft.zona = nuevaZona;
+        modificado = true;
+        mensajeCambio += `• *Zona actualizada:* ${nuevaZona}\n`;
+      }
 
-      if (rawNuevoNombre) {
-        // Verificar si viene con formato [Folio]-[Nombre] ej: "2979-Juan Perez" o "2979 Juan Perez"
-        const prefixMatch = rawNuevoNombre.match(/^(\d{1,7})\s*[-_.\s]+\s*(.+)$/);
-        if (prefixMatch) {
-          currentFolio = prefixMatch[1].trim();
-          currentCustomerName = cleanPersonName(prefixMatch[2].trim());
-          payload.name = `${currentFolio}-${currentCustomerName}`;
-          mensajeCambio += `• *Folio y Nombre actualizados:* ${payload.name}\n`;
-        } else if (/^\d{1,7}$/.test(rawNuevoNombre)) {
-          // Si pasaron solo números en "cambiar nombre 2979", interpretar como folio para no borrar el nombre
-          currentFolio = rawNuevoNombre;
-          if (currentCustomerName) {
-            payload.name = `${currentFolio}-${currentCustomerName}`;
-            mensajeCambio += `• *Folio actualizado:* ${currentFolio} (Nombre conservado: ${currentCustomerName})\n`;
-          } else {
-            payload.name = currentFolio;
-            mensajeCambio += `• *Folio actualizado:* ${currentFolio}\n`;
+      if (aiMod.nuevo_plan) {
+        const megasMatch = aiMod.nuevo_plan.match(/\d+/);
+        if (megasMatch) {
+          const profiles = getSmartOltSpeedProfiles(`${megasMatch[0]}MB`);
+          currentPlan = `${megasMatch[0]}MB`;
+          if (payload) {
+            payload.download_speed_profile_name = profiles.down;
+            payload.upload_speed_profile_name = profiles.up;
           }
-        } else {
-          // Es solo el nombre del cliente
-          currentCustomerName = cleanPersonName(rawNuevoNombre);
-          if (currentFolio) {
-            payload.name = `${currentFolio}-${currentCustomerName}`;
-            mensajeCambio += `• *Nombre actualizado:* ${currentCustomerName} (Folio conservado: ${currentFolio})\n`;
-          } else {
-            payload.name = currentCustomerName;
-            mensajeCambio += `• *Nombre actualizado:* ${currentCustomerName}\n`;
-          }
+          if (draft) draft.paquete = currentPlan;
+          modificado = true;
+          mensajeCambio += `• *Paquete actualizado:* ${megasMatch[0]} Megas\n`;
         }
-        modificado = true;
       }
     }
 
-    // 5. Modificar Serie (SN)
-    const matchSn = rawText.match(/(?:cambiar|modificar|poner|ajustar)?\s*(?:serie|sn|sufijo)\s*(?:a|en|:)?\s*([a-zA-Z0-9]+)/i);
-    if (matchSn) {
-      const nuevoSuffix = matchSn[1].trim().toUpperCase();
-      const cleanSn = nuevoSuffix.startsWith('48575443') ? 'HWTC' + nuevoSuffix.substring(8) : nuevoSuffix;
-      const unconfigured = await SmartOLTService.findUnconfiguredOnuBySnSuffix(cleanSn);
-      if (unconfigured) {
-        payload.sn = unconfigured.sn;
-        payload.board = unconfigured.board;
-        payload.port = unconfigured.port;
-        payload.onu_type = SmartOLTService.normalizeOnuType(unconfigured.onu_type_name || unconfigured.onu_type, unconfigured.sn);
-        details.snSuffix = unconfigured.sn.slice(-6);
-        details.signal = unconfigured.onu_signal_1490 || unconfigured.onu_signal || 'Detectada';
-        details.model = payload.onu_type;
-        modificado = true;
-        mensajeCambio += `• *Serie actualizada:* ${unconfigured.sn} (Nivel: ${details.signal})\n`;
-      } else {
-        mensajeCambio += `⚠️ No se encontró ninguna ONU sin autorizar con serie/sufijo *${cleanSn}* en SmartOLT.\n`;
-      }
-    }
-
+    // 7. Persistir y Mostrar Resumen Actualizado
     if (modificado) {
       metaObj.pendingActivation = payload;
       metaObj.pendingActivationDetails = details;
+      metaObj.pendingContractDraft = draft;
+
       await TursoService.upsertSession({
         phone,
         step: 'PENDIENTE_CONFIRMACION_ACTIVACION_ONU',
         metadata: JSON.stringify(metaObj),
       });
 
-      const planDisplay = (payload.download_speed_profile_name || '40MB').replace(/MB-DOWN|MB/i, ' Megas');
-      const signalText = details.signal || 'Detectada';
+      const planDisplay = currentPlan.replace(/MB-DOWN|MB|M/i, ' Megas');
 
-      const cardMsg = `🔄 *DATOS MODIFICADOS CON ÉXITO:*
+      if (payload) {
+        // Módem vinculado listo para autorizar
+        const signalText = details.signal || 'Detectada';
+        const cardMsg = `🔄 *DATOS MODIFICADOS CON ÉXITO:*
 ──────────────────────────────
 ${mensajeCambio}──────────────────────────────
-📋 *RESUMEN ACTUALIZADO:*
+📋 *RESUMEN DE ACTIVACIÓN:*
 • *Cliente / Folio:* *${payload.name}*
 • *Zona:* *${payload.zone}*
 • *Paquete:* *${planDisplay}*
@@ -4755,22 +4968,44 @@ ${mensajeCambio}─────────────────────�
 • *Nivel Óptico:* *${signalText}*
 • *IP asignada:* *${payload.ip_address}* (VLAN ${payload.vlan})
 ──────────────────────────────
-⚠️ *¿Confirmas la activación con estos datos?*
+⚠️ *¿Confirmas la activación de este módem en SmartOLT?*
 
 👉 Responde *SÍ* para autorizar o *NO* para cancelar.
 _(O indica otro cambio si es necesario)_`;
 
-      await this.enviarYLoguear(
-        phone,
-        cardMsg,
-        'ACTIVACION_TECNICO',
-        'DATOS_MODIFICADOS_CONFIRMACION',
-        targetJid
-      );
+        await this.enviarYLoguear(
+          phone,
+          cardMsg,
+          'ACTIVACION_TECNICO',
+          'DATOS_MODIFICADOS_CONFIRMACION',
+          targetJid
+        );
+      } else if (draft) {
+        // Borrador pendiente de serie (SN)
+        const cardDraftMsg = `🔄 *DATOS ACTUALIZADOS:*
+──────────────────────────────
+${mensajeCambio}──────────────────────────────
+📋 *BORRADOR DE CONTRATO:*
+• *Folio:* *${draft.folio || 'N/A'}*
+• *Cliente:* *${draft.cliente || 'Cliente'}*
+• *Zona / Municipio:* *${draft.zona || 'Actopan'}*
+• *Paquete:* *${planDisplay}*
+• *Serie (SN):* ⚠️ _Pendiente de vincular_
+──────────────────────────────
+👉 *Escribe los últimos dígitos del SN del módem* (ej: *474B4484* o *4484*) para vincularlo.`;
+
+        await this.enviarYLoguear(
+          phone,
+          cardDraftMsg,
+          'ACTIVACION_TECNICO',
+          'BORRADOR_ACTUALIZADO_PENDIENTE_SN',
+          targetJid
+        );
+      }
     } else {
       await this.enviarYLoguear(
         phone,
-        `⚠️ *No entendí qué dato deseas modificar.*\n\nPuedes escribir:\n• *cambiar folio [Nuevo Folio]*\n• *cambiar nombre [Nuevo Nombre]*\n• *cambiar zona [San José / Actopan / etc.]*\n• *cambiar plan [40 / 60 / 200 megas]*\n• *cambiar serie [6 dígitos SN]*\n\nO responde *SÍ* para activar tal como está, o *CANCELAR*.`,
+        `⚠️ *No entendí qué dato deseas modificar.*\n\nPuedes escribir:\n• *[Dígitos SN]* (ej: *474B4484* o *4484*)\n• *cambiar folio [Folio]* (ej: *cambiar folio 2980*)\n• *cambiar nombre [Nombre]* (ej: *cambiar nombre Pedro Gomez*)\n• *cambiar zona [Zona/Municipio]* (ej: *cambiar zona El Arenal*)\n• *cambiar plan [Megas]* (ej: *cambiar plan 60 megas*)\n\nO responde *SÍ* para activar o *CANCELAR*.`,
         'ACTIVACION_TECNICO',
         'MODIFICACION_NO_RECONOCIDA',
         targetJid
