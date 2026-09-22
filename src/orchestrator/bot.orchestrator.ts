@@ -334,29 +334,18 @@ export class BotOrchestrator {
     const bank = SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK', 'BBVA Bancomer');
     const account = SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', '012 180 0152433212 90');
     const beneficiary = SettingsService.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', this.getIspName());
-    const notes = SettingsService.get('PAYMENT_NOTES', 'PAYMENT_NOTES', '');
-    const mpUrl = SettingsService.get('PAYMENT_MERCADOPAGO_URL', 'MERCADOPAGO_URL', '');
     const clientName = this.formatDisplayName(session?.client_name) || 'tu nombre completo';
 
-    let txt = `\n💳 *Opciones de Pago - ${this.getIspName()}*\n\n`;
-    if (mpUrl) {
-      txt += `🛒 *Pagar en línea con Mercado Pago / Tarjeta (Acreditación inmediata):*\n👉 ${mpUrl}\n\n`;
-    }
-
-    txt += `🏦 *También puedes pagar por Transferencia Bancaria:*\n`;
-    if (bank) txt += `• *Banco:* ${bank}\n`;
-    if (account) txt += `• *Número de Cuenta / CLABE:* ${account}\n`;
-    if (beneficiary) txt += `• *Titular / Beneficiario:* ${beneficiary}\n`;
-    if (notes) txt += `• *Información adicional:* ${notes}\n`;
-
-    if (!bank && !account) {
-      txt += `• *Nota:* Puedes solicitar los datos bancarios vigentes con nuestro personal de cobranza.\n`;
-    }
-
-    txt += `\n📌 *CONCEPTO O MOTIVO DE PAGO:*`;
-    txt += `\n👉 Por favor coloca tu nombre o contrato: *${session?.client_name || clientName}*\n`;
-    txt += `\n📸 *Importante al enviar tu comprobante:*`;
-    txt += `\nUna vez realizada tu transferencia o pago, por favor envía la *foto o captura de pantalla de tu comprobante* y escribe tu *Nombre completo* aquí en el chat para validarlo y aplicarlo de inmediato en el sistema. ¡Muchas gracias!`;
+    let txt = `\n🏢 *Pago en Oficina Física:*\n` +
+      `• *Lunes a Viernes:* 9:00 a 18:00 hrs\n` +
+      `• *Sábados:* 9:00 a 15:00 hrs\n\n` +
+      `🏦 *Pago por Transferencia Bancaria:*\n` +
+      `• *Banco:* ${bank}\n` +
+      `• *CLABE / Cuenta:* \`${account}\`\n` +
+      `• *Titular:* ${beneficiary}\n` +
+      `• *Concepto / Motivo:* *${session?.client_name || clientName}*\n\n` +
+      `📸 *Envío de Comprobante:*\n` +
+      `Al realizar tu transferencia, por favor envíanos la captura o foto de tu comprobante por aquí para aplicarlo de inmediato a tu cuenta.`;
 
     return txt;
   }
@@ -3089,67 +3078,50 @@ export class BotOrchestrator {
 
     if (!estadoFinanciero.suspendido && facturas.length === 0 && estadoFinanciero.totalDeuda === 0) {
       const ficha = this.getFichaBancaria(session);
+      const nombreCliente = formatDisplayName(session?.client_name, true) || 'Cliente';
       await this.enviarYLoguear(
         phone,
-        `🎉 *¡Tu cuenta está al corriente!*\n\nEstimado(a) *${session?.client_name || 'Cliente'}*, no tienes facturas pendientes de pago en este momento. ¡Gracias por ser cliente de *${this.getIspName()}*!${ficha}`,
+        `🎉 *¡Tu cuenta está al corriente!*\n\nEstimado(a) *${nombreCliente}*, no tienes pagos pendientes en este momento. ¡Muchas gracias por tu preferencia!\n\n` +
+        `Si deseas adelantar tu mensualidad o para futuros pagos, ponemos a tu disposición nuestras opciones:\n${ficha}`,
         'CONSULTAR_SALDO',
         'CUENTA_AL_CORRIENTE',
         targetJid
       );
+      await this.marcarConsultaFinalizada(phone, session);
       return;
     }
 
     // Si tiene facturas pendientes emitidas en WispHub
     if (facturas.length > 0) {
-      let textoFacturas = `📋 *Estado de Cuenta - ${this.getIspName()}*\nCliente: *${session.client_name}*\n\n`;
+      const nombreCliente = formatDisplayName(session?.client_name, true) || 'Cliente';
       let totalAdeudo = 0;
+      let detalleRecibos = '';
 
-      facturas.forEach((f, idx) => {
+      facturas.forEach((f) => {
         totalAdeudo += f.monto;
-        textoFacturas += `*Recibo #${idx + 1}*\n• Folio: ${f.folio}\n• Monto: *$${f.monto.toFixed(2)} MXN*\n• Vence: ${f.fecha_vencimiento}\n`;
-        if (f.link_pago) {
-          textoFacturas += `• 👉 *Pagar con Mercado Pago:* ${f.link_pago}\n`;
-        }
-        textoFacturas += `\n`;
+        detalleRecibos += `• *Recibo #${f.folio}:* $${f.monto.toFixed(2)} MXN (Vence: ${f.fecha_vencimiento})\n`;
       });
 
-      textoFacturas += `💰 *Total a pagar: $${totalAdeudo.toFixed(2)} MXN*\n`;
-      textoFacturas += this.getFichaBancaria(session);
+      let textoFacturas = `📋 *Estado de Cuenta - ${this.getIspName()}*\nEstimado(a) *${nombreCliente}*:\n\n` +
+        detalleRecibos +
+        `\n💰 *Total a pagar: $${totalAdeudo.toFixed(2)} MXN*\n` +
+        this.getFichaBancaria(session);
 
       await this.enviarYLoguear(phone, textoFacturas, 'CONSULTAR_SALDO', 'FACTURAS_PENDIENTES_ENVIADAS', targetJid);
+      await TursoService.updateStep(phone, 'ESPERANDO_COMPROBANTE');
       return;
     }
 
     // Si está suspendido o registra adeudo sin facturas listadas
-    const mpUrl = await this.obtenerLinkMercadoPago({
-      clientName: session.client_name,
-      clientId: session.client_id,
-      phone,
-      monto: estadoFinanciero.totalDeuda > 0 ? estadoFinanciero.totalDeuda : 250,
-      folioFactura: facturas[0]?.folio || null,
-    });
-    const bank = SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK', 'BBVA Bancomer');
-    const account = SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', '012 180 0152433212 90');
-    const beneficiary = SettingsService.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', this.getIspName());
     const montoTexto = estadoFinanciero.totalDeuda > 0
-      ? `un saldo/recibo pendiente por *$${estadoFinanciero.totalDeuda.toFixed(2)} MXN*`
+      ? `un saldo pendiente por *$${estadoFinanciero.totalDeuda.toFixed(2)} MXN*`
       : `tu servicio se encuentra suspendido en el sistema`;
 
-    let onlinePaySection = '';
-    if (mpUrl) {
-      onlinePaySection = `\n🛒 *Pagar en línea con Mercado Pago / Tarjeta (Acreditación inmediata):*\n👉 ${mpUrl}\n`;
-    }
-
-    const nombreCliente = formatDisplayName(session.client_name, true) || 'Cliente';
+    const nombreCliente = formatDisplayName(session?.client_name, true) || 'Cliente';
     const mensajeMoroso =
       `¡Hola, *${nombreCliente}*! 👋\n\n` +
-      `Revisé tu cuenta en nuestro sistema y detectamos que ${montoTexto}.\n` +
-      `${onlinePaySection}\n` +
-      `💳 *También puedes pagar por Transferencia Bancaria:*\n` +
-      `• Banco: *${bank}* | CLABE: *${account}*\n` +
-      `• Beneficiario: *${beneficiary}*\n` +
-      `• Concepto / Referencia: *${session.client_name || phone}*\n\n` +
-      `📸 En cuanto realices tu pago, envía la *foto o captura de tu comprobante* y escribe tu *Nombre completo* por este chat para reactivarte de inmediato.`;
+      `Revisé tu cuenta y detectamos que ${montoTexto}.\n` +
+      this.getFichaBancaria(session);
 
     await this.enviarYLoguear(phone, mensajeMoroso, 'CONSULTAR_SALDO', 'AVISO_SUSPENDIDO_SALDO', targetJid);
     await TursoService.updateStep(phone, 'ESPERANDO_COMPROBANTE');
