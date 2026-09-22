@@ -621,14 +621,22 @@ export class TursoService {
           let diaCorte = c.dia_corte || '';
           let fechaCorte = c.fecha_corte || '';
 
-          if (!diaCorte && c.raw_data) {
+          if (!diaCorte && (fechaCorte || c.raw_data)) {
             try {
-              const raw = JSON.parse(c.raw_data);
-              fechaCorte = raw.fecha_corte || '';
+              if (!fechaCorte && c.raw_data) {
+                const raw = JSON.parse(c.raw_data);
+                fechaCorte = raw.fecha_corte || '';
+              }
               if (fechaCorte) {
                 const parts = fechaCorte.split(/[-/]/);
                 if (parts.length === 3) {
-                  diaCorte = String(parseInt(parts[2], 10) || parts[2]);
+                  // DD/MM/YYYY -> parts[0] es el día (1 a 31)
+                  // YYYY-MM-DD -> parts[2] es el día
+                  if (parts[0].length <= 2) {
+                    diaCorte = String(parseInt(parts[0], 10) || parts[0]);
+                  } else {
+                    diaCorte = String(parseInt(parts[2], 10) || parts[2]);
+                  }
                 }
               }
             } catch {}

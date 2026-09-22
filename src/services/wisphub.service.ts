@@ -672,26 +672,41 @@ export class WispHubService {
           break;
         }
 
-        const records: WisphubClientRecord[] = results.map((c: any) => ({
-          id_servicio: c.id_servicio || c.id,
-          nombre: String(c.nombre || `${c.nombre || ''} ${c.apellidos || ''}`).trim(),
-          servicio: String(c.servicio || c.nombre || '').trim(),
-          ip: String(c.ip || '').trim(),
-          estado: String(c.estado || 'Activo'),
-          estado_facturas: String(c.estado_facturas || 'Pagadas'),
-          precio_plan: String(c.precio_plan || '0'),
-          saldo: String(c.saldo || '0'),
-          plan_internet: typeof c.plan_internet === 'object' ? String(c.plan_internet?.nombre || '') : String(c.plan_internet || ''),
-          router: typeof c.router === 'object' ? String(c.router?.nombre || '') : String(c.router || ''),
-          sn_onu: String(c.sn_onu || ''),
-          telefono: String(c.telefono || ''),
-          direccion: String(c.direccion || ''),
-          raw_data: JSON.stringify({
-            fecha_corte: c.fecha_corte,
-            ultimo_cambio: c.ultimo_cambio,
-            usuario: c.usuario,
-          }),
-        }));
+        const records: WisphubClientRecord[] = results.map((c: any) => {
+          let diaCorteVal: string | undefined = undefined;
+          if (c.dia_corte) {
+            diaCorteVal = String(c.dia_corte);
+          } else if (c.fecha_corte && typeof c.fecha_corte === 'string') {
+            const rawParts = c.fecha_corte.split('/');
+            if (rawParts.length >= 2) {
+              const d = parseInt(rawParts[0], 10);
+              if (!isNaN(d) && d >= 1 && d <= 31) diaCorteVal = String(d);
+            }
+          }
+
+          return {
+            id_servicio: c.id_servicio || c.id,
+            nombre: String(c.nombre || `${c.nombre || ''} ${c.apellidos || ''}`).trim(),
+            servicio: String(c.servicio || c.nombre || '').trim(),
+            ip: String(c.ip || '').trim(),
+            estado: String(c.estado || 'Activo'),
+            estado_facturas: String(c.estado_facturas || 'Pagadas'),
+            precio_plan: String(c.precio_plan || '0'),
+            saldo: String(c.saldo || '0'),
+            plan_internet: typeof c.plan_internet === 'object' ? String(c.plan_internet?.nombre || '') : String(c.plan_internet || ''),
+            router: typeof c.router === 'object' ? String(c.router?.nombre || '') : String(c.router || ''),
+            sn_onu: String(c.sn_onu || ''),
+            telefono: String(c.telefono || ''),
+            direccion: String(c.direccion || ''),
+            dia_corte: diaCorteVal,
+            fecha_corte: c.fecha_corte ? String(c.fecha_corte) : undefined,
+            raw_data: JSON.stringify({
+              fecha_corte: c.fecha_corte,
+              ultimo_cambio: c.ultimo_cambio,
+              usuario: c.usuario,
+            }),
+          };
+        });
 
         await TursoService.saveWisphubClients(records);
         totalFetched += results.length;
