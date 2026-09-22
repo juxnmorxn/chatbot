@@ -3383,11 +3383,14 @@ export function getAdminDashboardHtml(): string {
 
     function autoFillGateway(segmentStr) {
       const clean = (segmentStr || '').trim();
-      const match = clean.match(/^(\d+\.\d+\.\d+)\.0\/24$/);
-      if (match) {
-        const gwInput = document.getElementById('vlan-form-gateway');
-        if (gwInput && (!gwInput.value || gwInput.value.endsWith('.254'))) {
-          gwInput.value = \`\${match[1]}.254\`;
+      if (clean.includes('.')) {
+        const ipPart = clean.split('/')[0].trim();
+        const parts = ipPart.split('.');
+        if (parts.length >= 3) {
+          const gwInput = document.getElementById('vlan-form-gateway');
+          if (gwInput && (!gwInput.value || gwInput.value.endsWith('.254'))) {
+            gwInput.value = parts[0] + '.' + parts[1] + '.' + parts[2] + '.254';
+          }
         }
       }
     }
