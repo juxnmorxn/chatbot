@@ -748,6 +748,25 @@ export class TursoService {
   }
 
   /**
+   * Actualiza y vincula el teléfono de un cliente de WispHub en Turso DB cuando el usuario interactúa por WhatsApp
+   */
+  static async updateWisphubClientPhone(idServicio: string | number, phone: string): Promise<boolean> {
+    try {
+      const client = getTursoClient();
+      const cleanPhone = phone.replace(/\D/g, '');
+      if (cleanPhone.length < 10) return false;
+      const res = await client.execute({
+        sql: `UPDATE wisphub_clients SET telefono = ?, updated_at = ? WHERE id_servicio = ? AND (telefono IS NULL OR telefono = '' OR LENGTH(telefono) < 10)`,
+        args: [cleanPhone, new Date().toISOString(), Number(idServicio)],
+      });
+      return (res.rowsAffected || 0) > 0;
+    } catch (err: any) {
+      logger.warn(`No se pudo vincular teléfono en WispHub para servicio ${idServicio}:`, err?.message || err);
+      return false;
+    }
+  }
+
+  /**
    * Búsqueda flexible (Fuzzy Matching) de clientes / ONUs por nombre
    * Tolerante a errores ortográficos, mayúsculas/minúsculas y acentos.
    */
