@@ -4530,12 +4530,9 @@ ${techInfo}───────────────────────
     // 3. Asignar IP libre en el pool IPAM
     let nextIp = await IpamService.getNextAvailableIp(defaultVlan, targetOltId);
 
-    // Si la primera VLAN de Actopan estuviera llena, buscar en 520..610
-    if (!nextIp && targetOltId === '3') {
-      for (const v of ['520', '530', '540', '550', '560', '570', '580', '590', '600', '610']) {
-        nextIp = await IpamService.getNextAvailableIp(v, '3');
-        if (nextIp) break;
-      }
+    // Si la VLAN principal estuviera llena, buscar automáticamente en cualquier otra VLAN libre de esa OLT
+    if (!nextIp) {
+      nextIp = await IpamService.getNextAvailableIp(undefined, targetOltId);
     }
 
     if (!nextIp) {
@@ -4973,11 +4970,8 @@ _(O puedes corregir datos: 'cambiar nombre [nombre]', 'cambiar folio [folio]', '
         const defaultVlan = isSanAgustin ? '800' : '510';
 
         let nextIp = await IpamService.getNextAvailableIp(defaultVlan, targetOltId);
-        if (!nextIp && targetOltId === '3') {
-          for (const v of ['520', '530', '540', '550', '560', '570', '580', '590', '600', '610']) {
-            nextIp = await IpamService.getNextAvailableIp(v, '3');
-            if (nextIp) break;
-          }
+        if (!nextIp) {
+          nextIp = await IpamService.getNextAvailableIp(undefined, targetOltId);
         }
 
         if (nextIp) {
@@ -5103,11 +5097,8 @@ _(O puedes corregir datos: 'cambiar nombre [nombre]', 'cambiar folio [folio]', '
         const targetOltName = isSanAgustin ? 'OLT-SanAgustin' : 'OLT5800-Actopan';
 
         let nextIp = await IpamService.getNextAvailableIp(isSanAgustin ? '800' : '510', targetOltId);
-        if (!nextIp && targetOltId === '3') {
-          for (const v of ['520', '530', '540', '550', '560', '570', '580', '590', '600', '610']) {
-            nextIp = await IpamService.getNextAvailableIp(v, '3');
-            if (nextIp) break;
-          }
+        if (!nextIp) {
+          nextIp = await IpamService.getNextAvailableIp(undefined, targetOltId);
         }
 
         if (nextIp) {
