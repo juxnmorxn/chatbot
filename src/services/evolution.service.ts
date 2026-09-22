@@ -98,8 +98,7 @@ export class EvolutionService {
         number: recipient,
         text: mensaje,
         options: {
-          delay: opciones.instant ? 0 : 1500,
-          presence: 'composing',
+          delay: 0,
         },
       });
 

@@ -374,7 +374,7 @@ export class SmartOLTService {
   }
 
   /**
-   * Envía la orden de reinicio remoto a la ONU (/onu/reboot/{id})
+   * Envía la orden de reinicio remoto a la ONU (/onu/reboot_onu/{id} o /onu/reboot/{id})
    */
   static async rebootONU(onuId: string): Promise<SmartOltRebootResult> {
     logger.info(`Enviando orden de reinicio remoto para ONU: ${onuId}`);
@@ -390,27 +390,55 @@ export class SmartOLTService {
 
     try {
       let onuRecord = await TursoService.getOnuById(onuId);
+      if (!onuRecord && onuId.length < 12) {
+        const matches = await TursoService.searchOnusFuzzy(onuId, 1);
+        if (matches.length > 0) onuRecord = matches[0];
+      }
       const externalId = onuRecord?.unique_external_id || onuId;
 
       const api = this.getApi();
-      const form = new FormData();
-      form.append('onu_external_id', externalId);
-      const response = await api.post(`/onu/reboot_onu/${encodeURIComponent(externalId)}`, form);
-      const resData = response.data;
+      let resData: any = null;
+      let statusOk = false;
 
-      if (resData?.status === true || response.status === 200 || resData?.response === 'success') {
+      // Intento 1: /onu/reboot_onu/{external_id} con x-www-form-urlencoded
+      try {
+        const params = new URLSearchParams();
+        params.append('onu_external_id', externalId);
+        const resp1 = await api.post(`/onu/reboot_onu/${encodeURIComponent(externalId)}`, params.toString(), {
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        });
+        resData = resp1.data;
+        statusOk = resData?.status === true || resp1.status === 200 || resData?.response === 'success';
+      } catch (err1: any) {
+        logger.warn(`Intento 1 de reinicio (/onu/reboot_onu) falló para ${externalId}, probando endpoint alterno...`, err1?.message || err1);
+      }
+
+      // Intento 2 (Fallback): /onu/reboot/{external_id}
+      if (!statusOk) {
+        try {
+          const resp2 = await api.post(`/onu/reboot/${encodeURIComponent(externalId)}`);
+          resData = resp2.data;
+          statusOk = resData?.status === true || resp2.status === 200 || resData?.response === 'success';
+        } catch (err2: any) {
+          logger.error(`Intento 2 de reinicio (/onu/reboot) falló para ${externalId}:`, err2?.response?.data || err2?.message || err2);
+        }
+      }
+
+      if (statusOk) {
+        logger.info(`✅ Orden de reinicio ejecutada exitosamente en SmartOLT para ONU ${externalId}:`, JSON.stringify(resData));
         return {
           success: true,
           message: resData?.message || 'Orden de reinicio enviada correctamente a la OLT.',
         };
       } else {
+        logger.warn(`SmartOLT rechazó reinicio para ONU ${externalId}:`, JSON.stringify(resData));
         return {
           success: false,
           message: resData?.message || resData?.error || 'SmartOLT rechazó la solicitud de reinicio.',
         };
       }
     } catch (error: any) {
-      logger.error(`Error al reiniciar ONU ${onuId} en SmartOLT:`, error?.response?.data || error?.message || error);
+      logger.error(`Error crítico al reiniciar ONU ${onuId} en SmartOLT:`, error?.response?.data || error?.message || error);
       return {
         success: false,
         message: 'No se pudo completar el reinicio remoto en la OLT.',

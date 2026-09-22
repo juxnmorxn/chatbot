@@ -1727,12 +1727,10 @@ export class BotOrchestrator {
 
     // CASO C: LÍNEA EN LÍNEA (ONLINE) O ESTADO NORMAL - DIAGNÓSTICO ESCALONADO CON TRIAGE
     const mensajeTriage = esSinInternet
-      ? `Hola${nombre}, revisé tu línea y tu módem aparece encendido y recibiendo señal física correctamente en tu domicilio.\n\n` +
-        `Para ayudarte a resolverlo de inmediato:\n` +
-        `¿La falta de internet te ocurre en *todos tus aparatos (celulares, pantallas, computadoras)* o *solo en uno en específico*?`
-      : `Hola${nombre}, revisé tu línea y tu módem aparece conectado y con señal estable.\n\n` +
-        `Para ayudarte a resolverlo de la forma más rápida:\n` +
-        `¿El problema te pasa en *todos tus aparatos (celulares, pantallas, computadoras)* o *solo en uno en específico*?`;
+      ? `Hola${nombre}, revisé tu línea y tu módem aparece encendido y con señal física estable.\n\n` +
+        `¿La falta de internet te ocurre en *todos tus dispositivos* o *solo en uno en específico*?`
+      : `Hola${nombre}, tu módem aparece conectado y con buena señal.\n\n` +
+        `¿El problema te ocurre en *todos tus dispositivos* o *solo en uno en específico*?`;
 
     await TursoService.upsertSession({
       phone,
@@ -1829,13 +1827,11 @@ export class BotOrchestrator {
     }
 
     const mensajeReinicio =
-      `Entendido${nombre}. Dado que el detalle ocurre de manera general, acabo de enviar una señal para *reiniciar tu módem remotamente* y refrescar la sesión de conexión.\n\n` +
-      `⏳ *El módem tardará de 1 a 2 minutos en reiniciar y estabilizar sus luces.*\n\n` +
-      `Una vez que vuelvan a encender sus luces en verde/azul, te pedimos realizar esta prueba rápida:\n` +
-      `1️⃣ Conéctate a tu red Wi-Fi **5G** (la que termina en _5G o _Plus) estando a unos pasos de tu módem.\n` +
-      `2️⃣ Haz una prueba de velocidad en [speedtest.net](https://www.speedtest.net) o en la app de Speedtest.\n` +
-      `3️⃣ Envíanos aquí la **captura de pantalla de tu Speedtest** o una **foto de las luces de tu módem**.\n\n` +
-      `Nuestra inteligencia artificial analizará la prueba contra tu paquete contratado para confirmar si tu enlace está al 100% o calibrar tu conexión.`;
+      `Listo${nombre}, acabo de enviar una señal para *reiniciar tu módem remotamente*.\n\n` +
+      `⏳ Tardará aprox. 1 a 2 minutos en estabilizarse. En cuanto vuelvan a encender sus luces:\n` +
+      `1️⃣ Conéctate a tu red Wi-Fi *5G* cerca del módem.\n` +
+      `2️⃣ Haz un test en https://www.speedtest.net\n` +
+      `3️⃣ Mándame aquí la *captura de pantalla de tu Speedtest* para verificar tu velocidad.`;
 
     await TursoService.upsertSession({
       phone,
@@ -1912,12 +1908,11 @@ export class BotOrchestrator {
     }
 
     const mensajeReinicioEscalonado =
-      `Enterado${nombre}. Enviaremos un reinicio a tu módem para refrescar su conexión.\n\n` +
-      `⏳ *Tomará de 1 a 2 minutos en reiniciar y fijar sus luces.*\n\n` +
-      `En cuanto encienda, por favor realiza una prueba rápida para comprobar la navegación:\n` +
-      `1️⃣ Conéctate al Wi-Fi **5G** (que termina en _5G o _Plus) cerca del módem.\n` +
-      `2️⃣ Haz un test en [speedtest.net](https://www.speedtest.net) o app Speedtest.\n` +
-      `3️⃣ Envíanos la **captura de pantalla de la prueba** o foto del módem para analizar la velocidad recibida.`;
+      `Enterado${nombre}. Envié un reinicio a tu módem para refrescar la conexión.\n\n` +
+      `⏳ Tardará 1 a 2 minutos. En cuanto prendan sus luces:\n` +
+      `1️⃣ Conéctate al Wi-Fi *5G* cerca del módem.\n` +
+      `2️⃣ Haz una prueba en https://www.speedtest.net\n` +
+      `3️⃣ Mándame la *captura de tu Speedtest* para confirmar tu velocidad.`;
 
     await TursoService.upsertSession({
       phone,
@@ -2410,17 +2405,11 @@ export class BotOrchestrator {
         }
 
         // Sin ticket previo pero velocidad óptima
-        const extraHolgura = bajadaNum && planMegasNum && bajadaNum > planMegasNum
-          ? ` (incluso estás recibiendo un poco más de megas por la holgura del enlace)`
-          : '';
         const msj =
-          `¡Recibí tu prueba de velocidad de Speedtest! 📊\n\n` +
-          `• *Descarga (Download):* ${bajada}\n` +
-          `• *Subida (Upload):* ${subida}${ping ? `\n• *Ping:* ${ping}` : ''}${planTexto}\n\n` +
-          `✅ *¡Excelente noticia!* Tu velocidad de *${bajada}* está entregando el *100% de tu paquete contratado* (*${planContratado || 'Plan Fibra'}* de ${planMegasNum || '40'} Mbps)${extraHolgura}.\n\n` +
-          `📡 Tu línea de fibra óptica y tu conexión en la central están operando en óptimas condiciones.\n\n` +
-          `💡 *Recomendación:* Si notas lentitud en algún dispositivo o aplicación en particular, puede deberse a la distancia o saturación Wi-Fi de ese equipo. Te sugerimos acercarte al módem o reconectar el Wi-Fi de tu dispositivo.\n\n` +
-          `¡Muchas gracias por realizar la comprobación! En *${this.getIspName()}* seguimos a tus órdenes.`;
+          `¡Listo! Tu prueba marca *${bajada}* de descarga (${subida} de subida${ping ? `, ${ping}` : ''}).\n\n` +
+          `✅ Tu enlace está entregando el *100% de tu paquete contratado* (*${planContratado || 'Plan Fibra'}* de ${planMegasNum || '40'} Mbps).\n\n` +
+          `Tu fibra óptica y conexión en central están al 100%. Si notas lentitud en algún equipo en particular, suele deberse a distancia o interferencia Wi-Fi. Te sugerimos acercarte al módem o reconectar el equipo.\n\n` +
+          `¡En *${this.getIspName()}* seguimos a tus órdenes!`;
 
         await this.enviarYLoguear(phone, msj, 'FALLA_INTERNET', 'SPEEDTEST_OPTIMO_SIN_TICKET', targetJid);
         await this.marcarConsultaFinalizada(phone, session);

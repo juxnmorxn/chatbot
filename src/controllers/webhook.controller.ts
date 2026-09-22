@@ -302,20 +302,16 @@ export class WebhookController {
         return;
       }
 
-      if (extracted.buttonId || (extracted.isMedia && !extracted.text)) {
+      if (extracted.buttonId) {
         setImmediate(() => {
           BotOrchestrator.procesarMensaje(incomingEvent).catch((err) => {
-            logger.error(`Error en BotOrchestrator para ${phone}:`, err?.message || err);
+            logger.error(`Error en BotOrchestrator para botón de ${phone}:`, err?.message || err);
           });
         });
         return;
       }
 
-      // Si es mensaje de texto o audio transcrito de un cliente residencial:
-      // 1. Activar estado "Escribiendo..." (composing) en WhatsApp para simulación humana
-      EvolutionService.enviarPresencia(phone, 'composing', 5000, incomingInstance || undefined).catch(() => {});
-
-      // 2. Programar en el búfer de debounce (5 segundos para agrupar ráfagas y dar ventana al operador)
+      // Programar en el búfer de debounce inteligente (5.5s para agrupar ráfagas de texto/imágenes y permitir lectura completa sin spam)
       WebhookController.scheduleDebouncedMessage(incomingEvent);
     } catch (error: any) {
       logger.error('Error al procesar webhook de Evolution API:', error?.message || error);
@@ -323,8 +319,8 @@ export class WebhookController {
   }
 
   /**
-   * Programa la ejecución de un mensaje agrupando ráfagas de texto en una sola idea
-   * y brindando una ventana de espera humana para que el operador pueda intervenir si lo desea
+   * Programa la ejecución de un mensaje agrupando ráfagas de texto e imágenes en una sola idea
+   * y brindando una ventana de espera natural sin spam ni respuestas fragmentadas
    */
   private static scheduleDebouncedMessage(event: IncomingMessageEvent): void {
     const cleanPhone = event.phone.replace(/\D/g, '');
@@ -334,7 +330,14 @@ export class WebhookController {
     if (entry) {
       clearTimeout(entry.timeout);
       if (text) entry.texts.push(text);
-      entry.event = event;
+      // Preservar análisis de imagen y ubicación si llega en este evento o en el previo
+      entry.event = {
+        ...entry.event,
+        ...event,
+        isMedia: event.isMedia || entry.event.isMedia,
+        imageAnalysis: event.imageAnalysis || entry.event.imageAnalysis,
+        location: event.location || entry.event.location,
+      };
     } else {
       entry = {
         texts: text ? [text] : [],
@@ -343,11 +346,11 @@ export class WebhookController {
       };
     }
 
-    // Ventana humana de 5 segundos
+    // Ventana inteligente de 5.5 segundos para agrupar mensajes
     entry.timeout = setTimeout(() => {
       this.messageBuffers.delete(cleanPhone);
 
-      // Si el operador intervino manualmente durante los 5 segundos, abortar respuesta automática
+      // Si el operador intervino manualmente durante los 5.5 segundos, abortar respuesta automática
       if (BotOrchestrator.estaBotPausado(cleanPhone).pausado) {
         logger.info(`[Debounce] Búfer descartado para ${cleanPhone} porque el operador tomó el control.`);
         return;
@@ -362,7 +365,7 @@ export class WebhookController {
       BotOrchestrator.procesarMensaje(finalEvent).catch((err) => {
         logger.error(`Error en BotOrchestrator para ${cleanPhone}:`, err?.message || err);
       });
-    }, 5000);
+    }, 5500);
 
     this.messageBuffers.set(cleanPhone, entry);
   }
