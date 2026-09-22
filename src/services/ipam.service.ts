@@ -117,18 +117,33 @@ export class IpamService {
       logger.warn('No se pudieron leer pools personalizados de Turso DB:', err?.message || err);
     }
 
-    // 3. Auto-descubrimiento en tiempo real: Detectar si en smartolt_onus o wisphub_clients hay IPs de subredes no registradas
+    // 3. Auto-descubrimiento en tiempo real: Detectar si en smartolt_onus o wisphub_clients hay IPs o VLANs de subredes no registradas
     try {
       const client = getTursoClient();
       const ipRows = await client.execute(`
-        SELECT DISTINCT ip_address as ip, olt_name FROM smartolt_onus WHERE ip_address IS NOT NULL AND ip_address != ''
-        UNION
-        SELECT DISTINCT ip, 'OLT5800-Actopan' as olt_name FROM wisphub_clients WHERE ip IS NOT NULL AND ip != ''
+        SELECT ip_address as ip, olt_name, raw_data FROM smartolt_onus WHERE (ip_address IS NOT NULL AND ip_address != '') OR (raw_data IS NOT NULL AND raw_data != '')
+        UNION ALL
+        SELECT ip, 'OLT5800-Actopan' as olt_name, NULL as raw_data FROM wisphub_clients WHERE ip IS NOT NULL AND ip != ''
       `);
 
       for (const row of ipRows.rows) {
-        const rawIp = String(row.ip || '').trim().split('/')[0].trim();
-        const parts = rawIp.split('.');
+        let explicitVlan: string | null = null;
+        let detectedIp = String(row.ip || '').trim().split('/')[0].trim();
+
+        // Extraer datos profundos de raw_data si existe
+        if (row.raw_data) {
+          try {
+            const rawObj = typeof row.raw_data === 'string' ? JSON.parse(row.raw_data) : row.raw_data;
+            if (!detectedIp && (rawObj.ip_address || rawObj.ip || rawObj.static_ip)) {
+              detectedIp = String(rawObj.ip_address || rawObj.ip || rawObj.static_ip || '').trim().split('/')[0].trim();
+            }
+            if (rawObj.vlan || rawObj.vlan_id || rawObj.mgmt_vlan || rawObj.service_vlan) {
+              explicitVlan = String(rawObj.vlan || rawObj.vlan_id || rawObj.mgmt_vlan || rawObj.service_vlan).trim();
+            }
+          } catch {}
+        }
+
+        const parts = detectedIp.split('.');
         if (parts.length === 4) {
           const prefix = `${parts[0]}.${parts[1]}.${parts[2]}`;
           const segment = `${prefix}.0/24`;
@@ -137,23 +152,24 @@ export class IpamService {
           // Verificar si este segmento ya está cubierto
           let exists = false;
           for (const conf of subnetsMap.values()) {
-            if (conf.segment === segment) {
+            if (conf.segment === segment || (explicitVlan && conf.vlan === explicitVlan)) {
               exists = true;
               break;
             }
           }
 
           if (!exists) {
-            // Auto-generar VLAN ID sugerida basada en el tercer octeto o nombre
-            const thirdOctet = parseInt(parts[2], 10);
-            let suggestedVlan = '';
-            if (parts[1] === '19') {
-              // 172.19.1.0 -> 510, 172.19.2.0 -> 520, 172.19.12.0 -> 620, etc.
-              suggestedVlan = String(500 + thirdOctet * 10);
-            } else if (parts[1] === '16' && parts[2] === '80') {
-              suggestedVlan = '800';
-            } else {
-              suggestedVlan = `VLAN-${parts[1]}.${parts[2]}`;
+            // Determinar ID de VLAN (usar el explícito si existe, o calcular sugerido)
+            let suggestedVlan = explicitVlan;
+            if (!suggestedVlan) {
+              const thirdOctet = parseInt(parts[2], 10);
+              if (parts[1] === '19') {
+                suggestedVlan = String(500 + thirdOctet * 10);
+              } else if (parts[1] === '16' && parts[2] === '80') {
+                suggestedVlan = '800';
+              } else {
+                suggestedVlan = `VLAN-${parts[1]}.${parts[2]}`;
+              }
             }
 
             const oltName = String(row.olt_name || (parts[1] === '16' ? 'OLT-SanAgustin' : 'OLT5800-Actopan'));
@@ -161,7 +177,7 @@ export class IpamService {
 
             const discovered: VlanSubnetConfig = {
               vlan: suggestedVlan,
-              name: `${suggestedVlan} - Auto-Detectada (${segment})`,
+              name: `VLAN ${suggestedVlan} (${segment})`,
               segment,
               gateway,
               netmask: '255.255.255.0',
