@@ -595,7 +595,19 @@ export class BotOrchestrator {
       return;
     }
 
-    // 2.0 ACTIVACIÓN DE ONUS (TÉCNICOS DE CAMPO):
+    // 2.0 RECEPCIÓN DE IMÁGENES / MULTIMEDIA (SPEEDTEST, FOTOS DE MÓDEM, COMPROBANTES DE PAGO, CONTRATOS)
+    if (event.isMedia && event.imageAnalysis) {
+      await this.procesarImagenInteligente(phone, rawText, event, session, targetJid);
+      return;
+    }
+
+    // 2.1 CONTINUACIÓN DE COMPROBANTE DE PAGO (TEXTO COMPLEMENTARIO CON NOMBRE/UBICACIÓN TRAS ENVIAR VOUCHER)
+    if (session?.step === 'ESPERANDO_DATOS_PAGO') {
+      await this.procesarDatosPagoComplementarios(phone, rawText, session, targetJid);
+      return;
+    }
+
+    // 2.2 ACTIVACIÓN DE ONUS (TÉCNICOS DE CAMPO):
     // A. Esperando Nombre y Folio del cliente
     if (session?.step === 'ACTIVACION_ESPERANDO_NOMBRE') {
       await this.procesarNombreActivacionTecnico(phone, rawText, session, targetJid);
@@ -2530,21 +2542,126 @@ export class BotOrchestrator {
       }
     }
 
-    // 3. CASO COMPROBANTE DE PAGO (VALIDACIÓN EN PROCESO - CERO ACTIVACIÓN AUTOMÁTICA A CIEGAS)
+    // 3. CASO COMPROBANTE DE PAGO BANCARIO (BBVA, SPEI, OXXO, TRANSFERENCIAS)
     if (analysis?.tipo === 'COMPROBANTE_PAGO') {
       const datos = analysis.datos_pago;
-      let detalle = '';
-      if (datos?.banco) detalle += `\n• *Banco / Emisor:* ${datos.banco}`;
-      if (datos?.monto) detalle += `\n• *Monto detectado:* ${datos.monto}`;
-      if (datos?.referencia) detalle += `\n• *Folio / Ref:* ${datos.referencia}`;
+      const montoRaw = datos?.monto ? datos.monto.replace(/[^\d.]/g, '') : '300.00';
+      const monto = `$${montoRaw}`;
+      const banco = datos?.banco || 'BBVA';
+      const folio = datos?.referencia || '';
+      const conceptoImg = (datos?.concepto || '').trim();
+      const destinatario = datos?.destinatario || '';
 
-      const msj =
-        `¡Muchas gracias por tu comprobante! 📸 Hemos recibido la captura de tu pago${nombre}.${detalle}\n\n` +
-        `⏳ *Validación en proceso:* Nuestro personal administrativo está corroborando el abono en el sistema y banco. En cuanto quede confirmada la transacción, se aplicará a tu cuenta y se restablecerá tu servicio. ¡Muchas gracias por tu paciencia!`;
+      // Reasignar departamento inmediatamente a ATENCION en Turso DB
+      await TursoService.updateDepartment(phone, 'ATENCION').catch(() => {});
 
-      await this.enviarYLoguear(phone, msj, 'REPORTAR_PAGO', 'COMPROBANTE_VALIDADO_VISION', targetJid);
-      await this.marcarConsultaFinalizada(phone, session);
-      return;
+      // Buscar si el cliente ya está identificado o si podemos extraer su identidad
+      let clienteIdentificado: any = null;
+
+      // 1. Intentar por texto del pie de foto (caption, ej: "Le envio el comprobante de pago del sr. Israel Ponce Ortiz de Cañada Chica")
+      if (rawText && rawText.length >= 4) {
+        const textoLimpio = cleanPersonName(rawText);
+        const matchesCaption = await TursoService.searchOnusFuzzy(textoLimpio || rawText, 3);
+        if (matchesCaption.length > 0 && matchesCaption[0].matchScore >= 65) {
+          clienteIdentificado = matchesCaption[0];
+        }
+      }
+
+      // 2. Si no se encontró por caption, buscar por el Concepto extraído de la foto (ej: "ISRAEL PONCE ORTIZ")
+      if (!clienteIdentificado && conceptoImg && conceptoImg.length >= 4 && !/^(?:pago|internet|mensualidad|servicio|abono|wifi)\b/i.test(conceptoImg)) {
+        const matchesConcepto = await TursoService.searchOnusFuzzy(conceptoImg, 3);
+        if (matchesConcepto.length > 0 && matchesConcepto[0].matchScore >= 65) {
+          clienteIdentificado = matchesConcepto[0];
+        }
+      }
+
+      // 3. Si no se encontró, buscar por teléfono en SmartOLT / WispHub
+      if (!clienteIdentificado) {
+        const matchesTel = await TursoService.searchOnusFuzzy(phone, 3);
+        if (matchesTel.length > 0 && matchesTel[0].matchScore >= 85) {
+          clienteIdentificado = matchesTel[0];
+        }
+      }
+
+      // 4. Si la sesión previa ya tenía el nombre
+      if (!clienteIdentificado && session?.client_name) {
+        clienteIdentificado = {
+          name: session.client_name,
+          unique_external_id: session.onu_id || session.client_id || '',
+          address: '',
+          zone_name: '',
+        };
+      }
+
+      let detalleInfo = `\n• *Monto detectado:* ${monto}`;
+      if (banco) detalleInfo += `\n• *Banco / Emisor:* ${banco}`;
+      if (folio) detalleInfo += `\n• *Folio de operación:* ${folio}`;
+
+      if (clienteIdentificado) {
+        // CLIENTE RECONOCIDO CON ÉXITO
+        const nombreTitular = clienteIdentificado.name || session?.client_name;
+        const ubicacion = clienteIdentificado.address || clienteIdentificado.zone_name ? ` (${clienteIdentificado.address || clienteIdentificado.zone_name})` : '';
+
+        // Auto-vincular sesión y teléfono
+        await TursoService.upsertSession({
+          phone,
+          client_name: nombreTitular,
+          client_id: clienteIdentificado.unique_external_id || clienteIdentificado.id || null,
+          onu_id: clienteIdentificado.unique_external_id || null,
+          department: 'ATENCION',
+          step: 'CONSULTA_FINALIZADA',
+          metadata: JSON.stringify({
+            ...meta,
+            ultimoPago: {
+              monto,
+              banco,
+              folio,
+              concepto: conceptoImg,
+              destinatario,
+              fecha: new Date().toISOString(),
+            },
+            consultaFinalizada: true,
+          }),
+        });
+
+        if (clienteIdentificado.unique_external_id) {
+          await TursoService.updateWisphubClientPhone(clienteIdentificado.unique_external_id, phone).catch(() => {});
+        }
+
+        const msj =
+          `¡Hola! 👋 Muchas gracias, recibí tu comprobante de pago por *${monto}* a nombre de *${nombreTitular}*${ubicacion}. 🧾✨\n${detalleInfo}\n\n` +
+          `✅ *Pago registrado en el sistema:* La información ya fue enviada a nuestra área de *Atención y Cobranza* para su validación en el banco y aplicación en tu cuenta.\n\n` +
+          `¡Agradecemos mucho tu puntualidad! Si necesitas algo más, seguimos a tus órdenes.`;
+
+        await this.enviarYLoguear(phone, msj, 'REPORTAR_PAGO', `COMPROBANTE_AUTO_IDENTIFICADO_${folio || 'OK'}`, targetJid);
+        return;
+      } else {
+        // CLIENTE AÚN NO RECONOCIDO -> ENTRAR EN VENTANA DE ESPERA DE DATOS
+        await TursoService.upsertSession({
+          phone,
+          department: 'ATENCION',
+          step: 'ESPERANDO_DATOS_PAGO',
+          metadata: JSON.stringify({
+            ...meta,
+            pagoPendiente: {
+              monto,
+              banco,
+              folio,
+              concepto: conceptoImg,
+              destinatario,
+              timestamp: Date.now(),
+            },
+          }),
+        });
+
+        const msj =
+          `¡Hola! 👋 He recibido tu comprobante de pago por *${monto}*${banco ? ` de *${banco}*` : ''}. 📸\n${detalleInfo}\n\n` +
+          `Para registrarlo y aplicarlo correctamente a tu cuenta:\n` +
+          `👉 *¿Podrías indicarnos a nombre de quién está contratado el servicio de internet o tu dirección / comunidad?*`;
+
+        await this.enviarYLoguear(phone, msj, 'REPORTAR_PAGO', 'COMPROBANTE_ESPERANDO_DATOS', targetJid);
+        return;
+      }
     }
 
     // 4. OTRO TIPO DE IMAGEN (O EN PASO DE ESPERA)
@@ -2570,6 +2687,74 @@ export class BotOrchestrator {
       `¿En qué podemos apoyarte el día de hoy con tu servicio de internet? Cuéntame tu duda o reporte.`;
 
     await this.enviarYLoguear(phone, msj, 'DESCONOCIDO', 'IMAGEN_RECIBIDA_CONVERSACIONAL', targetJid);
+  }
+
+  /**
+   * Procesa el mensaje de texto enviado por un cliente tras haber enviado un comprobante de pago
+   * Busca al titular por nombre, folio o comunidad y vincula el abono
+   */
+  private static async procesarDatosPagoComplementarios(
+    phone: string,
+    rawText: string,
+    session: Session | null,
+    targetJid?: string
+  ): Promise<void> {
+    let meta: any = {};
+    try { meta = JSON.parse(session?.metadata || '{}'); } catch {}
+    const pago = meta.pagoPendiente || {};
+    const monto = pago.monto || '$300.00';
+    const banco = pago.banco || 'BBVA';
+    const folio = pago.folio || '';
+
+    logger.info(`[Pago Complementario] Procesando datos para comprobante previo de ${phone}: "${rawText}" (Monto: ${monto})`);
+
+    const textoLimpio = cleanPersonName(rawText);
+    const matches = await TursoService.searchOnusFuzzy(textoLimpio || rawText, 5);
+
+    if (matches.length > 0 && matches[0].matchScore >= 55) {
+      const matched = matches[0];
+      const nombreTitular = matched.name;
+      const ubicacion = matched.address || matched.zone_name ? ` (${matched.address || matched.zone_name})` : '';
+
+      await TursoService.upsertSession({
+        phone,
+        client_name: nombreTitular,
+        client_id: matched.unique_external_id || null,
+        onu_id: matched.unique_external_id || null,
+        department: 'ATENCION',
+        step: 'CONSULTA_FINALIZADA',
+        metadata: JSON.stringify({
+          ...meta,
+          pagoPendiente: null,
+          ultimoPago: {
+            ...pago,
+            cliente: nombreTitular,
+            fechaRegistro: new Date().toISOString(),
+          },
+          consultaFinalizada: true,
+        }),
+      });
+
+      if (matched.unique_external_id) {
+        await TursoService.updateWisphubClientPhone(matched.unique_external_id, phone).catch(() => {});
+      }
+
+      let detalle = `\n• *Monto:* ${monto}`;
+      if (banco) detalle += `\n• *Banco:* ${banco}`;
+      if (folio) detalle += `\n• *Folio:* ${folio}`;
+
+      const msj =
+        `¡Excelente! 👍 Ya asocié tu comprobante de pago de *${monto}* al servicio de *${nombreTitular}*${ubicacion}. 🧾✨\n${detalle}\n\n` +
+        `✅ *Registrado con éxito:* El área de *Atención y Cobranza* verificará la transferencia y aplicará el abono en el sistema a la brevedad.\n\n` +
+        `¡Muchas gracias por tu pago y preferencia!`;
+
+      await this.enviarYLoguear(phone, msj, 'REPORTAR_PAGO', `COMPROBANTE_COMPLEMENTADO_${folio || 'OK'}`, targetJid);
+    } else {
+      // Si no hubo coincidencia clara, pedir aclaración amablemente
+      const msj =
+        `Gracias por los datos. Para localizar tu contrato en el sistema con exactitud, ¿nos podrías confirmar tu *Nombre completo* (con apellidos) o tu *número de contrato*?`;
+      await this.enviarYLoguear(phone, msj, 'REPORTAR_PAGO', 'COMPROBANTE_DATOS_AMBIGUOS', targetJid);
+    }
   }
 
   /**

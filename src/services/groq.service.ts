@@ -73,6 +73,8 @@ export interface GroqImageAnalysisResult {
     monto: string | null;
     banco: string | null;
     referencia: string | null;
+    concepto: string | null;
+    destinatario: string | null;
     fecha: string | null;
   };
   datos_contrato?: ContratoInstalacionDatos;
@@ -130,8 +132,14 @@ Tu objetivo es examinar la imagen recibida y clasificarla estrictamente en una d
    - Extrae con precisión: velocidad de descarga en Mbps (bajada_mbps), velocidad de subida en Mbps (subida_mbps), y latencia (ping_ms) si son legibles.
 
 3. "COMPROBANTE_PAGO":
-   - Recibo o captura de transferencia bancaria (BBVA, Banamex, Santander, Mercado Pago, Nu, etc.), ticket de OXXO / 7-Eleven, o ficha de depósito.
-   - Extrae monto ($), banco/emisor, folio o referencia, y fecha si son legibles.
+   - Recibo o captura de pantalla de transferencia bancaria (BBVA / Dimo, BanCoppel, Santander, Banamex, Banco Azteca, Mercado Pago, Nu, SPEI), ticket de OXXO / 7-Eleven, o ficha de depósito.
+   - Extrae con máxima fidelidad:
+     * monto: Monto numérico transferido (ej: "300.00").
+     * banco: Banco o app emisora (ej: "BBVA", "Mercado Pago", "BanCoppel", "SPEI").
+     * referencia: Folio de operación, clave de rastreo o número de autorización (ej: "0087066090").
+     * concepto: Texto exacto colocado en el campo "Concepto" o "Motivo de pago" (ej: "ISRAEL PONCE ORTIZ", "Internet casa", "pago mensual").
+     * destinatario: Nombre o cuenta de la persona que recibe (ej: "Osbaldo T").
+     * fecha: Fecha y hora de la operación (ej: "20 sep 2026, 22:44 h.").
 
 4. "MODEM_LUCES":
    - Foto de un módem / router / ONT de fibra óptica.
@@ -158,6 +166,8 @@ Devuelve EXCLUSIVAMENTE un JSON válido con esta estructura:
     "monto": string | null,
     "banco": string | null,
     "referencia": string | null,
+    "concepto": string | null,
+    "destinatario": string | null,
     "fecha": string | null
   },
   "datos_contrato": {
@@ -205,7 +215,7 @@ Devuelve EXCLUSIVAMENTE un JSON válido con esta estructura:
         equipo_apagado: Boolean(parsed.equipo_apagado),
         luces_verdes: Boolean(parsed.luces_verdes),
         speedtest: parsed.speedtest || { bajada_mbps: null, subida_mbps: null, ping_ms: null },
-        datos_pago: parsed.datos_pago || { monto: null, banco: null, referencia: null, fecha: null },
+        datos_pago: parsed.datos_pago || { monto: null, banco: null, referencia: null, concepto: null, destinatario: null, fecha: null },
         datos_contrato: parsed.datos_contrato || undefined,
       };
     } catch (error: any) {
