@@ -391,19 +391,47 @@ export class AdminController {
   static async closeChatCase(req: Request, res: Response): Promise<void> {
     try {
       const phone = String(req.params.phone || req.body?.phone || '').trim();
+      const removeSession = req.body?.removeSession === true || req.query?.removeSession === 'true';
       if (!phone) {
         res.status(400).json({ success: false, error: 'Teléfono requerido' });
         return;
       }
 
       await BotOrchestrator.finalizarIntervencionHumana(phone);
-      AdminController.broadcastSSE('chat:status', { phone, is_paused: false, status: 'RESOLVED' });
+      if (removeSession) {
+        await TursoService.deleteSession(phone);
+      }
+      AdminController.broadcastSSE('chat:status', { phone, is_paused: false, status: 'RESOLVED', removed: removeSession });
       res.json({
         success: true,
         message: `Caso cerrado exitosamente para ${phone}. El bot atenderá limpiamente las próximas consultas.`,
       });
     } catch (error: any) {
       logger.error('Error al cerrar caso de chat:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Elimina completamente la conversación (sesión y mensajes) de un teléfono
+   */
+  static async deleteChatConversation(req: Request, res: Response): Promise<void> {
+    try {
+      const phone = String(req.params.phone || req.body?.phone || '').trim();
+      if (!phone) {
+        res.status(400).json({ success: false, error: 'Teléfono requerido' });
+        return;
+      }
+
+      await TursoService.deleteChatAndLogs(phone);
+      await BotOrchestrator.reanudarBot(phone);
+      AdminController.broadcastSSE('chat:deleted', { phone });
+      res.json({
+        success: true,
+        message: `Conversación y mensajes eliminados permanentemente para ${phone}.`,
+      });
+    } catch (error: any) {
+      logger.error('Error al eliminar conversación:', error?.message || error);
       res.status(500).json({ success: false, error: error?.message || error });
     }
   }

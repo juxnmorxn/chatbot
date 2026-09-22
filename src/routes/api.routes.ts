@@ -45,6 +45,8 @@ router.post('/api/admin/chats/send', AdminController.sendManualChatMessage);
 router.post('/api/admin/chats/takeover', AdminController.toggleHumanTakeover);
 router.post('/api/admin/chats/:phone/close', AdminController.closeChatCase);
 router.post('/api/admin/chats/close', AdminController.closeChatCase);
+router.delete('/api/admin/chats/:phone', AdminController.deleteChatConversation);
+router.post('/api/admin/chats/:phone/delete', AdminController.deleteChatConversation);
 router.post('/api/admin/chats/:phone/department', AdminController.transferChatDepartment);
 router.post('/api/notifications/run-billing-cycle', AdminController.runBillingNotifications);
 

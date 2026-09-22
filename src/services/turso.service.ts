@@ -2252,8 +2252,21 @@ export class TursoService {
    */
   static async deleteSession(phone: string): Promise<boolean> {
     const client = getTursoClient();
-    await client.execute({ sql: 'DELETE FROM sessions WHERE phone = ?', args: [phone] });
+    const cleanPhone = phone.replace(/\D/g, '');
+    await client.execute({ sql: 'DELETE FROM sessions WHERE phone = ? OR phone = ?', args: [phone, cleanPhone] });
     logger.info(`Sesión del teléfono ${phone} eliminada.`);
+    return true;
+  }
+
+  /**
+   * Elimina completamente la conversación (sesión y mensajes) de un teléfono específico
+   */
+  static async deleteChatAndLogs(phone: string): Promise<boolean> {
+    const client = getTursoClient();
+    const cleanPhone = phone.replace(/\D/g, '');
+    await client.execute({ sql: 'DELETE FROM sessions WHERE phone = ? OR phone = ?', args: [phone, cleanPhone] });
+    await client.execute({ sql: 'DELETE FROM conversation_logs WHERE phone = ? OR phone = ?', args: [phone, cleanPhone] });
+    logger.info(`Sesión e historial de chat eliminados para ${phone}`);
     return true;
   }
 

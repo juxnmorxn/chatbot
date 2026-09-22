@@ -839,6 +839,30 @@ export function getAdminDashboardHtml(): string {
       background: rgba(255, 255, 255, 0.04);
     }
 
+    .btn-thread-delete {
+      background: rgba(239, 68, 68, 0.12);
+      border: 1px solid rgba(239, 68, 68, 0.25);
+      color: #f87171;
+      border-radius: 6px;
+      padding: 4px 6px;
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      opacity: 0.6;
+      margin-left: auto;
+      flex-shrink: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .btn-thread-delete:hover {
+      background: rgba(239, 68, 68, 0.35);
+      border-color: rgba(239, 68, 68, 0.6);
+      color: #fff;
+      opacity: 1;
+      transform: scale(1.1);
+    }
+
     .chat-thread-item.active {
       background: rgba(99, 102, 241, 0.15);
       border-left: 3px solid var(--primary);
@@ -1668,9 +1692,13 @@ export function getAdminDashboardHtml(): string {
                 <button class="btn btn-secondary btn-sm" title="Pausar hasta mañana a las 10:00 AM" onclick="pauseCurrentChatUntilMorning()">
                   🌙 Hasta Mañana
                 </button>
-                <button class="btn btn-danger btn-sm" title="Finalizar caso y reactivar bot" onclick="closeCurrentChatCase()">
+                <button class="btn btn-warning btn-sm" title="Finalizar caso y reactivar bot" onclick="closeCurrentChatCase()">
                   <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"></path></svg>
                   <span>Cerrar Caso</span>
+                </button>
+                <button class="btn btn-danger btn-sm" title="Borrar conversación y mensajes definitivamente" onclick="deleteCurrentChat()">
+                  <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                  <span>Eliminar Chat</span>
                 </button>
               </div>
             </div>
@@ -2595,6 +2623,24 @@ export function getAdminDashboardHtml(): string {
           }
         });
 
+        evtSource.addEventListener('chat:deleted', (e) => {
+          const data = JSON.parse(e.data || '{}');
+          if (data.phone) {
+            state.chats = state.chats.filter(c => c.phone !== data.phone && c.phone !== data.phone.replace(/\D/g, ''));
+            if (state.activeChatPhone === data.phone || state.activeChatPhone?.replace(/\D/g, '') === data.phone.replace(/\D/g, '')) {
+              state.activeChatPhone = null;
+              document.getElementById('chat-empty-state').style.display = 'flex';
+              document.getElementById('chat-active-header').style.display = 'none';
+              document.getElementById('chat-messages-wrap').style.display = 'none';
+              document.getElementById('chat-input-container').style.display = 'none';
+              if (state.chats.length > 0) {
+                selectChat(state.chats[0].phone);
+              }
+            }
+            filterChatThreads(document.getElementById('chat-filter-input')?.value || '');
+          }
+        });
+
         evtSource.addEventListener('chat:department', (e) => {
           const data = JSON.parse(e.data || '{}');
           if (state.currentView === 'live-chat') {
@@ -2800,7 +2846,7 @@ export function getAdminDashboardHtml(): string {
         return \`
           <div class="chat-thread-item \${isActive}" onclick="selectChat('\${c.phone}')">
             <div class="thread-avatar">\${initials}</div>
-            <div class="thread-content">
+            <div class="thread-content" style="flex:1; min-width: 0;">
               <div class="thread-top">
                 <span class="thread-name">\${escapeHtml(name)}</span>
                 <span class="thread-time">\${formatShortTime(c.last_interaction)}</span>
@@ -2816,6 +2862,9 @@ export function getAdminDashboardHtml(): string {
                 \${instanceLabel}
               </div>
             </div>
+            <button class="btn-thread-delete" title="Eliminar conversación" onclick="deleteChatThread(event, '\${c.phone}')">
+              <svg class="svg-icon" style="width: 13px; height: 13px;" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+            </button>
           </div>
         \`;
       }).join('');
@@ -3071,21 +3120,80 @@ export function getAdminDashboardHtml(): string {
 
     async function closeCurrentChatCase() {
       if (!state.activeChatPhone) return;
-      const chat = state.chats.find(c => c.phone === state.activeChatPhone);
       const phone = state.activeChatPhone;
+      const chat = state.chats.find(c => c.phone === phone);
 
       try {
         const res = await apiFetch('/api/admin/chats/' + encodeURIComponent(phone) + '/close', {
           method: 'POST',
+          body: JSON.stringify({ removeSession: true }),
         });
 
         if (res.success) {
           if (chat) chat.is_human_paused = false;
           updateTakeoverButton(false);
-          renderChatThreads(state.chats);
+          // Quitar de la lista de chats activos al finalizar el caso
+          state.chats = state.chats.filter(c => c.phone !== phone && c.phone !== phone.replace(/\D/g, ''));
+          if (state.chats.length > 0) {
+            selectChat(state.chats[0].phone);
+          } else {
+            state.activeChatPhone = null;
+            document.getElementById('chat-empty-state').style.display = 'flex';
+            document.getElementById('chat-active-header').style.display = 'none';
+            document.getElementById('chat-messages-wrap').style.display = 'none';
+            document.getElementById('chat-input-container').style.display = 'none';
+          }
+          filterChatThreads(document.getElementById('chat-filter-input')?.value || '');
           showToast('Caso Finalizado', res.message, 'success');
         } else {
           showToast('Error', res.error || 'No se pudo cerrar el caso', 'error');
+        }
+      } catch (err) {
+        showToast('Error', err.message, 'error');
+      }
+    }
+
+    async function deleteCurrentChat() {
+      if (!state.activeChatPhone) return;
+      const phone = state.activeChatPhone;
+      if (!confirm('¿Estás seguro de que deseas eliminar permanentemente esta conversación y todos sus mensajes registrados?')) {
+        return;
+      }
+      await executeDeleteChat(phone);
+    }
+
+    async function deleteChatThread(e, phone) {
+      if (e) e.stopPropagation();
+      if (!confirm('¿Eliminar la conversación y registros de ' + phone + '?')) {
+        return;
+      }
+      await executeDeleteChat(phone);
+    }
+
+    async function executeDeleteChat(phone) {
+      try {
+        const res = await apiFetch('/api/admin/chats/' + encodeURIComponent(phone), {
+          method: 'DELETE',
+        });
+
+        if (res.success) {
+          const cleanPhone = phone.replace(/\D/g, '');
+          state.chats = state.chats.filter(c => c.phone !== phone && c.phone !== cleanPhone);
+          
+          if (state.activeChatPhone === phone || state.activeChatPhone?.replace(/\D/g, '') === cleanPhone) {
+            state.activeChatPhone = null;
+            document.getElementById('chat-empty-state').style.display = 'flex';
+            document.getElementById('chat-active-header').style.display = 'none';
+            document.getElementById('chat-messages-wrap').style.display = 'none';
+            document.getElementById('chat-input-container').style.display = 'none';
+            if (state.chats.length > 0) {
+              selectChat(state.chats[0].phone);
+            }
+          }
+          filterChatThreads(document.getElementById('chat-filter-input')?.value || '');
+          showToast('Chat Eliminado', res.message || 'Conversación eliminada con éxito', 'success');
+        } else {
+          showToast('Error', res.error || 'No se pudo eliminar el chat', 'error');
         }
       } catch (err) {
         showToast('Error', err.message, 'error');
