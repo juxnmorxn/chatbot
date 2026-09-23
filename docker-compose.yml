@@ -1,18 +1,54 @@
 services:
-  evolution-api:
+  postgres:
+    image: postgres:15-alpine
+    container_name: evolution_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: evolution
+      POSTGRES_PASSWORD: evolution_password
+      POSTGRES_DB: evolution_db
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - chatbot_net
+
+  evolution_api:
     image: evoapicloud/evolution-api:v2.2.2
     container_name: evolution_api
     restart: always
+    depends_on:
+      - postgres
+    environment:
+      - SERVER_URL=http://2.25.241.239:8080
+      - AUTHENTICATION_API_KEY=429644-cloudware-key-auth
+      - DATABASE_ENABLED=true
+      - DATABASE_PROVIDER=postgresql
+      - DATABASE_CONNECTION_URI=postgresql://evolution:evolution_password@postgres:5432/evolution_db?schema=public
+      - CACHE_REDIS_ENABLED=false
     ports:
       - "8080:8080"
-    environment:
-      - SERVER_URL=http://localhost:8080
-      # SÚPER CLAVE MAESTRA GENERADA PARA EVOLUTION API:
-      - AUTHENTICATION_API_KEY=EVO_MASTER_c34b87b6167304a913370d2dbc6a17110e8fa6bd7f037e42
-      - DATABASE_ENABLED=false
-      - WEBHOOK_GLOBAL_ENABLED=true
-      - WEBHOOK_GLOBAL_WEBHOOK_BY_EVENTS=false
-      - WEBHOOK_EVENTS_MESSAGES_UPSERT=true
     volumes:
-      - ./evolution_instances:/evolution/instances
-      - ./evolution_store:/evolution/store
+      - evolution_instances:/evolution/instances
+    networks:
+      - chatbot_net
+
+  chatbot_app:
+    build: .
+    container_name: chatbot_app
+    restart: always
+    depends_on:
+      - evolution_api
+    env_file:
+      - .env
+    ports:
+      - "3000:3000"
+    networks:
+      - chatbot_net
+
+volumes:
+  pgdata:
+  evolution_instances:
+
+networks:
+  chatbot_net:
+    driver: bridge
