@@ -6,6 +6,7 @@ const logger = new Logger('SettingsService');
 
 export interface AppSettings {
   adminPassword?: string;
+  appUrl?: string;
   // Evolution
   evolutionUrl?: string;
   evolutionApiKey?: string;
@@ -154,6 +155,7 @@ export class SettingsService {
 
     return {
       adminPassword: this.get('ADMIN_PASSWORD', 'ADMIN_PASSWORD', 'admin123'),
+      appUrl: this.get('APP_URL', 'APP_URL', 'http://localhost:3000'),
       evolutionUrl: this.get('EVOLUTION_URL', 'EVOLUTION_URL', 'http://localhost:8080'),
       evolutionApiKey: this.get('EVOLUTION_API_KEY', 'EVOLUTION_API_KEY', ''),
       evolutionInstanceName: this.get('INSTANCE_NAME', 'INSTANCE_NAME', 'isp-soporte'),

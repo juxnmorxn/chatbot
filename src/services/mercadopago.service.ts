@@ -41,7 +41,7 @@ export class MercadoPagoService {
       const externalRef = `WISPHUB:${clienteId || '0'}:${contratoId || '0'}:${phone}:${folioFactura || '0'}`;
 
       // Configurar URLs de retorno y notificación
-      const appBaseUrl = (process.env.APP_BASE_URL || 'https://chatbot-rr1w.onrender.com').replace(/\/$/, '');
+      const appBaseUrl = SettingsService.get('APP_URL', 'APP_URL', 'http://localhost:3000').replace(/\/$/, '');
       const notificationUrl = `${appBaseUrl}/webhook/mercadopago`;
 
       const payload = {

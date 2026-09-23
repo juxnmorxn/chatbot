@@ -3,8 +3,8 @@ dotenv.config();
 
 export const config = {
   port: parseInt(process.env.PORT || '3000', 10),
-  nodeEnv: process.env.NODE_ENV || 'development',
-  appUrl: process.env.RENDER_EXTERNAL_URL || process.env.APP_URL || 'https://chatbot-rr1w.onrender.com',
+  nodeEnv: process.env.NODE_ENV || 'production',
+  appUrl: (process.env.APP_URL || '').replace(/\/+$/, ''),
 
   // Turso
   turso: {

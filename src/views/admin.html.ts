@@ -2250,19 +2250,58 @@ export function getAdminDashboardHtml(): string {
 
           <!-- Card 2: APIs y Credenciales -->
           <div class="glass-card">
-            <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 14px;">Credenciales & Grupo de Activaciones</h3>
+            <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 14px;">⚡ Credenciales de Servicios & Servidor</h3>
+            
             <div class="form-group">
-              <label class="form-label">Evolution API URL</label>
-              <input type="text" id="setting-EVOLUTION_URL" class="form-control" placeholder="https://evolution.example.com" autocomplete="off" spellcheck="false">
+              <label class="form-label">🌐 URL Pública del Servidor / VPS (APP_URL)</label>
+              <input type="text" id="setting-APP_URL" class="form-control" placeholder="http://2.25.241.239:3000 o https://tudominio.com" autocomplete="off" spellcheck="false">
+              <small style="font-size: 11px; color: var(--text-dim);">Dirección donde Evolution API sincroniza los webhooks de WhatsApp.</small>
             </div>
-            <div class="form-group">
-              <label class="form-label">Evolution API Key</label>
-              <input type="password" id="setting-EVOLUTION_API_KEY" class="form-control" placeholder="••••••••" autocomplete="new-password">
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+              <div class="form-group">
+                <label class="form-label">Evolution API URL</label>
+                <input type="text" id="setting-EVOLUTION_URL" class="form-control" placeholder="http://localhost:8080" autocomplete="off" spellcheck="false">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Evolution API Key (Master)</label>
+                <input type="password" id="setting-EVOLUTION_API_KEY" class="form-control" placeholder="••••••••" autocomplete="new-password">
+              </div>
             </div>
-            <div class="form-group">
-              <label class="form-label">Groq API Key</label>
-              <input type="password" id="setting-GROQ_API_KEY" class="form-control" placeholder="••••••••" autocomplete="new-password">
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+              <div class="form-group">
+                <label class="form-label">Groq API Key (IA)</label>
+                <input type="password" id="setting-GROQ_API_KEY" class="form-control" placeholder="gsk_••••••••" autocomplete="new-password">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Modelo Groq</label>
+                <input type="text" id="setting-GROQ_MODEL" class="form-control" placeholder="llama-3.1-8b-instant" value="llama-3.1-8b-instant">
+              </div>
             </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+              <div class="form-group">
+                <label class="form-label">WispHub API URL</label>
+                <input type="text" id="setting-WISPHUB_API_URL" class="form-control" placeholder="https://api.wisphub.net/api">
+              </div>
+              <div class="form-group">
+                <label class="form-label">WispHub API Key</label>
+                <input type="password" id="setting-WISPHUB_API_KEY" class="form-control" placeholder="••••••••" autocomplete="new-password">
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+              <div class="form-group">
+                <label class="form-label">SmartOLT API URL</label>
+                <input type="text" id="setting-SMARTOLT_API_URL" class="form-control" placeholder="https://tudominio.smartolt.com/api">
+              </div>
+              <div class="form-group">
+                <label class="form-label">SmartOLT API Key (X-Token)</label>
+                <input type="password" id="setting-SMARTOLT_API_KEY" class="form-control" placeholder="••••••••" autocomplete="new-password">
+              </div>
+            </div>
+
             <div class="form-group" style="background: rgba(16, 185, 129, 0.05); border: 1px dashed rgba(16, 185, 129, 0.3); border-radius: var(--radius-sm); padding: 12px; margin-top: 14px;">
               <label class="form-label" style="display: flex; align-items: center; justify-content: space-between;">
                 <span>📢 Grupo de Activaciones (WhatsApp)</span>
@@ -2279,6 +2318,66 @@ export function getAdminDashboardHtml(): string {
                   <option value="">-- O seleccionar de grupos activos --</option>
                 </select>
                 <button type="button" class="btn btn-secondary btn-sm" onclick="fetchWhatsAppGroups()" title="Refrescar lista">🔄</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 3: 🩺 Diagnóstico de Conexión en Vivo de APIs -->
+          <div class="glass-card">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+              <h3 style="font-size: 15px; font-weight: 700;">🩺 Diagnóstico Real de APIs</h3>
+              <button type="button" class="btn btn-primary btn-sm" onclick="testAllApisDiagnostic()" id="btn-test-all-apis">
+                ⚡ Probar Todas
+              </button>
+            </div>
+            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">
+              Ejecuta pruebas reales contra los servidores externos para verificar latencia y autenticación.
+            </p>
+
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+              <!-- Item 1: Evolution API -->
+              <div style="background: rgba(0,0,0,0.25); border: 1px solid var(--card-border); border-radius: var(--radius-sm); padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+                <div>
+                  <div style="font-size: 13px; font-weight: 600;">📱 Evolution API (WhatsApp)</div>
+                  <div id="diag-status-evolution" style="font-size: 11px; color: var(--text-dim);">Sin probar aún</div>
+                </div>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="testSingleApi('evolution', this)">⚡ Probar</button>
+              </div>
+
+              <!-- Item 2: Groq AI -->
+              <div style="background: rgba(0,0,0,0.25); border: 1px solid var(--card-border); border-radius: var(--radius-sm); padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+                <div>
+                  <div style="font-size: 13px; font-weight: 600;">🧠 Groq AI (Llama 3.1)</div>
+                  <div id="diag-status-groq" style="font-size: 11px; color: var(--text-dim);">Sin probar aún</div>
+                </div>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="testSingleApi('groq', this)">⚡ Probar</button>
+              </div>
+
+              <!-- Item 3: WispHub -->
+              <div style="background: rgba(0,0,0,0.25); border: 1px solid var(--card-border); border-radius: var(--radius-sm); padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+                <div>
+                  <div style="font-size: 13px; font-weight: 600;">📊 WispHub (Facturación)</div>
+                  <div id="diag-status-wisphub" style="font-size: 11px; color: var(--text-dim);">Sin probar aún</div>
+                </div>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="testSingleApi('wisphub', this)">⚡ Probar</button>
+              </div>
+
+              <!-- Item 4: SmartOLT -->
+              <div style="background: rgba(0,0,0,0.25); border: 1px solid var(--card-border); border-radius: var(--radius-sm); padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+                <div>
+                  <div style="font-size: 13px; font-weight: 600;">🌐 SmartOLT (Fibra GPON)</div>
+                  <div id="diag-status-smartolt" style="font-size: 11px; color: var(--text-dim);">Sin probar aún</div>
+                </div>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="testSingleApi('smartolt', this)">⚡ Probar</button>
+              </div>
+
+              <!-- Item 5: Turso DB -->
+              <div style="background: rgba(0,0,0,0.25); border: 1px solid var(--card-border); border-radius: var(--radius-sm); padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; gap: 10px;">
+                <div>
+                  <div style="font-size: 13px; font-weight: 600;">☁️ Turso DB (libSQL Cloud)</div>
+                  <div id="diag-status-turso" style="font-size: 11px; color: var(--text-dim);">Sin probar aún</div>
+                </div>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="testSingleApi('turso', this)">⚡ Probar</button>
               </div>
             </div>
           </div>
@@ -4478,13 +4577,25 @@ export function getAdminDashboardHtml(): string {
         if (res.settings) {
           const s = res.settings;
           const keyMap = {
+            appUrl: 'setting-APP_URL',
+            APP_URL: 'setting-APP_URL',
             evolutionUrl: 'setting-EVOLUTION_URL',
             evolutionApiKey: 'setting-EVOLUTION_API_KEY',
-            groqApiKey: 'setting-GROQ_API_KEY',
-            activationsGroupJid: 'setting-ACTIVATIONS_GROUP_JID',
             EVOLUTION_URL: 'setting-EVOLUTION_URL',
             EVOLUTION_API_KEY: 'setting-EVOLUTION_API_KEY',
+            groqApiKey: 'setting-GROQ_API_KEY',
             GROQ_API_KEY: 'setting-GROQ_API_KEY',
+            groqModel: 'setting-GROQ_MODEL',
+            GROQ_MODEL: 'setting-GROQ_MODEL',
+            wisphubUrl: 'setting-WISPHUB_API_URL',
+            WISPHUB_API_URL: 'setting-WISPHUB_API_URL',
+            wisphubApiKey: 'setting-WISPHUB_API_KEY',
+            WISPHUB_API_KEY: 'setting-WISPHUB_API_KEY',
+            smartoltUrl: 'setting-SMARTOLT_API_URL',
+            SMARTOLT_API_URL: 'setting-SMARTOLT_API_URL',
+            smartoltApiKey: 'setting-SMARTOLT_API_KEY',
+            SMARTOLT_API_KEY: 'setting-SMARTOLT_API_KEY',
+            activationsGroupJid: 'setting-ACTIVATIONS_GROUP_JID',
             ACTIVATIONS_GROUP_JID: 'setting-ACTIVATIONS_GROUP_JID',
             NOTIF_RECORDATORIO_PREVIO_DIAS: 'setting-NOTIF_RECORDATORIO_PREVIO_DIAS',
             NOTIF_INSTANCE_NAME: 'setting-NOTIF_INSTANCE_NAME',
@@ -4529,9 +4640,15 @@ export function getAdminDashboardHtml(): string {
       }
 
       const settings = {
-        EVOLUTION_URL: evoUrl,
+        APP_URL: document.getElementById('setting-APP_URL')?.value.trim() || '',
+        EVOLUTION_URL: evoUrl || '',
         EVOLUTION_API_KEY: document.getElementById('setting-EVOLUTION_API_KEY')?.value.trim() || '',
         GROQ_API_KEY: document.getElementById('setting-GROQ_API_KEY')?.value.trim() || '',
+        GROQ_MODEL: document.getElementById('setting-GROQ_MODEL')?.value.trim() || 'llama-3.1-8b-instant',
+        WISPHUB_API_URL: document.getElementById('setting-WISPHUB_API_URL')?.value.trim() || '',
+        WISPHUB_API_KEY: document.getElementById('setting-WISPHUB_API_KEY')?.value.trim() || '',
+        SMARTOLT_API_URL: document.getElementById('setting-SMARTOLT_API_URL')?.value.trim() || '',
+        SMARTOLT_API_KEY: document.getElementById('setting-SMARTOLT_API_KEY')?.value.trim() || '',
         ACTIVATIONS_GROUP_JID: document.getElementById('setting-ACTIVATIONS_GROUP_JID')?.value.trim() || '',
         NOTIF_RECORDATORIO_PREVIO_ENABLED: document.getElementById('setting-NOTIF_RECORDATORIO_PREVIO_ENABLED')?.checked ? 'true' : 'false',
         NOTIF_RECORDATORIO_PREVIO_DIAS: document.getElementById('setting-NOTIF_RECORDATORIO_PREVIO_DIAS')?.value || '3',
@@ -4552,12 +4669,82 @@ export function getAdminDashboardHtml(): string {
           body: JSON.stringify({ settings }),
         });
         if (res.success) {
-          showToast('Configuraciones Guardadas', 'Parámetros y switches actualizados en Turso DB.', 'success');
+          showToast('Configuraciones Guardadas', 'Parámetros, credenciales y switches actualizados en Turso DB.', 'success');
         } else {
           showToast('Error', res.error || 'No se pudieron guardar los ajustes', 'error');
         }
       } catch (err) {
         showToast('Error', err.message, 'error');
+      }
+    }
+
+    // Diagnóstico en vivo de conexiones reales
+    async function testSingleApi(service, btnElement) {
+      const statusEl = document.getElementById('diag-status-' + service);
+      if (statusEl) {
+        statusEl.innerHTML = '<span style="color: var(--accent-cyan);">⏳ Probando conexión real...</span>';
+      }
+      if (btnElement) {
+        btnElement.disabled = true;
+        btnElement.innerText = 'Probando...';
+      }
+
+      const payload = {
+        APP_URL: document.getElementById('setting-APP_URL')?.value.trim(),
+        EVOLUTION_URL: document.getElementById('setting-EVOLUTION_URL')?.value.trim(),
+        EVOLUTION_API_KEY: document.getElementById('setting-EVOLUTION_API_KEY')?.value.trim(),
+        GROQ_API_KEY: document.getElementById('setting-GROQ_API_KEY')?.value.trim(),
+        GROQ_MODEL: document.getElementById('setting-GROQ_MODEL')?.value.trim(),
+        WISPHUB_API_URL: document.getElementById('setting-WISPHUB_API_URL')?.value.trim(),
+        WISPHUB_API_KEY: document.getElementById('setting-WISPHUB_API_KEY')?.value.trim(),
+        SMARTOLT_API_URL: document.getElementById('setting-SMARTOLT_API_URL')?.value.trim(),
+        SMARTOLT_API_KEY: document.getElementById('setting-SMARTOLT_API_KEY')?.value.trim(),
+      };
+
+      try {
+        const res = await apiFetch('/api/test/' + service, {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+
+        if (res.success) {
+          if (statusEl) {
+            statusEl.innerHTML = \`<span style="color: var(--accent-green); font-weight: 600;">🟢 En línea (\${res.latencyMs || 0}ms)</span> - <span style="color: var(--text-muted);">\${res.message || 'Operativo'}</span>\`;
+          }
+          showToast('Conexión Exitosa (' + service.toUpperCase() + ')', res.message, 'success');
+        } else {
+          if (statusEl) {
+            statusEl.innerHTML = \`<span style="color: var(--accent-rose); font-weight: 600;">🔴 Error</span> - <span style="color: var(--accent-rose);">\${res.error || res.message || 'Fallo'}</span>\`;
+          }
+          showToast('Error de Conexión (' + service.toUpperCase() + ')', res.error || res.message, 'error', 5000);
+        }
+      } catch (err) {
+        if (statusEl) {
+          statusEl.innerHTML = \`<span style="color: var(--accent-rose); font-weight: 600;">🔴 Error</span> - <span style="color: var(--accent-rose);">\${err.message}</span>\`;
+        }
+        showToast('Error', err.message, 'error');
+      } finally {
+        if (btnElement) {
+          btnElement.disabled = false;
+          btnElement.innerText = '⚡ Probar';
+        }
+      }
+    }
+
+    async function testAllApisDiagnostic() {
+      const btn = document.getElementById('btn-test-all-apis');
+      if (btn) {
+        btn.disabled = true;
+        btn.innerText = '⏳ Verificando APIs...';
+      }
+      showToast('Diagnóstico Iniciado', 'Comprobando conectividad en vivo con todas las APIs...', 'info');
+
+      const services = ['evolution', 'groq', 'wisphub', 'smartolt', 'turso'];
+      await Promise.all(services.map(s => testSingleApi(s)));
+
+      if (btn) {
+        btn.disabled = false;
+        btn.innerText = '⚡ Probar Todas';
       }
     }
 

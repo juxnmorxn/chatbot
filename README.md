@@ -90,17 +90,20 @@ SOPORTE_HUMANO_PHONE=521XXXXXXXXXX
 
 ---
 
-## 🚀 Despliegue en Render
+## 🚀 Despliegue en VPS (Hostinger / Ubuntu)
 
-1. En tu servicio en **Render** (`https://dashboard.render.com/web/srv-daea6hht0dsc739e3ccg`):
-   - **Build Command:** `npm install && npm run build`
-   - **Start Command:** `npm start`
-   - **Environment Variables:** Añade las variables de tu archivo `.env`.
+1. **Variables de Entorno (`.env`):**
+   Solo se requiere `PORT`, `NODE_ENV` y las credenciales de conexión a **Turso DB**.
+   El resto de credenciales (Evolution API, Groq IA, WispHub, SmartOLT, Banco, Webhooks) se configuran dinámicamente desde el **Panel Web (`/admin`)**.
 
-2. Configurar **cron-job.org**:
-   - URL: `https://chatbot-rr1w.onrender.com/api/health`
-   - Intervalo: Cada **10 minutos**
-   - Método: `GET`
+2. **Compilar y Ejecutar con PM2:**
+   ```bash
+   npm install
+   npm run build
+   pm2 start dist/server.js --name "chatbot-isp"
+   pm2 save
+   pm2 startup
+   ```
 
 ---
 

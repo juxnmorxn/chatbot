@@ -684,38 +684,185 @@ export class AdminController {
   }
 
   /**
-   * Prueba de conectividad con los servicios externos
+   * Ejecuta una prueba interna real contra una API y retorna el resultado estructurado
    */
-  static async testService(req: Request, res: Response): Promise<void> {
-    const { service } = req.params;
-
+  private static async runInternalTest(service: string, overrideSettings: any = {}): Promise<{ success: boolean; service: string; latencyMs: number; message: string; details?: any; error?: string }> {
+    const startTime = Date.now();
     try {
+      if (service === 'evolution') {
+        const url = (overrideSettings.EVOLUTION_URL || SettingsService.get('EVOLUTION_URL', 'EVOLUTION_URL', config.evolution.url)).replace(/\/+$/, '');
+        const apiKey = overrideSettings.EVOLUTION_API_KEY || SettingsService.get('EVOLUTION_API_KEY', 'EVOLUTION_API_KEY', config.evolution.apiKey);
+
+        if (!url || !url.startsWith('http')) {
+          return { success: false, service: 'evolution', latencyMs: 0, message: 'URL de Evolution API no configurada', error: 'Evolution API URL vacía o inválida (debe iniciar con http:// o https://)' };
+        }
+        if (!apiKey) {
+          return { success: false, service: 'evolution', latencyMs: 0, message: 'API Key de Evolution no configurada', error: 'Evolution API Key vacía' };
+        }
+
+        const resp = await axios.get(`${url}/instance/fetchInstances`, {
+          headers: { apikey: apiKey },
+          timeout: 7000,
+        });
+        const latencyMs = Date.now() - startTime;
+        const raw = Array.isArray(resp.data) ? resp.data : (resp.data?.instances || resp.data?.response || []);
+        return {
+          success: true,
+          service: 'evolution',
+          latencyMs,
+          message: `Evolution API conectada (${latencyMs}ms). ${raw.length} instancias detectadas.`,
+          details: { url, instancesCount: raw.length, status: resp.status }
+        };
+      }
+
       if (service === 'groq') {
-        const testRes = await GroqService.clasificarMensaje('Hola, ¿cuánto debo de mi servicio de internet?');
-        res.json({ success: true, message: 'Groq conectado correctamente', data: testRes });
-        return;
+        const apiKey = overrideSettings.GROQ_API_KEY || SettingsService.get('GROQ_API_KEY', 'GROQ_API_KEY', config.groq.apiKey);
+        const model = overrideSettings.GROQ_MODEL || SettingsService.get('GROQ_MODEL', 'GROQ_MODEL', config.groq.model || 'llama-3.1-8b-instant');
+
+        if (!apiKey || apiKey.includes('tu_clave')) {
+          return { success: false, service: 'groq', latencyMs: 0, message: 'GROQ_API_KEY no configurada', error: 'Clave de Groq vacía o sin configurar' };
+        }
+
+        const Groq = (await import('groq-sdk')).default;
+        const groq = new Groq({ apiKey });
+        const cleanModel = model.includes('gpt-oss-20b') ? 'llama-3.1-8b-instant' : model;
+        const completion = await groq.chat.completions.create({
+          model: cleanModel,
+          messages: [{ role: 'user', content: 'Ping' }],
+          max_tokens: 3,
+        });
+        const latencyMs = Date.now() - startTime;
+        return {
+          success: true,
+          service: 'groq',
+          latencyMs,
+          message: `Groq AI conectada (${latencyMs}ms). Modelo: ${cleanModel}`,
+          details: { model: cleanModel, reply: completion.choices[0]?.message?.content }
+        };
       }
 
       if (service === 'wisphub') {
-        const testRes = await WispHubService.buscarClientePorTelefono('0000000000');
-        res.json({ success: true, message: 'WispHub API respondió correctamente', data: testRes });
-        return;
+        const url = (overrideSettings.WISPHUB_API_URL || SettingsService.get('WISPHUB_API_URL', 'WISPHUB_API_URL', config.wisphub.url)).replace(/\/+$/, '');
+        const apiKey = overrideSettings.WISPHUB_API_KEY || SettingsService.get('WISPHUB_API_KEY', 'WISPHUB_API_KEY', config.wisphub.apiKey);
+
+        if (!url || !url.startsWith('http')) {
+          return { success: false, service: 'wisphub', latencyMs: 0, message: 'WispHub URL no configurada', error: 'URL de WispHub vacía' };
+        }
+        if (!apiKey || apiKey.includes('tu_token')) {
+          return { success: false, service: 'wisphub', latencyMs: 0, message: 'WispHub API Key no configurada', error: 'API Key de WispHub vacía' };
+        }
+
+        const resp = await axios.get(`${url}/clientes/`, {
+          headers: { 'Authorization': `Api-Key ${apiKey}`, 'Content-Type': 'application/json' },
+          params: { limit: 1 },
+          timeout: 8000,
+        });
+        const latencyMs = Date.now() - startTime;
+        const count = resp.data?.count !== undefined ? resp.data.count : (Array.isArray(resp.data?.results) ? resp.data.results.length : 0);
+        return {
+          success: true,
+          service: 'wisphub',
+          latencyMs,
+          message: `WispHub API conectada (${latencyMs}ms). Clientes en WispHub: ${count}`,
+          details: { totalClients: count, status: resp.status }
+        };
       }
 
       if (service === 'smartolt') {
-        const testRes = await SmartOLTService.obtenerEstadoONU('TEST-ONU');
-        res.json({ success: true, message: 'SmartOLT API respondió correctamente', data: testRes });
-        return;
+        const url = (overrideSettings.SMARTOLT_API_URL || SettingsService.get('SMARTOLT_API_URL', 'SMARTOLT_API_URL', config.smartolt.url)).replace(/\/+$/, '');
+        const apiKey = overrideSettings.SMARTOLT_API_KEY || SettingsService.get('SMARTOLT_API_KEY', 'SMARTOLT_API_KEY', config.smartolt.apiKey);
+
+        if (!url || !url.startsWith('http') || url.includes('tu-dominio')) {
+          return { success: false, service: 'smartolt', latencyMs: 0, message: 'SmartOLT URL no configurada', error: 'URL de SmartOLT vacía o de ejemplo' };
+        }
+        if (!apiKey || apiKey.includes('tu_token')) {
+          return { success: false, service: 'smartolt', latencyMs: 0, message: 'SmartOLT API Key no configurada', error: 'X-Token de SmartOLT vacío' };
+        }
+
+        const resp = await axios.get(`${url}/system/get_olts`, {
+          headers: { 'X-Token': apiKey },
+          timeout: 10000,
+        });
+        const latencyMs = Date.now() - startTime;
+        const data = resp.data;
+        if (data?.status === false && data?.error) {
+          return { success: false, service: 'smartolt', latencyMs, message: `Error en SmartOLT: ${data.error}`, error: data.error };
+        }
+        const olts = Array.isArray(data?.response) ? data.response : (Array.isArray(data) ? data : []);
+        return {
+          success: true,
+          service: 'smartolt',
+          latencyMs,
+          message: `SmartOLT API conectada (${latencyMs}ms). OLTs registradas: ${olts.length}`,
+          details: { oltsCount: olts.length, status: resp.status }
+        };
       }
 
       if (service === 'turso') {
         const client = getTursoClient();
-        await client.execute('SELECT 1');
-        res.json({ success: true, message: 'Turso DB conectado y operando en la nube' });
+        const [settRes, logsRes] = await Promise.all([
+          client.execute('SELECT count(*) as count FROM settings'),
+          client.execute('SELECT count(*) as count FROM logs'),
+        ]);
+        const latencyMs = Date.now() - startTime;
+        return {
+          success: true,
+          service: 'turso',
+          latencyMs,
+          message: `Turso DB operativo (${latencyMs}ms). ${settRes.rows[0]?.count || 0} configuraciones y ${logsRes.rows[0]?.count || 0} registros.`,
+          details: { settingsCount: settRes.rows[0]?.count, logsCount: logsRes.rows[0]?.count }
+        };
+      }
+
+      return { success: false, service, latencyMs: 0, message: `Servicio desconocido: ${service}`, error: 'Servicio no soportado' };
+    } catch (err: any) {
+      const latencyMs = Date.now() - startTime;
+      const errMsg = err?.response?.data?.detail || err?.response?.data?.message || err?.response?.data?.error || err?.message || 'Error de conexión';
+      return {
+        success: false,
+        service,
+        latencyMs,
+        message: `Fallo al verificar ${service}: ${errMsg}`,
+        error: errMsg,
+        details: { status: err?.response?.status || 'NETWORK_ERROR' }
+      };
+    }
+  }
+
+  /**
+   * Endpoint de diagnóstico y prueba de conectividad REAL con los servicios externos
+   */
+  static async testService(req: Request, res: Response): Promise<void> {
+    const service = String(req.params.service || '').toLowerCase();
+    const bodySettings = req.body || {};
+
+    try {
+      if (service === 'all') {
+        const [evo, groq, wh, so, turso] = await Promise.all([
+          AdminController.runInternalTest('evolution', bodySettings),
+          AdminController.runInternalTest('groq', bodySettings),
+          AdminController.runInternalTest('wisphub', bodySettings),
+          AdminController.runInternalTest('smartolt', bodySettings),
+          AdminController.runInternalTest('turso', bodySettings),
+        ]);
+
+        const results = { evolution: evo, groq, wisphub: wh, smartolt: so, turso };
+        const allOk = Object.values(results).every((r: any) => r.success);
+
+        res.json({
+          success: allOk,
+          results,
+          message: allOk ? 'Todas las APIs e integraciones están conectadas y respondiendo en tiempo real.' : 'Se detectaron errores o advertencias en algunas integraciones.'
+        });
         return;
       }
 
-      res.status(400).json({ success: false, error: 'Servicio no reconocido' });
+      const result = await AdminController.runInternalTest(service, bodySettings);
+      if (result.success) {
+        res.json(result);
+      } else {
+        res.status(400).json(result);
+      }
     } catch (error: any) {
       res.status(500).json({ success: false, error: error?.message || error });
     }
@@ -748,7 +895,7 @@ export class AdminController {
             headers: { apikey: apiKey },
             timeout: 5000,
           });
-          qr = qrRes.data?.base64 || null;
+          qr = qrRes.data?.base64 || qrRes.data?.qrcode?.base64 || qrRes.data?.code || qrRes.data?.qrcode?.code || null;
         } catch (err: any) {
           logger.warn('No se pudo obtener QR:', err?.message || err);
         }

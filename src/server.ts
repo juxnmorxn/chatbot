@@ -112,13 +112,13 @@ async function startServer() {
       }
     }, 6 * 60 * 60 * 1000);
 
-    // Keepalive anti-inactividad para Render Free Tier (Evita que el servidor se duerma tras 15 min de inactividad)
+    // Keepalive de salud del servidor
     const axios = (await import('axios')).default;
     setInterval(async () => {
       try {
         await axios.get(`http://localhost:${config.port}/api/health`, { timeout: 5000 });
-        const appUrl = config.appUrl || 'https://chatbot-rr1w.onrender.com';
-        if (appUrl.startsWith('http') && !appUrl.includes('localhost')) {
+        const appUrl = SettingsService.get('APP_URL', 'APP_URL', config.appUrl);
+        if (appUrl && appUrl.startsWith('http') && !appUrl.includes('localhost')) {
           await axios.get(`${appUrl.replace(/\/$/, '')}/api/health`, { timeout: 8000 }).catch(() => {});
         }
       } catch {}

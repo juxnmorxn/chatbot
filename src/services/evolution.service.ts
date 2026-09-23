@@ -250,7 +250,8 @@ export class EvolutionService {
       }
 
       let webhookOk = false;
-      const targetUrl = webhookBaseUrl || (process.env.RENDER_EXTERNAL_URL ? `${process.env.RENDER_EXTERNAL_URL}/webhook` : 'https://chatbot-rr1w.onrender.com/webhook');
+      const baseAppUrl = SettingsService.get('APP_URL', 'APP_URL', config.appUrl || `http://localhost:${config.port}`).replace(/\/+$/, '');
+      const targetUrl = webhookBaseUrl || `${baseAppUrl}/webhook`;
 
       try {
         await api.post(`/webhook/set/${instance}`, {
@@ -525,8 +526,8 @@ export class EvolutionService {
       }
 
       const qrRes = await api.get(`/instance/connect/${instance}`, { timeout: 6000 });
-      const qr = qrRes.data?.base64 || qrRes.data?.code || null;
-      const pairingCode = qrRes.data?.pairingCode || null;
+      const qr = qrRes.data?.base64 || qrRes.data?.qrcode?.base64 || qrRes.data?.code || qrRes.data?.qrcode?.code || null;
+      const pairingCode = qrRes.data?.pairingCode || qrRes.data?.qrcode?.pairingCode || null;
 
       return { state, qr, pairingCode };
     } catch (err: any) {
