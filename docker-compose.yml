@@ -13,7 +13,7 @@ services:
       - chatbot_net
 
   evolution_api:
-    image: evoapicloud/evolution-api:v2.2.2
+    image: evoapicloud/evolution-api:latest
     container_name: evolution_api
     restart: always
     depends_on:
@@ -21,10 +21,12 @@ services:
     environment:
       - SERVER_URL=http://2.25.241.239:8080
       - AUTHENTICATION_API_KEY=429644-cloudware-key-auth
+      - AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES=true
       - DATABASE_ENABLED=true
       - DATABASE_PROVIDER=postgresql
       - DATABASE_CONNECTION_URI=postgresql://evolution:evolution_password@postgres:5432/evolution_db?schema=public
       - CACHE_REDIS_ENABLED=false
+      - QRCODE_LIMIT=30
     ports:
       - "8080:8080"
     volumes:
@@ -40,6 +42,9 @@ services:
       - evolution_api
     env_file:
       - .env
+    environment:
+      - EVOLUTION_URL=http://evolution_api:8080
+      - EVOLUTION_API_KEY=429644-cloudware-key-auth
     ports:
       - "3000:3000"
     networks:

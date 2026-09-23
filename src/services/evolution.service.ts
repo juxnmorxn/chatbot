@@ -18,7 +18,10 @@ export class EvolutionService {
   private static lastKey: string = '';
 
   private static getApi(): AxiosInstance {
-    const url = SettingsService.get('EVOLUTION_URL', 'EVOLUTION_URL', config.evolution.url).replace(/\/+$/, '');
+    let url = SettingsService.get('EVOLUTION_URL', 'EVOLUTION_URL', config.evolution.url).replace(/\/+$/, '');
+    if (process.env.EVOLUTION_URL && process.env.EVOLUTION_URL.includes('evolution_api') && url.includes('localhost:8080')) {
+      url = process.env.EVOLUTION_URL.replace(/\/+$/, '');
+    }
     const apiKey = SettingsService.get('EVOLUTION_API_KEY', 'EVOLUTION_API_KEY', config.evolution.apiKey);
 
     if (!this.api || this.lastUrl !== url || this.lastKey !== apiKey) {
@@ -519,15 +522,35 @@ export class EvolutionService {
       try {
         const stateRes = await api.get(`/instance/connectionState/${instance}`, { timeout: 4000 });
         state = stateRes.data?.instance?.state || 'close';
-      } catch {}
+      } catch (stateErr: any) {
+        // Si la instancia no existe en Evolution API, crearla automáticamente
+        if (stateErr?.response?.status === 404 || String(stateErr?.response?.data?.message || '').toLowerCase().includes('not found')) {
+          logger.info(`Instancia "${instance}" no encontrada en Evolution API. Creándola automáticamente...`);
+          await this.createInstance(instance);
+        }
+      }
 
       if (state === 'open') {
         return { state: 'open', qr: null };
       }
 
-      const qrRes = await api.get(`/instance/connect/${instance}`, { timeout: 6000 });
-      const qr = qrRes.data?.base64 || qrRes.data?.qrcode?.base64 || qrRes.data?.code || qrRes.data?.qrcode?.code || null;
-      const pairingCode = qrRes.data?.pairingCode || qrRes.data?.qrcode?.pairingCode || null;
+      let qrRes = await api.get(`/instance/connect/${instance}`, { timeout: 6000 });
+      let qr = qrRes.data?.base64 || qrRes.data?.qrcode?.base64 || qrRes.data?.code || qrRes.data?.qrcode?.code || null;
+      let pairingCode = qrRes.data?.pairingCode || qrRes.data?.qrcode?.pairingCode || null;
+
+      // Si retornó { count: 0 } o vino vacío, intentar consultar fetchInstances
+      if (!qr && state !== 'open') {
+        try {
+          const fetchRes = await api.get('/instance/fetchInstances', { timeout: 6000 });
+          const raw = Array.isArray(fetchRes.data) ? fetchRes.data : (fetchRes.data?.instances || []);
+          const found = raw.find((i: any) => (i.name || i.instance?.instanceName || '').toLowerCase() === instance.toLowerCase());
+          if (found) {
+            qr = found.qrcode?.base64 || found.instance?.qrcode?.base64 || found.qrcode?.code || null;
+            pairingCode = found.qrcode?.pairingCode || found.instance?.qrcode?.pairingCode || null;
+            state = found.connectionStatus || found.instance?.state || state;
+          }
+        } catch {}
+      }
 
       return { state, qr, pairingCode };
     } catch (err: any) {
