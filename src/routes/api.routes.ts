@@ -54,6 +54,17 @@ router.post('/api/admin/chats/:phone/delete', requireAdminAuth(['superadmin']), 
 router.post('/api/admin/chats/:phone/department', AdminController.transferChatDepartment);
 router.post('/api/notifications/run-billing-cycle', AdminController.runBillingNotifications);
 
+// ==========================================
+// CONTINGENCIAS Y CAÍDAS DE RED (OUTAGES)
+// ==========================================
+router.get('/api/admin/outages/active', AdminController.getActiveOutages);
+router.get('/api/admin/outages/history', AdminController.getOutagesHistory);
+router.get('/api/admin/outages/zones', AdminController.getOutageZones);
+router.post('/api/admin/outages', AdminController.createOutage);
+router.post('/api/admin/outages/create', AdminController.createOutage);
+router.put('/api/admin/outages/:id/resolve', AdminController.resolveOutage);
+router.post('/api/admin/outages/:id/resolve', AdminController.resolveOutage);
+
 
 // ==========================================
 // APIS ADMINISTRATIVAS PARA VARIABLES Y CONFIGURACIÓN
@@ -66,6 +77,8 @@ router.get('/api/logs', AdminController.getLogs);
 router.get('/api/whatsapp/status', AdminController.getWhatsAppStatus);
 router.get('/api/whatsapp/instances', AdminController.getWhatsAppInstances);
 router.post('/api/whatsapp/instances', AdminController.createWhatsAppInstance);
+router.get('/api/whatsapp/areas', AdminController.getWhatsAppAreas);
+router.put('/api/whatsapp/instances/:instance/area', AdminController.updateWhatsAppInstanceArea);
 router.get('/api/whatsapp/instances/:instance/qr', AdminController.getWhatsAppInstanceQr);
 router.post('/api/whatsapp/instances/:instance/select', AdminController.selectWhatsAppInstance);
 router.post('/api/whatsapp/instances/:instance/disconnect', AdminController.disconnectWhatsAppInstance);

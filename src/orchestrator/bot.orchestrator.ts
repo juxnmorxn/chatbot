@@ -455,10 +455,11 @@ export class BotOrchestrator {
       this.activeInstanceByPhone.set(event.remoteJid, instance);
     }
 
-    logger.info(`Procesando mensaje de ${phone} en instancia [${instance}] (Destino WhatsApp: ${targetJid}): "${rawText}"`);
-
     // 0. Obtener sesión de Turso DB
     let session = await TursoService.getSession(phone);
+    if (instance) {
+      TursoService.updateLastInstance(phone, instance).catch(() => {});
+    }
     const inputContent = rawText || (buttonId ? `[Botón: ${buttonId}]` : (event.isMedia ? '[Foto/Comprobante]' : '[Desconocido]'));
     const lowerMsg = rawText.toLowerCase().trim();
 
@@ -1414,8 +1415,11 @@ export class BotOrchestrator {
     );
   }
 
+
+
   /**
    * Flujo de Asistencia y Comprobaciones Técnicas Amigables con Diagnóstico Silencioso:
+   * 0. Revisa contingencias o caídas masivas activas en Turso (si hay caída en su zona o General, avisa y detiene flujo).
    * 1. Revisa internamente morosidad en WispHub (si adeuda, envía ficha de pago sin tickets falsos).
    * 2. Revisa internamente estado físico en SmartOLT:
    *    - Si hay corte en cableado (LOS): genera reporte #TK-XXXX y pide ubicación/dirección para técnico.
@@ -1448,6 +1452,57 @@ export class BotOrchestrator {
     const detalleQueja = c.resumen_queja || 'Falla o lentitud de internet';
     let meta: any = {};
     try { meta = JSON.parse(session.metadata || '{}'); } catch {}
+
+    // --- 0. VERIFICACIÓN SILENCIOSA DE CONTINGENCIA / CAÍDA MASIVA DE RED POR ZONA O GENERAL ---
+    let zonaCliente = meta.zone || meta.zone_name || meta.address || '';
+    if (!zonaCliente && session.onu_id) {
+      try {
+        const onuInfo = await TursoService.getOnuById(session.onu_id);
+        zonaCliente = onuInfo?.zone_name || onuInfo?.address || '';
+      } catch {}
+    }
+    if (!zonaCliente && phone) {
+      try {
+        const whClient = await TursoService.getWisphubClientByAny({ phone });
+        zonaCliente = whClient?.direccion || whClient?.servicio || '';
+      } catch {}
+    }
+
+    const outage = await TursoService.checkActiveOutageForZone(zonaCliente);
+    if (outage) {
+      logger.info(`[Contingencia] Cliente ${phone} en zona "${zonaCliente || 'N/A'}" contenido por caída masiva activa (ID: ${outage.id}, Zona: "${outage.zone_name}")`);
+      const esGeneral = (outage.zone_name || '').toLowerCase() === 'general' || (outage.zone_name || '').toLowerCase() === 'todas';
+      const zonaStr = esGeneral ? 'general en toda la red' : `en tu zona (*${outage.zone_name}*)`;
+      const notasStr = outage.notes ? `\n🛠️ *Detalle del incidente:* ${outage.notes}` : '';
+      const tiempoStr = outage.estimated_time ? `\n⏳ *Tiempo estimado de solución:* ${outage.estimated_time}` : '';
+
+      const mensajeContingencia =
+        `¡Hola${nombre}! ⚠️ Te informamos que actualmente presentamos una falla ${zonaStr}.\n` +
+        `${notasStr}` +
+        `${tiempoStr}\n\n` +
+        `👷‍♂️ Nuestro equipo técnico ya se encuentra en sitio trabajando para restablecer el servicio a la brevedad posible.\n\n` +
+        `💡 *No es necesario reiniciar tu módem ni mover cables*; te notificaremos por este medio en cuanto el enlace quede 100% normalizado. Agradecemos mucho tu paciencia y comprensión.`;
+
+      await this.enviarYLoguear(
+        phone,
+        mensajeContingencia,
+        'FALLA_MASIVA',
+        `CONTINGENCIA_ZONA_${outage.zone_name.toUpperCase()}`,
+        targetJid
+      );
+
+      await TursoService.upsertSession({
+        phone,
+        step: 'CONVERSACIONAL',
+        metadata: JSON.stringify({
+          ...meta,
+          lastOutageNotified: outage.id,
+          lastOutageZone: outage.zone_name,
+          consultaFinalizada: true,
+        }),
+      });
+      return;
+    }
 
     logger.info(`Iniciando diagnóstico interno silencioso para cliente ${phone} (${session.client_name || 'N/A'})...`);
 

@@ -1703,6 +1703,38 @@ export function getAdminDashboardHtml(): string {
           </div>
         </div>
 
+        <!-- Network Outages & Mass Incident Contingency Control Card -->
+        <div class="glass-card" style="margin-bottom: 24px; border: 1px solid rgba(244, 63, 94, 0.25); background: radial-gradient(at 0% 0%, rgba(244, 63, 94, 0.06) 0px, var(--bg-surface) 100%);">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <div class="metric-icon-box" style="color: var(--accent-rose); background: rgba(244, 63, 94, 0.1); border-color: rgba(244, 63, 94, 0.3);">
+                <svg class="svg-icon" viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+              </div>
+              <div>
+                <h3 style="font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+                  <span>Contingencias & Caídas Masivas de Red</span>
+                  <span id="badge-active-outages" class="badge badge-danger" style="display: none; font-size: 11px;">0 Activas</span>
+                </h3>
+                <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+                  El bot intercepta automáticamente las consultas de clientes en zonas afectadas para evitar saturación y tickets duplicados.
+                </p>
+              </div>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button class="btn btn-secondary btn-sm" onclick="loadOutagesData()" title="Refrescar fallas">
+                🔄 Refrescar
+              </button>
+              <button class="btn btn-primary btn-sm" style="background: linear-gradient(135deg, #f43f5e, #e11d48);" onclick="openDeclareOutageModal()">
+                ⚡ Declarar Falla de Zona
+              </button>
+            </div>
+          </div>
+
+          <div id="dashboard-outages-list" style="display: flex; flex-direction: column; gap: 10px;">
+            <div style="text-align: center; color: var(--text-dim); padding: 16px;">Cargando contingencias de red...</div>
+          </div>
+        </div>
+
         <!-- Recent Logs Activity -->
         <div class="glass-card">
           <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 14px;">Últimas Interacciones del Bot</h3>
@@ -1731,10 +1763,8 @@ export function getAdminDashboardHtml(): string {
           <div class="chat-sidebar" id="chat-threads-sidebar">
             <div class="chat-search-header">
               <input type="text" id="chat-filter-input" class="form-control" placeholder="Buscar cliente o número..." oninput="filterChatThreads(this.value)" style="margin-bottom: 8px;">
-              <div style="display: flex; gap: 4px;">
-                <button class="btn btn-secondary btn-sm active" id="btn-filter-dept-all" style="flex:1; padding:4px 6px; font-size:11px;" onclick="setChatDeptFilter('all', this)">Todos</button>
-                <button class="btn btn-secondary btn-sm" id="btn-filter-dept-soporte" style="flex:1; padding:4px 6px; font-size:11px;" onclick="setChatDeptFilter('SOPORTE', this)">🔧 Soporte</button>
-                <button class="btn btn-secondary btn-sm" id="btn-filter-dept-atencion" style="flex:1; padding:4px 6px; font-size:11px;" onclick="setChatDeptFilter('ATENCION', this)">💳 Atención</button>
+              <div id="chat-dept-filter-bar" style="display: flex; gap: 4px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin;">
+                <button class="btn btn-primary btn-sm active" id="btn-filter-dept-all" style="padding:4px 8px; font-size:11px; white-space: nowrap;" onclick="setChatDeptFilter('all', this)">Todos</button>
               </div>
             </div>
             <div id="chat-threads-container" class="chat-threads-list"></div>
@@ -1746,16 +1776,17 @@ export function getAdminDashboardHtml(): string {
                 <button class="btn btn-secondary btn-xs btn-back-to-threads" style="display: none;" id="btn-back-to-threads" onclick="toggleMobileChatThreads()" title="Volver a lista de chats">◀ Volver</button>
                 <div class="thread-avatar" id="active-chat-avatar">📱</div>
                 <div style="min-width: 0;">
-                  <div style="display: flex; align-items: center; gap: 6px;">
-                    <h4 id="active-chat-name" style="font-size: 13.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px;">Seleccione un chat</h4>
-                    <span id="active-chat-dept-badge" class="badge badge-info" style="font-size: 9.5px; padding: 2px 6px;">🔧 Soporte</span>
+                  <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                    <h4 id="active-chat-name" style="font-size: 13.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px;">Seleccione un chat</h4>
+                    <span id="active-chat-dept-badge" class="badge badge-info" style="font-size: 9.5px; padding: 2px 6px;">General</span>
+                    <span id="active-chat-instance-badge" class="badge badge-purple" style="font-size: 9.5px; padding: 2px 6px; display: none;" title="Línea de WhatsApp remitente">Línea: --</span>
                   </div>
                   <span id="active-chat-phone" style="font-size: 11px; color: var(--text-muted); font-family: var(--font-mono);">--</span>
                 </div>
               </div>
               <div class="chat-header-actions">
-                <button id="btn-transfer-dept" class="btn btn-secondary btn-xs" onclick="transferCurrentChatDepartment()" title="Transferir al otro departamento">
-                  🔄 <span id="btn-transfer-dept-text">Mover a Atención</span>
+                <button id="btn-transfer-dept" class="btn btn-secondary btn-xs" onclick="openTransferChatModal()" title="Traspasar conversación a otra oficina o área">
+                  🔄 <span>Traspasar Área</span>
                 </button>
                 <div id="takeover-status-indicator" class="badge badge-success" style="font-size: 10px; padding: 3px 8px;">🤖 Bot Activo</div>
                 <button id="btn-toggle-takeover" class="btn btn-secondary btn-xs" onclick="toggleCurrentChatTakeover()" title="Pausar bot para atención humana">
@@ -2410,12 +2441,15 @@ export function getAdminDashboardHtml(): string {
       chats: [],
       activeChatPhone: null,
       chatDeptFilter: 'all',
+      whatsappAreas: [],
+      whatsappInstances: [],
       tickets: [],
       clients: { filter: 'ALL', search: '', page: 1, limit: 25, total: 0, items: [] },
       audit: { filter: 'all', search: '', page: 1, limit: 30, total: 0 },
       provisioning: { filter: 'pending', search: '', page: 1, limit: 30, total: 0 },
       technicians: [],
       adminUsers: [],
+      outages: [],
       isSidebarCollapsed: false,
     };
 
@@ -2746,11 +2780,12 @@ export function getAdminDashboardHtml(): string {
             const chat = state.chats.find(c => c.phone === data.phone || (cleanPhone && c.phone.replace(/\D/g, '') === cleanPhone));
             if (chat) {
               chat.department = data.department;
+              if (data.instanceName) chat.last_instance = data.instanceName;
               if (data.is_paused !== undefined) {
                 chat.is_human_paused = data.is_paused;
               }
               if (state.activeChatPhone === data.phone || (cleanPhone && state.activeChatPhone?.replace(/\D/g, '') === cleanPhone)) {
-                updateChatDeptUI(data.department);
+                updateChatDeptUI(data.department, data.instanceName);
                 if (data.is_paused !== undefined) {
                   updateTakeoverButton(data.is_paused, data.takeover);
                 }
@@ -2758,6 +2793,7 @@ export function getAdminDashboardHtml(): string {
             } else {
               loadLiveChatData(false);
             }
+            renderDynamicDeptFilters();
             filterChatThreads(document.getElementById('chat-filter-input')?.value || '');
           }
         });
@@ -2782,11 +2818,16 @@ export function getAdminDashboardHtml(): string {
           if (state.currentView === 'tickets') loadTicketsData();
           loadDashboardBadgeCounters();
         });
+
+        evtSource.addEventListener('outages:update', () => {
+          loadOutagesData();
+        });
       }
     }
 
     // Dashboard Data
     async function loadDashboardData() {
+      loadOutagesData();
       try {
         const [smartRes, wisphubRes, ticketRes, logsRes] = await Promise.all([
           apiFetch('/api/smartolt/stats').catch(() => ({ stats: { count: 0, total_onus: 0 } })),
@@ -2825,6 +2866,154 @@ export function getAdminDashboardHtml(): string {
       } catch (err) {
         console.error('Error loading dashboard:', err);
       }
+    }
+
+    // Outages (Caídas Masivas y Contingencia por Zona)
+    async function loadOutagesData() {
+      try {
+        const res = await apiFetch('/api/admin/outages/active');
+        state.outages = res.outages || [];
+        renderOutagesList();
+      } catch (err) {
+        console.error('Error loading outages:', err);
+      }
+    }
+
+    function renderOutagesList() {
+      const container = document.getElementById('dashboard-outages-list');
+      const badge = document.getElementById('badge-active-outages');
+      if (!container) return;
+
+      if (state.outages && state.outages.length > 0) {
+        if (badge) {
+          badge.innerText = \`\${state.outages.length} Activa\${state.outages.length > 1 ? 's' : ''}\`;
+          badge.style.display = 'inline-block';
+        }
+
+        container.innerHTML = state.outages.map(o => \`
+          <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(244, 63, 94, 0.08); border: 1px solid rgba(244, 63, 94, 0.25); border-radius: var(--radius-sm); padding: 12px 16px; flex-wrap: wrap; gap: 12px;">
+            <div style="display: flex; align-items: center; gap: 12px; min-width: 240px; flex: 1;">
+              <span class="pulse-dot" style="background: #f43f5e; box-shadow: 0 0 10px #f43f5e;"></span>
+              <div>
+                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                  <strong style="font-size: 14px; color: #fff;">📍 Zona: \${escapeHtml(o.zone_name)}</strong>
+                  <span class="badge badge-warning" style="font-size: 11px;">⏳ Est: \${escapeHtml(o.estimated_time || 'Por definir')}</span>
+                  <span style="font-size: 11px; color: var(--text-dim); font-family: var(--font-mono);">Inicio: \${new Date(o.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                </div>
+                \${o.notes ? \`<div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">💬 \${escapeHtml(o.notes)}</div>\` : ''}
+              </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <button class="btn btn-secondary btn-sm" style="border-color: rgba(16, 185, 129, 0.4); color: var(--accent-green);" onclick="resolveOutage('\${o.id}', '\${escapeHtml(o.zone_name)}')">
+                🟢 Resolver Incidencia
+              </button>
+            </div>
+          </div>
+        \`).join('');
+      } else {
+        if (badge) badge.style.display = 'none';
+        container.innerHTML = \`
+          <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(16, 185, 129, 0.06); border: 1px dashed rgba(16, 185, 129, 0.3); border-radius: var(--radius-sm); padding: 14px 18px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span style="font-size: 18px;">✅</span>
+              <div>
+                <strong style="font-size: 13.5px; color: var(--accent-green);">Red Operando con Normalidad</strong>
+                <p style="font-size: 11.5px; color: var(--text-muted); margin-top: 2px;">No hay caídas generales ni contingencias por zona declaradas activas.</p>
+              </div>
+            </div>
+            <span class="badge badge-success" style="font-size: 11px;">100% Online</span>
+          </div>
+        \`;
+      }
+    }
+
+    async function openDeclareOutageModal() {
+      let zones = [];
+      try {
+        const res = await apiFetch('/api/admin/outages/zones');
+        zones = res.zones || [];
+      } catch (err) {
+        console.error('Error fetching zones:', err);
+      }
+
+      const zoneOptions = ['General (Toda la Red)', ...zones]
+        .map(z => \`<option value="\${escapeHtml(z)}">\${escapeHtml(z)}</option>\`)
+        .join('');
+
+      const content = \`
+        <div style="display: flex; flex-direction: column; gap: 14px;">
+          <div class="form-group">
+            <label class="form-label">Zona o Sector Afectado</label>
+            <div style="display: flex; gap: 8px;">
+              <select id="outage-form-zone-select" class="form-control" style="flex: 1;" onchange="if(this.value) document.getElementById('outage-form-zone-custom').value = this.value;">
+                <option value="">-- Seleccionar zona detectada --</option>
+                \${zoneOptions}
+              </select>
+            </div>
+            <input type="text" id="outage-form-zone-custom" class="form-control" placeholder="O escribe el nombre de la zona / sector..." style="margin-top: 6px;" value="General (Toda la Red)">
+            <small style="font-size: 11px; color: var(--text-dim); margin-top: 4px; display: block;">
+              Los clientes cuya dirección o metadata coincida con esta zona recibirán la respuesta de contingencia inmediata al reportar fallas.
+            </small>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Tiempo Estimado de Solución</label>
+            <input type="text" id="outage-form-est-time" class="form-control" placeholder="Ej: 2 horas, 45 minutos, 3:00 PM" value="1 a 2 horas">
+            <div style="display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap;">
+              <button type="button" class="btn btn-secondary btn-xs" onclick="document.getElementById('outage-form-est-time').value = '30 a 45 minutos'">30-45 min</button>
+              <button type="button" class="btn btn-secondary btn-xs" onclick="document.getElementById('outage-form-est-time').value = '1 a 2 horas'">1-2 horas</button>
+              <button type="button" class="btn btn-secondary btn-xs" onclick="document.getElementById('outage-form-est-time').value = '3 a 4 horas'">3-4 horas</button>
+              <button type="button" class="btn btn-secondary btn-xs" onclick="document.getElementById('outage-form-est-time').value = 'Aproximadamente a las 6:00 PM'">Hoy 6:00 PM</button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Motivo o Notas para el Cliente (Opcional)</label>
+            <textarea id="outage-form-notes" class="form-control" rows="3" placeholder="Ej: Corte de fibra dorsal por trabajos de CFE. Nuestras brigadas ya se encuentran en el sitio trabajando en la fusión."></textarea>
+          </div>
+        </div>
+      \`;
+
+      openModal('⚡ Declarar Contingencia de Red / Falla por Zona', content, async () => {
+        const zone = (document.getElementById('outage-form-zone-custom').value || document.getElementById('outage-form-zone-select').value || '').trim();
+        const estTime = document.getElementById('outage-form-est-time').value.trim();
+        const notes = document.getElementById('outage-form-notes').value.trim();
+
+        if (!zone) {
+          showToast('Campo Requerido', 'Debes especificar la zona o indicar "General"', 'warning');
+          return false;
+        }
+
+        const res = await apiFetch('/api/admin/outages', {
+          method: 'POST',
+          body: JSON.stringify({ zone_name: zone, estimated_time: estTime, notes }),
+        });
+
+        if (res.success) {
+          showToast('Contingencia Declarada', \`Falla en zona "\${zone}" registrada. El bot responderá automáticamente.\`, 'success', 4500);
+          loadOutagesData();
+        } else {
+          showToast('Error', res.error || 'No se pudo registrar la contingencia', 'error');
+          return false;
+        }
+      }, '⚡ Activar Contingencia');
+    }
+
+    async function resolveOutage(id, zoneName) {
+      showConfirmDialog(
+        \`🟢 Resolver Incidencia en \${zoneName}\`,
+        \`¿Confirmas que el servicio en la zona <strong>\${zoneName}</strong> ha sido restablecido? El bot reanudará el diagnóstico individual con SmartOLT para estos clientes.\`,
+        async () => {
+          const res = await apiFetch(\`/api/admin/outages/\${id}/resolve\`, { method: 'POST' });
+          if (res.success) {
+            showToast('Falla Resuelta', \`Zona "\${zoneName}" normalizada.\`, 'success', 3500);
+            loadOutagesData();
+          } else {
+            showToast('Error', res.error || 'No se pudo resolver la incidencia', 'error');
+          }
+        },
+        false
+      );
     }
 
     async function loadDashboardBadgeCounters() {
@@ -2909,8 +3098,18 @@ export function getAdminDashboardHtml(): string {
     // Live Chat Module
     async function loadLiveChatData(reselect = true) {
       try {
-        const res = await apiFetch('/api/admin/chats');
-        state.chats = res.conversations || [];
+        const [chatsRes, areasRes, instancesRes] = await Promise.all([
+          apiFetch('/api/admin/chats'),
+          apiFetch('/api/whatsapp/areas').catch(() => ({ areas: [] })),
+          apiFetch('/api/whatsapp/instances').catch(() => ({ instances: [] })),
+        ]);
+
+        state.chats = chatsRes.conversations || [];
+        state.whatsappAreas = areasRes.areas || [];
+        state.whatsappInstances = instancesRes.instances || [];
+
+        renderDynamicDeptFilters();
+        populateChatSenderInstances();
         filterChatThreads(document.getElementById('chat-filter-input')?.value || '');
 
         if (reselect && state.chats.length > 0 && !state.activeChatPhone) {
@@ -2921,16 +3120,81 @@ export function getAdminDashboardHtml(): string {
       }
     }
 
+    function renderDynamicDeptFilters() {
+      const bar = document.getElementById('chat-dept-filter-bar');
+      if (!bar) return;
+
+      // Calcular conteos por área
+      const counts = { all: state.chats.length };
+      state.chats.forEach(c => {
+        const d = (c.department || 'General').trim();
+        counts[d] = (counts[d] || 0) + 1;
+      });
+
+      // Conjunto único de áreas detectadas
+      const areaSet = new Set();
+      state.whatsappAreas.forEach(a => areaSet.add(a.area_name));
+      state.chats.forEach(c => {
+        if (c.department) areaSet.add(c.department);
+      });
+
+      const sortedAreas = Array.from(areaSet);
+
+      let html = \`
+        <button class="btn \${state.chatDeptFilter === 'all' ? 'btn-primary active' : 'btn-secondary'} btn-sm" style="padding:4px 8px; font-size:11px; white-space: nowrap;" onclick="setChatDeptFilter('all', this)">
+          Todos (\${counts.all})
+        </button>
+      \`;
+
+      sortedAreas.forEach(areaName => {
+        const c = counts[areaName] || 0;
+        const isCurrent = state.chatDeptFilter.toLowerCase() === areaName.toLowerCase();
+        let icon = '🏢';
+        const lower = areaName.toLowerCase();
+        if (lower.includes('soporte') || lower.includes('tecnic')) icon = '🔧';
+        else if (lower.includes('cobranza') || lower.includes('pago') || lower.includes('caja')) icon = '💳';
+        else if (lower.includes('ventas') || lower.includes('contrat')) icon = '💼';
+
+        html += \`
+          <button class="btn \${isCurrent ? 'btn-primary active' : 'btn-secondary'} btn-sm" style="padding:4px 8px; font-size:11px; white-space: nowrap;" onclick="setChatDeptFilter('\${escapeHtml(areaName)}', this)">
+            \${icon} \${escapeHtml(areaName)} (\${c})
+          </button>
+        \`;
+      });
+
+      bar.innerHTML = html;
+    }
+
+    function populateChatSenderInstances() {
+      const select = document.getElementById('chat-sender-instance');
+      if (!select) return;
+
+      if (!state.whatsappInstances || state.whatsappInstances.length === 0) {
+        select.innerHTML = '<option value="">Línea activa por defecto</option>';
+        return;
+      }
+
+      const currentVal = select.value;
+      select.innerHTML = state.whatsappInstances.map(inst => {
+        const phone = inst.phone ? \`(+52 \${inst.phone.slice(-10)})\` : '';
+        const area = inst.area_name ? \`[\${inst.area_name}] \` : '';
+        return \`<option value="\${escapeHtml(inst.name)}">\${area}\${escapeHtml(inst.name)} \${phone}</option>\`;
+      }).join('');
+
+      if (currentVal && Array.from(select.options).some(o => o.value === currentVal)) {
+        select.value = currentVal;
+      }
+    }
+
     function setChatDeptFilter(dept, btn) {
       state.chatDeptFilter = dept;
-      document.querySelectorAll('#chat-threads-sidebar .chat-search-header .btn').forEach(b => {
+      document.querySelectorAll('#chat-dept-filter-bar .btn').forEach(b => {
         b.classList.remove('btn-primary', 'active');
         b.classList.add('btn-secondary');
       });
-      const activeBtn = btn || document.getElementById('btn-filter-dept-' + (dept ? dept.toLowerCase() : 'all'));
-      if (activeBtn) {
-        activeBtn.classList.remove('btn-secondary');
-        activeBtn.classList.add('btn-primary', 'active');
+      if (btn) {
+        btn.classList.remove('btn-secondary');
+        btn.classList.add('btn-primary', 'active');
       }
       filterChatThreads(document.getElementById('chat-filter-input')?.value || '');
     }
@@ -2945,7 +3209,7 @@ export function getAdminDashboardHtml(): string {
     function renderChatThreads(list) {
       const container = document.getElementById('chat-threads-container');
       if (!list || list.length === 0) {
-        container.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-dim); font-size: 13px;">Sin conversaciones en este departamento.</div>';
+        container.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-dim); font-size: 13px;">Sin conversaciones en esta área.</div>';
         return;
       }
 
@@ -2955,10 +3219,8 @@ export function getAdminDashboardHtml(): string {
         const isActive = c.phone === state.activeChatPhone ? 'active' : '';
         const name = c.client_name || c.phone;
         const initials = name.substring(0, 2).toUpperCase();
-        const dept = (c.department || 'ATENCION').toUpperCase();
-        const deptBadgeClass = dept === 'SOPORTE' ? 'badge-purple' : 'badge-info';
-        const deptLabel = dept === 'SOPORTE' ? '🔧 Soporte' : '💳 Atención';
-        const instanceLabel = c.last_instance ? \`<span style="font-size: 9px; color: var(--text-dim); margin-left: 4px;">(\${c.last_instance})</span>\` : '';
+        const dept = c.department || 'General';
+        const instanceLabel = c.last_instance ? \`<span style="font-size: 9px; color: var(--text-dim); margin-left: 2px;">[\${c.last_instance}]</span>\` : '';
         const deleteBtnHtml = isSuperAdmin ? \`
             <button class="btn-thread-delete" title="Eliminar conversación" onclick="deleteChatThread(event, '\${c.phone}')">
               <svg class="svg-icon" style="width: 13px; height: 13px;" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
@@ -2973,11 +3235,11 @@ export function getAdminDashboardHtml(): string {
                 <span class="thread-time">\${formatShortTime(c.last_interaction)}</span>
               </div>
               <div class="thread-preview">\${escapeHtml(c.last_message || '')}</div>
-              <div style="display: flex; gap: 4px; align-items: center; margin-top: 4px;">
-                <span class="badge \${deptBadgeClass}" style="font-size: 9.5px; padding: 2px 6px;">
-                  \${deptLabel}
+              <div style="display: flex; gap: 4px; align-items: center; margin-top: 4px; flex-wrap: wrap;">
+                <span class="badge badge-info" style="font-size: 9px; padding: 2px 5px;">
+                  \${escapeHtml(dept)}
                 </span>
-                <span class="badge \${c.is_human_paused ? 'badge-warning' : 'badge-success'}" style="font-size: 9.5px; padding: 2px 6px;">
+                <span class="badge \${c.is_human_paused ? 'badge-warning' : 'badge-success'}" style="font-size: 9px; padding: 2px 5px;">
                   \${c.is_human_paused ? '⏸️ Humano' : '🤖 Bot'}
                 </span>
                 \${instanceLabel}
@@ -2994,7 +3256,7 @@ export function getAdminDashboardHtml(): string {
       let filtered = state.chats;
       
       if (state.chatDeptFilter && state.chatDeptFilter !== 'all') {
-        filtered = filtered.filter(c => (c.department || 'ATENCION').toUpperCase() === state.chatDeptFilter.toUpperCase());
+        filtered = filtered.filter(c => (c.department || 'General').toLowerCase() === state.chatDeptFilter.toLowerCase());
       }
 
       if (term) {
@@ -3007,23 +3269,28 @@ export function getAdminDashboardHtml(): string {
       renderChatThreads(filtered);
     }
 
-    function updateChatDeptUI(dept) {
-      const isSoporte = (dept || 'ATENCION').toUpperCase() === 'SOPORTE';
+    function updateChatDeptUI(dept, instanceName) {
+      const currentDept = dept || 'General';
       const badge = document.getElementById('active-chat-dept-badge');
-      const transferBtnText = document.getElementById('btn-transfer-dept-text');
+      const instBadge = document.getElementById('active-chat-instance-badge');
       const senderSelect = document.getElementById('chat-sender-instance');
 
       if (badge) {
-        badge.className = 'badge ' + (isSoporte ? 'badge-purple' : 'badge-info');
-        badge.innerText = isSoporte ? '🔧 Soporte' : '💳 Atención';
+        badge.innerText = currentDept;
       }
 
-      if (transferBtnText) {
-        transferBtnText.innerText = isSoporte ? 'Mover a Atención' : 'Mover a Soporte';
+      const activeInst = instanceName || (senderSelect?.value || '');
+      if (instBadge) {
+        if (activeInst) {
+          instBadge.innerText = \`Línea: \${activeInst}\`;
+          instBadge.style.display = 'inline-block';
+        } else {
+          instBadge.style.display = 'none';
+        }
       }
 
-      if (senderSelect) {
-        senderSelect.value = isSoporte ? 'soporte' : 'atencion';
+      if (senderSelect && instanceName) {
+        senderSelect.value = instanceName;
       }
     }
 
@@ -3041,7 +3308,7 @@ export function getAdminDashboardHtml(): string {
       document.getElementById('active-chat-name').innerText = chat?.client_name || phone;
       document.getElementById('active-chat-phone').innerText = phone;
       
-      updateChatDeptUI(chat?.department || 'ATENCION');
+      updateChatDeptUI(chat?.department || 'General', chat?.last_instance);
       if (chat?.last_instance) {
         const senderSelect = document.getElementById('chat-sender-instance');
         if (senderSelect) senderSelect.value = chat.last_instance;
@@ -3060,34 +3327,112 @@ export function getAdminDashboardHtml(): string {
       }
     }
 
-    async function transferCurrentChatDepartment() {
+    function openTransferChatModal() {
       if (!state.activeChatPhone) return;
       const chat = state.chats.find(c => c.phone === state.activeChatPhone);
-      const currentDept = (chat?.department || 'ATENCION').toUpperCase();
-      const newDept = currentDept === 'ATENCION' ? 'SOPORTE' : 'ATENCION';
+      const currentDept = chat?.department || 'General';
 
-      try {
-        const res = await apiFetch('/api/admin/chats/' + encodeURIComponent(state.activeChatPhone) + '/department', {
-          method: 'POST',
-          body: JSON.stringify({ department: newDept }),
-        });
+      const areaOptions = state.whatsappAreas.map(a => {
+        const isSelected = a.area_name.toLowerCase() === currentDept.toLowerCase();
+        const phoneTxt = a.phone_number ? \` (+52 \${a.phone_number.slice(-10)})\` : '';
+        return \`<option value="\${escapeHtml(a.area_name)}" data-instance="\${escapeHtml(a.instance_name)}" \${isSelected ? 'selected' : ''}>\${escapeHtml(a.area_name)}\${phoneTxt} [Línea: \${escapeHtml(a.instance_name)}]</option>\`;
+      }).join('');
 
-        if (res.success) {
-          if (chat) {
-            chat.department = newDept;
-            chat.is_human_paused = true;
-          }
-          updateChatDeptUI(newDept);
-          if (res.takeover) {
-            updateTakeoverButton(true, res.takeover);
-          }
-          filterChatThreads(document.getElementById('chat-filter-input')?.value || '');
-          showToast('Transferencia Realizada', \`Chat asignado a \${newDept === 'SOPORTE' ? 'Soporte Técnico' : 'Atención al Cliente'}. Bot pausado para atención humana.\`, 'success');
-        } else {
-          showToast('Error', res.error || 'No se pudo transferir el chat', 'error');
+      const content = \`
+        <div style="display: flex; flex-direction: column; gap: 14px;">
+          <p style="font-size: 13px; color: var(--text-muted);">
+            Transfiere la conversación del cliente <strong>\${escapeHtml(chat?.client_name || state.activeChatPhone)}</strong> a otra área u oficina. El historial de mensajes se conservará intacto.
+          </p>
+
+          <div class="form-group">
+            <label class="form-label">Área / Oficina Destino</label>
+            <select id="transfer-modal-area-select" class="form-control" onchange="handleTransferAreaChange(this)">
+              \${areaOptions || '<option value="Atención al Cliente">Atención al Cliente</option><option value="Soporte Técnico">Soporte Técnico</option>'}
+              <option value="__CUSTOM__">-- Otra área personalizada --</option>
+            </select>
+            <input type="text" id="transfer-modal-area-custom" class="form-control" placeholder="Escribe el nombre del área..." style="display: none; margin-top: 6px;">
+          </div>
+
+          <div class="form-group" style="background: rgba(0,0,0,0.25); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--card-border);">
+            <label style="display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
+              <div>
+                <strong style="font-size: 13px; color: var(--text-main);">💬 Notificar al cliente por WhatsApp</strong>
+                <div style="font-size: 11px; color: var(--text-dim);">Envía un mensaje automático avisando que su caso fue transferido</div>
+              </div>
+              <input type="checkbox" id="transfer-modal-notify-toggle" style="transform: scale(1.3); cursor: pointer;" checked onchange="document.getElementById('transfer-modal-msg-wrap').style.display = this.checked ? 'block' : 'none';">
+            </label>
+            <div id="transfer-modal-msg-wrap" style="margin-top: 10px;">
+              <textarea id="transfer-modal-custom-msg" class="form-control" rows="2" placeholder="Tu conversación ha sido transferida al área de..."></textarea>
+            </div>
+          </div>
+        </div>
+      \`;
+
+      openModal('🔄 Traspasar Conversación a Otra Área / Oficina', content, async () => {
+        const select = document.getElementById('transfer-modal-area-select');
+        let selectedArea = select.value;
+        if (selectedArea === '__CUSTOM__') {
+          selectedArea = document.getElementById('transfer-modal-area-custom')?.value.trim();
         }
-      } catch (err) {
-        showToast('Error', err.message, 'error');
+
+        if (!selectedArea) {
+          showToast('Área requerida', 'Debes seleccionar o escribir un área de destino', 'warning');
+          return false;
+        }
+
+        const selectedOption = select.options[select.selectedIndex];
+        const targetInstance = selectedOption?.getAttribute('data-instance') || undefined;
+        const notifyClient = document.getElementById('transfer-modal-notify-toggle')?.checked || false;
+        const customMessage = document.getElementById('transfer-modal-custom-msg')?.value.trim() || '';
+
+        try {
+          const res = await apiFetch('/api/admin/chats/' + encodeURIComponent(state.activeChatPhone) + '/department', {
+            method: 'POST',
+            body: JSON.stringify({
+              department: selectedArea,
+              targetInstance,
+              notifyClient,
+              customMessage,
+            }),
+          });
+
+          if (res.success) {
+            if (chat) {
+              chat.department = selectedArea;
+              if (res.instanceName) chat.last_instance = res.instanceName;
+              chat.is_human_paused = true;
+            }
+            updateChatDeptUI(selectedArea, res.instanceName);
+            if (res.takeover) {
+              updateTakeoverButton(true, res.takeover);
+            }
+            renderDynamicDeptFilters();
+            filterChatThreads(document.getElementById('chat-filter-input')?.value || '');
+            showToast('Traspaso Exitoso', res.message || \`Chat transferido a \${selectedArea}.\`, 'success');
+          } else {
+            showToast('Error', res.error || 'No se pudo transferir el chat', 'error');
+            return false;
+          }
+        } catch (err) {
+          showToast('Error', err.message, 'error');
+          return false;
+        }
+      }, '🔄 Confirmar Traspaso');
+    }
+
+    function handleTransferAreaChange(select) {
+      const customInput = document.getElementById('transfer-modal-area-custom');
+      const msgInput = document.getElementById('transfer-modal-custom-msg');
+      if (select.value === '__CUSTOM__') {
+        if (customInput) {
+          customInput.style.display = 'block';
+          customInput.focus();
+        }
+      } else {
+        if (customInput) customInput.style.display = 'none';
+        if (msgInput && (!msgInput.value || msgInput.value.includes('transferida'))) {
+          msgInput.value = \`Tu conversación ha sido transferida al área de *\${select.value}*. En un momento un asesor continuará con tu atención por este medio.\`;
+        }
       }
     }
 
@@ -4315,29 +4660,35 @@ export function getAdminDashboardHtml(): string {
           
           const phoneDisplay = inst.phone ? \`+52 \${inst.phone.slice(-10)}\` : 'Sin número vinculado';
           const safeName = inst.name.replace(/'/g, "\\'");
+          const areaDisplay = inst.area_name || inst.name;
+          const safeArea = (inst.area_name || inst.name).replace(/'/g, "\\'");
 
           return \`
-            <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(0,0,0,0.3); padding: 12px 14px; border-radius: var(--radius-sm); border: 1px solid \${inst.isActive ? 'var(--primary)' : 'var(--card-border)'};">
+            <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(0,0,0,0.3); padding: 12px 14px; border-radius: var(--radius-sm); border: 1px solid \${inst.isActive ? 'var(--primary)' : 'var(--card-border)'}; flex-wrap: wrap; gap: 10px;">
               <div style="display: flex; align-items: center; gap: 12px;">
                 <div style="width: 36px; height: 36px; border-radius: 50%; background: \${isOpen ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)'}; display: flex; align-items: center; justify-content: center; font-size: 18px;">
                   \${isOpen ? '📱' : '📵'}
                 </div>
                 <div>
-                  <div style="display: flex; align-items: center; gap: 8px;">
+                  <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                     <strong style="font-size: 13.5px; color: var(--text-main);">\${escapeHtml(inst.name)}</strong>
+                    <span class="badge badge-info" style="font-size: 10px;">🏢 \${escapeHtml(areaDisplay)}</span>
                     \${inst.isActive ? '<span class="badge badge-primary" style="font-size: 10px;">BOT ACTIVO</span>' : ''}
                   </div>
-                  <div style="font-size: 12px; color: var(--text-muted); font-family: var(--font-mono);">
+                  <div style="font-size: 12px; color: var(--text-muted); font-family: var(--font-mono); margin-top: 2px;">
                     \${escapeHtml(phoneDisplay)} \${inst.profileName ? \`(\${escapeHtml(inst.profileName)})\` : ''}
                   </div>
                 </div>
               </div>
 
-              <div style="display: flex; align-items: center; gap: 8px;">
+              <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                 \${statusBadge}
+                <button class="btn btn-secondary btn-sm" style="font-size: 11px; padding: 4px 8px;" onclick="openEditWhatsAppInstanceAreaModal('\${safeName}', '\${safeArea}', '\${(inst.description || '').replace(/'/g, "\\'")}')" title="Editar área / oficina asignada">
+                  ✏️ Área
+                </button>
                 \${!isOpen ? \`
                   <button class="btn btn-primary btn-sm" style="font-size: 11px; padding: 4px 8px;" onclick="openInstanceQrModal('\${safeName}')" title="Escanear código QR para conectar">
-                    📲 Vincular QR
+                    📲 QR
                   </button>
                 \` : ''}
                 \${!inst.isActive ? \`
@@ -4376,40 +4727,98 @@ export function getAdminDashboardHtml(): string {
       const content = \`
         <div style="display: flex; flex-direction: column; gap: 14px;">
           <p style="font-size: 13px; color: var(--text-muted);">
-            Ingresa un nombre para identificar esta nueva línea de WhatsApp (ej: <strong>soporte-linea2</strong>, <strong>ventas-actopan</strong>, <strong>cobranza</strong>):
+            Registra una nueva cuenta / línea de WhatsApp e indícale a qué área u oficina pertenece:
           </p>
           <div class="form-group">
-            <label class="form-label">Nombre de la Instancia</label>
-            <input type="text" id="new-instance-name" class="form-control" placeholder="ej: soporte-linea2" autocomplete="off" spellcheck="false" required>
-            <div style="font-size: 11px; color: var(--text-dim); margin-top: 4px;">Usa solo letras minúsculas, números o guiones.</div>
+            <label class="form-label">Nombre del Área / Oficina (Visible para traspasos)</label>
+            <input type="text" id="new-instance-area" class="form-control" placeholder="Ej: Oficina Actopan, Cobranza Matriz, Soporte Fibra" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Identificador de Instancia (Slug)</label>
+            <input type="text" id="new-instance-name" class="form-control" placeholder="ej: actopan, cobranza, soporte-linea2" autocomplete="off" spellcheck="false" required oninput="this.value = this.value.toLowerCase().replace(/[^a-z0-9_-]/g, '')">
+            <div style="font-size: 11px; color: var(--text-dim); margin-top: 4px;">Usa solo minúsculas sin espacios (ej. oficina-actopan).</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Descripción o Notas (Opcional)</label>
+            <input type="text" id="new-instance-desc" class="form-control" placeholder="Ej: Línea de atención presencial y pagos">
           </div>
         </div>
       \`;
 
-      openModal('➕ Vincular Nuevo Número de WhatsApp', content, async () => {
+      openModal('➕ Registrar Nueva Línea y Área de WhatsApp', content, async () => {
         const nameInput = document.getElementById('new-instance-name');
+        const areaInput = document.getElementById('new-instance-area');
+        const descInput = document.getElementById('new-instance-desc');
+
         const name = (nameInput?.value || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
-        if (!name) {
-          showToast('Nombre inválido', 'Por favor ingresa un nombre para la instancia', 'warning');
+        const area_name = (areaInput?.value || '').trim();
+        const description = (descInput?.value || '').trim();
+
+        if (!name || !area_name) {
+          showToast('Campos requeridos', 'Debes ingresar el nombre de la instancia y el área u oficina', 'warning');
           return false;
         }
 
-        showToast('Creando Instancia', \`Registrando "\${name}" en Evolution API...\`, 'info');
+        showToast('Creando Instancia', \`Registrando "\${name}" para el área "\${area_name}"...\`, 'info');
         const res = await apiFetch('/api/whatsapp/instances', {
           method: 'POST',
-          body: JSON.stringify({ name }),
+          body: JSON.stringify({ name, area_name, description }),
         });
 
         if (res.success) {
           showToast('Instancia Creada', res.message || 'Instancia creada exitosamente.', 'success');
           fetchWhatsAppInstancesList();
+          loadLiveChatData(false);
           setTimeout(() => {
             openInstanceQrModal(name);
           }, 400);
         } else {
           showToast('Error', res.message || res.error || 'No se pudo crear la instancia', 'error');
+          return false;
         }
       }, 'Crear & Generar QR');
+    }
+
+    function openEditWhatsAppInstanceAreaModal(instanceName, currentArea, currentDesc) {
+      const content = \`
+        <div style="display: flex; flex-direction: column; gap: 14px;">
+          <p style="font-size: 13px; color: var(--text-muted);">
+            Modifica el nombre del área asignada a la línea <strong>\${escapeHtml(instanceName)}</strong>:
+          </p>
+          <div class="form-group">
+            <label class="form-label">Nombre del Área / Oficina</label>
+            <input type="text" id="edit-instance-area-name" class="form-control" value="\${escapeHtml(currentArea || '')}" placeholder="Ej: Oficina Actopan, Cobranza, etc." required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Descripción</label>
+            <input type="text" id="edit-instance-area-desc" class="form-control" value="\${escapeHtml(currentDesc || '')}" placeholder="Notas adicionales">
+          </div>
+        </div>
+      \`;
+
+      openModal(\`✏️ Editar Área de \${instanceName}\`, content, async () => {
+        const areaName = document.getElementById('edit-instance-area-name')?.value.trim();
+        const desc = document.getElementById('edit-instance-area-desc')?.value.trim();
+
+        if (!areaName) {
+          showToast('Campo requerido', 'El nombre del área es obligatorio', 'warning');
+          return false;
+        }
+
+        const res = await apiFetch(\`/api/whatsapp/instances/\${encodeURIComponent(instanceName)}/area\`, {
+          method: 'PUT',
+          body: JSON.stringify({ area_name: areaName, description: desc }),
+        });
+
+        if (res.success) {
+          showToast('Área Actualizada', \`Línea \${instanceName} asignada a "\${areaName}".\`, 'success');
+          fetchWhatsAppInstancesList();
+          loadLiveChatData(false);
+        } else {
+          showToast('Error', res.error || 'No se pudo actualizar el área', 'error');
+          return false;
+        }
+      }, 'Guardar Cambios');
     }
 
     async function openInstanceQrModal(instanceName) {

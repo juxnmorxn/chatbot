@@ -257,23 +257,38 @@ export class TursoService {
   }
 
   /**
-   * Reasigna o transfiere el departamento de una sesión (ej. 'SOPORTE' o 'ATENCION')
+   * Reasigna o transfiere el departamento / área de una sesión (ej. 'Oficina Actopan', 'Cobranza Matriz', etc.)
    */
-  static async updateDepartment(phone: string, department: 'SOPORTE' | 'ATENCION'): Promise<void> {
+  static async updateDepartment(phone: string, department: string, targetInstance?: string): Promise<void> {
     try {
       const client = getTursoClient();
       const now = new Date().toISOString();
-      await client.execute({
-        sql: `
-          INSERT INTO sessions (phone, department, last_interaction)
-          VALUES (?, ?, ?)
-          ON CONFLICT(phone) DO UPDATE SET
-            department = excluded.department,
-            last_interaction = excluded.last_interaction
-        `,
-        args: [phone, department, now],
-      });
-      logger.info(`Departamento de ${phone} transferido a: ${department}`);
+      const cleanDept = (department || 'General').trim();
+      if (targetInstance) {
+        await client.execute({
+          sql: `
+            INSERT INTO sessions (phone, department, last_instance, last_interaction)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(phone) DO UPDATE SET
+              department = excluded.department,
+              last_instance = excluded.last_instance,
+              last_interaction = excluded.last_interaction
+          `,
+          args: [phone, cleanDept, targetInstance.trim(), now],
+        });
+      } else {
+        await client.execute({
+          sql: `
+            INSERT INTO sessions (phone, department, last_interaction)
+            VALUES (?, ?, ?)
+            ON CONFLICT(phone) DO UPDATE SET
+              department = excluded.department,
+              last_interaction = excluded.last_interaction
+          `,
+          args: [phone, cleanDept, now],
+        });
+      }
+      logger.info(`Departamento de ${phone} transferido a: ${cleanDept}${targetInstance ? ` (Instancia: ${targetInstance})` : ''}`);
     } catch (error: any) {
       logger.error(`Error al actualizar departamento de ${phone}:`, error?.message || error);
     }
@@ -2834,6 +2849,263 @@ export class TursoService {
       return [];
     }
   }
+
+  // ==========================================
+  // CONTINGENCIA Y CAÍDAS MASIVAS DE RED (OUTAGES)
+  // ==========================================
+
+  static async createOutage(data: {
+    zone_name: string;
+    estimated_time?: string;
+    notes?: string;
+  }): Promise<{ id: number; zone_name: string; status: string }> {
+    const client = getTursoClient();
+    const zone = data.zone_name.trim();
+    const estimated = (data.estimated_time || '').trim();
+    const notes = (data.notes || '').trim();
+    const now = new Date().toISOString();
+
+    const res = await client.execute({
+      sql: `INSERT INTO network_outages (zone_name, status, estimated_time, notes, created_at) VALUES (?, 'active', ?, ?, ?)`,
+      args: [zone, estimated, notes, now],
+    });
+
+    const id = Number(res.lastInsertRowid || 0);
+    logger.info(`[Outage] Nueva contingencia de red declarada para zona "${zone}" (ID: ${id})`);
+    return { id, zone_name: zone, status: 'active' };
+  }
+
+  static async getActiveOutages(): Promise<NetworkOutage[]> {
+    try {
+      const client = getTursoClient();
+      const res = await client.execute({
+        sql: `SELECT * FROM network_outages WHERE status = 'active' ORDER BY id DESC`,
+        args: [],
+      });
+      return res.rows as unknown as NetworkOutage[];
+    } catch (error: any) {
+      logger.error('Error al obtener contingencias activas:', error?.message || error);
+      return [];
+    }
+  }
+
+  static async getAllOutages(limit: number = 50): Promise<NetworkOutage[]> {
+    try {
+      const client = getTursoClient();
+      const res = await client.execute({
+        sql: `SELECT * FROM network_outages ORDER BY id DESC LIMIT ?`,
+        args: [limit],
+      });
+      return res.rows as unknown as NetworkOutage[];
+    } catch (error: any) {
+      logger.error('Error al obtener historial de contingencias:', error?.message || error);
+      return [];
+    }
+  }
+
+  static async resolveOutage(id: number): Promise<boolean> {
+    try {
+      const client = getTursoClient();
+      const now = new Date().toISOString();
+      const res = await client.execute({
+        sql: `UPDATE network_outages SET status = 'resolved', resolved_at = ? WHERE id = ?`,
+        args: [now, id],
+      });
+      logger.info(`[Outage] Contingencia ID ${id} marcada como normalizada/resuelta.`);
+      return (res.rowsAffected || 0) > 0;
+    } catch (error: any) {
+      logger.error(`Error al resolver contingencia ID ${id}:`, error?.message || error);
+      return false;
+    }
+  }
+
+  static async checkActiveOutageForZone(zoneName?: string | null): Promise<NetworkOutage | null> {
+    try {
+      const client = getTursoClient();
+      // 1. Verificar si hay caída "General" / "Todas" activa
+      const generalRes = await client.execute({
+        sql: `SELECT * FROM network_outages WHERE status = 'active' AND (LOWER(zone_name) IN ('general', 'todas', 'todos', 'red general', 'global')) LIMIT 1`,
+        args: [],
+      });
+      if (generalRes.rows.length > 0) {
+        return generalRes.rows[0] as unknown as NetworkOutage;
+      }
+
+      if (!zoneName) return null;
+      const cleanZone = zoneName.trim().toLowerCase();
+
+      // 2. Verificar si coincide con la zona específica del cliente
+      const zoneRes = await client.execute({
+        sql: `SELECT * FROM network_outages WHERE status = 'active'`,
+        args: [],
+      });
+
+      for (const row of zoneRes.rows) {
+        const outZone = String(row.zone_name || '').toLowerCase();
+        if (cleanZone.includes(outZone) || outZone.includes(cleanZone)) {
+          return row as unknown as NetworkOutage;
+        }
+      }
+
+      return null;
+    } catch (error: any) {
+      logger.error('Error al verificar caídas activas para zona:', error?.message || error);
+      return null;
+    }
+  }
+
+  static async getDistinctZones(): Promise<string[]> {
+    try {
+      const client = getTursoClient();
+      const [onusZones, whDirecciones] = await Promise.all([
+        client.execute(`SELECT DISTINCT zone_name FROM smartolt_onus WHERE zone_name IS NOT NULL AND zone_name != ''`),
+        client.execute(`SELECT DISTINCT direccion FROM wisphub_clients WHERE direccion IS NOT NULL AND direccion != '' LIMIT 100`),
+      ]);
+
+      const set = new Set<string>();
+      for (const r of onusZones.rows) {
+        if (r.zone_name) set.add(String(r.zone_name).trim());
+      }
+      for (const r of whDirecciones.rows) {
+        if (r.direccion) {
+          const part = String(r.direccion).split(',')[0].trim();
+          if (part && part.length >= 3 && part.length <= 40) set.add(part);
+        }
+      }
+
+      return Array.from(set).sort();
+    } catch (error: any) {
+      logger.error('Error al obtener zonas únicas:', error?.message || error);
+      return [];
+    }
+  }
+
+  // ==========================================
+  // INSTANCIAS DE WHATSAPP Y ÁREAS DINÁMICAS
+  // ==========================================
+
+  static async upsertWhatsAppInstance(data: {
+    instance_name: string;
+    area_name: string;
+    phone_number?: string | null;
+    description?: string | null;
+    is_active?: number;
+  }): Promise<void> {
+    try {
+      const client = getTursoClient();
+      const instName = data.instance_name.trim();
+      const area = (data.area_name || instName).trim();
+      const phone = data.phone_number ? data.phone_number.trim() : null;
+      const desc = data.description ? data.description.trim() : null;
+      const active = data.is_active ?? 1;
+      const now = new Date().toISOString();
+
+      await client.execute({
+        sql: `
+          INSERT INTO whatsapp_instances (instance_name, area_name, phone_number, description, is_active, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(instance_name) DO UPDATE SET
+            area_name = excluded.area_name,
+            phone_number = COALESCE(excluded.phone_number, whatsapp_instances.phone_number),
+            description = COALESCE(excluded.description, whatsapp_instances.description),
+            is_active = excluded.is_active,
+            updated_at = excluded.updated_at
+        `,
+        args: [instName, area, phone, desc, active, now, now],
+      });
+      logger.info(`Instancia de WhatsApp "${instName}" registrada para el área "${area}".`);
+    } catch (error: any) {
+      logger.error(`Error al registrar instancia de WhatsApp ${data.instance_name}:`, error?.message || error);
+    }
+  }
+
+  static async getWhatsAppInstancesFromDb(): Promise<WhatsAppInstanceRecord[]> {
+    try {
+      const client = getTursoClient();
+      const res = await client.execute(`SELECT * FROM whatsapp_instances ORDER BY area_name ASC`);
+      return res.rows.map((r: any) => ({
+        instance_name: String(r.instance_name),
+        area_name: String(r.area_name || r.instance_name),
+        phone_number: r.phone_number ? String(r.phone_number) : null,
+        description: r.description ? String(r.description) : null,
+        is_active: Number(r.is_active ?? 1),
+        created_at: String(r.created_at || ''),
+        updated_at: String(r.updated_at || ''),
+      }));
+    } catch (error: any) {
+      logger.error('Error al obtener instancias de WhatsApp de Turso:', error?.message || error);
+      return [];
+    }
+  }
+
+  static async getInstanceByArea(areaName: string): Promise<WhatsAppInstanceRecord | null> {
+    try {
+      const client = getTursoClient();
+      const clean = areaName.trim();
+      const res = await client.execute({
+        sql: `SELECT * FROM whatsapp_instances WHERE LOWER(area_name) = LOWER(?) OR LOWER(instance_name) = LOWER(?) LIMIT 1`,
+        args: [clean, clean],
+      });
+      if (res.rows.length === 0) return null;
+      const r: any = res.rows[0];
+      return {
+        instance_name: String(r.instance_name),
+        area_name: String(r.area_name || r.instance_name),
+        phone_number: r.phone_number ? String(r.phone_number) : null,
+        description: r.description ? String(r.description) : null,
+        is_active: Number(r.is_active ?? 1),
+        created_at: String(r.created_at || ''),
+        updated_at: String(r.updated_at || ''),
+      };
+    } catch (error: any) {
+      logger.error(`Error al buscar instancia para área ${areaName}:`, error?.message || error);
+      return null;
+    }
+  }
+
+  static async deleteWhatsAppInstanceRecord(instanceName: string): Promise<boolean> {
+    try {
+      const client = getTursoClient();
+      const res = await client.execute({
+        sql: `DELETE FROM whatsapp_instances WHERE instance_name = ?`,
+        args: [instanceName.trim()],
+      });
+      return (res.rowsAffected || 0) > 0;
+    } catch (error: any) {
+      logger.error(`Error al eliminar registro de instancia ${instanceName}:`, error?.message || error);
+      return false;
+    }
+  }
+
+  static async getAllDistinctAreas(): Promise<Array<{ area_name: string; instance_name: string; phone_number: string | null }>> {
+    try {
+      const list = await this.getWhatsAppInstancesFromDb();
+      if (list.length > 0) {
+        return list.map(i => ({
+          area_name: i.area_name,
+          instance_name: i.instance_name,
+          phone_number: i.phone_number ?? null,
+        }));
+      }
+      return [
+        { area_name: 'Soporte Técnico', instance_name: 'soporte', phone_number: null },
+        { area_name: 'Atención al Cliente', instance_name: 'atencion', phone_number: null },
+      ];
+    } catch (error: any) {
+      logger.error('Error al obtener áreas de WhatsApp:', error?.message || error);
+      return [];
+    }
+  }
+}
+
+export interface NetworkOutage {
+  id: number;
+  zone_name: string;
+  status: 'active' | 'resolved';
+  estimated_time?: string | null;
+  notes?: string | null;
+  created_at: string;
+  resolved_at?: string | null;
 }
 
 export interface AdminUserRecord {
@@ -2841,7 +3113,7 @@ export interface AdminUserRecord {
   username: string;
   password_hash?: string;
   name: string;
-  role: 'superadmin' | 'soporte' | 'tecnico' | 'facturacion';
+  role: 'superadmin' | 'soporte' | 'tecnico' | 'facturacion' | 'atencion';
   is_active: number;
   created_at: string;
   last_login: string | null;
@@ -2858,12 +3130,17 @@ export interface ChatConversationItem {
   is_human_paused: boolean;
   human_takeover_until?: string | null;
   human_takeover_status?: string | null;
-  department?: 'SOPORTE' | 'ATENCION' | string;
+  department?: string;
   last_instance?: string | null;
   unread_count?: number;
 }
 
-
-
-
-
+export interface WhatsAppInstanceRecord {
+  instance_name: string;
+  area_name: string;
+  phone_number?: string | null;
+  description?: string | null;
+  is_active: number;
+  created_at?: string;
+  updated_at?: string;
+}

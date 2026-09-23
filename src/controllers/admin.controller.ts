@@ -252,30 +252,50 @@ export class AdminController {
   }
 
   /**
-   * Reasigna o transfiere una conversación a otro departamento (SOPORTE | ATENCION)
+   * Reasigna o transfiere una conversación a otro departamento u oficina (ej. Oficina Actopan, Cobranza Matriz)
    */
   static async transferChatDepartment(req: Request, res: Response): Promise<void> {
     try {
       const phone = String(req.params.phone || req.body?.phone || '').trim();
-      const department = String(req.body?.department || 'SOPORTE').toUpperCase() as 'SOPORTE' | 'ATENCION';
+      const department = String(req.body?.department || 'General').trim();
+      const targetInstance = req.body?.targetInstance ? String(req.body.targetInstance).trim() : undefined;
+      const notifyClient = Boolean(req.body?.notifyClient);
+      const customMessage = req.body?.customMessage ? String(req.body.customMessage).trim() : '';
+
       if (!phone) {
         res.status(400).json({ success: false, error: 'Teléfono requerido' });
         return;
       }
-      await TursoService.updateDepartment(phone, department);
+
+      // Si no especificaron targetInstance, buscar si este departamento está mapeado a una instancia
+      let resolvedInstance = targetInstance;
+      if (!resolvedInstance) {
+        const instRec = await TursoService.getInstanceByArea(department);
+        if (instRec) resolvedInstance = instRec.instance_name;
+      }
+
+      await TursoService.updateDepartment(phone, department, resolvedInstance);
 
       // Cancelar cualquier debounce pendiente de la IA y pausar bot en modo Human Takeover por defecto (240m)
       WebhookController.cancelPendingDebounce(phone);
       const takeoverRes = await BotOrchestrator.activarPausaOperador(
         phone,
         240,
-        `Transferencia manual al departamento de ${department === 'SOPORTE' ? 'Soporte Técnico' : 'Atención al Cliente'}`,
+        `Transferencia manual al área de ${department}`,
         'OPERATOR_ACTIVE'
       );
+
+      // Si se solicitó notificar al cliente vía WhatsApp
+      if (notifyClient) {
+        const notifText = customMessage || `Tu conversación ha sido transferida al área de *${department}*. En un momento un asesor continuará con tu atención por este medio.`;
+        await EvolutionService.enviarTexto(phone, notifText, { instanceName: resolvedInstance || undefined });
+        await TursoService.logMessage(phone, 'OUT', notifText, 'TRANSFERENCIA_AREA', `Transferido a ${department}`);
+      }
 
       AdminController.broadcastSSE('chat:department', {
         phone,
         department,
+        instanceName: resolvedInstance,
         is_paused: true,
         takeover: takeoverRes,
       });
@@ -283,9 +303,10 @@ export class AdminController {
       res.json({
         success: true,
         department,
+        instanceName: resolvedInstance,
         is_paused: true,
         takeover: takeoverRes,
-        message: `Chat transferido a ${department === 'SOPORTE' ? 'Soporte Técnico' : 'Atención al Cliente'}. Bot pausado para atención humana.`,
+        message: `Chat transferido a ${department}.${resolvedInstance ? ` Respuestas asignadas a línea [${resolvedInstance}].` : ''} Bot pausado para atención humana.`,
       });
     } catch (error: any) {
       logger.error('Error al transferir departamento:', error?.message || error);
@@ -324,8 +345,20 @@ export class AdminController {
       // Cancelar cualquier mensaje pendiente de la IA
       WebhookController.cancelPendingDebounce(cleanPhone);
 
-      // Enviar el mensaje vía Evolution API en la instancia correspondiente
-      const instance = (req.body.instanceName || BotOrchestrator.getActiveInstance(cleanPhone) || '').trim();
+      // Enviar el mensaje vía Evolution API en la instancia correspondiente al chat / área
+      let instance = (req.body.instanceName || '').trim();
+      if (!instance) {
+        const session = await TursoService.getSession(cleanPhone);
+        if (session?.last_instance) {
+          instance = session.last_instance;
+        } else if (session?.department) {
+          const instRec = await TursoService.getInstanceByArea(session.department);
+          if (instRec) instance = instRec.instance_name;
+        }
+        if (!instance) {
+          instance = BotOrchestrator.getActiveInstance(cleanPhone);
+        }
+      }
       const sent = await EvolutionService.enviarTexto(cleanPhone, text, { instanceName: instance || undefined });
       if (!sent) {
         res.status(500).json({ success: false, error: 'No se pudo enviar el mensaje a través de WhatsApp' });
@@ -748,12 +781,31 @@ export class AdminController {
   }
 
   /**
-   * Obtiene la lista de todas las instancias / números de WhatsApp disponibles
+   * Obtiene la lista de todas las instancias / números de WhatsApp disponibles con sus áreas mapeadas
    */
   static async getWhatsAppInstances(_req: Request, res: Response): Promise<void> {
     try {
-      const instances = await EvolutionService.fetchAllInstances();
-      res.json({ success: true, count: instances.length, instances });
+      const [instances, dbRecords] = await Promise.all([
+        EvolutionService.fetchAllInstances(),
+        TursoService.getWhatsAppInstancesFromDb(),
+      ]);
+
+      const dbMap = new Map<string, any>();
+      for (const rec of dbRecords) {
+        dbMap.set(rec.instance_name.toLowerCase(), rec);
+      }
+
+      const merged = instances.map(inst => {
+        const rec = dbMap.get(inst.name.toLowerCase());
+        const areaName = rec?.area_name || (inst.name.toLowerCase().includes('soporte') ? 'Soporte Técnico' : (inst.name.toLowerCase().includes('atencion') ? 'Atención al Cliente' : inst.name));
+        return {
+          ...inst,
+          area_name: areaName,
+          description: rec?.description || null,
+        };
+      });
+
+      res.json({ success: true, count: merged.length, instances: merged });
     } catch (error: any) {
       logger.error('Error al listar instancias WhatsApp:', error?.message || error);
       res.status(500).json({ success: false, error: error?.message || error });
@@ -761,23 +813,68 @@ export class AdminController {
   }
 
   /**
-   * Crea una nueva instancia de WhatsApp para vincular otro número
+   * Obtiene la lista de todas las áreas activas configuradas para WhatsApp
+   */
+  static async getWhatsAppAreas(_req: Request, res: Response): Promise<void> {
+    try {
+      const areas = await TursoService.getAllDistinctAreas();
+      res.json({ success: true, count: areas.length, areas });
+    } catch (error: any) {
+      logger.error('Error al listar áreas de WhatsApp:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Crea una nueva instancia de WhatsApp para vincular otro número y le asigna su área
    */
   static async createWhatsAppInstance(req: Request, res: Response): Promise<void> {
     try {
-      const { name } = req.body || {};
+      const { name, area_name, description } = req.body || {};
       if (!name) {
         res.status(400).json({ success: false, error: 'El nombre de la instancia es obligatorio' });
         return;
       }
       const result = await EvolutionService.createInstance(name);
       if (result.success) {
+        const cleanName = String(name || '').trim().replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase();
+        const finalArea = String(area_name || cleanName).trim();
+        await TursoService.upsertWhatsAppInstance({
+          instance_name: cleanName,
+          area_name: finalArea,
+          description: description ? String(description).trim() : null,
+        });
         res.json(result);
       } else {
         res.status(400).json(result);
       }
     } catch (error: any) {
       logger.error('Error al crear instancia WhatsApp:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Actualiza el área o descripción de una instancia de WhatsApp
+   */
+  static async updateWhatsAppInstanceArea(req: Request, res: Response): Promise<void> {
+    try {
+      const instance = String(req.params.instance || '').trim();
+      const { area_name, description, phone_number, is_active } = req.body || {};
+      if (!instance || !area_name) {
+        res.status(400).json({ success: false, error: 'Instancia y nombre de área son requeridos' });
+        return;
+      }
+      await TursoService.upsertWhatsAppInstance({
+        instance_name: instance,
+        area_name: String(area_name).trim(),
+        phone_number: phone_number ? String(phone_number).trim() : undefined,
+        description: description !== undefined ? String(description).trim() : undefined,
+        is_active: is_active !== undefined ? Number(is_active) : undefined,
+      });
+      res.json({ success: true, message: `Área "${area_name}" asignada a la instancia "${instance}".` });
+    } catch (error: any) {
+      logger.error(`Error al actualizar área de instancia ${req.params.instance}:`, error?.message || error);
       res.status(500).json({ success: false, error: error?.message || error });
     }
   }
@@ -839,6 +936,7 @@ export class AdminController {
     try {
       const instance = String(req.params.instance || '').trim();
       const ok = await EvolutionService.deleteInstance(instance);
+      await TursoService.deleteWhatsAppInstanceRecord(instance);
       if (ok) {
         res.json({ success: true, message: `Instancia "${instance}" eliminada de Evolution API.` });
       } else {
@@ -1480,6 +1578,101 @@ export class AdminController {
       }
     } catch (error: any) {
       logger.error(`Error al actualizar teléfonos de cliente ${req.params.id}:`, error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  // ==========================================
+  // CONTINGENCIAS Y CAÍDAS DE RED (OUTAGES)
+  // ==========================================
+
+  static async getActiveOutages(_req: Request, res: Response): Promise<void> {
+    try {
+      const outages = await TursoService.getActiveOutages();
+      res.json({ success: true, outages });
+    } catch (error: any) {
+      logger.error('Error al obtener caídas activas:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  static async getOutagesHistory(req: Request, res: Response): Promise<void> {
+    try {
+      const limit = parseInt(String(req.query.limit || '50'), 10);
+      const outages = await TursoService.getAllOutages(limit);
+      res.json({ success: true, outages });
+    } catch (error: any) {
+      logger.error('Error al obtener historial de caídas:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  static async getOutageZones(_req: Request, res: Response): Promise<void> {
+    try {
+      const zones = await TursoService.getDistinctZones();
+      res.json({ success: true, zones });
+    } catch (error: any) {
+      logger.error('Error al obtener zonas:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  static async createOutage(req: Request, res: Response): Promise<void> {
+    try {
+      const { zone_name, estimated_time, notes } = req.body || {};
+      if (!zone_name || !String(zone_name).trim()) {
+        res.status(400).json({ success: false, error: 'Nombre de la zona requerido' });
+        return;
+      }
+
+      const outage = await TursoService.createOutage({
+        zone_name: String(zone_name).trim(),
+        estimated_time: estimated_time ? String(estimated_time).trim() : undefined,
+        notes: notes ? String(notes).trim() : undefined,
+      });
+
+      // Broadcast SSE
+      AdminController.broadcastSSE('outages:update', {
+        action: 'created',
+        outage,
+      });
+
+      res.json({
+        success: true,
+        outage,
+        message: `Falla masiva declarada para la zona "${zone_name}". El bot aplicará contingencia automática a los abonados afectados.`,
+      });
+    } catch (error: any) {
+      logger.error('Error al declarar caída de red:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  static async resolveOutage(req: Request, res: Response): Promise<void> {
+    try {
+      const id = parseInt(String(req.params.id || ''), 10);
+      if (isNaN(id) || id <= 0) {
+        res.status(400).json({ success: false, error: 'ID de contingencia inválido' });
+        return;
+      }
+
+      const ok = await TursoService.resolveOutage(id);
+      if (ok) {
+        // Broadcast SSE
+        AdminController.broadcastSSE('outages:update', {
+          action: 'resolved',
+          id,
+        });
+
+        res.json({
+          success: true,
+          message: 'Contingencia de red normalizada. El bot regresa a diagnóstico habitual para esta zona.',
+        });
+      } else {
+        res.status(404).json({ success: false, error: 'Contingencia no encontrada' });
+      }
+    } catch (error: any) {
+      logger.error(`Error al normalizar contingencia ${req.params.id}:`, error?.message || error);
       res.status(500).json({ success: false, error: error?.message || error });
     }
   }
