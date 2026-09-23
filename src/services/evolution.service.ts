@@ -253,7 +253,12 @@ export class EvolutionService {
       }
 
       let webhookOk = false;
-      const baseAppUrl = SettingsService.get('APP_URL', 'APP_URL', config.appUrl || `http://localhost:${config.port}`).replace(/\/+$/, '');
+      let baseAppUrl = SettingsService.get('APP_URL', 'APP_URL', config.appUrl).replace(/\/+$/, '');
+      if (!baseAppUrl || baseAppUrl.includes('localhost') || baseAppUrl.includes('127.0.0.1')) {
+        baseAppUrl = process.env.EVOLUTION_URL?.includes('evolution_api')
+          ? `http://chatbot_app:${config.port || 3000}`
+          : `http://2.25.241.239:${config.port || 3000}`;
+      }
       const targetUrl = webhookBaseUrl || `${baseAppUrl}/webhook`;
 
       try {
