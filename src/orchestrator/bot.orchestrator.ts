@@ -751,7 +751,10 @@ export class BotOrchestrator {
     // tratarse como respuesta técnica a un reporte previo ni generar tickets de falla.
     const esSaludo = /^(hola|buen\s*(dia|día)|buenas\s*(tardes|noches)?|saludos|que\s*tal|hey|hi)\b/i.test(lowerMsg);
     const esConsultaPago = /\b(pagar|pago|saldo|debo|cuanto\s*debo|cuando\s*me\s*toca|factura|recibo|cuenta|tarjeta|transferencia|clabe|banco|mensualidad|costo)\b/i.test(lowerMsg);
-    const esConsultaWifi = /\b(contrase[ñn]a|clave|wifi|wi-fi|ssid)\b/i.test(lowerMsg);
+    const esConsultaWifi = (
+      /\b(cambiar|cambio|modificar|olvid[eé]|saber|cual\s*es|quitar|poner)\b.*\b(contrase[ñn]a|clave|password|wifi|wi-fi|ssid|red)\b/i.test(lowerMsg) ||
+      /\b(contrase[ñn]a|password|clave\s*del?\s*(wifi|wi-fi|modem|módem))\b/i.test(lowerMsg)
+    ) && !/\b(no\s*tengo|sin\s*wifi|no\s*hay|falla|lento|lenta|intermitente|caid[ao]|sirve|funciona|conecta|no\s*da|sin\s*internet)\b/i.test(lowerMsg);
 
     if ((esSaludo || esConsultaPago || esConsultaWifi) && pasosTemporales.includes(session?.step || '')) {
       logger.info(`[Intent Override] Cliente ${phone} envió "${rawText}" mientras estaba en paso "${session?.step}". Cancelando espera técnica.`);

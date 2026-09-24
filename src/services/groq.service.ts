@@ -406,7 +406,7 @@ CATEGORÍAS DE INTENCIÓN PERMITIDAS (Elige EXACTAMENTE una de esta lista):
 - "REPORTAR_PAGO": Mensajes donde el cliente indica que ya realizó su pago, transfirió dinero o envía comprobante.
 - "FALLA_INTERNET": Cualquier reporte de falla de internet, lentitud, intermitencia, desconexión, "no tengo internet", "no da internet", "sigue sin internet", "se cayó el servicio", páginas que no cargan o luces rojas.
 - "REINICIAR_MODEM": Peticiones explícitas de reinicio remoto de módem ("reinicien mi modem", "pueden resetearlo desde allá").
-- "DATOS_WIFI": Consultas sobre contraseña, nombre de la red WiFi o configuración inalámbrica.
+- "DATOS_WIFI": Solicitud EXCLUSIVA para cambiar o consultar la contraseña/clave del WiFi o nombre SSID de la red ("cambiar contraseña", "cambio de clave wifi", "cuál es mi contraseña"). NUNCA usar para quejas o fallas como "no tengo wifi", "no hay wifi", "se fue el wifi", "no me conecta el wifi" o "falla el wifi" (esas son SIEMPRE "FALLA_INTERNET").
 - "HABLAR_HUMANO": Solicitudes de comunicarse con un asesor, operador, recepcionista o persona humana.
 - "CAMBIO_DOMICILIO": Peticiones de cambio de casa, mudanza, mover el servicio a otra dirección o validar cobertura en un nuevo domicilio ("me voy a cambiar de casa", "cambio de domicilio", "quiero mover mi servicio a otra casa", "tienen cobertura en la calle X").
 - "ESTATUS_TECNICO_AGENDA": Preguntas sobre la hora de llegada del técnico, reagendar citas, cancelaciones de visita técnica o quejas sobre el instalador ("a qué hora viene el técnico", "cuándo viene la cuadrilla", "el técnico no vino", "quiero cambiar la fecha de la cita").
