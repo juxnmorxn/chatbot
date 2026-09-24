@@ -27,7 +27,7 @@ export const config = {
 
   // WispHub
   wisphub: {
-    url: (process.env.WISPHUB_API_URL || 'https://api.wisphub.io/api').replace(/\/+$/, ''),
+    url: (process.env.WISPHUB_API_URL || 'https://api.wisphub.net/api').replace(/\/+$/, ''),
     apiKey: process.env.WISPHUB_API_KEY || '',
   },
 

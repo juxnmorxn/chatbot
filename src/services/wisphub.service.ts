@@ -66,23 +66,86 @@ export class WispHubService {
   }
 
   /**
-   * Reactiva/despausa un cliente en WispHub tras confirmación de pago
+   * Reactiva/despausa un cliente en WispHub conforme al OpenAPI oficial:
+   * POST /clientes/activar/ con { "servicios": [id_servicio] }
    */
-  static async activarCliente(clienteId: string | number): Promise<boolean> {
-    const idClean = String(clienteId).replace(/\D/g, '') || String(clienteId);
-    logger.info(`Solicitando activación/reconexión en WispHub para cliente ID: ${idClean}...`);
+  static async activarCliente(clienteId: string | number, extraName?: string): Promise<boolean> {
+    const rawId = String(clienteId || '').trim();
+    if (!rawId) return false;
+
+    let targetId: number | null = null;
+
+    // 1. Resolver el id_servicio numérico real desde Turso DB
+    try {
+      const dbClient = await TursoService.getWisphubClientByAny({
+        id: rawId,
+        name: extraName,
+      });
+      if (dbClient?.id_servicio) {
+        targetId = Number(dbClient.id_servicio);
+      }
+    } catch {}
+
+    if (!targetId) {
+      const cleanNum = rawId.replace(/\D/g, '');
+      if (cleanNum) targetId = Number(cleanNum);
+    }
+
+    if (!targetId) {
+      logger.warn(`[WispHub API] No se pudo resolver ID de servicio numérico para activar: ${rawId}`);
+      return false;
+    }
+
+    logger.info(`[WispHub API] Solicitando activación para ID servicio: ${targetId}...`);
     const apiKey = this.getApiKey();
     if (!apiKey || apiKey.includes('tu_token')) return false;
 
     try {
       const api = this.getApi();
-      const res = await api.post('/clientes/activar/', {
-        clientes: [Number(idClean) || idClean],
-      });
-      logger.info(`WispHub POST /clientes/activar/ exitoso para ID ${idClean}:`, res.data);
-      return true;
+      let activado = false;
+
+      // 1. Endpoint oficial de WispHub: POST /clientes/activar/ con { servicios: [targetId] }
+      try {
+        const res = await api.post('/clientes/activar/', {
+          servicios: [targetId],
+        });
+        if (res?.status >= 200 && res?.status < 300) {
+          activado = true;
+          logger.info(`[WispHub API] POST /clientes/activar/ exitoso para ID ${targetId}:`, res.data);
+        }
+      } catch (err: any) {
+        logger.warn(`[WispHub API] POST /clientes/activar/ falló para ${targetId}:`, err?.response?.data || err?.message);
+      }
+
+      // 2. Fallback oficial: PUT /clientes/{id}/ con { estado: 1, auto_activar_servicio: true }
+      if (!activado) {
+        try {
+          const res = await api.put(`/clientes/${targetId}/`, {
+            estado: 1,
+            auto_activar_servicio: true,
+          });
+          if (res?.status >= 200 && res?.status < 300) {
+            activado = true;
+            logger.info(`[WispHub API] PUT /clientes/${targetId}/ { estado: 1 } exitoso.`);
+          }
+        } catch (err: any) {
+          logger.warn(`[WispHub API] PUT /clientes/${targetId}/ falló:`, err?.response?.data || err?.message);
+        }
+      }
+
+      // 3. Actualizar base de datos local Turso a 'Activo'
+      try {
+        const { getTursoClient } = await import('../database/turso');
+        const client = getTursoClient();
+        await client.execute({
+          sql: `UPDATE wisphub_clients SET estado = 'Activo' WHERE id_servicio = ?`,
+          args: [targetId],
+        });
+      } catch {}
+
+      return activado;
     } catch (error: any) {
-      logger.error(`Error al activar cliente ${idClean} en WispHub:`, error?.response?.data || error?.message || error);
+      logger.error(`[WispHub API] Error al activar cliente ${targetId} en WispHub:`, error?.response?.data || error?.message || error);
       return false;
     }
   }
