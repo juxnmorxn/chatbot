@@ -129,7 +129,11 @@ Tu objetivo es examinar la imagen recibida y clasificarla estrictamente en una d
 
 2. "SPEEDTEST":
    - Captura de pantalla de test de velocidad (Speedtest por Ookla, Fast.com, Google Speedtest, etc.).
-   - Extrae con precisión: velocidad de descarga en Mbps (bajada_mbps), velocidad de subida en Mbps (subida_mbps), y latencia (ping_ms) si son legibles.
+   - Extrae con máxima precisión:
+     * bajada_mbps: Velocidad de descarga en Mbps (ej: 205.94).
+     * subida_mbps: Velocidad de subida en Mbps SÓLO SI existe una medición explícita de "SUBIDA" / "UPLOAD". Si en la pantalla SOLO se realizó la prueba de descarga (muy habitual en speedtest.net móvil) o no hay indicador de subida, asigna estrictamente null.
+     * ping_ms: Latencia principal de Ping en ms (ej: 6).
+   - ¡CUIDADO CON SPEEDTEST MÓVIL!: Debajo de "Ping ms" suelen aparecer íconos como ⚡ 6, ⬇️ 14 y ⬆️ 20. ¡ESTOS NÚMEROS JUNTO A LAS FLECHAS ⬇️ Y ⬆️ SON VALORES DE LATENCIA / BUFFERBLOAT EN MILISEGUNDOS (ms), NO SON VELOCIDAD DE SUBIDA! Nunca los asignes a subida_mbps.
 
 3. "COMPROBANTE_PAGO":
    - Recibo o captura de pantalla de transferencia bancaria (BBVA / Dimo, BanCoppel, Santander, Banamex, Banco Azteca, Mercado Pago, Nu, SPEI), ticket de OXXO / 7-Eleven, o ficha de depósito.

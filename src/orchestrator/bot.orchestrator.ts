@@ -2408,9 +2408,13 @@ export class BotOrchestrator {
 
     // 1. CASO SPEEDTEST / TEST DE VELOCIDAD
     if (analysis?.tipo === 'SPEEDTEST') {
-      const bajada = analysis.speedtest?.bajada_mbps ? `${analysis.speedtest.bajada_mbps} Mbps` : 'detectada';
-      const subida = analysis.speedtest?.subida_mbps ? `${analysis.speedtest.subida_mbps} Mbps` : 'N/A';
-      const ping = analysis.speedtest?.ping_ms ? ` (Latencia: ${analysis.speedtest.ping_ms} ms)` : '';
+      const bajadaNum = analysis.speedtest?.bajada_mbps;
+      const subidaNum = analysis.speedtest?.subida_mbps;
+      const pingNum = analysis.speedtest?.ping_ms;
+
+      const bajada = bajadaNum ? `${bajadaNum} Mbps` : 'detectada';
+      const subida = subidaNum ? `${subidaNum} Mbps` : null;
+      const ping = pingNum ? `${pingNum} ms` : null;
       const folio = meta.ticketFolio;
 
       // Obtener plan y velocidad real del cliente en WispHub / Turso DB
@@ -2422,12 +2426,21 @@ export class BotOrchestrator {
         ? `\n• *Paquete contratado:* ${planContratado}${velocidadMegasOficial ? ` (${velocidadMegasOficial} Mbps de descarga)` : ''}`
         : '';
 
-      // Comparación de megas si se detectó número
-      const bajadaNum = analysis.speedtest?.bajada_mbps;
       const planMegasNum = velocidadMegasOficial;
 
       // Se considera óptima si entrega al menos el 80% del paquete contratado (o más por balanceo/burst)
       const esVelocidadOptima = Boolean(bajadaNum && planMegasNum && bajadaNum >= planMegasNum * 0.8);
+
+      const resumenMetricas = [
+        `• *Descarga (Download):* ${bajada}`,
+        subida ? `• *Subida (Upload):* ${subida}` : null,
+        ping ? `• *Latencia (Ping):* ${ping}` : null,
+      ].filter(Boolean).join('\n');
+
+      const partesCortas = [`*${bajada}* de descarga`];
+      if (subida) partesCortas.push(`*${subida}* de subida`);
+      if (ping) partesCortas.push(`Latencia: ${ping}`);
+      const resumenCorto = partesCortas.join(', ');
 
       if (esVelocidadOptima) {
         // CASO A: Velocidad entregando 100%+ del paquete contratado
@@ -2435,14 +2448,13 @@ export class BotOrchestrator {
           await TursoService.updateTicketStatus(
             folio,
             'RESUELTO',
-            `✅ Speedtest óptimo: Bajada=${bajada} (vs ${planMegasNum} Mbps contratados), Subida=${subida}${ping}. Enlace entregando velocidad completa. Reporte resuelto automáticamente.`
+            `✅ Speedtest óptimo: Bajada=${bajada}${subida ? `, Subida=${subida}` : ''}${ping ? `, Ping=${ping}` : ''} (vs ${planMegasNum || 'N/A'} Mbps contratados). Enlace entregando velocidad completa. Reporte resuelto automáticamente.`
           );
 
           const msj =
             `¡Recibí tu prueba de velocidad de Speedtest! 📊\n\n` +
-            `• *Descarga (Download):* ${bajada}\n` +
-            `• *Subida (Upload):* ${subida}${ping ? `\n• *Ping:* ${ping}` : ''}${planTexto}\n\n` +
-            `✅ *¡Excelente noticia!* Tu velocidad de *${bajada}* está entregando el *100% de tu paquete contratado* (*${planContratado}* de ${planMegasNum} Mbps)${bajadaNum && planMegasNum && bajadaNum > planMegasNum ? ' (incluso estás recibiendo un poco más de megas por la holgura del enlace)' : ''}.\n\n` +
+            `${resumenMetricas}${planTexto}\n\n` +
+            `✅ *¡Excelente noticia!* Tu velocidad de *${bajada}* está entregando el *100% de tu paquete contratado* (*${planContratado || 'Plan Internet'}* de ${planMegasNum || '40'} Mbps)${bajadaNum && planMegasNum && bajadaNum > planMegasNum ? ' (incluso estás recibiendo un poco más de megas por la holgura del enlace)' : ''}.\n\n` +
             `📡 Tu línea de fibra óptica y tu conexión en la central están operando en óptimas condiciones.\n` +
             `💡 *Recomendación:* Si notas lentitud en algún dispositivo o aplicación en particular, puede deberse a la distancia o saturación Wi-Fi de ese equipo. Te sugerimos acercarte al módem o reconectar el Wi-Fi.\n\n` +
             `Dado que tu servicio está entregando la velocidad contratada correctamente, tu reporte previo *#${folio}* ha quedado *resuelto automáticamente*. ¡Muchas gracias!`;
@@ -2454,7 +2466,7 @@ export class BotOrchestrator {
 
         // Sin ticket previo pero velocidad óptima
         const msj =
-          `¡Listo! Tu prueba marca *${bajada}* de descarga (${subida} de subida${ping ? `, ${ping}` : ''}).\n\n` +
+          `¡Listo! Tu prueba marca ${resumenCorto}.\n\n` +
           `✅ Tu enlace está entregando el *100% de tu paquete contratado* (*${planContratado || 'Plan Fibra'}* de ${planMegasNum || '40'} Mbps).\n\n` +
           `Tu fibra óptica y conexión en central están al 100%. Si notas lentitud en algún equipo en particular, suele deberse a distancia o interferencia Wi-Fi. Te sugerimos acercarte al módem o reconectar el equipo.\n\n` +
           `¡En *${this.getIspName()}* seguimos a tus órdenes!`;
@@ -2469,13 +2481,12 @@ export class BotOrchestrator {
         await TursoService.updateTicketStatus(
           folio,
           'ABIERTO',
-          `⚠️ Speedtest con déficit: Bajada=${bajada}, Subida=${subida}${ping}. Plan=${planContratado || 'N/A'} (${planMegasNum || 'N/A'} Mbps)`
+          `⚠️ Speedtest con déficit: Bajada=${bajada}${subida ? `, Subida=${subida}` : ''}${ping ? `, Ping=${ping}` : ''}. Plan=${planContratado || 'N/A'} (${planMegasNum || 'N/A'} Mbps)`
         );
 
         const msj =
           `¡Recibí tu prueba de velocidad de Speedtest! 📊\n\n` +
-          `• *Descarga (Download):* ${bajada}\n` +
-          `• *Subida (Upload):* ${subida}${ping ? `\n• *Ping:* ${ping}` : ''}${planTexto}\n\n` +
+          `${resumenMetricas}${planTexto}\n\n` +
           `⚠️ Tu velocidad de *${bajada}* se encuentra por debajo de tu paquete contratado (*${planContratado}* de ${planMegasNum} Mbps).\n\n` +
           `Ya adjunté esta evidencia a tu reporte *#${folio}*. El equipo de soporte técnico revisará el rendimiento de tu enlace para calibrar tu velocidad. ¡Muchas gracias!`;
 
@@ -2490,7 +2501,7 @@ export class BotOrchestrator {
         client_name: session?.client_name,
         onu_id: session?.onu_id,
         issue_summary: `Velocidad baja en Speedtest (${bajada} bajada vs plan ${planContratado || 'N/A'})`,
-        checks_performed: `Captura de Speedtest con velocidad baja: Bajada=${bajada}, Subida=${subida}${ping}. Plan=${planContratado || 'N/A'} (${planMegasNum || 'N/A'} Mbps)`,
+        checks_performed: `Captura de Speedtest con velocidad baja: Bajada=${bajada}${subida ? `, Subida=${subida}` : ''}${ping ? `, Ping=${ping}` : ''}. Plan=${planContratado || 'N/A'} (${planMegasNum || 'N/A'} Mbps)`,
         has_photo: 1,
         has_speedtest: 1,
         status: 'ABIERTO',
@@ -2501,15 +2512,14 @@ export class BotOrchestrator {
         await WispHubService.crearTicketSoporte(
           session.client_id,
           `Speedtest Bajo - ${ticket.folio}`,
-          `Prueba de velocidad enviada por cliente con velocidad baja: Bajada=${bajada}, Subida=${subida}${ping}. Plan: ${planContratado || 'N/A'}. Folio: ${ticket.folio}`,
+          `Prueba de velocidad enviada por cliente con velocidad baja: Bajada=${bajada}${subida ? `, Subida=${subida}` : ''}${ping ? `, Ping=${ping}` : ''}. Plan: ${planContratado || 'N/A'}. Folio: ${ticket.folio}`,
           'Media'
         ).catch(() => {});
       }
 
       const msj =
         `¡Recibí tu prueba de velocidad de Speedtest! 📊\n\n` +
-        `• *Descarga:* ${bajada}\n` +
-        `• *Subida:* ${subida}${ping ? `\n• *Ping:* ${ping}` : ''}${planTexto}\n\n` +
+        `${resumenMetricas}${planTexto}\n\n` +
         `⚠️ Tu velocidad de *${bajada}* se encuentra por debajo de tu paquete contratado.\n\n` +
         `Ya registré tus resultados con el reporte *#${ticket.folio}* para que el personal técnico revise la estabilidad y velocidad asignada a tu servicio.`;
 
