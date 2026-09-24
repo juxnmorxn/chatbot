@@ -191,7 +191,7 @@ export class NotificationService {
           nombre: c.nombre,
         });
 
-        if (!liveCheck.suspendido) {
+        if (!liveCheck.suspendido || liveCheck.yaPagoPeroNoActivo || (liveCheck.totalDeuda <= 0 && (!liveCheck.facturas || liveCheck.facturas.length === 0))) {
           result.skippedPaid++;
           continue;
         }

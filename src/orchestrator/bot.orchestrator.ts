@@ -1068,7 +1068,9 @@ export class BotOrchestrator {
           ip: meta.ip,
         });
 
-        if (estadoFinanciero.suspendido || estadoFinanciero.totalDeuda > 0) {
+        const tieneDeudaReal = estadoFinanciero.totalDeuda > 0 || (estadoFinanciero.facturas && estadoFinanciero.facturas.length > 0);
+
+        if (tieneDeudaReal) {
           const facturas = estadoFinanciero.facturas || [];
           let detalleFacturas = '';
           if (facturas.length > 0) {
@@ -1091,9 +1093,6 @@ export class BotOrchestrator {
           const bank = SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK', 'BBVA Bancomer');
           const account = SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', '012 180 0152433212 90');
           const beneficiary = SettingsService.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', this.getIspName());
-          const montoTexto = estadoFinanciero.totalDeuda > 0
-            ? `un saldo/recibo pendiente por *$${estadoFinanciero.totalDeuda.toFixed(2)} MXN*`
-            : `tu servicio se encuentra suspendido por corte o inactividad`;
 
           let onlinePaySection = '';
           if (mpUrl) {
@@ -1103,7 +1102,7 @@ export class BotOrchestrator {
           const nombreCliente = formatDisplayName(session.client_name, true) || 'Cliente';
           const mensajeMoroso =
             `¡Hola, *${nombreCliente}*! 👋\n\n` +
-            `Revisé tu cuenta en nuestro sistema y detectamos que ${montoTexto}.\n` +
+            `Revisé tu cuenta en nuestro sistema y detectamos que registras un saldo/recibo pendiente por *$${estadoFinanciero.totalDeuda.toFixed(2)} MXN*.\n` +
             `${detalleFacturas}` +
             `${onlinePaySection}\n` +
             `💳 *También puedes pagar por Transferencia Bancaria:*\n` +
@@ -1115,6 +1114,11 @@ export class BotOrchestrator {
           await this.enviarYLoguear(phone, mensajeMoroso, 'CONSULTAR_SALDO', 'AVISO_SUSPENSION_SALUDO', targetJid);
           await TursoService.updateStep(phone, 'ESPERANDO_COMPROBANTE');
           return;
+        } else if (estadoFinanciero.suspendido) {
+          logger.info(`Cliente ${phone} (${session.client_name}) está suspendido en WispHub pero SIN adeudos (pagos al corriente). Solicitando reactivación...`);
+          if (session.client_id) {
+            await WispHubService.activarCliente(session.client_id).catch(() => {});
+          }
         }
       } catch (err: any) {
         logger.warn('Error al verificar suspensión en mensaje conversacional:', err?.message || err);
@@ -1516,8 +1520,10 @@ export class BotOrchestrator {
         ip: meta.ip,
       });
 
-      if (estadoFinanciero.suspendido || estadoFinanciero.totalDeuda > 0) {
-        logger.info(`Cliente ${phone} (${session.client_name}) presenta suspensión o adeudo en WispHub: Deuda=$${estadoFinanciero.totalDeuda} (${estadoFinanciero.motivo || 'Suspendido'})`);
+      const tieneDeudaReal = estadoFinanciero.totalDeuda > 0 || (estadoFinanciero.facturas && estadoFinanciero.facturas.length > 0);
+
+      if (tieneDeudaReal) {
+        logger.info(`Cliente ${phone} (${session.client_name}) presenta adeudo real en WispHub: Deuda=$${estadoFinanciero.totalDeuda}`);
 
         const facturas = estadoFinanciero.facturas || [];
         let detalleFacturas = '';
@@ -1541,9 +1547,6 @@ export class BotOrchestrator {
         const bank = SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK', 'BBVA Bancomer');
         const account = SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', '012 180 0152433212 90');
         const beneficiary = SettingsService.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', this.getIspName());
-        const montoTexto = estadoFinanciero.totalDeuda > 0
-          ? `registras un recibo pendiente por *$${estadoFinanciero.totalDeuda.toFixed(2)} MXN*`
-          : `tu servicio se encuentra suspendido por corte o inactividad`;
 
         let onlinePaySection = '';
         if (mpUrl) {
@@ -1551,7 +1554,7 @@ export class BotOrchestrator {
         }
 
         const mensajeMoroso =
-          `Hola${nombre}, revisé tu servicio y detectamos que ${montoTexto}.\n` +
+          `Hola${nombre}, revisé tu servicio y detectamos que registras un recibo pendiente por *$${estadoFinanciero.totalDeuda.toFixed(2)} MXN*.\n` +
           `${detalleFacturas}` +
           `${onlinePaySection}\n` +
           `💳 *También puedes pagar por Transferencia Bancaria:*\n` +
@@ -1562,6 +1565,23 @@ export class BotOrchestrator {
 
         await this.enviarYLoguear(phone, mensajeMoroso, 'CONSULTAR_SALDO', 'AVISO_MOROSIDAD_SILENCIOSA', targetJid);
         await TursoService.updateStep(phone, 'ESPERANDO_COMPROBANTE');
+        return;
+      } else if (estadoFinanciero.suspendido) {
+        logger.info(`Cliente ${phone} (${session.client_name}) figura Suspendido en WispHub pero SIN facturas pendientes (pagos al corriente). Solicitando reactivación...`);
+        const idCliente = session.client_id || estadoFinanciero.cliente?.id;
+        if (idCliente) {
+          await WispHubService.activarCliente(idCliente).catch(() => {});
+        }
+
+        const nombreCliente = formatDisplayName(session.client_name, true) || 'Cliente';
+        const msj =
+          `Hola *${nombreCliente}*, revisé tu cuenta y *tus pagos se encuentran al corriente* (no registras recibos pendientes). ✅\n\n` +
+          `⚠️ Sin embargo, tu servicio figuraba como *Suspendido* en el sistema. Ya enviamos la orden de *reactivación automática* a tu línea.\n\n` +
+          `🔄 Por favor desconecta tu módem de la corriente durante 30 segundos y vuélvelo a conectar para que sincronice la señal.\n\n` +
+          `¿Me confirmas si al reiniciar ya tienes navegación o si necesitas que revisemos las luces de tu módem?`;
+
+        await this.enviarYLoguear(phone, msj, 'FALLA_INTERNET', 'REACTIVACION_SUSPENDIDO_AL_CORRIENTE', targetJid);
+        await TursoService.updateStep(phone, 'COMPROBACION_TURNO_1');
         return;
       }
     } catch (err: any) {
@@ -3056,8 +3076,10 @@ export class BotOrchestrator {
         ip: meta.ip,
       });
 
-      if (estadoFinanciero.suspendido || estadoFinanciero.totalDeuda > 0) {
-        logger.info(`Intento de reinicio bloqueado: Cliente ${phone} (${session?.client_name}) suspendido/adeudo en WispHub.`);
+      const tieneDeudaReal = estadoFinanciero.totalDeuda > 0 || (estadoFinanciero.facturas && estadoFinanciero.facturas.length > 0);
+
+      if (tieneDeudaReal) {
+        logger.info(`Intento de reinicio bloqueado: Cliente ${phone} (${session?.client_name}) con adeudo real en WispHub: $${estadoFinanciero.totalDeuda}.`);
         const mpUrl = await this.obtenerLinkMercadoPago({
           clientName: session?.client_name,
           clientId: session?.client_id,
@@ -3068,16 +3090,13 @@ export class BotOrchestrator {
         const bank = SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK', 'BBVA Bancomer');
         const account = SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', '012 180 0152433212 90');
         const beneficiary = SettingsService.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', this.getIspName());
-        const montoTexto = estadoFinanciero.totalDeuda > 0
-          ? `registras un saldo pendiente por *$${estadoFinanciero.totalDeuda.toFixed(2)} MXN*`
-          : `tu servicio se encuentra suspendido en el sistema`;
 
         let onlinePaySection = '';
         if (mpUrl) {
           onlinePaySection = `\n🛒 *Pagar en línea con Mercado Pago / Tarjeta (Acreditación inmediata):*\n👉 ${mpUrl}\n`;
         }
 
-        const msj = `Hola${nombre}, revisé tu línea antes de proceder con el reinicio y detectamos que ${montoTexto}.\n` +
+        const msj = `Hola${nombre}, revisé tu línea antes de proceder con el reinicio y detectamos que registras un saldo pendiente por *$${estadoFinanciero.totalDeuda.toFixed(2)} MXN*.\n` +
           `${onlinePaySection}\n` +
           `💳 *También puedes pagar por Transferencia Bancaria:*\n` +
           `• Banco: *${bank}* | CLABE: *${account}*\n` +
@@ -3085,9 +3104,14 @@ export class BotOrchestrator {
           `• Concepto / Referencia: *${session?.client_name || phone}*\n\n` +
           `📸 En cuanto realices tu pago, por favor envía la *foto o captura de tu comprobante* y escribe tu *Nombre completo* en este chat para reactivar tu servicio.`;
 
-        await this.enviarYLoguear(phone, msj, 'CONSULTAR_SALDO', 'REINICIO_BLOQUEADO_POR_SUSPENSION', targetJid);
+        await this.enviarYLoguear(phone, msj, 'CONSULTAR_SALDO', 'REINICIO_BLOQUEADO_POR_ADEUDO', targetJid);
         await TursoService.updateStep(phone, 'ESPERANDO_COMPROBANTE');
         return;
+      } else if (estadoFinanciero.suspendido) {
+        logger.info(`Triage de soporte: Cliente ${phone} (${session?.client_name}) figura suspendido pero sin deuda. Reactivando servicio...`);
+        if (session?.client_id) {
+          await WispHubService.activarCliente(session.client_id).catch(() => {});
+        }
       }
     } catch (err: any) {
       logger.warn(`Error al verificar estado de pago en WispHub antes de reiniciar:`, err?.message || err);
@@ -3145,9 +3169,29 @@ export class BotOrchestrator {
       ? estadoFinanciero.facturas
       : (session?.client_id ? await WispHubService.obtenerFacturasPendientes(session.client_id) : []);
 
-    if (!estadoFinanciero.suspendido && facturas.length === 0 && estadoFinanciero.totalDeuda === 0) {
+    const tieneDeudaReal = estadoFinanciero.totalDeuda > 0 || facturas.length > 0;
+
+    if (!tieneDeudaReal) {
       const ficha = this.getFichaBancaria(session);
       const nombreCliente = formatDisplayName(session?.client_name, true) || 'Cliente';
+
+      if (estadoFinanciero.suspendido) {
+        if (session?.client_id) {
+          await WispHubService.activarCliente(session.client_id).catch(() => {});
+        }
+        await this.enviarYLoguear(
+          phone,
+          `🎉 *¡Tu cuenta está al corriente!*\n\nEstimado(a) *${nombreCliente}*, no tienes ningún recibo pendiente de pago. ✅\n\n` +
+          `⚠️ Detectamos que tu servicio aparecía como *Suspendido* en el sistema. Ya solicitamos la reactivación automática de tu servicio.\n\n` +
+          `Por favor reinicia tu módem desconectándolo de la luz 30 segundos. Si deseas consultar datos para futuros pagos:\n${ficha}`,
+          'CONSULTAR_SALDO',
+          'SUSPENDIDO_SIN_ADEUDO_REACTIVADO',
+          targetJid
+        );
+        await this.marcarConsultaFinalizada(phone, session);
+        return;
+      }
+
       await this.enviarYLoguear(
         phone,
         `🎉 *¡Tu cuenta está al corriente!*\n\nEstimado(a) *${nombreCliente}*, no tienes pagos pendientes en este momento. ¡Muchas gracias por tu preferencia!\n\n` +
@@ -3181,15 +3225,11 @@ export class BotOrchestrator {
       return;
     }
 
-    // Si está suspendido o registra adeudo sin facturas listadas
-    const montoTexto = estadoFinanciero.totalDeuda > 0
-      ? `un saldo pendiente por *$${estadoFinanciero.totalDeuda.toFixed(2)} MXN*`
-      : `tu servicio se encuentra suspendido en el sistema`;
-
+    // Saldo adeudado sin facturas listadas
     const nombreCliente = formatDisplayName(session?.client_name, true) || 'Cliente';
     const mensajeMoroso =
       `¡Hola, *${nombreCliente}*! 👋\n\n` +
-      `Revisé tu cuenta y detectamos que ${montoTexto}.\n` +
+      `Revisé tu cuenta y detectamos que registras un saldo pendiente por *$${estadoFinanciero.totalDeuda.toFixed(2)} MXN*.\n` +
       this.getFichaBancaria(session);
 
     await this.enviarYLoguear(phone, mensajeMoroso, 'CONSULTAR_SALDO', 'AVISO_SUSPENDIDO_SALDO', targetJid);

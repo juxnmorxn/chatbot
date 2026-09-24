@@ -490,22 +490,21 @@ export class WispHubService {
       estado === 'desconectado' ||
       estado.includes('susp');
 
-    // Si está suspendido en WispHub y totalDeuda es 0 (por falta de factura emitida), se asigna el precio de su plan
-    if (esSuspendido && totalDeuda === 0) {
-      const precioPlan = Number(clienteEncontrado?.precio_plan || 0);
-      totalDeuda = precioPlan > 0 ? precioPlan : 0;
-    }
+    // Si está suspendido pero NO tiene facturas pendientes ni saldo adeudado:
+    const yaPagoPeroNoActivo = esSuspendido && totalDeuda === 0 && facturas.length === 0;
 
     const motivo = esSuspendido
-      ? (totalDeuda > 0 ? `Factura o saldo pendiente ($${totalDeuda.toFixed(2)} MXN)` : 'Servicio suspendido en WispHub')
+      ? (totalDeuda > 0
+          ? `Factura o saldo pendiente ($${totalDeuda.toFixed(2)} MXN)`
+          : 'Servicio suspendido en WispHub (sin facturas pendientes / al corriente)')
       : undefined;
 
-    logger.info(`[WispHub Live Result] Cliente="${clienteEncontrado?.nombre || 'N/A'}" Estado="${clienteEncontrado?.estado || 'Desconocido'}" Suspendido=${esSuspendido} Deuda=$${totalDeuda}`);
+    logger.info(`[WispHub Live Result] Cliente="${clienteEncontrado?.nombre || 'N/A'}" Estado="${clienteEncontrado?.estado || 'Desconocido'}" Suspendido=${esSuspendido} YaPagoPeroNoActivo=${yaPagoPeroNoActivo} Deuda=$${totalDeuda} FacturasPendientes=${facturas.length}`);
 
     return {
       suspendido: esSuspendido,
-      yaPagoPeroNoActivo: false,
-      totalDeuda: esSuspendido ? totalDeuda : 0,
+      yaPagoPeroNoActivo,
+      totalDeuda: totalDeuda,
       facturas,
       cliente: clienteEncontrado,
       motivo,
