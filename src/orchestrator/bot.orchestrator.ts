@@ -1119,8 +1119,31 @@ export class BotOrchestrator {
           return;
         } else if (estadoFinanciero.suspendido) {
           logger.info(`Cliente ${phone} (${session.client_name}) está suspendido en WispHub pero SIN adeudos (pagos al corriente). Solicitando reactivación...`);
-          if (session.client_id) {
-            await WispHubService.activarCliente(session.client_id).catch(() => {});
+          const idWispHub = estadoFinanciero.cliente?.id ||
+            (session.service_id && !String(session.service_id).startsWith('HWTC') && !String(session.service_id).startsWith('ONU-') && !String(session.service_id).startsWith('ZTEG') ? session.service_id : null) ||
+            (session.client_id && !String(session.client_id).startsWith('HWTC') && !String(session.client_id).startsWith('ONU-') && !String(session.client_id).startsWith('ZTEG') ? session.client_id : null);
+          const ipCliente = estadoFinanciero.cliente?.ip;
+          const nombreClienteActivar = session.client_name || estadoFinanciero.cliente?.nombre;
+
+          if (idWispHub || ipCliente || nombreClienteActivar) {
+            await WispHubService.activarCliente({
+              id: idWispHub,
+              name: nombreClienteActivar,
+              ip: ipCliente,
+              sn: session.onu_id,
+            }).catch(() => {});
+          }
+
+          if (estadoFinanciero.cliente?.id) {
+            await TursoService.upsertSession({
+              phone,
+              service_id: String(estadoFinanciero.cliente.id),
+              metadata: JSON.stringify({
+                wisphub_id: estadoFinanciero.cliente.id,
+                wisphub_ip: estadoFinanciero.cliente.ip,
+                ip: estadoFinanciero.cliente.ip,
+              }),
+            }).catch(() => {});
           }
         }
       } catch (err: any) {
@@ -1571,9 +1594,34 @@ export class BotOrchestrator {
         return;
       } else if (estadoFinanciero.suspendido) {
         logger.info(`Cliente ${phone} (${session.client_name}) figura Suspendido en WispHub pero SIN facturas pendientes (pagos al corriente). Solicitando reactivación...`);
-        const idCliente = session.client_id || estadoFinanciero.cliente?.id;
-        if (idCliente) {
-          await WispHubService.activarCliente(idCliente).catch(() => {});
+        const idWispHub = estadoFinanciero.cliente?.id ||
+          (session.service_id && !String(session.service_id).startsWith('HWTC') && !String(session.service_id).startsWith('ONU-') && !String(session.service_id).startsWith('ZTEG') ? session.service_id : null) ||
+          (session.client_id && !String(session.client_id).startsWith('HWTC') && !String(session.client_id).startsWith('ONU-') && !String(session.client_id).startsWith('ZTEG') ? session.client_id : null);
+        const ipCliente = estadoFinanciero.cliente?.ip || meta.ip;
+        const nombreClienteActivar = session.client_name || estadoFinanciero.cliente?.nombre;
+
+        if (idWispHub || ipCliente || nombreClienteActivar) {
+          await WispHubService.activarCliente({
+            id: idWispHub,
+            name: nombreClienteActivar,
+            ip: ipCliente,
+            sn: meta.sn || session.onu_id,
+          }).catch((err) => {
+            logger.error('Error al activar cliente en WispHub:', err);
+          });
+        }
+
+        if (estadoFinanciero.cliente?.id) {
+          await TursoService.upsertSession({
+            phone,
+            service_id: String(estadoFinanciero.cliente.id),
+            metadata: JSON.stringify({
+              ...meta,
+              wisphub_id: estadoFinanciero.cliente.id,
+              wisphub_ip: estadoFinanciero.cliente.ip,
+              ip: estadoFinanciero.cliente.ip || meta.ip,
+            }),
+          }).catch(() => {});
         }
 
         const nombreCliente = formatDisplayName(session.client_name, true) || 'Cliente';
@@ -3112,8 +3160,19 @@ export class BotOrchestrator {
         return;
       } else if (estadoFinanciero.suspendido) {
         logger.info(`Triage de soporte: Cliente ${phone} (${session?.client_name}) figura suspendido pero sin deuda. Reactivando servicio...`);
-        if (session?.client_id) {
-          await WispHubService.activarCliente(session.client_id).catch(() => {});
+        const idWispHub = estadoFinanciero.cliente?.id ||
+          (session?.service_id && !String(session.service_id).startsWith('HWTC') && !String(session.service_id).startsWith('ONU-') && !String(session.service_id).startsWith('ZTEG') ? session.service_id : null) ||
+          (session?.client_id && !String(session.client_id).startsWith('HWTC') && !String(session.client_id).startsWith('ONU-') && !String(session.client_id).startsWith('ZTEG') ? session.client_id : null);
+        const ipCliente = estadoFinanciero.cliente?.ip;
+        const nombreClienteActivar = session?.client_name || estadoFinanciero.cliente?.nombre;
+
+        if (idWispHub || ipCliente || nombreClienteActivar) {
+          await WispHubService.activarCliente({
+            id: idWispHub,
+            name: nombreClienteActivar,
+            ip: ipCliente,
+            sn: session?.onu_id,
+          }).catch(() => {});
         }
       }
     } catch (err: any) {
@@ -3179,8 +3238,19 @@ export class BotOrchestrator {
       const nombreCliente = formatDisplayName(session?.client_name, true) || 'Cliente';
 
       if (estadoFinanciero.suspendido) {
-        if (session?.client_id) {
-          await WispHubService.activarCliente(session.client_id).catch(() => {});
+        const idWispHub = estadoFinanciero.cliente?.id ||
+          (session?.service_id && !String(session.service_id).startsWith('HWTC') && !String(session.service_id).startsWith('ONU-') && !String(session.service_id).startsWith('ZTEG') ? session.service_id : null) ||
+          (session?.client_id && !String(session.client_id).startsWith('HWTC') && !String(session.client_id).startsWith('ONU-') && !String(session.client_id).startsWith('ZTEG') ? session.client_id : null);
+        const ipCliente = estadoFinanciero.cliente?.ip || meta.ip;
+        const nombreClienteActivar = session?.client_name || estadoFinanciero.cliente?.nombre;
+
+        if (idWispHub || ipCliente || nombreClienteActivar) {
+          await WispHubService.activarCliente({
+            id: idWispHub,
+            name: nombreClienteActivar,
+            ip: ipCliente,
+            sn: meta.sn || session?.onu_id,
+          }).catch(() => {});
         }
         await this.enviarYLoguear(
           phone,
@@ -3344,6 +3414,41 @@ export class BotOrchestrator {
     try { metaPre = JSON.parse(session?.metadata || '{}'); } catch {}
 
     // =========================================================================
+    // 0.0 IDENTIFICACIÓN DIRECTA POR IP EN EL SISTEMA (ej: "172.19.11.245" o "ip 172.19.11.245")
+    // =========================================================================
+    const matchIp = rawInput.match(/\b(172\.\d{1,3}\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3})\b/);
+    if (matchIp) {
+      const ipBuscada = matchIp[1];
+      logger.info(`[Identificación por IP] Entrada contiene IP "${ipBuscada}". Buscando directamente en Turso...`);
+      const whPorIp = await TursoService.getWisphubClientByAny({ ip: ipBuscada });
+      if (whPorIp) {
+        logger.info(`[Identificación por IP] Cliente localizado en WispHub por IP: ID=${whPorIp.id_servicio}, Nombre="${whPorIp.nombre}"`);
+        const meta = {
+          ...metaPre,
+          ip: whPorIp.ip,
+          wisphub_id: whPorIp.id_servicio,
+          speed_profile: whPorIp.plan_internet,
+          zone: whPorIp.router,
+          address: whPorIp.direccion,
+          sn: whPorIp.sn_onu,
+        };
+
+        const sessionActualizada = await TursoService.upsertSession({
+          phone,
+          client_id: whPorIp.sn_onu || `WH-${whPorIp.id_servicio}`,
+          service_id: String(whPorIp.id_servicio),
+          client_name: whPorIp.nombre,
+          onu_id: whPorIp.sn_onu || `ONU-${whPorIp.id_servicio}`,
+          metadata: JSON.stringify(meta),
+          step: 'IDENTIFICADO',
+        });
+
+        await this.finalizarIdentificacionYContinuarFlujo(phone, sessionActualizada, metaPre, targetJid);
+        return;
+      }
+    }
+
+    // =========================================================================
     // 0. DESAMBIGUACIÓN CONTEXTUAL POR UBICACIÓN / LOCALIDAD / APELLIDOS
     // Si la sesión ya tenía candidatos pendientes de desambiguación (pendingCandidates)
     // =========================================================================
@@ -3504,11 +3609,16 @@ export class BotOrchestrator {
       }
 
       for (const w of coincidenciasWh) {
-        const yaExiste = listaUnificada.some(
+        const oltMatch = listaUnificada.find(
           item => (item.sn && w.sn_onu && item.sn.toUpperCase() === w.sn_onu.toUpperCase()) ||
-                  computeNameMatchScore(item.name, w.nombre) >= 90
+                  computeNameMatchScore(item.name, w.nombre) >= 80
         );
-        if (!yaExiste) {
+        if (oltMatch) {
+          oltMatch.id_servicio = w.id_servicio;
+          (oltMatch as any).ip = w.ip;
+          (oltMatch as any).wisphub_id = w.id_servicio;
+          (oltMatch as any).wisphub_name = w.nombre;
+        } else {
           listaUnificada.push({
             unique_external_id: w.sn_onu || `WH-${w.id_servicio}`,
             id_servicio: w.id_servicio,
@@ -3520,7 +3630,8 @@ export class BotOrchestrator {
             phone: w.telefono || '',
             matchScore: w.matchScore,
             is_wisphub: true,
-          });
+            ip: w.ip,
+          } as any);
         }
       }
 
@@ -3550,12 +3661,14 @@ export class BotOrchestrator {
             zone: exacto.zone_name,
             address: exacto.address,
             sn: exacto.sn,
+            wisphub_id: exacto.id_servicio,
+            ip: (exacto as any).ip || (exacto as any).wisphub_ip || metaPre.ip,
           };
 
           const sessionActualizada = await TursoService.upsertSession({
             phone,
             client_id: exacto.unique_external_id || String(exacto.id_servicio || ''),
-            service_id: exacto.sn || String(exacto.id_servicio || ''),
+            service_id: exacto.id_servicio ? String(exacto.id_servicio) : (exacto.sn || String(exacto.unique_external_id || '')),
             client_name: exacto.name,
             onu_id: exacto.unique_external_id,
             metadata: JSON.stringify(meta),
@@ -3678,12 +3791,14 @@ export class BotOrchestrator {
             zone: mejor.zone_name,
             address: mejor.address,
             sn: mejor.sn,
+            wisphub_id: mejor.id_servicio,
+            ip: (mejor as any).ip || (mejor as any).wisphub_ip || metaPre.ip,
           };
 
           const sessionActualizada = await TursoService.upsertSession({
             phone,
             client_id: mejor.unique_external_id || String(mejor.id_servicio || ''),
-            service_id: mejor.sn || String(mejor.id_servicio || ''),
+            service_id: mejor.id_servicio ? String(mejor.id_servicio) : (mejor.sn || String(mejor.unique_external_id || '')),
             client_name: mejor.name,
             onu_id: mejor.unique_external_id,
             metadata: JSON.stringify(meta),

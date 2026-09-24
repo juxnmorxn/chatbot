@@ -1603,16 +1603,24 @@ export class TursoService {
       const client = getTursoClient();
       const { id, phone, sn, name, ip } = params;
 
-      // 1. Si tenemos número de contrato / ID numérico
-      if (id && !String(id).startsWith('HWTC') && !String(id).startsWith('ONU-')) {
-        const idStr = String(id).trim();
-        const idNum = idStr.replace(/\D/g, '');
+      // 1. Búsqueda prioritaria por IP en el sistema
+      const ipBuscada = (ip && ip !== 'N/A') ? ip : (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(String(id || '')) ? String(id) : null);
+      if (ipBuscada) {
+        const res = await client.execute({
+          sql: `SELECT * FROM wisphub_clients WHERE ip = ? LIMIT 1`,
+          args: [ipBuscada],
+        });
+        if (res.rows.length > 0) return res.rows[0] as any;
+      }
 
-        // Búsqueda por id_servicio directo, validando que coincida con el nombre si se proporcionó
-        if (idNum) {
+      // 2. Si tenemos número de contrato / ID numérico (estrictamente numérico o con prefijo)
+      if (id && !String(id).startsWith('HWTC') && !String(id).startsWith('ONU-') && !String(id).startsWith('ZTEG')) {
+        const idStr = String(id).trim();
+        // Solo extraer si es numérico
+        if (/^\d+$/.test(idStr)) {
           const res = await client.execute({
             sql: `SELECT * FROM wisphub_clients WHERE id_servicio = ? LIMIT 1`,
-            args: [Number(idNum)],
+            args: [Number(idStr)],
           });
           if (res.rows.length > 0) {
             const row = res.rows[0];
@@ -1622,10 +1630,10 @@ export class TursoService {
           }
 
           // Si no coincidió por id_servicio directo, buscar por prefijo de contrato en el nombre/servicio (ej: "0696" o "696")
-          const padded = idNum.padStart(4, '0');
+          const padded = idStr.padStart(4, '0');
           const prefixRes = await client.execute({
             sql: `SELECT * FROM wisphub_clients WHERE nombre LIKE ? OR nombre LIKE ? OR servicio LIKE ? LIMIT 10`,
-            args: [`%${idNum}%`, `%${padded}%`, `%${idNum}%`],
+            args: [`%${idStr}%`, `%${padded}%`, `%${idStr}%`],
           });
           for (const row of prefixRes.rows) {
             if (!name || computeNameMatchScore(name, String(row.nombre || '')) >= 40) {
@@ -1635,22 +1643,50 @@ export class TursoService {
         }
       }
 
-      // 2. Búsqueda por IP
-      if (ip && ip !== 'N/A') {
-        const res = await client.execute({
-          sql: `SELECT * FROM wisphub_clients WHERE ip = ? LIMIT 1`,
-          args: [ip],
-        });
-        if (res.rows.length > 0) return res.rows[0] as any;
-      }
-
-      // 3. Búsqueda por SN de ONU
-      if (sn) {
+      // 3. Búsqueda por SN de ONU o cruce con SmartOLT si es un serial tipo HWTC/ZTEG
+      const snVal = sn || (id && (String(id).startsWith('HWTC') || String(id).startsWith('ZTEG') || String(id).startsWith('ONU-')) ? String(id) : null);
+      if (snVal) {
         const res = await client.execute({
           sql: `SELECT * FROM wisphub_clients WHERE sn_onu LIKE ? LIMIT 1`,
-          args: [`%${sn}%`],
+          args: [`%${snVal}%`],
         });
         if (res.rows.length > 0) return res.rows[0] as any;
+
+        // Cruce con SmartOLT para obtener el nombre o IP registrada de la ONU
+        const oltRow = await client.execute({
+          sql: `SELECT name, ip_address FROM smartolt_onus WHERE unique_external_id = ? OR sn = ? LIMIT 1`,
+          args: [snVal, snVal],
+        });
+        if (oltRow.rows.length > 0) {
+          const oName = String(oltRow.rows[0].name || '');
+          const oIp = String(oltRow.rows[0].ip_address || '');
+          if (oIp && oIp !== 'N/A') {
+            const whByIp = await client.execute({
+              sql: `SELECT * FROM wisphub_clients WHERE ip = ? LIMIT 1`,
+              args: [oIp],
+            });
+            if (whByIp.rows.length > 0) return whByIp.rows[0] as any;
+          }
+          if (oName) {
+            const numMatch = oName.match(/^0*(\d+)/);
+            if (numMatch) {
+              const padded = numMatch[1].padStart(4, '0');
+              const prefixRes = await client.execute({
+                sql: `SELECT * FROM wisphub_clients WHERE servicio LIKE ? OR nombre LIKE ? OR servicio LIKE ? LIMIT 5`,
+                args: [`%${numMatch[1]}%`, `%${padded}%`, `%${numMatch[1]}%`],
+              });
+              for (const row of prefixRes.rows) {
+                if (computeNameMatchScore(oName, String(row.nombre || '')) >= 40) {
+                  return row as any;
+                }
+              }
+            }
+            const fuzzy = await this.searchWisphubClientsFuzzy(oName, 1);
+            if (fuzzy.length > 0 && fuzzy[0].matchScore >= 50) {
+              return fuzzy[0];
+            }
+          }
+        }
       }
 
       // 4. Búsqueda por Teléfono

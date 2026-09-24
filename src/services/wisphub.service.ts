@@ -68,31 +68,181 @@ export class WispHubService {
   /**
    * Reactiva/despausa un cliente en WispHub conforme al OpenAPI oficial:
    * POST /clientes/activar/ con { "servicios": [id_servicio] }
+   * 
+   * Identifica el cliente con alta precisión por:
+   * 1. ID de servicio directo (numérico)
+   * 2. IP en el sistema (ej: 172.19.11.245)
+   * 3. Nombre del cliente (prefijo de contrato o búsqueda difusa/fuzzy)
+   * 4. SN de ONU / mapeo de SmartOLT (cruzando número de contrato o IP)
    */
-  static async activarCliente(clienteId: string | number, extraName?: string): Promise<boolean> {
-    const rawId = String(clienteId || '').trim();
-    if (!rawId) return false;
+  static async activarCliente(
+    target: string | number | {
+      id?: string | number | null;
+      name?: string | null;
+      ip?: string | null;
+      sn?: string | null;
+      phone?: string | null;
+    },
+    extraName?: string,
+    extraIp?: string
+  ): Promise<boolean> {
+    let rawId = '';
+    let nameParam = extraName || '';
+    let ipParam = extraIp || '';
+    let snParam = '';
+    let phoneParam = '';
+
+    if (typeof target === 'object' && target !== null) {
+      rawId = target.id !== undefined && target.id !== null ? String(target.id).trim() : '';
+      if (!nameParam && target.name) nameParam = String(target.name).trim();
+      if (!ipParam && target.ip) ipParam = String(target.ip).trim();
+      if (target.sn) snParam = String(target.sn).trim();
+      if (target.phone) phoneParam = String(target.phone).trim();
+    } else {
+      rawId = String(target || '').trim();
+    }
+
+    // Si rawId tiene formato de IP (ej: 172.19.11.245), reasignarlo como ipParam
+    if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(rawId)) {
+      if (!ipParam) ipParam = rawId;
+      rawId = '';
+    }
+
+    if (!rawId && !nameParam && !ipParam && !snParam && !phoneParam) {
+      logger.warn('[WispHub API] activarCliente invocado sin ningún parámetro identificador.');
+      return false;
+    }
 
     let targetId: number | null = null;
+    const { getTursoClient } = await import('../database/turso');
+    const client = getTursoClient();
 
-    // 1. Resolver el id_servicio numérico real desde Turso DB
-    try {
-      const dbClient = await TursoService.getWisphubClientByAny({
-        id: rawId,
-        name: extraName,
-      });
-      if (dbClient?.id_servicio) {
-        targetId = Number(dbClient.id_servicio);
-      }
-    } catch {}
+    // 1. Si tenemos rawId estrictamente numérico, validar si existe en wisphub_clients
+    if (rawId && /^\d+$/.test(rawId)) {
+      try {
+        const res = await client.execute({
+          sql: `SELECT id_servicio, nombre FROM wisphub_clients WHERE id_servicio = ? LIMIT 1`,
+          args: [Number(rawId)],
+        });
+        if (res.rows.length > 0) {
+          targetId = Number(res.rows[0].id_servicio);
+          logger.info(`[WispHub API] Activación: ID ${targetId} verificado directamente en DB local (${res.rows[0].nombre}).`);
+        }
+      } catch {}
+    }
 
+    // 2. Identificar por IP en el sistema (requerimiento explícito)
+    if (!targetId && ipParam && ipParam !== 'N/A') {
+      try {
+        const res = await client.execute({
+          sql: `SELECT id_servicio, nombre, ip FROM wisphub_clients WHERE ip = ? LIMIT 1`,
+          args: [ipParam],
+        });
+        if (res.rows.length > 0) {
+          targetId = Number(res.rows[0].id_servicio);
+          logger.info(`[WispHub API] Activación: Cliente identificado por IP (${ipParam}): ID=${targetId}, Nombre="${res.rows[0].nombre}".`);
+        }
+      } catch {}
+    }
+
+    // 3. Identificar por Nombre en el sistema (requerimiento explícito)
+    if (!targetId && nameParam) {
+      try {
+        // A. Verificar si tiene prefijo numérico de contrato (ej: "696-Maria del Pilar" o "0696-")
+        const numMatch = nameParam.match(/^0*(\d+)/);
+        if (numMatch && numMatch[1]) {
+          const idNum = numMatch[1];
+          const padded = idNum.padStart(4, '0');
+          const prefixRes = await client.execute({
+            sql: `SELECT id_servicio, nombre FROM wisphub_clients WHERE servicio LIKE ? OR nombre LIKE ? OR servicio LIKE ? LIMIT 5`,
+            args: [`%${idNum}%`, `%${padded}%`, `%${idNum}%`],
+          });
+          for (const row of prefixRes.rows) {
+            if (computeNameMatchScore(nameParam, String(row.nombre || '')) >= 40) {
+              targetId = Number(row.id_servicio);
+              logger.info(`[WispHub API] Activación: Cliente identificado por prefijo contrato #${idNum} ("${nameParam}"): ID=${targetId}, Nombre="${row.nombre}".`);
+              break;
+            }
+          }
+        }
+
+        // B. Búsqueda difusa (fuzzy) por nombre completo
+        if (!targetId) {
+          const fuzzy = await TursoService.searchWisphubClientsFuzzy(nameParam, 3);
+          if (fuzzy.length > 0 && fuzzy[0].matchScore >= 50) {
+            targetId = Number(fuzzy[0].id_servicio);
+            logger.info(`[WispHub API] Activación: Cliente identificado por Nombre difuso ("${nameParam}"): ID=${targetId}, Nombre="${fuzzy[0].nombre}" (Score: ${fuzzy[0].matchScore}).`);
+          }
+        }
+      } catch {}
+    }
+
+    // 4. Identificar por SN de ONU o cruce con SmartOLT
+    const snCandidato = snParam || (rawId.startsWith('HWTC') || rawId.startsWith('ZTEG') || rawId.startsWith('ONU-') ? rawId : '');
+    if (!targetId && snCandidato) {
+      try {
+        // En wisphub_clients directamente
+        const resSn = await client.execute({
+          sql: `SELECT id_servicio, nombre FROM wisphub_clients WHERE sn_onu LIKE ? LIMIT 1`,
+          args: [`%${snCandidato}%`],
+        });
+        if (resSn.rows.length > 0) {
+          targetId = Number(resSn.rows[0].id_servicio);
+          logger.info(`[WispHub API] Activación: Cliente identificado por SN ONU (${snCandidato}): ID=${targetId}, Nombre="${resSn.rows[0].nombre}".`);
+        } else {
+          // En smartolt_onus para obtener nombre o IP y cruzar a WispHub
+          const oltRes = await client.execute({
+            sql: `SELECT name, ip_address FROM smartolt_onus WHERE unique_external_id = ? OR sn = ? LIMIT 1`,
+            args: [snCandidato, snCandidato],
+          });
+          if (oltRes.rows.length > 0) {
+            const oltRow = oltRes.rows[0];
+            if (oltRow.ip_address) {
+              const whByIp = await client.execute({
+                sql: `SELECT id_servicio, nombre FROM wisphub_clients WHERE ip = ? LIMIT 1`,
+                args: [String(oltRow.ip_address)],
+              });
+              if (whByIp.rows.length > 0) {
+                targetId = Number(whByIp.rows[0].id_servicio);
+                logger.info(`[WispHub API] Activación: Cliente identificado cruzando SmartOLT ONU IP (${oltRow.ip_address}): ID=${targetId}, Nombre="${whByIp.rows[0].nombre}".`);
+              }
+            }
+            if (!targetId && oltRow.name) {
+              const whByName = await TursoService.getWisphubClientByAny({ name: String(oltRow.name) });
+              if (whByName?.id_servicio) {
+                targetId = Number(whByName.id_servicio);
+                logger.info(`[WispHub API] Activación: Cliente identificado cruzando SmartOLT ONU Nombre ("${oltRow.name}"): ID=${targetId}, Nombre="${whByName.nombre}".`);
+              }
+            }
+          }
+        }
+      } catch {}
+    }
+
+    // 5. Fallback por TursoService.getWisphubClientByAny
     if (!targetId) {
-      const cleanNum = rawId.replace(/\D/g, '');
-      if (cleanNum) targetId = Number(cleanNum);
+      try {
+        const dbClient = await TursoService.getWisphubClientByAny({
+          id: /^\d+$/.test(rawId) ? rawId : undefined,
+          name: nameParam || undefined,
+          ip: ipParam || undefined,
+          sn: snParam || undefined,
+          phone: phoneParam || undefined,
+        });
+        if (dbClient?.id_servicio) {
+          targetId = Number(dbClient.id_servicio);
+          logger.info(`[WispHub API] Activación: Resuelto por getWisphubClientByAny: ID=${targetId}, Nombre="${dbClient.nombre}".`);
+        }
+      } catch {}
+    }
+
+    // 6. Si era un número puro y no se encontró en la BD local, probar con ese número en WispHub
+    if (!targetId && rawId && /^\d+$/.test(rawId)) {
+      targetId = Number(rawId);
     }
 
     if (!targetId) {
-      logger.warn(`[WispHub API] No se pudo resolver ID de servicio numérico para activar: ${rawId}`);
+      logger.warn(`[WispHub API] No se pudo resolver ID numérico de servicio para activar. RawId="${rawId}", Nombre="${nameParam}", IP="${ipParam}", SN="${snParam}"`);
       return false;
     }
 
@@ -135,8 +285,6 @@ export class WispHubService {
 
       // 3. Actualizar base de datos local Turso a 'Activo'
       try {
-        const { getTursoClient } = await import('../database/turso');
-        const client = getTursoClient();
         await client.execute({
           sql: `UPDATE wisphub_clients SET estado = 'Activo' WHERE id_servicio = ?`,
           args: [targetId],
