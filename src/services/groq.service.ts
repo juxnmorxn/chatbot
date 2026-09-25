@@ -19,6 +19,7 @@ export type BotIntent =
   | 'ESTATUS_TECNICO_AGENDA'
   | 'CANCELAR_SUSCRIPCION'
   | 'IDENTIFICAR_CLIENTE'
+  | 'CONSULTAR_TV_CANALES'
   | 'DESCONOCIDO';
 
 export interface GroqClassificationResult {
@@ -29,6 +30,9 @@ export interface GroqClassificationResult {
   sin_internet_total: boolean;
   red_wifi_no_visible: boolean;
   bloqueo_paginas_apps: boolean;
+  problema_streaming_tv: boolean;
+  consulta_canales_cable: boolean;
+  alcance_dispositivos: 'TODOS' | 'SOLO_UNO' | 'INDETERMINADO';
   ya_reinicio: boolean;
   nombre_mencionado: string | null;
   telefono_mencionado: string | null;
@@ -333,7 +337,11 @@ Objetivo y comportamiento:
 8. REGLA ESTRICTA DE PRIVACIDAD TÉCNICA (NIVELES / dBm):
    - NUNCA menciones números técnicos de decibeles o potencia óptica (ej. "-19.4 dBm", "-22 dBm") al cliente final ni uses lenguaje frío ("en la central", "en el sistema").
    - Explícale en lenguaje comercial amable que su línea y señal se encuentran en estado óptimo y estable.
-9. Contexto del usuario:
+9. REGLA ESTRICTA DE SERVICIO EXCLUSIVO DE INTERNET (NO VENDEMOS TV NI CANALES):
+   - En ${ispName} vendemos y proveemos EXCLUSIVAMENTE servicio de INTERNET de alta velocidad (fibra óptica / inalámbrico).
+   - NO vendemos, NO ofrecemos y NO manejamos servicio de televisión por cable ni canales de televisión abierta/paga.
+   - Si el cliente pregunta por canales de tele, que no se ven canales, o contratar televisión/cable, aclárale con amabilidad, calidez y empatía que somos una empresa 100% proveedora de internet. Si cuenta con Smart TV, con nuestro internet puede usar aplicaciones como YouTube o Netflix (recomendándole conectarse a la señal Wi-Fi 5G con la misma contraseña), pero la señal de canales tradicionales de televisión no forma parte de nuestro servicio.
+10. Contexto del usuario:
 ${clienteTexto}
 
 ¡Responde de inmediato al último mensaje del usuario!
@@ -400,11 +408,12 @@ NUNCA respondas con texto conversacional. NUNCA respondas al usuario directament
 
 CATEGORÍAS DE INTENCIÓN PERMITIDAS (Elige EXACTAMENTE una de esta lista):
 - "SALUDO": Cualquier saludo ("hola", "buenas tardes", "buen dia", "hola qué tal", "hola me pueden ayudar", "saludos", "hola disculpe").
+- "CONSULTAR_TV_CANALES": Preguntas sobre canales de televisión, televisión abierta o por cable, sintonización de canales, canales que no se ven, "se fue la tele", "no tengo tele", "no se ven los canales", "qué canales tienen", "se ven borrosos los canales", "tienen cable", o si vendemos televisión/canales. (IMPORTANTE: Si la queja es sobre aplicaciones de video o Smart TV como Netflix o YouTube que dan círculos o no cargan por internet, esa es "FALLA_INTERNET" con la bandera "problema_streaming_tv": true).
 - "CONSULTAR_NIVELES": Preguntas sobre niveles de señal, potencia óptica, dBm, decibeles, potencia de luz, estado de la fibra o señal ("cuáles son mis niveles", "dime mis niveles", "mis dBm", "cómo andan mis niveles", "qué nivel tengo", "revisa mis niveles", "cómo está mi señal", "revisa mi conexión").
 - "CONSULTAR_SALDO": Preguntas sobre saldo pendiente, recibo, factura, cuánto debo, fecha límite de pago o dónde pagar.
 - "CONSULTAR_PLAN": Preguntas sobre qué plan tiene contratado, qué velocidad tiene, cuál debería ser su velocidad, cuántos megas le corresponden, costo mensual del paquete ("cuál es mi velocidad", "qué plan tengo", "cuál debería ser mi velocidad", "cuántos megas tengo", "qué paquete tengo", "cuánto cuesta mi plan", "información de mi plan", "qué velocidad tengo contratada").
 - "REPORTAR_PAGO": Mensajes donde el cliente indica que ya realizó su pago, transfirió dinero o envía comprobante.
-- "FALLA_INTERNET": Cualquier reporte de falla de internet, lentitud, intermitencia, desconexión, "no tengo internet", "no da internet", "sigue sin internet", "se cayó el servicio", páginas que no cargan o luces rojas.
+- "FALLA_INTERNET": Cualquier reporte de falla de internet, lentitud, intermitencia, desconexión, "no tengo internet", "no da internet", "sigue sin internet", "se cayó el servicio", páginas que no cargan, aplicaciones lentas o luces rojas.
 - "REINICIAR_MODEM": Peticiones explícitas de reinicio remoto de módem ("reinicien mi modem", "pueden resetearlo desde allá").
 - "DATOS_WIFI": Solicitud EXCLUSIVA para cambiar o consultar la contraseña/clave del WiFi o nombre SSID de la red ("cambiar contraseña", "cambio de clave wifi", "cuál es mi contraseña"). NUNCA usar para quejas o fallas como "no tengo wifi", "no hay wifi", "se fue el wifi", "no me conecta el wifi" o "falla el wifi" (esas son SIEMPRE "FALLA_INTERNET").
 - "HABLAR_HUMANO": Solicitudes de comunicarse con un asesor, operador, recepcionista o persona humana.
@@ -415,12 +424,15 @@ CATEGORÍAS DE INTENCIÓN PERMITIDAS (Elige EXACTAMENTE una de esta lista):
 - "DESCONOCIDO": Mensajes incoherentes, bromas, temas ajenos al servicio de telecomunicaciones o dudas no contempladas.
 
 EXTRACCIÓN DE BANDERAS Y DETALLES:
+- "problema_streaming_tv": true si indica que aplicaciones de streaming o video en su tele/Smart TV o dispositivo (Netflix, YouTube, Prime, Disney+, etc.) marcan error de conexión, se quedan cargando, no abren los videos o se quedan dando círculos / la ruedita / buffering; false si no.
+- "consulta_canales_cable": true si pregunta por canales de televisión tradicional/cable o reporta que no se ven canales de la tele; false si no.
+- "alcance_dispositivos": "TODOS" si el usuario indica que la falla le pasa en todos sus aparatos, en toda la casa, o en varios dispositivos (ej. "en mi tele y en mi celular", "en todos", "en ninguno agarra", "en varias teles"); "SOLO_UNO" si indica claramente que solo es en un aparato en particular (ej. "solo en mi celular", "solo en una tele", "en el patio"); "INDETERMINADO" si no especifica.
 - "foco_rojo": true si menciona foco rojo, luz roja, led rojo, LOS parpadeando o luz de alarma en el módem/ONU; false si no.
 - "equipo_apagado": true si dice que el módem no prende, se fue la luz en la casa, o no encienden las luces del equipo; false si no.
 - "reporta_lentitud": true si dice que el internet está lento, intermitente, sube y baja o hay lag; false si no.
 - "sin_internet_total": true si dice que NO TIENE INTERNET, no da internet, sin internet, se cayó el internet, no navega nada o corte total; false si no.
 - "red_wifi_no_visible": true si indica que no le aparece el nombre de su red Wi-Fi, no sale su red en el celular, no encuentra la red, se le borró el internet o no prende el foco de WLAN/Wi-Fi; false si no.
-- "bloqueo_paginas_apps": true si indica que no le abren ciertas páginas web, no cargan aplicaciones específicas (ej. banco, Netflix, YouTube, Facebook), solo entra a WhatsApp, le sale pantalla de aviso/bloqueo de portal cautivo, o problemas de acceso a ciertos sitios; false si no.
+- "bloqueo_paginas_apps": true ÚNICAMENTE si indica que no le abre una página web específica o un portal bancario/corporativo particular mientras el resto del internet sí funciona (NUNCA usar para lentitud o buffering en Netflix/YouTube/videos); false si no.
 - "ya_reinicio": true si el usuario aclara que ya lo desconectó, ya lo reinició o ya lo apagó y prendió; false si no.
 - "nombre_mencionado": string con el nombre propio limpio y capitalizado (ej. si dice "me llamo Juan Manuel" -> "Juan Manuel", si dice "carlos" -> "Carlos"), o null si no menciona nombre.
 - "telefono_mencionado": string de 10 dígitos si menciona algún número telefónico, o null.
@@ -451,16 +463,30 @@ Contexto actual del cliente:
 
       // Normalizaciones y validaciones por seguridad
       let finalIntent: BotIntent = parsed.intencion || 'DESCONOCIDO';
-      const reportaLentitud = Boolean(parsed.reporta_lentitud);
+      let reportaLentitud = Boolean(parsed.reporta_lentitud);
       const sinInternetTotal = Boolean(parsed.sin_internet_total);
       const focoRojo = Boolean(parsed.foco_rojo);
       const equipoApagado = Boolean(parsed.equipo_apagado);
       const redWifiNoVisible = Boolean(parsed.red_wifi_no_visible);
       const bloqueoPaginas = Boolean(parsed.bloqueo_paginas_apps);
+      const problemaStreamingTv = Boolean(parsed.problema_streaming_tv);
+      const consultaCanales = Boolean(parsed.consulta_canales_cable) || finalIntent === 'CONSULTAR_TV_CANALES';
 
-      if ((reportaLentitud || sinInternetTotal || focoRojo || equipoApagado || redWifiNoVisible || bloqueoPaginas) && (finalIntent === 'DESCONOCIDO' || finalIntent === 'IDENTIFICAR_CLIENTE' || finalIntent === 'SALUDO')) {
+      const textLower = mensajeUsuario.toLowerCase();
+      const indicaFallaGeneral = textLower.includes('faltando') || textLower.includes('fallando') || textLower.includes('falla') || textLower.includes('inestable') || textLower.includes('intermitente') || textLower.includes('problemas con el servicio') || textLower.includes('no agarra') || textLower.includes('se va');
+
+      if (consultaCanales) {
+        finalIntent = 'CONSULTAR_TV_CANALES';
+      } else if ((reportaLentitud || sinInternetTotal || focoRojo || equipoApagado || redWifiNoVisible || bloqueoPaginas || problemaStreamingTv || indicaFallaGeneral) && (finalIntent === 'DESCONOCIDO' || finalIntent === 'IDENTIFICAR_CLIENTE' || finalIntent === 'SALUDO')) {
         finalIntent = 'FALLA_INTERNET';
+        if (indicaFallaGeneral && !sinInternetTotal) {
+          reportaLentitud = true;
+        }
       }
+
+      const alcanceRaw = (parsed.alcance_dispositivos || '').toUpperCase();
+      const alcanceDispositivos: 'TODOS' | 'SOLO_UNO' | 'INDETERMINADO' =
+        alcanceRaw === 'TODOS' ? 'TODOS' : (alcanceRaw === 'SOLO_UNO' ? 'SOLO_UNO' : 'INDETERMINADO');
 
       return {
         intencion: finalIntent,
@@ -470,6 +496,9 @@ Contexto actual del cliente:
         sin_internet_total: sinInternetTotal,
         red_wifi_no_visible: redWifiNoVisible,
         bloqueo_paginas_apps: bloqueoPaginas,
+        problema_streaming_tv: problemaStreamingTv,
+        consulta_canales_cable: consultaCanales,
+        alcance_dispositivos: alcanceDispositivos,
         ya_reinicio: Boolean(parsed.ya_reinicio),
         nombre_mencionado: parsed.nombre_mencionado || null,
         telefono_mencionado: parsed.telefono_mencionado || null,
@@ -489,8 +518,13 @@ Contexto actual del cliente:
   private static fallbackClasificacionLocal(text: string): GroqClassificationResult {
     const lower = text.toLowerCase();
 
+    const esCanales = lower.includes('canal') || lower.includes('canales') || lower.includes('television') || lower.includes('televisión') || lower.includes('cable') || lower.includes('tele no agarra') || lower.includes('no se ve la tele') || lower.includes('no se ven los canales');
+    const esStreaming = lower.includes('netflix') || lower.includes('youtube') || lower.includes('circulos') || lower.includes('círculos') || lower.includes('pantalla') || lower.includes('smart tv') || lower.includes('smart');
+
     let intencion: BotIntent = 'DESCONOCIDO';
-    if (lower.includes('hola') || lower.includes('buenos dias') || lower.includes('buenas tardes')) {
+    if (esCanales && !esStreaming) {
+      intencion = 'CONSULTAR_TV_CANALES';
+    } else if (lower.includes('hola') || lower.includes('buenos dias') || lower.includes('buenas tardes')) {
       intencion = 'SALUDO';
     } else if (lower.includes('saldo') || lower.includes('debo') || lower.includes('recibo') || lower.includes('pagar')) {
       intencion = 'CONSULTAR_SALDO';
@@ -500,7 +534,7 @@ Contexto actual del cliente:
       intencion = 'CAMBIO_DOMICILIO';
     } else if (lower.includes('a que hora') || lower.includes('agenda') || lower.includes('tecnico no vino')) {
       intencion = 'ESTATUS_TECNICO_AGENDA';
-    } else if (lower.includes('no tengo internet') || lower.includes('sin señal') || lower.includes('falla') || lower.includes('lento') || lower.includes('no abre')) {
+    } else if (esStreaming || lower.includes('no tengo internet') || lower.includes('sin señal') || lower.includes('falla') || lower.includes('lento') || lower.includes('no abre')) {
       intencion = 'FALLA_INTERNET';
     } else if (lower.includes('reiniciar') || lower.includes('reset')) {
       intencion = 'REINICIAR_MODEM';
@@ -510,6 +544,10 @@ Contexto actual del cliente:
       intencion = 'CANCELAR_SUSCRIPCION';
     }
 
+    const alcance: 'TODOS' | 'SOLO_UNO' | 'INDETERMINADO' =
+      lower.includes('todos') || lower.includes('todas') || lower.includes('ambos') ? 'TODOS' :
+      (lower.includes('solo') || lower.includes('solamente') || lower.includes('un cel') || lower.includes('una tele') ? 'SOLO_UNO' : 'INDETERMINADO');
+
     return {
       intencion,
       foco_rojo: lower.includes('foco rojo') || lower.includes('luz roja') || lower.includes('los'),
@@ -517,7 +555,10 @@ Contexto actual del cliente:
       reporta_lentitud: lower.includes('lento') || lower.includes('lentitud') || lower.includes('intermitente'),
       sin_internet_total: lower.includes('no tengo internet') || lower.includes('sin internet') || lower.includes('no da internet') || lower.includes('sin conexion') || lower.includes('sin conexión'),
       red_wifi_no_visible: lower.includes('no aparece') || lower.includes('no sale mi') || lower.includes('no veo mi red') || lower.includes('se borro') || lower.includes('wlan'),
-      bloqueo_paginas_apps: lower.includes('no abre') || lower.includes('no abren') || lower.includes('ciertas paginas') || lower.includes('algunas paginas') || lower.includes('portal cautivo') || lower.includes('bloquea'),
+      bloqueo_paginas_apps: lower.includes('portal cautivo') || lower.includes('bloqueada'),
+      problema_streaming_tv: esStreaming,
+      consulta_canales_cable: esCanales && !esStreaming,
+      alcance_dispositivos: alcance,
       ya_reinicio: lower.includes('ya reinicie') || lower.includes('ya lo apague'),
       nombre_mencionado: null,
       telefono_mencionado: null,

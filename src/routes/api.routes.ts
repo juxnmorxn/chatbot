@@ -99,6 +99,9 @@ router.get('/api/smartolt/search', AdminController.searchClients);
 router.post('/api/wisphub/sync', AdminController.syncWisphub);
 router.get('/api/wisphub/stats', AdminController.getWisphubStats);
 router.get('/api/audit/ip-cross', AdminController.getAuditIpCross);
+router.post('/api/audit/sync-client/:id', AdminController.syncAuditClient);
+router.post('/api/audit/sync-client', AdminController.syncAuditClient);
+router.post('/api/audit/sync-vlan', AdminController.syncAuditVlan);
 
 // ==========================================
 // DIRECTORIO DE CLIENTES, MULTI-TELÉFONOS Y GPS

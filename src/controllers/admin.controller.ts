@@ -1291,20 +1291,74 @@ export class AdminController {
   }
 
   /**
-   * Realiza la auditoría de cruce de IPs entre SmartOLT y WispHub
+   * Realiza la auditoría de cruce de datos entre SmartOLT y WispHub (MAC, IPv4, IPv6, VLANs)
    */
   static async getAuditIpCross(req: Request, res: Response): Promise<void> {
     try {
       const filter = (req.query.filter as any) || 'all';
+      const vlan = (req.query.vlan as string) || '';
       const search = (req.query.search as string) || '';
       const page = parseInt(req.query.page as string, 10) || 1;
       const limit = parseInt(req.query.limit as string, 10) || 50;
 
-      const result = await TursoService.getAuditIpCross({ filter, search, page, limit });
+      const result = await TursoService.getAuditIpCross({ filter, vlan, search, page, limit });
       res.json({ success: true, ...result });
     } catch (error: any) {
-      logger.error('Error al auditar cruce de IPs:', error?.message || error);
+      logger.error('Error al auditar cruce de datos SmartOLT vs WispHub:', error?.message || error);
       res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Sincroniza los datos técnicos de un cliente (MAC, IPv6, IP, SN) hacia WispHub
+   */
+  static async syncAuditClient(req: Request, res: Response): Promise<void> {
+    try {
+      const wisphubId = req.params.id || req.body?.wisphub_id;
+      const { smartolt_id, mac, remote_ipv6_prefix, ip, sn, vlan } = req.body || {};
+
+      if (!wisphubId) {
+        res.status(400).json({ success: false, message: 'ID de servicio WispHub es requerido.' });
+        return;
+      }
+
+      const result = await TursoService.syncAuditClient({
+        wisphub_id: wisphubId,
+        smartolt_id,
+        mac,
+        remote_ipv6_prefix,
+        ip,
+        sn,
+        vlan,
+      });
+
+      if (result.success) {
+        res.json(result);
+      } else {
+        res.status(400).json({ success: false, message: result.message });
+      }
+    } catch (error: any) {
+      logger.error('Error al sincronizar cliente con WispHub:', error?.message || error);
+      res.status(500).json({ success: false, message: error?.message || 'Error interno' });
+    }
+  }
+
+  /**
+   * Sincroniza en lote todos los clientes desincronizados de una VLAN hacia WispHub
+   */
+  static async syncAuditVlan(req: Request, res: Response): Promise<void> {
+    try {
+      const { vlan } = req.body || {};
+      if (!vlan) {
+        res.status(400).json({ success: false, message: 'Debe especificar la VLAN a sincronizar.' });
+        return;
+      }
+
+      const result = await TursoService.syncAuditVlan(vlan);
+      res.json(result);
+    } catch (error: any) {
+      logger.error('Error al sincronizar lote de VLAN con WispHub:', error?.message || error);
+      res.status(500).json({ success: false, message: error?.message || 'Error interno' });
     }
   }
 

@@ -231,6 +231,9 @@ export class SmartOLTService {
         ip_address: item.ip_address || item.ip || null,
         zone_name: item.zone || item.zone_name || item.location || 'Actopan',
         onu_type_name: item.onu_type_name || item.model || item.type || '',
+        vlan: String(item.vlan || item.mgmt_vlan || item.service_ports?.[0]?.vlan || '').trim(),
+        mac: String(item.mac || item.mac_address || item.onu_mac || '').trim(),
+        remote_ipv6_prefix: String(item.remote_ipv6_prefix || item.ipv6_prefix || '').trim(),
         raw_data: JSON.stringify(item),
         updated_at: new Date().toISOString(),
       }));

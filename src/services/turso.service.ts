@@ -17,6 +17,9 @@ export interface SmartOltOnuRecord {
   ip_address?: string;
   coordenadas_gps?: string;
   google_maps_url?: string;
+  vlan?: string;
+  mac?: string;
+  remote_ipv6_prefix?: string;
   raw_data?: string;
   updated_at?: string;
 }
@@ -42,6 +45,9 @@ export interface WisphubClientRecord {
   direccion?: string;
   dia_corte?: string | null;
   fecha_corte?: string | null;
+  mac?: string;
+  remote_ipv6_prefix?: string;
+  vlan?: string;
   raw_data?: string;
   updated_at?: string;
 }
@@ -54,6 +60,12 @@ export interface AuditIpItem {
   smartolt_ip: string | null;
   wisphub_ip: string | null;
   ip_status: 'MISMATCH' | 'MATCH' | 'NO_IP' | 'ONLY_SMARTOLT' | 'ONLY_WISPHUB';
+  sync_status?: 'SYNCED' | 'MISSING_IPV6' | 'MISSING_MAC' | 'MISMATCH_IP' | 'ONLY_SMARTOLT' | 'ONLY_WISPHUB' | 'DESYNCHRONIZED';
+  vlan?: string | null;
+  mac_smartolt?: string | null;
+  mac_wisphub?: string | null;
+  ipv6_smartolt?: string | null;
+  ipv6_wisphub?: string | null;
   tr069_status?: 'ACTIVE' | 'OMCI' | 'MISSING';
   ipv6_status?: 'DUAL_STACK' | 'IPV4_ONLY' | 'MISSING';
   onu_external_id?: string | null;
@@ -509,8 +521,8 @@ export class TursoService {
             sql: `
               INSERT INTO smartolt_onus (
                 unique_external_id, sn, name, name_normalized, phone, address,
-                zone_name, speed_profile, olt_name, ip_address, raw_data, updated_at
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                zone_name, speed_profile, olt_name, ip_address, vlan, mac, remote_ipv6_prefix, raw_data, updated_at
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
               ON CONFLICT(unique_external_id) DO UPDATE SET
                 sn = excluded.sn,
                 name = excluded.name,
@@ -521,6 +533,9 @@ export class TursoService {
                 speed_profile = excluded.speed_profile,
                 olt_name = excluded.olt_name,
                 ip_address = CASE WHEN excluded.ip_address IS NOT NULL AND excluded.ip_address != '' THEN excluded.ip_address ELSE smartolt_onus.ip_address END,
+                vlan = COALESCE(NULLIF(excluded.vlan, ''), smartolt_onus.vlan),
+                mac = COALESCE(NULLIF(excluded.mac, ''), smartolt_onus.mac),
+                remote_ipv6_prefix = COALESCE(NULLIF(excluded.remote_ipv6_prefix, ''), smartolt_onus.remote_ipv6_prefix),
                 raw_data = excluded.raw_data,
                 updated_at = excluded.updated_at
             `,
@@ -535,6 +550,9 @@ export class TursoService {
               item.speed_profile || '',
               item.olt_name || '',
               item.ip_address || '',
+              item.vlan || '',
+              item.mac || '',
+              item.remote_ipv6_prefix || '',
               item.raw_data || '',
               now,
             ],
@@ -584,9 +602,10 @@ export class TursoService {
       logger.warn(`Pruning omitido: el lote de ONUs activas es demasiado pequeño (${activeIds?.size || 0})`);
       return 0;
     }
+
     try {
       const client = getTursoClient();
-      const existingRes = await client.execute(`SELECT unique_external_id FROM smartolt_onus`);
+      const existingRes = await client.execute('SELECT unique_external_id FROM smartolt_onus');
       const toDelete: string[] = [];
 
       for (const row of existingRes.rows) {
@@ -669,8 +688,8 @@ export class TursoService {
                 id_servicio, nombre, nombre_normalized, servicio, ip, estado,
                 estado_facturas, precio_plan, saldo, plan_internet, router,
                 sn_onu, telefono, telefonos_adicionales, coordenadas_gps, google_maps_url, ubicacion_notas,
-                direccion, dia_corte, fecha_corte, raw_data, updated_at
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                direccion, dia_corte, fecha_corte, mac, remote_ipv6_prefix, vlan, raw_data, updated_at
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
               ON CONFLICT(id_servicio) DO UPDATE SET
                 nombre = excluded.nombre,
                 nombre_normalized = excluded.nombre_normalized,
@@ -691,6 +710,9 @@ export class TursoService {
                 direccion = COALESCE(NULLIF(excluded.direccion, ''), wisphub_clients.direccion),
                 dia_corte = COALESCE(excluded.dia_corte, wisphub_clients.dia_corte),
                 fecha_corte = COALESCE(excluded.fecha_corte, wisphub_clients.fecha_corte),
+                mac = COALESCE(NULLIF(excluded.mac, ''), wisphub_clients.mac),
+                remote_ipv6_prefix = COALESCE(NULLIF(excluded.remote_ipv6_prefix, ''), wisphub_clients.remote_ipv6_prefix),
+                vlan = COALESCE(NULLIF(excluded.vlan, ''), wisphub_clients.vlan),
                 raw_data = excluded.raw_data,
                 updated_at = excluded.updated_at
             `,
@@ -715,6 +737,9 @@ export class TursoService {
               c.direccion || '',
               diaCorte || null,
               fechaCorte || null,
+              c.mac || null,
+              c.remote_ipv6_prefix || null,
+              c.vlan || null,
               c.raw_data || '',
               now,
             ],
@@ -728,7 +753,7 @@ export class TursoService {
       logger.info(`Sincronización exitosa: ${totalInserted} clientes de WispHub guardados en Turso DB`);
       return totalInserted;
     } catch (error: any) {
-      logger.error('Error al guardar clientes de WispHub en Turso DB:', error?.message || error);
+      logger.error('Error al guardar lote de clientes de WispHub en Turso DB:', error?.message || error);
       throw error;
     }
   }
@@ -1817,11 +1842,12 @@ export class TursoService {
   }
 
   /**
-   * Realiza el cruce de datos entre SmartOLT y WispHub (detección de discrepancias de IP, TR-069 e IPv6)
-   * 100% solo lectura. Cruza por número de folio/contrato (ej: 2861) y por nombre normalizado.
+   * Realiza el cruce de datos completo entre SmartOLT y WispHub (MAC, IPv4, IPv6, VLANs y Estado de Sincronización)
+   * Permite filtrar por VLAN, discrepancias, falta de IPv6 en WispHub o falta de MAC.
    */
   static async getAuditIpCross(options: {
-    filter?: 'all' | 'mismatches' | 'matches' | 'only_olt' | 'only_wisphub' | 'no_ip' | 'missing_tr069' | 'missing_ipv6';
+    filter?: 'all' | 'desynchronized' | 'missing_ipv6' | 'missing_mac' | 'mismatches' | 'matches' | 'synced' | 'only_olt' | 'only_wisphub' | 'no_ip' | 'missing_tr069';
+    vlan?: string;
     search?: string;
     page?: number;
     limit?: number;
@@ -1837,13 +1863,18 @@ export class TursoService {
       noIp: number;
       missingTr069: number;
       missingIpv6: number;
+      missingMac: number;
+      synced: number;
+      desynchronized: number;
     };
+    vlans: Array<{ vlan: string; label: string; count: number }>;
     items: AuditIpItem[];
     total: number;
     page: number;
     totalPages: number;
   }> {
     const filter = options.filter || 'all';
+    const vlanFilter = (options.vlan || '').trim();
     const search = (options.search || '').toLowerCase().trim();
     const limit = options.limit || 50;
     const page = options.page || 1;
@@ -1888,6 +1919,7 @@ export class TursoService {
       }
 
       const matchedItems: AuditIpItem[] = [];
+      const vlanCounter = new Map<string, { label: string; count: number }>();
 
       // 3. Procesar registros de SmartOLT y buscar su par en WispHub
       for (const olt of oltRows) {
@@ -1897,6 +1929,12 @@ export class TursoService {
         const oltNormName = String(olt.name_normalized || normalizeText(cleanPersonName(oltName)));
         const oltSn = String(olt.sn || '').trim().toUpperCase();
         const oltIp = olt.ip_address ? String(olt.ip_address).trim() : null;
+
+        let oltRaw: any = {};
+        try { oltRaw = JSON.parse(String(olt.raw_data || '{}')); } catch {}
+
+        const oltVlan = String(olt.vlan || oltRaw.vlan || oltRaw.mgmt_vlan || oltRaw.service_ports?.[0]?.vlan || '').trim();
+        const oltMac = String(olt.mac || oltRaw.mac || oltRaw.mac_address || oltRaw.onu_mac || '').trim().toUpperCase();
 
         let whMatch: any = null;
 
@@ -1909,7 +1947,6 @@ export class TursoService {
         }
 
         // 2. Coincidencia por Folio numérico CON VALIDACIÓN DE NOMBRE
-        // Previene falsos positivos con folios duplicados de antenas u otras OLTs
         if (!whMatch && oltNumFolio && whByFolio.has(oltNumFolio)) {
           const candidates = whByFolio.get(oltNumFolio) || [];
           let bestCandidate: any = null;
@@ -1946,9 +1983,22 @@ export class TursoService {
         const tr069Status = parseOnuTr069Status(olt.raw_data);
         const ipv6Status = parseOnuIpv6Status(olt.raw_data);
 
+        // Contar VLAN para selector
+        if (oltVlan) {
+          const existing = vlanCounter.get(oltVlan) || { label: `VLAN ${oltVlan}${olt.zone_name ? ` (${olt.zone_name})` : ''}`, count: 0 };
+          existing.count++;
+          vlanCounter.set(oltVlan, existing);
+        }
+
         if (whMatch) {
           whUsedIds.add(whMatch.id_servicio);
           const whIp = whMatch.ip ? String(whMatch.ip).trim() : null;
+          let whRaw: any = {};
+          try { whRaw = JSON.parse(String(whMatch.raw_data || '{}')); } catch {}
+
+          const whMac = String(whMatch.mac || whRaw.mac_cpe || whRaw.mac || '').trim().toUpperCase();
+          const whIpv6 = String(whMatch.remote_ipv6_prefix || whRaw.remote_ipv6_prefix || whRaw.ipv6_prefix || '').trim();
+          const vlanFinal = oltVlan || String(whMatch.vlan || whRaw.vlan || whRaw.interfaz_lan || '').trim();
 
           let ipStatus: AuditIpItem['ip_status'] = 'NO_IP';
           if (oltIp && whIp) {
@@ -1959,6 +2009,22 @@ export class TursoService {
             ipStatus = 'NO_IP';
           }
 
+          // Cálculo del Estado de Sincronización
+          let syncStatus: AuditIpItem['sync_status'] = 'DESYNCHRONIZED';
+          const ipEmpatada = ipStatus === 'MATCH';
+          const tieneIpv6 = whIpv6.length > 0;
+          const tieneMac = whMac.length > 0;
+
+          if (ipStatus === 'MISMATCH') {
+            syncStatus = 'MISMATCH_IP';
+          } else if (!tieneIpv6) {
+            syncStatus = 'MISSING_IPV6';
+          } else if (!tieneMac) {
+            syncStatus = 'MISSING_MAC';
+          } else if (ipEmpatada && tieneIpv6 && tieneMac) {
+            syncStatus = 'SYNCED';
+          }
+
           matchedItems.push({
             id: `MATCH-${olt.unique_external_id}-${whMatch.id_servicio}`,
             folio: oltNumFolio || String(whMatch.id_servicio),
@@ -1967,6 +2033,12 @@ export class TursoService {
             smartolt_ip: oltIp,
             wisphub_ip: whIp,
             ip_status: ipStatus,
+            sync_status: syncStatus,
+            vlan: vlanFinal || null,
+            mac_smartolt: oltMac || null,
+            mac_wisphub: whMac || null,
+            ipv6_smartolt: ipv6Status === 'DUAL_STACK' ? 'TR-069 Dual Stack' : (ipv6Status === 'IPV4_ONLY' ? 'Solo IPv4' : 'Desconocido'),
+            ipv6_wisphub: whIpv6 || null,
             tr069_status: tr069Status,
             ipv6_status: ipv6Status,
             onu_external_id: String(olt.unique_external_id),
@@ -1989,6 +2061,12 @@ export class TursoService {
             smartolt_ip: oltIp,
             wisphub_ip: null,
             ip_status: 'ONLY_SMARTOLT',
+            sync_status: 'ONLY_SMARTOLT',
+            vlan: oltVlan || null,
+            mac_smartolt: oltMac || null,
+            mac_wisphub: null,
+            ipv6_smartolt: ipv6Status === 'DUAL_STACK' ? 'TR-069 Dual Stack' : 'Solo IPv4',
+            ipv6_wisphub: null,
             tr069_status: tr069Status,
             ipv6_status: ipv6Status,
             onu_external_id: String(olt.unique_external_id),
@@ -2010,6 +2088,18 @@ export class TursoService {
           const servicioStr = String(wh.servicio || wh.nombre || '');
           const folioMatch = servicioStr.match(/^([0-9]{1,6})[-\s_]/);
           const whIp = wh.ip ? String(wh.ip).trim() : null;
+          let whRaw: any = {};
+          try { whRaw = JSON.parse(String(wh.raw_data || '{}')); } catch {}
+
+          const whMac = String(wh.mac || whRaw.mac_cpe || whRaw.mac || '').trim().toUpperCase();
+          const whIpv6 = String(wh.remote_ipv6_prefix || whRaw.remote_ipv6_prefix || whRaw.ipv6_prefix || '').trim();
+          const whVlan = String(wh.vlan || whRaw.vlan || whRaw.interfaz_lan || '').trim();
+
+          if (whVlan) {
+            const existing = vlanCounter.get(whVlan) || { label: `VLAN ${whVlan}${wh.router ? ` (${wh.router})` : ''}`, count: 0 };
+            existing.count++;
+            vlanCounter.set(whVlan, existing);
+          }
 
           matchedItems.push({
             id: `WH-${wh.id_servicio}`,
@@ -2019,6 +2109,12 @@ export class TursoService {
             smartolt_ip: null,
             wisphub_ip: whIp,
             ip_status: 'ONLY_WISPHUB',
+            sync_status: 'ONLY_WISPHUB',
+            vlan: whVlan || null,
+            mac_smartolt: null,
+            mac_wisphub: whMac || null,
+            ipv6_smartolt: null,
+            ipv6_wisphub: whIpv6 || null,
             tr069_status: 'MISSING',
             ipv6_status: 'MISSING',
             onu_external_id: null,
@@ -2044,16 +2140,32 @@ export class TursoService {
         onlyWisphub: matchedItems.filter(i => i.ip_status === 'ONLY_WISPHUB').length,
         noIp: matchedItems.filter(i => i.ip_status === 'NO_IP').length,
         missingTr069: matchedItems.filter(i => i.smartolt_id && i.tr069_status !== 'ACTIVE').length,
-        missingIpv6: matchedItems.filter(i => i.smartolt_id && i.ipv6_status !== 'DUAL_STACK').length,
+        missingIpv6: matchedItems.filter(i => i.sync_status === 'MISSING_IPV6' || (i.wisphub_id && !i.ipv6_wisphub)).length,
+        missingMac: matchedItems.filter(i => i.sync_status === 'MISSING_MAC' || (i.wisphub_id && !i.mac_wisphub)).length,
+        synced: matchedItems.filter(i => i.sync_status === 'SYNCED').length,
+        desynchronized: matchedItems.filter(i => i.sync_status !== 'SYNCED' && i.wisphub_id).length,
       };
 
-      // 6. Aplicar filtro
+      // 6. Aplicar filtro por VLAN si se especificó
       let filtered = matchedItems;
+      if (vlanFilter) {
+        filtered = filtered.filter(i => String(i.vlan || '').toLowerCase() === vlanFilter.toLowerCase());
+      }
+
+      // 7. Aplicar filtro de estado
       const f = String(filter || 'all').trim().toLowerCase();
       if (f === 'mismatches' || f === 'mismatch' || f === 'discrepancias' || f === 'discrepancia') {
         filtered = filtered.filter(i => i.ip_status === 'MISMATCH');
       } else if (f === 'matches' || f === 'match' || f === 'correctos' || f === 'correcto' || f === 'coinciden' || f === 'coincide') {
         filtered = filtered.filter(i => i.ip_status === 'MATCH');
+      } else if (f === 'synced' || f === 'sincronizado' || f === 'sincronizados') {
+        filtered = filtered.filter(i => i.sync_status === 'SYNCED');
+      } else if (f === 'desynchronized' || f === 'desincronizados' || f === 'pendientes_sync') {
+        filtered = filtered.filter(i => i.sync_status !== 'SYNCED' && i.wisphub_id);
+      } else if (f === 'missing_ipv6' || f === 'falta_ipv6' || f === 'sin_ipv6') {
+        filtered = filtered.filter(i => !i.ipv6_wisphub && i.wisphub_id);
+      } else if (f === 'missing_mac' || f === 'falta_mac' || f === 'sin_mac') {
+        filtered = filtered.filter(i => !i.mac_wisphub && i.wisphub_id);
       } else if (f === 'only_olt' || f === 'only_smartolt' || f === 'smartolt' || f === 'solo_smartolt') {
         filtered = filtered.filter(i => i.ip_status === 'ONLY_SMARTOLT');
       } else if (f === 'only_wisphub' || f === 'wisphub' || f === 'solo_wisphub') {
@@ -2062,15 +2174,9 @@ export class TursoService {
         filtered = filtered.filter(i => i.ip_status === 'NO_IP');
       } else if (f === 'missing_tr069' || f === 'falta_tr069' || f === 'sin_tr069') {
         filtered = filtered.filter(i => i.smartolt_id && i.tr069_status !== 'ACTIVE');
-      } else if (f === 'missing_ipv6' || f === 'falta_ipv6' || f === 'sin_ipv6') {
-        filtered = filtered.filter(i => i.smartolt_id && i.ipv6_status !== 'DUAL_STACK');
-      } else if (f === 'pending' || f === 'pendientes' || f === 'pendientes_tr069_ipv6') {
-        filtered = filtered.filter(i => i.smartolt_id && (i.tr069_status !== 'ACTIVE' || i.ipv6_status !== 'DUAL_STACK'));
-      } else if (f === 'ready' || f === 'completados' || f === 'listos' || f === 'provisioned') {
-        filtered = filtered.filter(i => i.smartolt_id && i.tr069_status === 'ACTIVE' && i.ipv6_status === 'DUAL_STACK');
       }
 
-      // 7. Aplicar búsqueda por texto si existe
+      // 8. Aplicar búsqueda por texto si existe
       if (search) {
         filtered = filtered.filter(i =>
           (i.cliente && String(i.cliente).toLowerCase().includes(search)) ||
@@ -2078,6 +2184,10 @@ export class TursoService {
           (i.servicio && String(i.servicio).toLowerCase().includes(search)) ||
           (i.smartolt_ip && String(i.smartolt_ip).toLowerCase().includes(search)) ||
           (i.wisphub_ip && String(i.wisphub_ip).toLowerCase().includes(search)) ||
+          (i.mac_smartolt && String(i.mac_smartolt).toLowerCase().includes(search)) ||
+          (i.mac_wisphub && String(i.mac_wisphub).toLowerCase().includes(search)) ||
+          (i.ipv6_wisphub && String(i.ipv6_wisphub).toLowerCase().includes(search)) ||
+          (i.vlan && String(i.vlan).toLowerCase().includes(search)) ||
           (i.zona_o_router && String(i.zona_o_router).toLowerCase().includes(search)) ||
           (i.sn_smartolt && String(i.sn_smartolt).toLowerCase().includes(search)) ||
           (i.sn_wisphub && String(i.sn_wisphub).toLowerCase().includes(search)) ||
@@ -2085,33 +2195,164 @@ export class TursoService {
         );
       }
 
-      // Priorizar discrepancias al inicio cuando se muestra 'all'
+      // Priorizar desincronizados al inicio cuando se muestra 'all'
       if (filter === 'all' && !search) {
         filtered.sort((a, b) => {
-          const priority = (st: string) => st === 'MISMATCH' ? 0 : (st === 'MATCH' ? 1 : 2);
-          return priority(a.ip_status) - priority(b.ip_status);
+          const priority = (st?: string) => {
+            if (st === 'MISSING_IPV6' || st === 'MISMATCH_IP') return 0;
+            if (st === 'MISSING_MAC' || st === 'DESYNCHRONIZED') return 1;
+            if (st === 'SYNCED') return 3;
+            return 2;
+          };
+          return priority(a.sync_status) - priority(b.sync_status);
         });
       }
+
+      // Generar lista ordenada de VLANs disponibles
+      const vlansList = Array.from(vlanCounter.entries())
+        .map(([vlan, data]) => ({ vlan, label: data.label, count: data.count }))
+        .sort((a, b) => (parseInt(a.vlan, 10) || 0) - (parseInt(b.vlan, 10) || 0));
 
       const totalCount = filtered.length;
       const paginated = filtered.slice(offset, offset + limit);
 
       return {
         summary,
+        vlans: vlansList,
         items: paginated,
         total: totalCount,
         page,
         totalPages: Math.max(1, Math.ceil(totalCount / limit)),
       };
     } catch (error: any) {
-      logger.error('Error al realizar cruce de IPs SmartOLT vs WispHub:', error?.message || error);
+      logger.error('Error al realizar cruce de datos SmartOLT vs WispHub:', error?.message || error);
       return {
-        summary: { totalSmartOlt: 0, totalWisphub: 0, mismatches: 0, matches: 0, onlySmartOlt: 0, onlyWisphub: 0, noIp: 0, missingTr069: 0, missingIpv6: 0 },
+        summary: { totalSmartOlt: 0, totalWisphub: 0, mismatches: 0, matches: 0, onlySmartOlt: 0, onlyWisphub: 0, noIp: 0, missingTr069: 0, missingIpv6: 0, missingMac: 0, synced: 0, desynchronized: 0 },
+        vlans: [],
         items: [],
         total: 0,
         page: 1,
         totalPages: 1,
       };
+    }
+  }
+
+  /**
+   * Sincroniza los parámetros técnicos de una ONT de SmartOLT (MAC, IPv6, IP, SN) hacia el servicio correspondiente en WispHub
+   */
+  static async syncAuditClient(params: {
+    wisphub_id: number | string;
+    smartolt_id?: string | null;
+    mac?: string | null;
+    remote_ipv6_prefix?: string | null;
+    ip?: string | null;
+    sn?: string | null;
+    vlan?: string | null;
+  }): Promise<{ success: boolean; message: string; updated?: any }> {
+    const cleanWhId = Number(params.wisphub_id);
+    if (!cleanWhId || isNaN(cleanWhId)) {
+      return { success: false, message: 'ID de servicio en WispHub no proporcionado o inválido.' };
+    }
+
+    try {
+      const client = getTursoClient();
+
+      // 1. Obtener datos actuales de SmartOLT si se tiene el smartolt_id
+      let oltRecord: any = null;
+      if (params.smartolt_id) {
+        const oltRes = await client.execute({
+          sql: 'SELECT * FROM smartolt_onus WHERE unique_external_id = ? OR sn = ? LIMIT 1',
+          args: [params.smartolt_id, params.smartolt_id.toUpperCase()],
+        });
+        if (oltRes.rows.length > 0) oltRecord = oltRes.rows[0];
+      }
+
+      let oltRaw: any = {};
+      if (oltRecord?.raw_data) {
+        try { oltRaw = JSON.parse(String(oltRecord.raw_data)); } catch {}
+      }
+
+      const macToSet = (params.mac || oltRecord?.mac || oltRaw.mac || oltRaw.mac_address || oltRaw.onu_mac || '').trim().toUpperCase();
+      const ipToSet = (params.ip || oltRecord?.ip_address || oltRaw.ip_address || '').trim();
+      const snToSet = (params.sn || oltRecord?.sn || '').trim().toUpperCase();
+      const ipv6ToSet = (params.remote_ipv6_prefix || oltRecord?.remote_ipv6_prefix || oltRaw.remote_ipv6_prefix || oltRaw.ipv6_prefix || '').trim();
+
+      const { WispHubService } = await import('./wisphub.service');
+      const updateRes = await WispHubService.actualizarServicioCliente(cleanWhId, {
+        mac_cpe: macToSet || undefined,
+        ip: ipToSet || undefined,
+        sn_onu: snToSet || undefined,
+        remote_ipv6_prefix: ipv6ToSet || undefined,
+      });
+
+      if (!updateRes.success) {
+        return { success: false, message: updateRes.message || 'Error al actualizar en WispHub.' };
+      }
+
+      logger.info(`✅ Sincronización exitosa SmartOLT -> WispHub para cliente ${cleanWhId}: MAC="${macToSet}", IP="${ipToSet}", IPv6="${ipv6ToSet}", SN="${snToSet}"`);
+      return {
+        success: true,
+        message: 'Cliente sincronizado exitosamente con WispHub.',
+        updated: {
+          wisphub_id: cleanWhId,
+          mac: macToSet,
+          ip: ipToSet,
+          sn: snToSet,
+          remote_ipv6_prefix: ipv6ToSet,
+        },
+      };
+    } catch (err: any) {
+      logger.error(`Error al sincronizar cliente audit ${params.wisphub_id}:`, err?.message || err);
+      return { success: false, message: `Error interno: ${err?.message || err}` };
+    }
+  }
+
+  /**
+   * Sincroniza en lote todos los clientes desincronizados de una VLAN específica hacia WispHub
+   */
+  static async syncAuditVlan(vlan: string): Promise<{ success: boolean; totalProcessed: number; syncedCount: number; errors: string[] }> {
+    const cleanVlan = (vlan || '').trim();
+    if (!cleanVlan) {
+      return { success: false, totalProcessed: 0, syncedCount: 0, errors: ['Debe especificar una VLAN.'] };
+    }
+
+    try {
+      const auditData = await this.getAuditIpCross({ vlan: cleanVlan, filter: 'all', limit: 500 });
+      const desynchronized = auditData.items.filter(i => i.wisphub_id && i.sync_status !== 'SYNCED');
+
+      logger.info(`Iniciando sincronización por lote para VLAN ${cleanVlan}: ${desynchronized.length} clientes desincronizados.`);
+
+      let syncedCount = 0;
+      const errors: string[] = [];
+
+      for (const item of desynchronized) {
+        if (!item.wisphub_id) continue;
+        const res = await this.syncAuditClient({
+          wisphub_id: item.wisphub_id,
+          smartolt_id: item.smartolt_id,
+          mac: item.mac_smartolt,
+          ip: item.smartolt_ip,
+          sn: item.sn_smartolt,
+          remote_ipv6_prefix: item.ipv6_wisphub || item.ipv6_smartolt,
+        });
+
+        if (res.success) {
+          syncedCount++;
+        } else {
+          errors.push(`Cliente ${item.cliente} (#${item.folio}): ${res.message}`);
+        }
+      }
+
+      logger.info(`Lote VLAN ${cleanVlan} finalizado: ${syncedCount}/${desynchronized.length} sincronizados exitosamente.`);
+      return {
+        success: true,
+        totalProcessed: desynchronized.length,
+        syncedCount,
+        errors,
+      };
+    } catch (err: any) {
+      logger.error(`Error en syncAuditVlan para VLAN ${cleanVlan}:`, err?.message || err);
+      return { success: false, totalProcessed: 0, syncedCount: 0, errors: [err?.message || 'Error interno'] };
     }
   }
 

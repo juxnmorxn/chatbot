@@ -98,6 +98,9 @@ export async function initTursoDatabase(): Promise<void> {
     try { await client.execute(`ALTER TABLE smartolt_onus ADD COLUMN ip_address TEXT;`); } catch (_) {}
     try { await client.execute(`ALTER TABLE smartolt_onus ADD COLUMN coordenadas_gps TEXT;`); } catch (_) {}
     try { await client.execute(`ALTER TABLE smartolt_onus ADD COLUMN google_maps_url TEXT;`); } catch (_) {}
+    try { await client.execute(`ALTER TABLE smartolt_onus ADD COLUMN vlan TEXT;`); } catch (_) {}
+    try { await client.execute(`ALTER TABLE smartolt_onus ADD COLUMN mac TEXT;`); } catch (_) {}
+    try { await client.execute(`ALTER TABLE smartolt_onus ADD COLUMN remote_ipv6_prefix TEXT;`); } catch (_) {}
 
     // Índices para búsquedas rápidas
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_onus_name_norm ON smartolt_onus(name_normalized);`);
@@ -128,6 +131,9 @@ export async function initTursoDatabase(): Promise<void> {
         direccion TEXT,
         dia_corte TEXT,
         fecha_corte TEXT,
+        mac TEXT,
+        remote_ipv6_prefix TEXT,
+        vlan TEXT,
         raw_data TEXT,
         updated_at TEXT
       );
@@ -138,6 +144,9 @@ export async function initTursoDatabase(): Promise<void> {
     try { await client.execute(`ALTER TABLE wisphub_clients ADD COLUMN coordenadas_gps TEXT;`); } catch (_) {}
     try { await client.execute(`ALTER TABLE wisphub_clients ADD COLUMN google_maps_url TEXT;`); } catch (_) {}
     try { await client.execute(`ALTER TABLE wisphub_clients ADD COLUMN ubicacion_notas TEXT;`); } catch (_) {}
+    try { await client.execute(`ALTER TABLE wisphub_clients ADD COLUMN mac TEXT;`); } catch (_) {}
+    try { await client.execute(`ALTER TABLE wisphub_clients ADD COLUMN remote_ipv6_prefix TEXT;`); } catch (_) {}
+    try { await client.execute(`ALTER TABLE wisphub_clients ADD COLUMN vlan TEXT;`); } catch (_) {}
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_wh_nombre_norm ON wisphub_clients(nombre_normalized);`);
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_wh_servicio ON wisphub_clients(servicio);`);
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_wh_ip ON wisphub_clients(ip);`);

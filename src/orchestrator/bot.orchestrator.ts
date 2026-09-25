@@ -715,6 +715,8 @@ export class BotOrchestrator {
       'ACTIVACION_ESPERANDO_NOMBRE',
       'ACTIVACION_ESPERANDO_ZONA',
       'PENDIENTE_CONFIRMACION_ACTIVACION_ONU',
+      'COMPROBACION_STREAMING_TV',
+      'MONITOREO_POST_REINICIO',
       'DIAGNOSTICO_TRIAGE_DISPOSITIVOS',
       'DIAGNOSTICO_COMPROBAR_UN_DISPOSITIVO',
       'DIAGNOSTICO_POST_REINICIO',
@@ -786,6 +788,12 @@ export class BotOrchestrator {
     }
 
     // Pasos técnicos del diagnóstico escalonado:
+    // Si el cliente está en la comprobación o dudas de Smart TV / Red 5G (ej: Netflix / YouTube dando círculos)
+    if (session?.step === 'COMPROBACION_STREAMING_TV') {
+      await this.procesarStreamingTv(phone, rawText, event, session, targetJid);
+      return;
+    }
+
     // Si el cliente está en el triage de dispositivos (¿1 aparato o todos?)
     if (session?.step === 'DIAGNOSTICO_TRIAGE_DISPOSITIVOS') {
       await this.procesarTriageDispositivos(phone, rawText, event, session, targetJid);
@@ -798,8 +806,8 @@ export class BotOrchestrator {
       return;
     }
 
-    // Si el cliente está respondiendo tras el reinicio remoto del módem
-    if (session?.step === 'DIAGNOSTICO_POST_REINICIO') {
+    // Si el cliente está respondiendo tras el reinicio remoto del módem o durante monitoreo
+    if (session?.step === 'DIAGNOSTICO_POST_REINICIO' || session?.step === 'MONITOREO_POST_REINICIO') {
       await this.procesarPostReinicio(phone, rawText, event, session, targetJid);
       return;
     }
@@ -1000,8 +1008,31 @@ export class BotOrchestrator {
           currentStep: 'INICIO',
         });
 
+        // Si el usuario pregunta por canales de TV o televisión por cable (incluso antes de identificarse)
+        if (clasif.intencion === 'CONSULTAR_TV_CANALES' || clasif.consulta_canales_cable) {
+          const msjTv =
+            `¡Hola! 👋 Te informamos con mucho gusto: en *${this.getIspName()}* nos dedicamos de forma exclusiva a proveer *servicio de internet de alta velocidad* (fibra óptica e inalámbrico). 🌐\n\n` +
+            `📺 *Nosotros no vendemos ni manejamos servicio de televisión por cable ni canales de TV.* Por ello, la señal o sintonización de canales tradicionales no depende de nuestro servicio.\n\n` +
+            `💡 *Si tu televisor es Smart TV:* Puedes utilizar nuestro internet para ver plataformas de video y streaming (como YouTube, Netflix, Disney+, etc.). Para que tus videos carguen rápido y sin pausas, te sugerimos conectar tu pantalla a la red Wi-Fi *5G* (con tu misma contraseña de siempre).\n\n` +
+            `¿Hay alguna consulta sobre tu conexión de internet en la que te podamos apoyar? 😊`;
+
+          await this.enviarYLoguear(phone, msjTv, 'CONSULTAR_TV_CANALES', 'ACLARACION_SOLO_INTERNET_NO_TV', targetJid);
+          return;
+        }
+
         if (clasif.nombre_mencionado) {
-          await this.procesarIdentificacion(phone, rawText, session, targetJid);
+          // Preservar la queja o intención inicial para no preguntar doble tras identificarse
+          const sesionConMeta = await TursoService.upsertSession({
+            phone,
+            metadata: JSON.stringify({
+              ...metaObjPre,
+              initialQuery: rawText,
+              initialIntent: clasif.intencion,
+              initialClasif: clasif,
+              resumen_queja: clasif.resumen_queja,
+            }),
+          });
+          await this.procesarIdentificacion(phone, rawText, sesionConMeta, targetJid);
           return;
         }
 
@@ -1052,8 +1083,8 @@ export class BotOrchestrator {
       clasificacion.intencion = 'FALLA_INTERNET';
     }
 
-    // Si es una acción específica de telecomunicaciones (Niveles, Plan/Velocidad, Falla, Saldo, Reboot, Asesor, Wi-Fi, Mudanza/Cobertura, Agenda Cuadrilla)
-    if (['CONSULTAR_NIVELES', 'CONSULTAR_PLAN', 'FALLA_INTERNET', 'REINICIAR_MODEM', 'CONSULTAR_SALDO', 'REPORTAR_PAGO', 'HABLAR_HUMANO', 'CANCELAR_SUSCRIPCION', 'DATOS_WIFI', 'CAMBIO_DOMICILIO', 'ESTATUS_TECNICO_AGENDA'].includes(clasificacion.intencion)) {
+    // Si es una acción específica de telecomunicaciones (Niveles, Plan/Velocidad, Falla, Saldo, Reboot, Asesor, Wi-Fi, Mudanza/Cobertura, Agenda Cuadrilla, Canales TV)
+    if (['CONSULTAR_NIVELES', 'CONSULTAR_PLAN', 'FALLA_INTERNET', 'REINICIAR_MODEM', 'CONSULTAR_SALDO', 'REPORTAR_PAGO', 'HABLAR_HUMANO', 'CANCELAR_SUSCRIPCION', 'DATOS_WIFI', 'CAMBIO_DOMICILIO', 'ESTATUS_TECNICO_AGENDA', 'CONSULTAR_TV_CANALES'].includes(clasificacion.intencion)) {
       await this.ejecutarIntencion(phone, clasificacion, session, rawText, targetJid, event);
       return;
     }
@@ -1274,6 +1305,20 @@ export class BotOrchestrator {
       case 'FALLA_INTERNET':
         await this.flujoFallaInteligente(phone, c, session, targetJid);
         break;
+
+      case 'CONSULTAR_TV_CANALES': {
+        const nombreLimpio = formatDisplayName(session?.client_name, true);
+        const nombre = nombreLimpio ? ` *${nombreLimpio}*` : '';
+        const msjTv =
+          `¡Hola${nombre}! 👋 Te informamos con mucho gusto: en *${this.getIspName()}* nos dedicamos de forma exclusiva a proveer *servicio de internet de alta velocidad* (fibra óptica e inalámbrico). 🌐\n\n` +
+          `📺 *Nosotros no vendemos ni manejamos servicio de televisión por cable ni canales de TV.* Por ello, los canales tradicionales de televisión no forman parte de nuestro servicio.\n\n` +
+          `💡 *Si tu televisor es Smart TV:* Puedes utilizar nuestro internet para disfrutar de tus aplicaciones de video y streaming (como YouTube, Netflix, Disney+, etc.). Para que tus videos carguen rápido y sin pausas, te sugerimos conectar tu pantalla a tu red Wi-Fi *5G* (con tu misma contraseña de siempre).\n\n` +
+          `¿Hay alguna consulta sobre tu conexión de internet en la que te podamos apoyar? 😊`;
+
+        await this.enviarYLoguear(phone, msjTv, 'CONSULTAR_TV_CANALES', 'ACLARACION_SOLO_INTERNET_NO_TV', targetJid);
+        await this.marcarConsultaFinalizada(phone, session);
+        break;
+      }
 
       case 'REINICIAR_MODEM':
         await this.flujoReiniciarModem(phone, session, targetJid);
@@ -1844,12 +1889,118 @@ export class BotOrchestrator {
       detalleQueja.toLowerCase().includes('no da internet') ||
       detalleQueja.toLowerCase().includes('no navega');
 
-    // CASO C: LÍNEA EN LÍNEA (ONLINE) O ESTADO NORMAL - DIAGNÓSTICO ESCALONADO CON TRIAGE
-    const mensajeTriage = esSinInternet
-      ? `Hola${nombre}, revisé tu línea y tu módem aparece encendido y con señal física estable.\n\n` +
-        `¿La falta de internet te ocurre en *todos tus dispositivos* o *solo en uno en específico*?`
-      : `Hola${nombre}, tu módem aparece conectado y con buena señal.\n\n` +
-        `¿El problema te ocurre en *todos tus dispositivos* o *solo en uno en específico*?`;
+    // CASO C0: PREGUNTA SOBRE TELEVISIÓN O CANALES DE TV (NO LOS VENDEMOS)
+    if (c.consulta_canales_cable || c.intencion === 'CONSULTAR_TV_CANALES') {
+      const msjTv =
+        `¡Hola${nombre}! 👋 Te informamos con mucho gusto: en *${this.getIspName()}* nos dedicamos de forma exclusiva a proveer *servicio de internet de alta velocidad* (fibra óptica e inalámbrico). 🌐\n\n` +
+        `📺 *Nosotros no vendemos ni manejamos servicio de televisión por cable ni canales de TV.* Por ello, los canales tradicionales de televisión no forman parte de nuestro servicio.\n\n` +
+        `💡 *Si tu televisor es Smart TV:* Puedes utilizar nuestro internet para disfrutar de tus aplicaciones de video y streaming (como YouTube, Netflix, Disney+, etc.). Para que tus videos carguen rápido y sin pausas, te sugerimos conectar tu pantalla a la red Wi-Fi *5G* (con tu misma contraseña de siempre).\n\n` +
+        `¿Hay alguna consulta sobre tu conexión de internet en la que te podamos ayudar? 😊`;
+
+      await this.enviarYLoguear(phone, msjTv, 'CONSULTAR_TV_CANALES', 'ACLARACION_SOLO_INTERNET_NO_TV', targetJid);
+      await this.marcarConsultaFinalizada(phone, session);
+      return;
+    }
+
+    // CASO C1: SMART TV / STREAMING (Netflix, YouTube, videos que dan círculos o no abren) - CAPTURA 1
+    const esStreamingSmartTv = c.problema_streaming_tv ||
+      detalleQueja.toLowerCase().includes('netflix') ||
+      detalleQueja.toLowerCase().includes('youtube') ||
+      detalleQueja.toLowerCase().includes('circulo') ||
+      detalleQueja.toLowerCase().includes('círculo') ||
+      detalleQueja.toLowerCase().includes('ruedita') ||
+      (detalleQueja.toLowerCase().includes('tele') && (detalleQueja.toLowerCase().includes('video') || detalleQueja.toLowerCase().includes('abrir') || detalleQueja.toLowerCase().includes('carga')));
+
+    if (esStreamingSmartTv) {
+      logger.info(`[Streaming TV 5G] Cliente ${phone} reporta buffering en Smart TV / apps de video.`);
+      const sugerenciaRed = meta.sn ? 'tu red Wi-Fi con terminación *-5G*' : 'tu red Wi-Fi con terminación *-5G*';
+
+      const mensajeStreaming =
+        `¡Hola${nombre}! Revisé tu línea en el sistema y tu módem se encuentra encendido y con señal física estable. 📶\n\n` +
+        `Cuando aplicaciones de video como Netflix o YouTube se quedan dando círculos o marcan error en tu Smart TV o celular, se debe a interferencia en la red Wi-Fi normal.\n\n` +
+        `🚀 *Para que tus videos carguen rápido y sin pausas:*\n` +
+        `1️⃣ En los ajustes de Wi-Fi de tu pantalla y celular, busca tu red con terminación *5G* (${sugerenciaRed}).\n` +
+        `2️⃣ Conéctate a ella colocando tu *misma contraseña de siempre*.\n\n` +
+        `💡 *Recomendación:* La señal 5G ofrece mucha mayor velocidad y evita que los videos se queden cargando (siempre que tu equipo esté relativamente cerca del módem).\n\n` +
+        `¿Podrías conectarte a la red 5G y confirmarme si ya cargan fluidos tus videos?`;
+
+      await TursoService.upsertSession({
+        phone,
+        step: 'COMPROBACION_STREAMING_TV',
+        metadata: JSON.stringify({
+          ...meta,
+          resumenFalla: detalleQueja,
+          onuIdParaReinicio: onuId,
+        }),
+      });
+
+      await this.enviarYLoguear(phone, mensajeStreaming, 'FALLA_INTERNET', 'GUIA_STREAMING_TV_5G', targetJid);
+      return;
+    }
+
+    // CASO C2: UN SOLO APARATO O ZONA DISTANTE YA ESPECIFICADO (evitar doble pregunta)
+    if (c.alcance_dispositivos === 'SOLO_UNO') {
+      const mensajeUnDispositivo =
+        `Entendido${nombre}. Como el detalle se presenta en un solo dispositivo, tu servicio principal y módem están recibiendo buena señal.\n\n` +
+        `Por favor realiza estos 2 pasos rápidos:\n` +
+        `1️⃣ Apaga el Wi-Fi en ese aparato durante 10 segundos y vuelve a encenderlo.\n` +
+        `2️⃣ Acércate a unos pasos del módem (o conéctate a la red 5G si está disponible) para comprobar si la señal mejora.\n\n` +
+        `¿Notaste mejoría tras hacer la prueba?`;
+
+      await TursoService.upsertSession({
+        phone,
+        step: 'DIAGNOSTICO_COMPROBAR_UN_DISPOSITIVO',
+        metadata: JSON.stringify({
+          ...meta,
+          triageAlcance: 'UN_DISPOSITIVO',
+          resumenFalla: detalleQueja,
+        }),
+      });
+
+      await this.enviarYLoguear(phone, mensajeUnDispositivo, 'FALLA_INTERNET', 'TRIAGE_UN_DISPOSITIVO_DIRECTO', targetJid);
+      return;
+    }
+
+    // CASO C3: GENERAL, TODOS LOS DISPOSITIVOS O INESTABILIDAD RECURRENTE (PROTOCOLO DE 4 PASOS) - CAPTURA 2
+    // Se ejecuta si el cliente ya indicó que es general/todos, o si reporta lentitud o fallas en varios días (ej: Aurora Sánchez)
+    if (c.alcance_dispositivos === 'TODOS' || c.reporta_lentitud || esSinInternet || detalleQueja.toLowerCase().includes('faltando') || detalleQueja.toLowerCase().includes('dias') || detalleQueja.toLowerCase().includes('días')) {
+      if (onuId) {
+        SmartOLTService.rebootONU(onuId).then(res => {
+          logger.info(`Reinicio de ONU ${onuId} ordenado automáticamente para ${phone}: ${res.message}`);
+        }).catch(err => {
+          logger.warn(`Error al reiniciar ONU ${onuId}:`, err?.message || err);
+        });
+      }
+
+      const mensaje4Pasos =
+        `¡Buenas noticias${nombre}! Realizamos ajustes en el sistema para mejorar tu conexión. 🚀\n\n` +
+        `Para finalizar, solo necesitamos tu ayuda con estos 4 pasos rápidos:\n\n` +
+        `1️⃣ *Cambio de red:* Conéctate a la señal *5G* usando tu contraseña de siempre. 📶\n` +
+        `2️⃣ *Reinicio:* En este momento reiniciamos tu equipo a distancia (perderás conexión por unos 2 minutos). ⏳\n` +
+        `3️⃣ *Foto del módem:* Por favor, envíanos una foto de tu equipo encendido para validar que las luces estén correctas. 📸\n` +
+        `4️⃣ *Monitoreo:* Prueba tu navegación el resto del día. Si notas cualquier detalle, avísanos de inmediato para agendar una visita técnica. ¡Quedamos atentos! 😊`;
+
+      await TursoService.upsertSession({
+        phone,
+        step: 'DIAGNOSTICO_POST_REINICIO',
+        metadata: JSON.stringify({
+          ...meta,
+          resumenFalla: detalleQueja,
+          onuIdParaReinicio: onuId,
+          triageAlcance: 'TODOS_DISPOSITIVOS',
+          rebootTriggeredAt: new Date().toISOString(),
+          esperandoFotoModem: true,
+        }),
+      });
+
+      await this.enviarYLoguear(phone, mensaje4Pasos, 'FALLA_INTERNET', 'PROTOCOLO_4_PASOS_REINICIO', targetJid);
+      return;
+    }
+
+    // CASO C4: CASO INDETERMINADO O PRIMER CONTACTO BREVE
+    const mensajeTriage =
+      `Hola${nombre}, revisé tu línea y tu módem aparece conectado y con señal física estable. 📶\n\n` +
+      `¿El inconveniente de navegación te ocurre en todos tus aparatos o principalmente en uno en específico?`;
 
     await TursoService.upsertSession({
       phone,
@@ -1865,6 +2016,111 @@ export class BotOrchestrator {
     });
 
     await this.enviarYLoguear(phone, mensajeTriage, 'FALLA_INTERNET', 'DIAGNOSTICO_TRIAGE_DISPOSITIVOS', targetJid);
+  }
+
+  /**
+   * Atiende las dudas o confirmaciones del cliente cuando se le recomendó conectar su Smart TV / celular a la red 5G
+   * (Flujo Captura 1: Netflix / YouTube dando círculos)
+   */
+  private static async procesarStreamingTv(
+    phone: string,
+    rawText: string,
+    event: IncomingMessageEvent,
+    session: Session | null,
+    targetJid?: string
+  ): Promise<void> {
+    const lower = rawText.toLowerCase().trim();
+    const nombreLimpio = formatDisplayName(session?.client_name, true);
+    const nombre = nombreLimpio ? ` *${nombreLimpio}*` : '';
+    let meta: any = {};
+    try { meta = JSON.parse(session?.metadata || '{}'); } catch {}
+
+    // A. Si pregunta cómo conectarla o no la encuentra
+    const pideAyudaConectar = lower.includes('como') || lower.includes('cómo') || lower.includes('donde') || lower.includes('dónde') || lower.includes('no me aparece') || lower.includes('no sale') || lower.includes('no la veo') || lower.includes('buscador');
+    const preguntaPorCelular = lower.includes('celular') || lower.includes('telefono') || lower.includes('teléfono') || lower.includes('dispositivo');
+
+    if (pideAyudaConectar && !preguntaPorCelular) {
+      const msjComo =
+        `Para conectarte en tu pantalla:\n` +
+        `1️⃣ Ve al menú de tu televisor en *Configuración* o *Ajustes* ⚙️ > *Red e Internet* > *Wi-Fi*.\n` +
+        `2️⃣ En la lista de redes detectadas, busca el nombre que termina en *-5G*.\n` +
+        `3️⃣ Selecciónala e ingresa la *misma contraseña* que siempre has usado para tu internet.\n\n` +
+        `💡 Si tu pantalla no la detecta al instante, asegúrate de buscarla en la lista de *Redes Wi-Fi* (no en el navegador web). ¿Logras verla en la lista?`;
+
+      await this.enviarYLoguear(phone, msjComo, 'FALLA_INTERNET', 'STREAMING_GUIA_BUSCAR_5G', targetJid);
+      return;
+    }
+
+    if (preguntaPorCelular) {
+      const msjCel =
+        `¡También en los celulares! 📱 Puedes conectar tus teléfonos y tablets a la red *5G* con la misma contraseña.\n\n` +
+        `💡 Recuerda que la red 5G te dará la velocidad máxima siempre y cuando te encuentres a una distancia moderada del módem (sin muchos muros intermedios).\n\n` +
+        `¿Pudiste conectarte a la señal 5G para validar si mejora la conexión?`;
+
+      await this.enviarYLoguear(phone, msjCel, 'FALLA_INTERNET', 'STREAMING_GUIA_CELULARES_5G', targetJid);
+      return;
+    }
+
+    // B. Si confirma que ya se conectó, va a probar o agradece (Flujo Captura 1: "Si ya me conecte", "Deje checar en transcurso de la tarde")
+    const esConfirmacionOEspera = lower.includes('ya') || lower.includes('conecte') || lower.includes('conecté') || lower.includes('checar') || lower.includes('pruebo') || lower.includes('transcurso') || lower.includes('tarde') || lower.includes('ok') || lower.includes('listo') || lower.includes('gracias');
+
+    if (esConfirmacionOEspera) {
+      const msjAtento =
+        `¡Perfecto${nombre}! Quedamos al pendiente durante el transcurso de la tarde. 😊\n\n` +
+        `Prueba tu navegación y si notas cualquier detalle o no mejora, por favor avísanos por este medio para agendarte una visita técnica. ¡Que tengas un excelente día!`;
+
+      await this.enviarYLoguear(phone, msjAtento, 'FALLA_INTERNET', 'STREAMING_CONFIRMACION_PENDIENTE', targetJid);
+      await this.marcarConsultaFinalizada(phone, session);
+      return;
+    }
+
+    // C. Si reporta que sigue fallando o no mejoró
+    const esNegativo = lower.includes('sigue') || lower.includes('no mejoro') || lower.includes('no mejoró') || lower.includes('sigue mal') || lower.includes('sigue lento') || lower.includes('no sirvio') || lower.includes('no sirvió') || lower.includes('no funciona');
+
+    if (esNegativo) {
+      const ticket = await TursoService.createTicket({
+        phone,
+        client_name: session?.client_name,
+        onu_id: session?.onu_id,
+        issue_summary: 'Lentitud/buffering persistente en Smart TV y dispositivos tras prueba 5G',
+        checks_performed: `Cliente reportó que persiste falla tras prueba en red 5G: "${rawText}". Se solicita visita técnica.`,
+        status: 'ABIERTO',
+        is_out_of_hours: this.isFueraDeHorario() ? 1 : 0,
+      });
+
+      if (session?.client_id) {
+        await WispHubService.crearTicketSoporte(
+          session.client_id,
+          `Visita Técnica Streaming - ${ticket.folio}`,
+          `Falla persistente en streaming y dispositivos. Folio local: ${ticket.folio}`,
+          'Media'
+        ).catch(() => {});
+      }
+
+      const msjEscalar =
+        `Enterado${nombre}. Como el detalle persiste, con gusto programaremos una visita técnica para revisar tu equipo y calibrar tu señal en sitio. 🛠️\n\n` +
+        `📋 Tu reporte ha sido registrado con el folio *#${ticket.folio}*.\n\n` +
+        `📍 Por favor compártenos tu *ubicación por WhatsApp* o tu *dirección completa con referencias* para registrarla en la orden de la cuadrilla.`;
+
+      await TursoService.upsertSession({
+        phone,
+        step: 'ESPERANDO_UBICACION_TECNICO',
+        metadata: JSON.stringify({
+          ...meta,
+          ticketFolio: ticket.folio,
+        }),
+      });
+
+      await this.enviarYLoguear(phone, msjEscalar, 'FALLA_INTERNET', `STREAMING_VISITA_TECNICA_${ticket.folio}`, targetJid);
+      return;
+    }
+
+    // D. Respuesta libre con Groq si tiene alguna otra duda
+    const respuestaIA = await GroqService.generarRespuestaConversacional(rawText, [], {
+      clientName: session?.client_name,
+      ispName: this.getIspName(),
+    });
+    await this.enviarYLoguear(phone, respuestaIA, 'FALLA_INTERNET', 'STREAMING_CONVERSACIONAL', targetJid);
   }
 
   /**
@@ -2103,6 +2359,66 @@ export class BotOrchestrator {
         targetJid
       );
       await this.marcarConsultaFinalizada(phone, session);
+      return;
+    }
+
+    const esConfirmacionPasos = lower.includes('cuatro') || lower.includes('puntos') || lower.includes('realizados') || lower.includes('esperando solucion') || lower.includes('esperando solución') || lower.includes('ya lo hice') || lower.includes('listo los pasos');
+
+    if (esConfirmacionPasos) {
+      const msjMonitoreo =
+        `¡Muchas gracias${nombre}! Serías tan amable de monitorear tu servicio el resto de la tarde. Si notas cualquier detalle o no mejora, nos puedes notificar para que pasen a tu domicilio por favor. ¡Quedamos atentos! 😊`;
+
+      await TursoService.upsertSession({
+        phone,
+        step: 'MONITOREO_POST_REINICIO',
+        metadata: JSON.stringify({
+          ...meta,
+          monitoreoIniciado: true,
+        }),
+      });
+
+      await this.enviarYLoguear(phone, msjMonitoreo, 'FALLA_INTERNET', 'MONITOREO_POST_REINICIO', targetJid);
+      return;
+    }
+
+    const esPersistente = lower.includes('sigue fallando') || lower.includes('sigue igual') || lower.includes('no mejoro') || lower.includes('no mejoró') || lower.includes('sigue mal') || lower.includes('sigue lento') || lower.includes('no funciona') || lower.includes('no sirve') || lower.includes('falla');
+
+    if (esPersistente) {
+      const ticket = await TursoService.createTicket({
+        phone,
+        client_name: session?.client_name,
+        onu_id: session?.onu_id,
+        issue_summary: meta.resumenFalla || rawText || 'Falla persistente tras reinicio y 4 pasos',
+        checks_performed: `Protocolo 4 pasos y reinicio completados. Cliente reportó que persiste el problema: "${rawText}". Se agenda visita técnica para revisión / renovación de módem.`,
+        status: 'ABIERTO',
+        is_out_of_hours: this.isFueraDeHorario() ? 1 : 0,
+      });
+
+      if (session?.client_id) {
+        await WispHubService.crearTicketSoporte(
+          session.client_id,
+          `Visita Técnica / Módem - ${ticket.folio}`,
+          `Falla persistente tras protocolo 4 pasos. Folio local: ${ticket.folio}. Detalle: ${rawText}`,
+          'Alta'
+        ).catch(() => {});
+      }
+
+      const msjVisita =
+        `¡Buen día${nombre}! Queremos que tu internet funcione al 100%, así que programaremos una visita y renovaremos tu módem para asegurar que no tenga más fallas. 🛠️\n\n` +
+        `📋 Hemos generado tu orden de visita con el reporte *#${ticket.folio}*.\n\n` +
+        `📍 Por favor compártenos tu *ubicación por WhatsApp* o tu *dirección completa con referencias* para registrarla en la orden de la cuadrilla.`;
+
+      await TursoService.upsertSession({
+        phone,
+        step: 'ESPERANDO_UBICACION_TECNICO',
+        metadata: JSON.stringify({
+          ...meta,
+          ticketFolio: ticket.folio,
+          resumenFalla: 'Visita para revisión y renovación de módem',
+        }),
+      });
+
+      await this.enviarYLoguear(phone, msjVisita, 'FALLA_INTERNET', `VISITA_RENOVACION_MODEM_${ticket.folio}`, targetJid);
       return;
     }
 
@@ -2662,6 +2978,24 @@ export class BotOrchestrator {
       }
 
       if (analysis.luces_verdes) {
+        if (session?.step === 'DIAGNOSTICO_POST_REINICIO' || session?.step === 'MONITOREO_POST_REINICIO' || meta.esperandoFotoModem) {
+          const msj =
+            `Hola${nombre}, revisé la foto de tu equipo y las luces se observan correctas. 👍\n\n` +
+            `Serías tan amable de monitorear tu servicio el resto de la tarde. Si notas cualquier detalle o no mejora, nos puedes notificar para que pasen a tu domicilio por favor. ¡Quedamos atentos! 😊`;
+
+          await TursoService.upsertSession({
+            phone,
+            step: 'MONITOREO_POST_REINICIO',
+            metadata: JSON.stringify({
+              ...meta,
+              resumenFalla: 'Foto de módem con luces correctas recibida',
+            }),
+          });
+
+          await this.enviarYLoguear(phone, msj, 'FALLA_INTERNET', 'LUCES_VERDES_MONITOREO', targetJid);
+          return;
+        }
+
         const msj =
           `Hola${nombre}, he revisado la foto de tu módem y las luces se observan encendidas y con señal normal (verde/azul). 👍\n\n` +
           `Como la señal física llega bien a tu equipo:\n` +
@@ -3552,21 +3886,23 @@ export class BotOrchestrator {
 
     // Si viene acompañada de una queja o intención técnica/financiera, guardarla en metadata para auto-continuar tras identificarse
     const lowerRaw = rawInput.toLowerCase();
-    const esReporteFalla = lowerRaw.includes('no tengo internet') || lowerRaw.includes('sin internet') || lowerRaw.includes('no hay internet') || lowerRaw.includes('falla') || lowerRaw.includes('lento') || lowerRaw.includes('lentitud') || lowerRaw.includes('no sirve') || lowerRaw.includes('no funciona');
+    const esReporteFalla = lowerRaw.includes('no tengo internet') || lowerRaw.includes('sin internet') || lowerRaw.includes('no hay internet') || lowerRaw.includes('falla') || lowerRaw.includes('lento') || lowerRaw.includes('lentitud') || lowerRaw.includes('no sirve') || lowerRaw.includes('no funciona') || lowerRaw.includes('faltando') || lowerRaw.includes('netflix') || lowerRaw.includes('youtube') || lowerRaw.includes('circulo') || lowerRaw.includes('círculo');
     const esConsultaSaldo = lowerRaw.includes('saldo') || lowerRaw.includes('debo') || lowerRaw.includes('pagar') || lowerRaw.includes('factura') || lowerRaw.includes('recibo') || lowerRaw.includes('pago');
 
-    if (esReporteFalla) {
-      metaPre.initialQuery = rawInput;
-      metaPre.initialIntent = 'FALLA_INTERNET';
-      metaPre.resumen_queja = 'Falla o corte de internet reportado por el cliente';
-    } else if (esConsultaSaldo) {
-      metaPre.initialQuery = rawInput;
-      metaPre.initialIntent = 'CONSULTAR_SALDO';
-    } else if (clasificacion.intencion && !['SALUDO', 'IDENTIFICAR_CLIENTE', 'DESCONOCIDO'].includes(clasificacion.intencion)) {
+    if (clasificacion.intencion && !['SALUDO', 'IDENTIFICAR_CLIENTE', 'DESCONOCIDO'].includes(clasificacion.intencion)) {
       metaPre.initialQuery = rawInput;
       metaPre.initialIntent = clasificacion.intencion;
       metaPre.initialClasif = clasificacion;
       metaPre.resumen_queja = clasificacion.resumen_queja;
+    } else if (esReporteFalla) {
+      metaPre.initialQuery = rawInput;
+      metaPre.initialIntent = 'FALLA_INTERNET';
+      metaPre.initialClasif = clasificacion;
+      metaPre.resumen_queja = clasificacion.resumen_queja || 'Falla o corte de internet reportado por el cliente';
+    } else if (esConsultaSaldo) {
+      metaPre.initialQuery = rawInput;
+      metaPre.initialIntent = 'CONSULTAR_SALDO';
+      metaPre.initialClasif = clasificacion;
     }
 
     const searchTerm = candidateName || cleanPersonName(rawInput) || rawInput;
@@ -4106,9 +4442,17 @@ export class BotOrchestrator {
     const zonaTexto = meta.address || meta.zone ? `\n📍 *Ubicación:* ${meta.address || meta.zone}` : '';
 
     const initialQuery = meta.initialQuery;
-    const initialIntent = meta.initialIntent;
+    let initialIntent = meta.initialIntent;
     const initialClasif = meta.initialClasif;
     const quejaTexto = meta.resumen_queja || (typeof initialQuery === 'string' ? initialQuery : '');
+
+    // Detección proactiva si venía una queja en la consulta inicial para no preguntar doble
+    if (!initialIntent && typeof initialQuery === 'string') {
+      const qLower = initialQuery.toLowerCase();
+      if (qLower.includes('no tengo internet') || qLower.includes('sin internet') || qLower.includes('falla') || qLower.includes('lento') || qLower.includes('faltando') || qLower.includes('netflix') || qLower.includes('youtube') || qLower.includes('circulo') || qLower.includes('círculo')) {
+        initialIntent = 'FALLA_INTERNET';
+      }
+    }
 
     // Si el usuario reportó un problema o intención antes de identificarse (ej. "esta lento mi internet", "cuanto debo", etc.)
     if (initialIntent && !['SALUDO', 'IDENTIFICAR_CLIENTE', 'DESCONOCIDO'].includes(initialIntent)) {
@@ -4117,7 +4461,18 @@ export class BotOrchestrator {
       const clasifAEjecutar = initialClasif || {
         intencion: initialIntent,
         resumen_queja: quejaTexto,
-        confianza: 0.95,
+        foco_rojo: false,
+        equipo_apagado: false,
+        reporta_lentitud: true,
+        sin_internet_total: false,
+        red_wifi_no_visible: false,
+        bloqueo_paginas_apps: false,
+        problema_streaming_tv: false,
+        consulta_canales_cable: false,
+        alcance_dispositivos: 'INDETERMINADO',
+        ya_reinicio: false,
+        nombre_mencionado: session.client_name,
+        telefono_mencionado: null,
       };
 
       await this.ejecutarIntencion(phone, clasifAEjecutar, session, initialQuery || 'Reporte inicial', targetJid);
