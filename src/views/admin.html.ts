@@ -4398,23 +4398,30 @@ export function getAdminDashboardHtml(): string {
             // Action Button
             let actionBtn = '<span style="font-size: 11px; color: var(--text-dim);">--</span>';
             if (item.wisphub_id) {
+              const syncData = {
+                wisphub_id: item.wisphub_id,
+                smartolt_id: item.smartolt_id || '',
+                mac: item.mac_wisphub || item.mac_smartolt || '',
+                ipv6_prefix: item.ipv6_wisphub || (item.ipv6_smartolt && !item.ipv6_smartolt.includes('Solo') ? item.ipv6_smartolt : '') || '',
+                ip: item.smartolt_ip || item.wisphub_ip || '',
+                sn: item.sn || item.sn_smartolt || item.sn_wisphub || '',
+                cliente: item.cliente || '',
+                folio: item.folio || item.servicio || '',
+                router: item.zona_o_router || ''
+              };
+              const jsonStr = encodeURIComponent(JSON.stringify(syncData));
+
               if (item.sync_status === 'SYNCED') {
-                actionBtn = '<span class="badge badge-success" style="opacity: 0.85; font-size: 11px;">✓ Sincronizado</span>';
-              } else {
-                const safeName = (item.cliente || 'Cliente').replace(/'/g, "\\'").replace(/"/g, '&quot;');
-                const syncData = {
-                  wisphub_id: item.wisphub_id,
-                  smartolt_id: item.smartolt_id || '',
-                  mac: item.mac_smartolt || item.mac_wisphub || '',
-                  ipv6_prefix: item.ipv6_smartolt || item.ipv6_wisphub || '',
-                  ip: item.smartolt_ip || item.wisphub_ip || '',
-                  sn: item.sn || '',
-                  cliente: item.cliente || ''
-                };
-                const jsonStr = encodeURIComponent(JSON.stringify(syncData));
                 actionBtn = \`
-                  <button id="btn-sync-cli-\${item.wisphub_id}" class="btn btn-primary btn-sm" onclick="syncAuditClientSingle('\${jsonStr}', '\${rowId}')" title="Sincronizar MAC e IPv6 a WispHub">
-                    ⚡ Sincronizar
+                  <div style="display: flex; gap: 4px; align-items: center; justify-content: center;">
+                    <span class="badge badge-success" style="opacity: 0.9; font-size: 11px;">✓ Sincronizado</span>
+                    <button class="btn btn-secondary btn-sm" onclick="openSyncClientModal('\${jsonStr}', '\${rowId}')" title="Editar MAC o IPv6" style="padding: 2px 6px; font-size: 11px;">✏️</button>
+                  </div>
+                \`;
+              } else {
+                actionBtn = \`
+                  <button id="btn-sync-cli-\${item.wisphub_id}" class="btn btn-primary btn-sm" onclick="openSyncClientModal('\${jsonStr}', '\${rowId}')" title="Completar MAC e IPv6 en WispHub" style="font-size: 11.5px; padding: 5px 10px;">
+                    ⚡ Sincronizar WH
                   </button>
                 \`;
               }
@@ -4427,7 +4434,7 @@ export function getAdminDashboardHtml(): string {
                 <td>
                   <div style="font-weight: 600; color: var(--text-main);">\${escapeHtml(item.cliente || 'Desconocido')}</div>
                   <div style="font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); margin-top: 2px;">
-                    Folio: \${escapeHtml(item.folio || item.servicio || '--')} | SN: \${escapeHtml(item.sn || '--')}
+                    Folio: \${escapeHtml(item.folio || item.servicio || '--')} | SN: \${escapeHtml(item.sn || item.sn_smartolt || item.sn_wisphub || '--')}
                   </div>
                 </td>
                 <td>
@@ -4453,7 +4460,7 @@ export function getAdminDashboardHtml(): string {
       }
     }
 
-    async function syncAuditClientSingle(jsonEncoded, rowId) {
+    function openSyncClientModal(jsonEncoded, rowId) {
       let data = {};
       try {
         data = JSON.parse(decodeURIComponent(jsonEncoded));
@@ -4462,52 +4469,95 @@ export function getAdminDashboardHtml(): string {
         return;
       }
 
-      const btn = document.getElementById(\`btn-sync-cli-\${data.wisphub_id}\`);
-      if (btn) {
-        btn.disabled = true;
-        btn.innerText = 'Sincronizando...';
-      }
+      const modalHtml = \`
+        <div style="display: flex; flex-direction: column; gap: 14px;">
+          <div style="background: rgba(99,102,241,0.1); border: 1px solid rgba(99,102,241,0.25); border-radius: 8px; padding: 12px;">
+            <div style="font-weight: 700; font-size: 14px; color: #fff;">\${escapeHtml(data.cliente || 'Cliente')}</div>
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px; font-family: var(--font-mono);">
+              IP: <strong style="color: var(--accent-cyan);">\${escapeHtml(data.ip || '--')}</strong> | 
+              SN: <strong style="color: var(--accent-green);">\${escapeHtml(data.sn || '--')}</strong> | 
+              WispHub ID: <strong>#\${escapeHtml(String(data.wisphub_id))}</strong>
+            </div>
+          </div>
 
-      showToast('Sincronizando', \`Actualizando MAC e IPv6 en WispHub para \${data.cliente}...\`, 'info', 2500);
+          <div class="form-group">
+            <label class="form-label" style="font-weight: 600; display: flex; justify-content: space-between;">
+              <span>Dirección MAC CPE (Antena / Router)</span>
+              <span style="font-size: 11px; color: var(--text-dim); font-weight: normal;">Guardar en WispHub (mac_cpe)</span>
+            </label>
+            <input type="text" id="sync-input-mac" class="form-control" placeholder="Ej: 48:D8:69:27:69:F6" value="\${escapeHtml(data.mac || '')}" style="font-family: var(--font-mono); text-transform: uppercase;">
+            <small style="color: var(--text-muted); font-size: 11px; margin-top: 4px; display: block;">
+              💡 Si la conoces o la obtuviste de ARP / etiqueta física, ingrésala para empatar el cliente.
+            </small>
+          </div>
 
-      try {
-        const res = await apiFetch('/api/audit/sync-client', {
-          method: 'POST',
-          body: JSON.stringify(data),
-        });
+          <div class="form-group">
+            <label class="form-label" style="font-weight: 600; display: flex; justify-content: space-between;">
+              <span>Prefijo IPv6 Delegado (Remote IPv6 Prefix)</span>
+              <span style="font-size: 11px; color: var(--accent-amber); font-weight: normal;">Bloquea fugas en corte</span>
+            </label>
+            <input type="text" id="sync-input-ipv6" class="form-control" placeholder="Ej: 2806:108e:xxxx:xxxx::/64" value="\${escapeHtml(data.ipv6_prefix || '')}" style="font-family: var(--font-mono);">
+            <small style="color: var(--text-muted); font-size: 11px; margin-top: 4px; display: block;">
+              💡 Prefijo IPv6 de MikroTik DHCPv6 / TR-069. Al guardarlo, WispHub cortará IPv6 correctamente al suspender.
+            </small>
+          </div>
+        </div>
+      \`;
 
-        if (res.success) {
-          showToast('Sincronizado', \`Datos actualizados con éxito en WispHub para \${data.cliente}.\`, 'success', 3500);
-          
-          // Dynamically update row UI without reloading entire table
-          const statusEl = document.getElementById(\`\${rowId}-status\`);
-          const actionEl = document.getElementById(\`\${rowId}-action\`);
-          if (statusEl) {
-            statusEl.innerHTML = '<span class="badge badge-success">🟢 Sincronizado</span>';
-          }
-          if (actionEl) {
-            actionEl.innerHTML = '<span class="badge badge-success" style="opacity: 0.85; font-size: 11px;">✓ Sincronizado</span>';
-          }
+      openModal(
+        \`Sincronizar Datos en WispHub (#\${data.wisphub_id})\`,
+        modalHtml,
+        async () => {
+          const macVal = (document.getElementById('sync-input-mac')?.value || '').trim().toUpperCase();
+          const ipv6Val = (document.getElementById('sync-input-ipv6')?.value || '').trim();
 
-          // Update metric counts if available
-          const elSynced = document.getElementById('metric-audit-synced');
-          if (elSynced && !isNaN(parseInt(elSynced.innerText))) {
-            elSynced.innerText = parseInt(elSynced.innerText) + 1;
+          const payload = {
+            ...data,
+            mac: macVal,
+            remote_ipv6_prefix: ipv6Val,
+          };
+
+          showToast('Sincronizando', \`Guardando MAC e IPv6 en WispHub para \${data.cliente}...\`, 'info', 3000);
+
+          try {
+            const res = await apiFetch('/api/audit/sync-client', {
+              method: 'POST',
+              body: JSON.stringify(payload),
+            });
+
+            if (res.success) {
+              showToast('Sincronizado', \`Datos guardados con éxito en WispHub para \${data.cliente}.\`, 'success', 4000);
+              
+              // Dynamically update row UI
+              const statusEl = document.getElementById(\`\${rowId}-status\`);
+              const actionEl = document.getElementById(\`\${rowId}-action\`);
+              
+              const isFullySynced = macVal.length > 0 && ipv6Val.length > 0;
+              if (statusEl) {
+                statusEl.innerHTML = isFullySynced ? '<span class="badge badge-success">🟢 Sincronizado</span>' : '<span class="badge badge-warning">🟡 Actualizado</span>';
+              }
+              if (actionEl) {
+                const newJson = encodeURIComponent(JSON.stringify({ ...data, mac: macVal, ipv6_prefix: ipv6Val }));
+                actionEl.innerHTML = \`
+                  <div style="display: flex; gap: 4px; align-items: center; justify-content: center;">
+                    <span class="badge badge-success" style="font-size: 11px;">✓ Guardado</span>
+                    <button class="btn btn-secondary btn-sm" onclick="openSyncClientModal('\${newJson}', '\${rowId}')" title="Editar de nuevo" style="padding: 2px 6px; font-size: 11px;">✏️</button>
+                  </div>
+                \`;
+              }
+
+              return true;
+            } else {
+              showToast('Error', res.error || res.message || 'No se pudo guardar en WispHub.', 'error', 5000);
+              return false;
+            }
+          } catch (err) {
+            showToast('Error', err.message || 'Fallo de red', 'error');
+            return false;
           }
-        } else {
-          showToast('Error', res.error || 'No se pudo sincronizar el cliente.', 'error', 4000);
-          if (btn) {
-            btn.disabled = false;
-            btn.innerText = '⚡ Sincronizar';
-          }
-        }
-      } catch (err) {
-        showToast('Error', err.message || 'Fallo de red', 'error');
-        if (btn) {
-          btn.disabled = false;
-          btn.innerText = '⚡ Sincronizar';
-        }
-      }
+        },
+        '💾 Guardar en WispHub'
+      );
     }
 
     async function syncCurrentVlanBatch() {
@@ -4721,21 +4771,29 @@ export function getAdminDashboardHtml(): string {
 
             // 1. Sync button for WispHub
             if (item.wisphub_id) {
+              const syncData = {
+                wisphub_id: item.wisphub_id,
+                smartolt_id: item.smartolt_id || '',
+                mac: item.mac_wisphub || item.mac_smartolt || '',
+                ipv6_prefix: item.ipv6_wisphub || (item.ipv6_smartolt && !item.ipv6_smartolt.includes('Solo') ? item.ipv6_smartolt : '') || '',
+                ip: item.smartolt_ip || item.wisphub_ip || '',
+                sn: item.sn || item.sn_smartolt || item.sn_wisphub || '',
+                cliente: item.cliente || '',
+                folio: item.folio || item.servicio || '',
+                router: item.zona_o_router || ''
+              };
+              const jsonStr = encodeURIComponent(JSON.stringify(syncData));
+
               if (item.sync_status === 'SYNCED') {
-                actions.push('<span class="badge badge-success" style="font-size: 10.5px;">✓ WH Sincronizado</span>');
-              } else {
-                const syncData = {
-                  wisphub_id: item.wisphub_id,
-                  smartolt_id: item.smartolt_id || '',
-                  mac: item.mac_smartolt || item.mac_wisphub || '',
-                  ipv6_prefix: item.ipv6_smartolt || item.ipv6_wisphub || '',
-                  ip: item.smartolt_ip || item.wisphub_ip || '',
-                  sn: item.sn || item.sn_smartolt || '',
-                  cliente: item.cliente || ''
-                };
-                const jsonStr = encodeURIComponent(JSON.stringify(syncData));
                 actions.push(\`
-                  <button id="btn-prov-sync-\${item.wisphub_id}" class="btn btn-primary btn-sm" onclick="syncAuditClientSingle('\${jsonStr}', '\${rowId}')" title="Sincronizar MAC e IPv6 a WispHub" style="font-size: 11px; padding: 4px 8px;">
+                  <div style="display: flex; gap: 4px; align-items: center; justify-content: center;">
+                    <span class="badge badge-success" style="font-size: 10.5px;">✓ WH Sincronizado</span>
+                    <button class="btn btn-secondary btn-sm" onclick="openSyncClientModal('\${jsonStr}', '\${rowId}')" title="Editar MAC o IPv6" style="padding: 2px 6px; font-size: 10px;">✏️</button>
+                  </div>
+                \`);
+              } else {
+                actions.push(\`
+                  <button id="btn-prov-sync-\${item.wisphub_id}" class="btn btn-primary btn-sm" onclick="openSyncClientModal('\${jsonStr}', '\${rowId}')" title="Completar MAC e IPv6 en WispHub" style="font-size: 11px; padding: 4px 8px;">
                     ⚡ Sincronizar WH
                   </button>
                 \`);

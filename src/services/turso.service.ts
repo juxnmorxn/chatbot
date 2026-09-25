@@ -2017,6 +2017,8 @@ export class TursoService {
 
           if (ipStatus === 'MISMATCH') {
             syncStatus = 'MISMATCH_IP';
+          } else if (!tieneIpv6 && !tieneMac) {
+            syncStatus = 'DESYNCHRONIZED';
           } else if (!tieneIpv6) {
             syncStatus = 'MISSING_IPV6';
           } else if (!tieneMac) {
