@@ -63,7 +63,7 @@ export interface ActivacionModificacionesParsed {
 }
 
 export interface GroqImageAnalysisResult {
-  tipo: 'COMPROBANTE_PAGO' | 'SPEEDTEST' | 'MODEM_LUCES' | 'CONTRATO_INSTALACION' | 'OTRO';
+  tipo: 'COMPROBANTE_PAGO' | 'SPEEDTEST' | 'MODEM_LUCES' | 'CONTRATO_INSTALACION' | 'POTENCIA_OPTICA' | 'ETIQUETA_MODEM' | 'OTRO';
   descripcion: string;
   foco_rojo: boolean;
   equipo_apagado: boolean;
@@ -82,6 +82,16 @@ export interface GroqImageAnalysisResult {
     fecha: string | null;
   };
   datos_contrato?: ContratoInstalacionDatos;
+  potencia_optica?: {
+    potencia_dbm: number | null;
+    longitud_onda_nm: number | null;
+  };
+  etiqueta_modem?: {
+    sn: string | null;
+    mac: string | null;
+    modelo: string | null;
+    wifi_password: string | null;
+  };
 }
 
 export class GroqService {
@@ -101,7 +111,7 @@ export class GroqService {
   }
 
   /**
-   * Analiza una imagen enviada por WhatsApp (foto de contrato, comprobante, speedtest o luces de módem)
+   * Analiza una imagen enviada por WhatsApp (foto de contrato, comprobante, speedtest, medidor de potencia, etiqueta o luces de módem)
    * utilizando el modelo de visión de Groq (qwen/qwen3.8-27b).
    */
   static async analizarImagen(imageBuffer: Buffer, mimeType: string = 'image/jpeg'): Promise<GroqImageAnalysisResult> {
@@ -129,17 +139,31 @@ Tu objetivo es examinar la imagen recibida y clasificarla estrictamente en una d
      * municipio_zona: Municipio o zona de instalación (ej: "Actopan", "El Arenal", "San Agustín Tlaxiaca", "San José", "Santiago de Anaya").
      * telefono: Número de teléfono fijo o móvil (ej: "7721891087").
      * wifi_password: Clave o contraseña anotada (ej: "BZ6yMmYE").
-     * sn: null (el número de serie será capturado manualmente por el técnico).
+     * sn: null (el número de serie será capturado manualmente o desde la etiqueta).
 
-2. "SPEEDTEST":
+2. "POTENCIA_OPTICA":
+   - Foto de un medidor de potencia óptica digital / Optical Multi-meter (pantalla LCD naranja/negra mostrando dBm de fibra óptica, ej: -21.13 dBm, -24.86 dBm).
+   - Extrae:
+     * potencia_dbm: Número decimal negativo de la medición principal en dBm (ej: -21.13, -24.86, -18.5).
+     * longitud_onda_nm: Longitud de onda mostrada en nm (ej: 1490, 1310, 1550, 850).
+
+3. "ETIQUETA_MODEM":
+   - Foto de la etiqueta trasera, inferior o frontal de un módem/ONT Huawei, ZTE, VSOL, etc.
+   - Extrae:
+     * sn: Número de serie o SN del módem (ej: "HWTC2769F6B1", "485754432769F6B1", "ZTEGC1234567").
+     * mac: Dirección MAC impresa (ej: "00:25:9E:69:F6:B1" o "00259E69F6B1").
+     * modelo: Modelo del equipo (ej: "EG8041V5", "EchoLife EG8041V5", "HG8145X6-10", "HG8145V5").
+     * wifi_password: Clave Wi-Fi / WPA Key / WLAN Key por defecto si aparece en la etiqueta.
+
+4. "SPEEDTEST":
    - Captura de pantalla de test de velocidad (Speedtest por Ookla, Fast.com, Google Speedtest, etc.).
    - Extrae con máxima precisión:
      * bajada_mbps: Velocidad de descarga en Mbps (ej: 205.94).
-     * subida_mbps: Velocidad de subida en Mbps SÓLO SI existe una medición explícita de "SUBIDA" / "UPLOAD". Si en la pantalla SOLO se realizó la prueba de descarga (muy habitual en speedtest.net móvil) o no hay indicador de subida, asigna estrictamente null.
+     * subida_mbps: Velocidad de subida en Mbps SÓLO SI existe una medición explícita de "SUBIDA" / "UPLOAD". Si en la pantalla SOLO se realizó la prueba de descarga o no hay indicador de subida, asigna estrictamente null.
      * ping_ms: Latencia principal de Ping en ms (ej: 6).
    - ¡CUIDADO CON SPEEDTEST MÓVIL!: Debajo de "Ping ms" suelen aparecer íconos como ⚡ 6, ⬇️ 14 y ⬆️ 20. ¡ESTOS NÚMEROS JUNTO A LAS FLECHAS ⬇️ Y ⬆️ SON VALORES DE LATENCIA / BUFFERBLOAT EN MILISEGUNDOS (ms), NO SON VELOCIDAD DE SUBIDA! Nunca los asignes a subida_mbps.
 
-3. "COMPROBANTE_PAGO":
+5. "COMPROBANTE_PAGO":
    - Recibo o captura de pantalla de transferencia bancaria (BBVA / Dimo, BanCoppel, Santander, Banamex, Banco Azteca, Mercado Pago, Nu, SPEI), ticket de OXXO / 7-Eleven, o ficha de depósito.
    - Extrae con máxima fidelidad:
      * monto: Monto numérico transferido (ej: "300.00").
@@ -149,18 +173,18 @@ Tu objetivo es examinar la imagen recibida y clasificarla estrictamente en una d
      * destinatario: Nombre o cuenta de la persona que recibe (ej: "Osbaldo T").
      * fecha: Fecha y hora de la operación (ej: "20 sep 2026, 22:44 h.").
 
-4. "MODEM_LUCES":
-   - Foto de un módem / router / ONT de fibra óptica.
+6. "MODEM_LUCES":
+   - Foto de un módem / router / ONT de fibra óptica encendido o apagado por el frente.
    - foco_rojo = true si observas algún LED rojo (foco LOS parpadeando en rojo o alarma).
    - equipo_apagado = true si el equipo no tiene ninguna luz encendida (apagado total).
    - luces_verdes = true si las luces principales (PON, POWER, LAN, WLAN) se ven en verde o azul normal.
 
-5. "OTRO":
+7. "OTRO":
    - Cualquier otra imagen que no pertenezca a las categorías anteriores.
 
 Devuelve EXCLUSIVAMENTE un JSON válido con esta estructura:
 {
-  "tipo": "CONTRATO_INSTALACION" | "COMPROBANTE_PAGO" | "SPEEDTEST" | "MODEM_LUCES" | "OTRO",
+  "tipo": "CONTRATO_INSTALACION" | "POTENCIA_OPTICA" | "ETIQUETA_MODEM" | "COMPROBANTE_PAGO" | "SPEEDTEST" | "MODEM_LUCES" | "OTRO",
   "descripcion": "resumen en 1 oración de lo que se ve en la foto",
   "foco_rojo": boolean,
   "equipo_apagado": boolean,
@@ -169,6 +193,16 @@ Devuelve EXCLUSIVAMENTE un JSON válido con esta estructura:
     "bajada_mbps": number | null,
     "subida_mbps": number | null,
     "ping_ms": number | null
+  },
+  "potencia_optica": {
+    "potencia_dbm": number | null,
+    "longitud_onda_nm": number | null
+  },
+  "etiqueta_modem": {
+    "sn": string | null,
+    "mac": string | null,
+    "modelo": string | null,
+    "wifi_password": string | null
   },
   "datos_pago": {
     "monto": string | null,

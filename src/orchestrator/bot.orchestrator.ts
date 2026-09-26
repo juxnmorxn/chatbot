@@ -2820,6 +2820,62 @@ export class BotOrchestrator {
 
     logger.info(`[Visión Inteligente] Procesando imagen para ${phone}: Tipo=${analysis?.tipo || 'OTRO'} | Descripción: "${analysis?.descripcion || ''}"`);
 
+    // 0.1 CASO POTENCIA ÓPTICA (MEDIDOR POWER METER / OPTICAL MULTI-METER)
+    if (analysis?.tipo === 'POTENCIA_OPTICA' && analysis.potencia_optica?.potencia_dbm !== null && analysis.potencia_optica?.potencia_dbm !== undefined) {
+      const dbm = analysis.potencia_optica.potencia_dbm;
+      const nm = analysis.potencia_optica.longitud_onda_nm || 1490;
+      const optLevel = (dbm >= -27 && dbm <= -14) ? '✅ *Nivel Óptimo de Potencia*' : '⚠️ *Atenuación fuera de rango ideal (-15 a -27 dBm)*';
+      
+      const pendingEvidence = meta.pendingActivationEvidence || {};
+      pendingEvidence.potencia_dbm = dbm;
+      pendingEvidence.longitud_onda_nm = nm;
+      meta.pendingActivationEvidence = pendingEvidence;
+      
+      await TursoService.upsertSession({
+        phone,
+        metadata: JSON.stringify(meta),
+      });
+
+      const msj = `📊 *Medición de Potencia Óptica:*\n` +
+        `• *Potencia:* \`${dbm} dBm\`\n` +
+        `• *Longitud de Onda:* \`${nm} nm\`\n` +
+        `${optLevel}\n\n` +
+        `✅ Evidencia registrada para el expediente de instalación.`;
+
+      await this.enviarYLoguear(phone, msj, 'ACTIVACION_TECNICO', 'EVIDENCIA_POTENCIA_OPTICA', targetJid);
+      return;
+    }
+
+    // 0.2 CASO ETIQUETA DE MÓDEM / ONT (Huawei, ZTE, VSOL)
+    if (analysis?.tipo === 'ETIQUETA_MODEM' && (analysis.etiqueta_modem?.sn || analysis.etiqueta_modem?.mac)) {
+      const sn = analysis.etiqueta_modem?.sn;
+      const mac = analysis.etiqueta_modem?.mac;
+      const modelo = analysis.etiqueta_modem?.modelo;
+      const wifiPass = analysis.etiqueta_modem?.wifi_password;
+
+      const pendingEvidence = meta.pendingActivationEvidence || {};
+      if (sn) pendingEvidence.sn = sn;
+      if (mac) pendingEvidence.mac = mac;
+      if (modelo) pendingEvidence.modelo = modelo;
+      if (wifiPass) pendingEvidence.wifi_password = wifiPass;
+      meta.pendingActivationEvidence = pendingEvidence;
+
+      await TursoService.upsertSession({
+        phone,
+        metadata: JSON.stringify(meta),
+      });
+
+      const msj = `🏷️ *Etiqueta de Módem Detectada:*\n` +
+        (sn ? `• *Serie (SN):* \`${sn}\`\n` : '') +
+        (modelo ? `• *Modelo:* \`${modelo}\`\n` : '') +
+        (mac ? `• *MAC:* \`${mac}\`\n` : '') +
+        (wifiPass ? `• *Clave Wi-Fi:* \`${wifiPass}\`\n` : '') +
+        `\n✅ Datos de equipo registrados listos para aprovisionamiento.`;
+
+      await this.enviarYLoguear(phone, msj, 'ACTIVACION_TECNICO', 'EVIDENCIA_ETIQUETA_MODEM', targetJid);
+      return;
+    }
+
     // 0. CASO CONTRATO DE INSTALACIÓN / COMODATO (ACTIVACIÓN POR FOTO CON IA)
     if (analysis?.tipo === 'CONTRATO_INSTALACION' && analysis.datos_contrato) {
       await this.procesarActivacionPorContrato(phone, rawText, analysis.datos_contrato, session, targetJid);
@@ -3211,6 +3267,48 @@ export class BotOrchestrator {
     const direccion = loc.address || loc.name || '';
 
     logger.info(`[Ubicación WhatsApp] Procesando ubicación para ${phone}: Coordenadas=${coordsStr}, URL=${url}`);
+
+    // Si el remitente es un TÉCNICO AUTORIZADO en campo
+    const authTecnico = await this.verificarAutorizacionTecnico(phone);
+    if (authTecnico.autorizado) {
+      let meta: any = {};
+      try { meta = JSON.parse(session?.metadata || '{}'); } catch {}
+      const targetClientId = meta.pendingActivation?.client_id || meta.pendingActivation?.name || meta.pendingModemSwap?.name || meta.lastActivatedClientId || meta.lastActivatedName;
+
+      const pendingEvidence = meta.pendingActivationEvidence || {};
+      pendingEvidence.gps = { lat, lng, coordsStr, url, direccion };
+      meta.pendingActivationEvidence = pendingEvidence;
+      await TursoService.upsertSession({ phone, metadata: JSON.stringify(meta) });
+
+      if (targetClientId) {
+        await TursoService.updateClientLocation(targetClientId, { lat, lng, url, direccion, notas: loc.name });
+      }
+
+      // Notificar vía SSE al panel de administración en tiempo real
+      try {
+        const { AdminController } = require('../controllers/admin.controller');
+        AdminController.broadcastSSE('chat:location_received', {
+          phone,
+          techName: authTecnico.tech?.name,
+          coords: coordsStr,
+          url,
+          direccion,
+          targetClient: targetClientId,
+          timestamp: new Date().toISOString(),
+        });
+      } catch {}
+
+      const mensajeTecnico =
+        `📍 *Ubicación GPS Recibida y Guardada*\n\n` +
+        `• *Coordenadas:* \`${coordsStr || 'GPS'}\`\n` +
+        `• *Maps:* ${url || 'https://maps.google.com'}\n` +
+        (targetClientId ? `• *Cliente Asignado:* *${targetClientId}*\n` : '') +
+        (direccion ? `• *Referencia:* ${direccion}\n` : '') +
+        `\n✅ Coordenadas guardadas en base de datos y sincronizadas con el mapa de WispHub.`;
+
+      await this.enviarYLoguear(phone, mensajeTecnico, 'ACTIVACION_TECNICO', 'GPS_TECNICO_GUARDADO', targetJid);
+      return;
+    }
 
     // 1. Guardar en base de datos Turso DB (wisphub_clients, smartolt_onus, tickets)
     await TursoService.updateClientLocation(phone, {
@@ -5293,8 +5391,16 @@ ${techInfo}───────────────────────
       );
 
       // Notificación automática al grupo de WhatsApp de Activaciones
-      // Formato: "2982-Diana Laura Lopez Gonzalez 172.19.2.178 Actopan LISTO"
-      const groupMsg = `${payload.name} ${payload.ip_address} ${payload.zone || 'Actopan'} LISTO`;
+      let groupMsg = `${payload.name}\n${payload.ip_address}\n${payload.zone || 'Actopan'}\nLISTO`;
+      const ev = metaObj.pendingActivationEvidence || {};
+      const extraTags: string[] = [];
+      if (ev.potencia_dbm) extraTags.push(`📊 Potencia: ${ev.potencia_dbm} dBm`);
+      if (ev.speedtest?.down) extraTags.push(`🚀 Test: ${ev.speedtest.down} Mbps`);
+      if (ev.gps?.coordsStr) extraTags.push(`📍 GPS: ${ev.gps.coordsStr}`);
+      if (ev.wifi_password) extraTags.push(`🔐 Wi-Fi: ${ev.wifi_password}`);
+      if (extraTags.length > 0) {
+        groupMsg += `\n${extraTags.join(' | ')}`;
+      }
       let configuredGroupJid = SettingsService.get(
         'ACTIVATIONS_GROUP_JID',
         'ACTIVATIONS_GROUP_JID',

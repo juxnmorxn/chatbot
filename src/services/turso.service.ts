@@ -882,7 +882,18 @@ export class TursoService {
           `,
           args: [coordsStr || null, mapsUrl || null, loc.notas || null, loc.direccion || null, now, idNum],
         });
-        if ((res.rowsAffected || 0) > 0) updatedCount++;
+        if ((res.rowsAffected || 0) > 0) {
+          updatedCount++;
+          // Sincronizar en tiempo real con WispHub API
+          try {
+            const { WispHubService } = require('./wisphub.service');
+            WispHubService.actualizarCliente(idNum, {
+              latitud: loc.lat,
+              longitud: loc.lng,
+              direccion: loc.direccion,
+            }).catch(() => {});
+          } catch {}
+        }
       }
 
       // 2. Actualizar por teléfono en wisphub_clients

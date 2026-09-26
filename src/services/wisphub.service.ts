@@ -299,6 +299,45 @@ export class WispHubService {
   }
 
   /**
+   * Actualiza los datos de un cliente en WispHub en tiempo real (Coordenadas GPS lat/lng, dirección, MAC CPE, SN ONU, etc.)
+   */
+  static async actualizarCliente(
+    idServicio: string | number,
+    fields: {
+      latitud?: number | string;
+      longitud?: number | string;
+      direccion?: string;
+      mac_cpe?: string;
+      sn_onu?: string;
+      remote_ipv6_prefix?: string;
+      comentarios?: string;
+    }
+  ): Promise<{ success: boolean; data?: any; error?: string }> {
+    try {
+      const api = this.getApi();
+      const payload: any = {};
+      if (fields.latitud !== undefined && fields.latitud !== '') payload.latitud = String(fields.latitud);
+      if (fields.longitud !== undefined && fields.longitud !== '') payload.longitud = String(fields.longitud);
+      if (fields.direccion !== undefined) payload.direccion = fields.direccion;
+      if (fields.mac_cpe !== undefined) payload.mac_cpe = fields.mac_cpe;
+      if (fields.sn_onu !== undefined) payload.sn_onu = fields.sn_onu;
+      if (fields.remote_ipv6_prefix !== undefined) payload.remote_ipv6_prefix = fields.remote_ipv6_prefix;
+      if (fields.comentarios !== undefined) payload.comentarios = fields.comentarios;
+
+      if (Object.keys(payload).length === 0) {
+        return { success: true };
+      }
+
+      logger.info(`[WispHub API] Actualizando cliente ${idServicio} con:`, payload);
+      const res = await api.patch(`/clientes/${idServicio}/`, payload);
+      return { success: true, data: res.data };
+    } catch (err: any) {
+      logger.error(`[WispHub API] Error al actualizar cliente ${idServicio}:`, err?.response?.data || err?.message || err);
+      return { success: false, error: err?.response?.data?.detail || err?.message || 'Error al actualizar en WispHub' };
+    }
+  }
+
+  /**
    * Busca cliente por número telefónico (comparando últimos 10 dígitos)
    */
   /**
