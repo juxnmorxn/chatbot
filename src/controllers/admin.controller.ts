@@ -1728,9 +1728,28 @@ export class AdminController {
       const page = parseInt(String(req.query.page || '1'), 10);
       const offset = Math.max(0, (page - 1) * limit);
 
+      const search_nombre = req.query.search_nombre ? String(req.query.search_nombre) : undefined;
+      const search_servicio = req.query.search_servicio ? String(req.query.search_servicio) : undefined;
+      const search_ip = req.query.search_ip ? String(req.query.search_ip) : undefined;
+      const search_estado = req.query.search_estado ? String(req.query.search_estado) : undefined;
+      const search_plan = req.query.search_plan ? String(req.query.search_plan) : undefined;
+      const search_router = req.query.search_router ? String(req.query.search_router) : undefined;
+      const search_telefono = req.query.search_telefono ? String(req.query.search_telefono) : undefined;
+      const search_direccion = req.query.search_direccion ? String(req.query.search_direccion) : undefined;
+      const search_gps = req.query.search_gps ? String(req.query.search_gps) : undefined;
+
       const data = await TursoService.getClientsDirectory({
         search,
         status,
+        search_nombre,
+        search_servicio,
+        search_ip,
+        search_estado,
+        search_plan,
+        search_router,
+        search_telefono,
+        search_direccion,
+        search_gps,
         limit,
         offset,
       });

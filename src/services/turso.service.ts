@@ -1052,6 +1052,15 @@ export class TursoService {
   static async getClientsDirectory(options: {
     search?: string;
     status?: string; // 'ALL' | 'ACTIVO' | 'SUSPENDIDO' | 'CON_GPS' | 'SIN_GPS'
+    search_nombre?: string;
+    search_servicio?: string;
+    search_ip?: string;
+    search_estado?: string;
+    search_plan?: string;
+    search_router?: string;
+    search_telefono?: string;
+    search_direccion?: string;
+    search_gps?: string;
     limit?: number;
     offset?: number;
   }): Promise<{
@@ -1088,6 +1097,7 @@ export class TursoService {
       const whereClauses: string[] = [];
       const args: any[] = [];
 
+      // Búsqueda global (si se provee)
       if (search) {
         const cleanSearch = search.replace(/[^a-z0-9]/gi, '');
         const normSearch = normalizeText(search);
@@ -1115,20 +1125,87 @@ export class TursoService {
         );
       }
 
-      if (statusFilter === 'ACTIVO') {
+      // Filtros granulares por columna individual (estilo WispHub)
+      if (options.search_nombre) {
+        const val = options.search_nombre.trim().toLowerCase();
+        const norm = normalizeText(val);
+        whereClauses.push(`(LOWER(w.nombre) LIKE ? OR w.nombre_normalized LIKE ?)`);
+        args.push(`%${val}%`, `%${norm}%`);
+      }
+
+      if (options.search_servicio) {
+        const val = options.search_servicio.trim().toLowerCase();
+        whereClauses.push(`(LOWER(w.servicio) LIKE ? OR CAST(w.id_servicio AS TEXT) LIKE ?)`);
+        args.push(`%${val}%`, `%${val}%`);
+      }
+
+      if (options.search_ip) {
+        const val = options.search_ip.trim().toLowerCase();
+        whereClauses.push(`(LOWER(w.ip) LIKE ? OR LOWER(o.ip_address) LIKE ?)`);
+        args.push(`%${val}%`, `%${val}%`);
+      }
+
+      if (options.search_estado) {
+        const val = options.search_estado.trim().toLowerCase();
+        if (val.includes('act')) {
+          whereClauses.push(`LOWER(w.estado) LIKE '%act%'`);
+        } else if (val.includes('susp') || val.includes('cort')) {
+          whereClauses.push(`(LOWER(w.estado) LIKE '%susp%' OR LOWER(w.estado) LIKE '%cort%')`);
+        } else if (val) {
+          whereClauses.push(`LOWER(w.estado) LIKE ?`);
+          args.push(`%${val}%`);
+        }
+      }
+
+      if (options.search_plan) {
+        const val = options.search_plan.trim().toLowerCase();
+        whereClauses.push(`LOWER(w.plan_internet) LIKE ?`);
+        args.push(`%${val}%`);
+      }
+
+      if (options.search_router) {
+        const val = options.search_router.trim().toLowerCase();
+        whereClauses.push(`(LOWER(w.router) LIKE ? OR LOWER(o.olt_name) LIKE ? OR LOWER(o.zone_name) LIKE ?)`);
+        args.push(`%${val}%`, `%${val}%`, `%${val}%`);
+      }
+
+      if (options.search_telefono) {
+        const val = options.search_telefono.trim().replace(/\D/g, '');
+        if (val) {
+          whereClauses.push(`(w.telefono LIKE ? OR w.telefonos_adicionales LIKE ?)`);
+          args.push(`%${val}%`, `%${val}%`);
+        }
+      }
+
+      if (options.search_direccion) {
+        const val = options.search_direccion.trim().toLowerCase();
+        whereClauses.push(`(LOWER(w.direccion) LIKE ? OR LOWER(w.ubicacion_notas) LIKE ?)`);
+        args.push(`%${val}%`, `%${val}%`);
+      }
+
+      const gpsFilter = (options.search_gps || '').toUpperCase();
+      if (gpsFilter === 'CON_GPS' || statusFilter === 'CON_GPS') {
+        whereClauses.push(`((w.coordenadas_gps IS NOT NULL AND LENGTH(w.coordenadas_gps) > 3) OR (w.google_maps_url IS NOT NULL AND LENGTH(w.google_maps_url) > 5))`);
+      } else if (gpsFilter === 'SIN_GPS' || statusFilter === 'SIN_GPS') {
+        whereClauses.push(`(w.coordenadas_gps IS NULL OR LENGTH(w.coordenadas_gps) <= 3) AND (w.google_maps_url IS NULL OR LENGTH(w.google_maps_url) <= 5)`);
+      } else if (statusFilter === 'ACTIVO') {
         whereClauses.push(`LOWER(w.estado) LIKE '%act%'`);
       } else if (statusFilter === 'SUSPENDIDO') {
         whereClauses.push(`(LOWER(w.estado) LIKE '%susp%' OR LOWER(w.estado) LIKE '%cort%')`);
-      } else if (statusFilter === 'CON_GPS') {
-        whereClauses.push(`((w.coordenadas_gps IS NOT NULL AND LENGTH(w.coordenadas_gps) > 3) OR (w.google_maps_url IS NOT NULL AND LENGTH(w.google_maps_url) > 5))`);
-      } else if (statusFilter === 'SIN_GPS') {
-        whereClauses.push(`(w.coordenadas_gps IS NULL OR LENGTH(w.coordenadas_gps) <= 3) AND (w.google_maps_url IS NULL OR LENGTH(w.google_maps_url) <= 5)`);
       }
 
       const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
 
-      // Total filtrado
-      const countSql = `SELECT COUNT(*) as filtered_count FROM wisphub_clients w ${whereSql}`;
+      // Total filtrado con JOIN si es necesario
+      const countSql = `
+        SELECT COUNT(*) as filtered_count 
+        FROM wisphub_clients w 
+        LEFT JOIN smartolt_onus o ON (
+          (w.sn_onu IS NOT NULL AND LENGTH(w.sn_onu) >= 6 AND o.sn = w.sn_onu) OR
+          (w.ip IS NOT NULL AND LENGTH(w.ip) >= 7 AND o.ip_address = w.ip)
+        )
+        ${whereSql}
+      `;
       const countRes = await client.execute({ sql: countSql, args });
       const filteredTotal = Number(countRes.rows[0]?.filtered_count || 0);
 

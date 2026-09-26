@@ -818,6 +818,48 @@ export function getAdminDashboardHtml(): string {
       background: rgba(255, 255, 255, 0.03);
     }
 
+    .table-filter-row th {
+      padding: 6px 8px;
+      background: rgba(15, 23, 42, 0.7);
+      border-bottom: 2px solid var(--card-border);
+      vertical-align: middle;
+    }
+
+    .table-col-filter {
+      width: 100%;
+      background: rgba(0, 0, 0, 0.45);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 6px;
+      color: var(--text-main);
+      padding: 5px 8px;
+      font-size: 11.5px;
+      font-family: var(--font-main);
+      outline: none;
+      transition: var(--transition);
+      box-sizing: border-box;
+      font-weight: 400;
+    }
+
+    .table-col-filter:focus {
+      border-color: var(--primary);
+      background: rgba(30, 41, 59, 0.9);
+      box-shadow: 0 0 8px var(--primary-glow);
+    }
+
+    .table-col-filter::placeholder {
+      color: var(--text-dim);
+      font-size: 11px;
+    }
+
+    select.table-col-filter {
+      cursor: pointer;
+    }
+
+    select.table-col-filter option {
+      background: #0b0f19;
+      color: #f8fafc;
+    }
+
     /* Badges */
     .badge {
       display: inline-flex;
@@ -1935,22 +1977,22 @@ export function getAdminDashboardHtml(): string {
         </div>
 
         <!-- Filter & Search Toolbar -->
-        <div class="glass-card" style="margin-bottom: 20px; padding: 16px 20px;">
+        <div class="glass-card" style="margin-bottom: 20px; padding: 14px 20px;">
           <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;">
-            <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center; flex: 1; min-width: 280px;">
-              <div style="position: relative; flex: 1; min-width: 240px; max-width: 440px;">
-                <input type="text" id="input-clients-search" class="form-control" placeholder="Buscar por nombre, teléfono, IP, serie ONU o dirección..." oninput="handleClientsSearchInput(this.value)">
-              </div>
-              <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-                <button class="btn btn-primary btn-sm" id="btn-client-filter-all" onclick="setClientsStatusFilter('ALL', this)">Todos</button>
-                <button class="btn btn-secondary btn-sm" id="btn-client-filter-gps" onclick="setClientsStatusFilter('CON_GPS', this)">📍 Con GPS</button>
-                <button class="btn btn-secondary btn-sm" id="btn-client-filter-nogps" onclick="setClientsStatusFilter('SIN_GPS', this)">⚠️ Sin GPS</button>
-                <button class="btn btn-secondary btn-sm" id="btn-client-filter-act" onclick="setClientsStatusFilter('ACTIVO', this)">🟢 Activos</button>
-                <button class="btn btn-secondary btn-sm" id="btn-client-filter-susp" onclick="setClientsStatusFilter('SUSPENDIDO', this)">🔴 Suspendidos</button>
-              </div>
+            <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center; flex: 1;">
+              <span style="font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Filtros rápidos:</span>
+              <button class="btn btn-primary btn-sm" id="btn-client-filter-all" onclick="setClientsStatusFilter('ALL', this)">Todos (3,400+)</button>
+              <button class="btn btn-secondary btn-sm" id="btn-client-filter-act" onclick="setClientsStatusFilter('ACTIVO', this)">🟢 Activos</button>
+              <button class="btn btn-secondary btn-sm" id="btn-client-filter-susp" onclick="setClientsStatusFilter('SUSPENDIDO', this)">🔴 Suspendidos</button>
+              <button class="btn btn-secondary btn-sm" id="btn-client-filter-gps" onclick="setClientsStatusFilter('CON_GPS', this)">📍 Con GPS</button>
+              <button class="btn btn-secondary btn-sm" id="btn-client-filter-nogps" onclick="setClientsStatusFilter('SIN_GPS', this)">⚠️ Sin GPS</button>
             </div>
-            <div style="display: flex; gap: 10px;">
-              <button class="btn btn-secondary btn-sm" onclick="triggerWisphubSync()">
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <button class="btn btn-secondary btn-sm" onclick="clearClientColFilters()" title="Limpiar todas las búsquedas y filtros">
+                <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M19 6L5 20M5 6l14 14"/></svg>
+                <span>Limpiar Filtros</span>
+              </button>
+              <button class="btn btn-secondary btn-sm" onclick="triggerWisphubSync()" title="Sincronizar base de datos con WispHub en vivo">
                 <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"></path></svg>
                 <span>Sincronizar WispHub</span>
               </button>
@@ -1961,24 +2003,68 @@ export function getAdminDashboardHtml(): string {
         <!-- Table Container -->
         <div class="glass-card">
           <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 8px;">
-            <h3 style="font-size: 15px; font-weight: 700;">Directorio de Clientes & Geolocalización</h3>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <h3 style="font-size: 15px; font-weight: 700;">Directorio de Clientes & Geolocalización</h3>
+              <span class="badge badge-info" style="font-size: 10px;">Filtros por Columna Activos</span>
+            </div>
             <span id="clients-count-label" style="font-size: 12px; color: var(--text-muted);">Cargando clientes...</span>
           </div>
           <div class="table-responsive">
             <table class="data-table">
               <thead>
                 <tr>
-                  <th>Cliente / Servicio</th>
-                  <th>Estado</th>
-                  <th>Corte</th>
-                  <th>Teléfonos (Principal & Familiares)</th>
-                  <th>Ubicación GPS & Google Maps</th>
-                  <th>Datos Técnicos</th>
-                  <th style="text-align: right;">Acciones</th>
+                  <th style="min-width: 200px;">Cliente / Nombre</th>
+                  <th style="min-width: 150px;">Servicio / Contrato</th>
+                  <th style="min-width: 140px;">IP & SN</th>
+                  <th style="min-width: 120px;">Estado</th>
+                  <th style="min-width: 140px;">Plan Internet</th>
+                  <th style="min-width: 140px;">Router / Zona</th>
+                  <th style="min-width: 150px;">Teléfono(s)</th>
+                  <th style="min-width: 160px;">Ubicación GPS</th>
+                  <th style="text-align: right; min-width: 100px;">Acciones</th>
+                </tr>
+                <tr class="table-filter-row">
+                  <th>
+                    <input type="text" id="filter-client-nombre" class="table-col-filter" placeholder="Buscar nombre..." oninput="handleClientColFilter()">
+                  </th>
+                  <th>
+                    <input type="text" id="filter-client-servicio" class="table-col-filter" placeholder="Buscar servicio/ID..." oninput="handleClientColFilter()">
+                  </th>
+                  <th>
+                    <input type="text" id="filter-client-ip" class="table-col-filter" placeholder="172.x.x.x o SN..." oninput="handleClientColFilter()">
+                  </th>
+                  <th>
+                    <select id="filter-client-estado" class="table-col-filter" onchange="handleClientColFilter()">
+                      <option value="">Todos</option>
+                      <option value="Activo">🟢 Activo</option>
+                      <option value="Suspendido">🔴 Suspendido</option>
+                    </select>
+                  </th>
+                  <th>
+                    <input type="text" id="filter-client-plan" class="table-col-filter" placeholder="Plan / Megas..." oninput="handleClientColFilter()">
+                  </th>
+                  <th>
+                    <input type="text" id="filter-client-router" class="table-col-filter" placeholder="Router o Zona..." oninput="handleClientColFilter()">
+                  </th>
+                  <th>
+                    <input type="text" id="filter-client-telefono" class="table-col-filter" placeholder="Buscar teléfono..." oninput="handleClientColFilter()">
+                  </th>
+                  <th>
+                    <select id="filter-client-gps" class="table-col-filter" onchange="handleClientColFilter()">
+                      <option value="">GPS (Todos)</option>
+                      <option value="CON_GPS">📍 Con GPS</option>
+                      <option value="SIN_GPS">⚠️ Sin GPS</option>
+                    </select>
+                  </th>
+                  <th style="text-align: right;">
+                    <button class="btn btn-secondary btn-xs" onclick="clearClientColFilters()" title="Limpiar todos los filtros" style="padding: 4px 8px; font-size: 10.5px; width: 100%;">
+                      🧹 Limpiar
+                    </button>
+                  </th>
                 </tr>
               </thead>
               <tbody id="table-clients-body">
-                <tr><td colspan="7" style="text-align: center; color: var(--text-dim); padding: 24px;">Cargando listado de clientes...</td></tr>
+                <tr><td colspan="9" style="text-align: center; color: var(--text-dim); padding: 24px;">Cargando listado de clientes...</td></tr>
               </tbody>
             </table>
           </div>
@@ -2741,7 +2827,7 @@ export function getAdminDashboardHtml(): string {
       whatsappAreas: [],
       whatsappInstances: [],
       tickets: [],
-      clients: { filter: 'ALL', search: '', page: 1, limit: 25, total: 0, items: [] },
+      clients: { filter: 'ALL', search: '', colFilters: {}, page: 1, limit: 25, total: 0, items: [] },
       audit: { filter: 'all', search: '', page: 1, limit: 30, total: 0 },
       provisioning: { filter: 'pending', search: '', page: 1, limit: 30, total: 0 },
       technicians: [],
@@ -5629,6 +5715,17 @@ export function getAdminDashboardHtml(): string {
           limit: String(state.clients.limit || 25),
         });
 
+        if (state.clients.colFilters) {
+          if (state.clients.colFilters.nombre) params.set('search_nombre', state.clients.colFilters.nombre);
+          if (state.clients.colFilters.servicio) params.set('search_servicio', state.clients.colFilters.servicio);
+          if (state.clients.colFilters.ip) params.set('search_ip', state.clients.colFilters.ip);
+          if (state.clients.colFilters.estado) params.set('search_estado', state.clients.colFilters.estado);
+          if (state.clients.colFilters.plan) params.set('search_plan', state.clients.colFilters.plan);
+          if (state.clients.colFilters.router) params.set('search_router', state.clients.colFilters.router);
+          if (state.clients.colFilters.telefono) params.set('search_telefono', state.clients.colFilters.telefono);
+          if (state.clients.colFilters.gps) params.set('search_gps', state.clients.colFilters.gps);
+        }
+
         const res = await apiFetch('/api/admin/clients?' + params.toString());
         if (!res.success) {
           showToast('Error', res.error || 'No se pudieron cargar los clientes.', 'error');
@@ -5685,7 +5782,7 @@ export function getAdminDashboardHtml(): string {
       if (!tbody) return;
 
       if (!clients || clients.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-dim); padding: 24px;">No se encontraron clientes con los filtros aplicados.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; color: var(--text-dim); padding: 24px;">No se encontraron clientes con los filtros aplicados.</td></tr>';
         return;
       }
 
@@ -5775,24 +5872,29 @@ export function getAdminDashboardHtml(): string {
           \`;
         }
 
-        // Datos Técnicos (IP, SN ONU, Plan, Router)
-        const techHtml = \`
-          <div style="display: flex; flex-direction: column; gap: 2px; font-size: 11.5px;">
-            <div><span style="color: var(--text-dim);">IP:</span> <span style="font-family: var(--font-mono); font-weight: 600;">\${c.ip || '--'}</span></div>
-            <div><span style="color: var(--text-dim);">SN:</span> <span style="font-family: var(--font-mono); color: var(--accent-cyan); font-weight: 600;">\${c.sn_onu || '--'}</span></div>
-            <div><span style="color: var(--text-dim);">Plan:</span> <span>\${escapeHtml(c.plan_internet || '--')}</span></div>
-          </div>
-        \`;
-
+        // Col 1: Cliente / Nombre
+        // Col 2: Servicio / Contrato
+        // Col 3: IP & SN
+        // Col 4: Estado
+        // Col 5: Plan Internet
+        // Col 6: Router / Zona
+        // Col 7: Teléfonos
+        // Col 8: Ubicación GPS
+        // Col 9: Acciones
         return \`
           <tr>
             <td>
-              <div style="display: flex; flex-direction: column; gap: 2px;">
-                <div style="font-weight: 700; font-size: 13.5px; color: #fff;">\${escapeHtml(c.nombre)}</div>
-                <div style="font-size: 11px; color: var(--text-muted); display: flex; align-items: center; gap: 6px;">
-                  <span style="font-family: var(--font-mono); color: var(--primary);">#\${c.id_servicio}</span>
-                  <span>\${escapeHtml(c.servicio || '')}</span>
-                </div>
+              <div style="font-weight: 700; font-size: 13px; color: #fff;">\${escapeHtml(c.nombre)}</div>
+              \${c.comentarios ? \`<div style="font-size: 10.5px; color: var(--text-dim); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">\${escapeHtml(c.comentarios)}</div>\` : ''}
+            </td>
+            <td>
+              <div style="font-family: var(--font-mono); color: var(--primary); font-weight: 700; font-size: 12px;">#\${c.id_servicio || '--'}</div>
+              <div style="font-size: 11px; color: var(--text-muted); max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">\${escapeHtml(c.servicio || '')}</div>
+            </td>
+            <td>
+              <div style="display: flex; flex-direction: column; gap: 2px; font-size: 11.5px;">
+                <div><span style="color: var(--text-dim);">IP:</span> <span style="font-family: var(--font-mono); font-weight: 600; color: #38bdf8;">\${c.ip || '--'}</span></div>
+                <div><span style="color: var(--text-dim);">SN:</span> <span style="font-family: var(--font-mono); color: var(--accent-cyan); font-weight: 600;">\${c.sn_onu || '--'}</span></div>
               </div>
             </td>
             <td>
@@ -5802,13 +5904,16 @@ export function getAdminDashboardHtml(): string {
               </div>
             </td>
             <td>
-              <span class="badge badge-purple" style="font-size: 11px;">
-                Día \${c.dia_corte || '--'}
+              <span class="badge badge-purple" style="font-size: 11px; font-weight: 600; white-space: nowrap;">
+                \${escapeHtml(c.plan_internet || '--')}
               </span>
+            </td>
+            <td>
+              <div style="font-size: 11.5px; font-weight: 600; color: var(--text-main);">\${escapeHtml(c.router || '--')}</div>
+              \${c.zona ? \`<div style="font-size: 10.5px; color: var(--text-dim);">\${escapeHtml(c.zona)}</div>\` : ''}
             </td>
             <td>\${phonesHtml}</td>
             <td>\${gpsHtml}</td>
-            <td>\${techHtml}</td>
             <td style="text-align: right;">
               <div style="display: flex; gap: 6px; justify-content: flex-end;">
                 <button class="btn btn-secondary btn-sm" onclick="openClientDetailModal(\${c.id_servicio})" title="Ver Expediente Completo">
@@ -5824,6 +5929,59 @@ export function getAdminDashboardHtml(): string {
           </tr>
         \`;
       }).join('');
+    }
+
+    function handleClientColFilter() {
+      if (clientsSearchDebounce) clearTimeout(clientsSearchDebounce);
+      clientsSearchDebounce = setTimeout(() => {
+        state.clients.colFilters = {
+          nombre: (document.getElementById('filter-client-nombre')?.value || '').trim(),
+          servicio: (document.getElementById('filter-client-servicio')?.value || '').trim(),
+          ip: (document.getElementById('filter-client-ip')?.value || '').trim(),
+          estado: document.getElementById('filter-client-estado')?.value || '',
+          plan: (document.getElementById('filter-client-plan')?.value || '').trim(),
+          router: (document.getElementById('filter-client-router')?.value || '').trim(),
+          telefono: (document.getElementById('filter-client-telefono')?.value || '').trim(),
+          gps: document.getElementById('filter-client-gps')?.value || '',
+        };
+        state.clients.page = 1;
+        loadClientsData();
+      }, 300);
+    }
+
+    function clearClientColFilters() {
+      const inputs = [
+        'filter-client-nombre',
+        'filter-client-servicio',
+        'filter-client-ip',
+        'filter-client-estado',
+        'filter-client-plan',
+        'filter-client-router',
+        'filter-client-telefono',
+        'filter-client-gps'
+      ];
+      inputs.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+      });
+      state.clients.colFilters = {};
+      state.clients.filter = 'ALL';
+      state.clients.search = '';
+      state.clients.page = 1;
+
+      document.querySelectorAll('#view-clients .btn-sm').forEach(b => {
+        if (b.id && b.id.startsWith('btn-client-filter-')) {
+          b.classList.remove('btn-primary');
+          b.classList.add('btn-secondary');
+        }
+      });
+      const btnAll = document.getElementById('btn-client-filter-all');
+      if (btnAll) {
+        btnAll.classList.remove('btn-secondary');
+        btnAll.classList.add('btn-primary');
+      }
+
+      loadClientsData();
     }
 
     function handleClientsSearchInput(val) {
