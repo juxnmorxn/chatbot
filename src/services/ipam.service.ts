@@ -48,7 +48,7 @@ export class IpamService {
    * Configuración de Subredes y VLANs por defecto de CloudWare:
    */
   static readonly DEFAULT_SUBNETS: VlanSubnetConfig[] = [
-    // OLT5800-Actopan
+    // OLT5800-Actopan (VLANs 510 a 620)
     { vlan: '510', name: '510 - Internet', segment: '172.19.1.0/24', gateway: '172.19.1.254', netmask: '255.255.255.0', startHost: 2, endHost: 253, oltId: '3', oltName: 'OLT5800-Actopan' },
     { vlan: '520', name: '520 - Internet', segment: '172.19.2.0/24', gateway: '172.19.2.254', netmask: '255.255.255.0', startHost: 2, endHost: 253, oltId: '3', oltName: 'OLT5800-Actopan' },
     { vlan: '530', name: '530 - Internet', segment: '172.19.3.0/24', gateway: '172.19.3.254', netmask: '255.255.255.0', startHost: 2, endHost: 253, oltId: '3', oltName: 'OLT5800-Actopan' },
@@ -60,29 +60,40 @@ export class IpamService {
     { vlan: '590', name: '590 - Internet', segment: '172.19.9.0/24', gateway: '172.19.9.254', netmask: '255.255.255.0', startHost: 2, endHost: 253, oltId: '3', oltName: 'OLT5800-Actopan' },
     { vlan: '600', name: '600 - Internet', segment: '172.19.10.0/24', gateway: '172.19.10.254', netmask: '255.255.255.0', startHost: 2, endHost: 253, oltId: '3', oltName: 'OLT5800-Actopan' },
     { vlan: '610', name: '610 - Internet', segment: '172.19.11.0/24', gateway: '172.19.11.254', netmask: '255.255.255.0', startHost: 2, endHost: 253, oltId: '3', oltName: 'OLT5800-Actopan' },
-    // OLT-SanAgustin
+    { vlan: '620', name: '620 - Internet', segment: '172.19.12.0/24', gateway: '172.19.12.254', netmask: '255.255.255.0', startHost: 2, endHost: 253, oltId: '3', oltName: 'OLT5800-Actopan' },
+    // OLT-SanAgustin (VLAN 800)
     { vlan: '800', name: '800 - Internet San Agustín', segment: '172.16.80.0/24', gateway: '172.16.80.254', netmask: '255.255.255.0', startHost: 2, endHost: 253, oltId: '2', oltName: 'OLT-SanAgustin' },
   ];
 
   /**
-   * Obtiene la lista completa de VLANs y Subredes combinando la base de datos Turso DB,
-   * los valores por defecto y el auto-descubrimiento en tiempo real de IPs registradas.
+   * Obtiene la lista completa de VLANs y Subredes de fibra óptica (FTTH)
+   * Actopan (VLANs 510 a 620) y San Agustín (VLAN 800).
+   * Excluye antenas / segmentos inalámbricos (172.17.x.x, 192.168.x.x, etc.).
    */
   static async getAllSubnets(): Promise<VlanSubnetConfig[]> {
     const subnetsMap = new Map<string, VlanSubnetConfig>();
 
-    // 1. Cargar subredes por defecto
+    // 1. Cargar subredes por defecto de FTTH (Actopan 510-620 y San Agustín 800)
     for (const d of this.DEFAULT_SUBNETS) {
       subnetsMap.set(d.vlan, { ...d });
     }
 
-    // 2. Cargar subredes configuradas en Turso DB (tabla ipam_vlan_pools)
+    // 2. Limpiar en Turso DB cualquier subred de antenas / no-FTTH previa
     try {
       const client = getTursoClient();
+      await client.execute(`
+        DELETE FROM ipam_vlan_pools 
+        WHERE vlan LIKE 'VLAN-%' 
+           OR vlan IN ('1010', '1020') 
+           OR segment LIKE '172.17.%' 
+           OR segment LIKE '192.168.%' 
+           OR segment LIKE '172.19.5%'
+      `);
+
       const res = await client.execute(`SELECT * FROM ipam_vlan_pools WHERE is_active = 1`);
       
       if (res.rows.length === 0) {
-        // Inicializar la tabla con los valores por defecto
+        // Inicializar la tabla exclusivamente con los pools oficiales de fibra óptica
         const now = new Date().toISOString();
         for (const s of this.DEFAULT_SUBNETS) {
           try {
@@ -98,119 +109,36 @@ export class IpamService {
         }
       } else {
         for (const row of res.rows) {
-          const vlan = String(row.vlan);
-          subnetsMap.set(vlan, {
-            vlan,
-            name: String(row.name || `${vlan} - Internet`),
-            segment: String(row.segment),
-            gateway: String(row.gateway),
-            netmask: String(row.netmask || '255.255.255.0'),
-            startHost: Number(row.start_host || 2),
-            endHost: Number(row.end_host || 253),
-            oltId: String(row.olt_id || '3'),
-            oltName: String(row.olt_name || 'OLT5800-Actopan'),
-            isCustom: true,
-          });
+          const vlan = String(row.vlan).trim();
+          const segment = String(row.segment || '').trim();
+
+          // Filtrar: Solo aceptar VLANs válidas de FTTH (Actopan 510-620 o San Agustín 800-899)
+          const vlanNum = parseInt(vlan, 10);
+          const isActopanRange = !isNaN(vlanNum) && vlanNum >= 510 && vlanNum <= 620;
+          const isSanAgustinRange = !isNaN(vlanNum) && vlanNum >= 800 && vlanNum <= 899;
+          const isFtthSegment = segment.startsWith('172.19.') || segment.startsWith('172.16.80.');
+
+          if ((isActopanRange || isSanAgustinRange) && isFtthSegment) {
+            subnetsMap.set(vlan, {
+              vlan,
+              name: String(row.name || `${vlan} - Internet`),
+              segment,
+              gateway: String(row.gateway),
+              netmask: String(row.netmask || '255.255.255.0'),
+              startHost: Number(row.start_host || 2),
+              endHost: Number(row.end_host || 253),
+              oltId: String(row.olt_id || (isSanAgustinRange ? '2' : '3')),
+              oltName: String(row.olt_name || (isSanAgustinRange ? 'OLT-SanAgustin' : 'OLT5800-Actopan')),
+              isCustom: true,
+            });
+          }
         }
       }
     } catch (err: any) {
       logger.warn('No se pudieron leer pools personalizados de Turso DB:', err?.message || err);
     }
 
-    // 3. Auto-descubrimiento en tiempo real: Detectar si en smartolt_onus o wisphub_clients hay IPs o VLANs de subredes no registradas
-    try {
-      const client = getTursoClient();
-      const ipRows = await client.execute(`
-        SELECT ip_address as ip, olt_name, raw_data FROM smartolt_onus WHERE (ip_address IS NOT NULL AND ip_address != '') OR (raw_data IS NOT NULL AND raw_data != '')
-        UNION ALL
-        SELECT ip, 'OLT5800-Actopan' as olt_name, NULL as raw_data FROM wisphub_clients WHERE ip IS NOT NULL AND ip != ''
-      `);
-
-      for (const row of ipRows.rows) {
-        let explicitVlan: string | null = null;
-        let detectedIp = String(row.ip || '').trim().split('/')[0].trim();
-
-        // Extraer datos profundos de raw_data si existe
-        if (row.raw_data) {
-          try {
-            const rawObj = typeof row.raw_data === 'string' ? JSON.parse(row.raw_data) : row.raw_data;
-            if (!detectedIp && (rawObj.ip_address || rawObj.ip || rawObj.static_ip)) {
-              detectedIp = String(rawObj.ip_address || rawObj.ip || rawObj.static_ip || '').trim().split('/')[0].trim();
-            }
-            if (rawObj.vlan || rawObj.vlan_id || rawObj.mgmt_vlan || rawObj.service_vlan) {
-              explicitVlan = String(rawObj.vlan || rawObj.vlan_id || rawObj.mgmt_vlan || rawObj.service_vlan).trim();
-            }
-          } catch {}
-        }
-
-        const parts = detectedIp.split('.');
-        if (parts.length === 4) {
-          const prefix = `${parts[0]}.${parts[1]}.${parts[2]}`;
-          const segment = `${prefix}.0/24`;
-          const gateway = `${prefix}.254`;
-          
-          // Verificar si este segmento ya está cubierto
-          let exists = false;
-          for (const conf of subnetsMap.values()) {
-            if (conf.segment === segment || (explicitVlan && conf.vlan === explicitVlan)) {
-              exists = true;
-              break;
-            }
-          }
-
-          if (!exists) {
-            // Determinar ID de VLAN (usar el explícito si existe, o calcular sugerido)
-            let suggestedVlan = explicitVlan;
-            if (!suggestedVlan) {
-              const thirdOctet = parseInt(parts[2], 10);
-              if (parts[1] === '19') {
-                suggestedVlan = String(500 + thirdOctet * 10);
-              } else if (parts[1] === '16' && parts[2] === '80') {
-                suggestedVlan = '800';
-              } else {
-                suggestedVlan = `VLAN-${parts[1]}.${parts[2]}`;
-              }
-            }
-
-            const oltName = String(row.olt_name || (parts[1] === '16' ? 'OLT-SanAgustin' : 'OLT5800-Actopan'));
-            const oltId = oltName.toLowerCase().includes('sanagustin') || parts[1] === '16' ? '2' : '3';
-
-            const discovered: VlanSubnetConfig = {
-              vlan: suggestedVlan,
-              name: `VLAN ${suggestedVlan} (${segment})`,
-              segment,
-              gateway,
-              netmask: '255.255.255.0',
-              startHost: 2,
-              endHost: 253,
-              oltId,
-              oltName,
-              isCustom: true,
-            };
-
-            subnetsMap.set(suggestedVlan, discovered);
-
-            // Persistir la subred descubierta en base de datos
-            try {
-              const now = new Date().toISOString();
-              await client.execute({
-                sql: `
-                  INSERT OR IGNORE INTO ipam_vlan_pools 
-                  (vlan, name, segment, gateway, netmask, start_host, end_host, olt_id, olt_name, is_active, created_at, updated_at)
-                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
-                `,
-                args: [discovered.vlan, discovered.name, discovered.segment, discovered.gateway, discovered.netmask, discovered.startHost, discovered.endHost, discovered.oltId, discovered.oltName, now, now],
-              });
-              logger.info(`[Auto-IPAM] Nueva VLAN/Subred detectada y guardada: ${discovered.vlan} (${segment})`);
-            } catch {}
-          }
-        }
-      }
-    } catch (err: any) {
-      logger.warn('Error en auto-descubrimiento de subredes IPAM:', err?.message || err);
-    }
-
-    // Ordenar por número de VLAN
+    // Ordenar por número de VLAN (510, 520, ... 620, 800)
     return Array.from(subnetsMap.values()).sort((a, b) => {
       const numA = parseInt(a.vlan, 10);
       const numB = parseInt(b.vlan, 10);
