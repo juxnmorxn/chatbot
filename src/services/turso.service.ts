@@ -844,6 +844,9 @@ export class TursoService {
       url?: string;
       direccion?: string;
       notas?: string;
+      clientName?: string;
+      clientId?: string | number;
+      ticketFolio?: string | number;
     }
   ): Promise<boolean> {
     try {
@@ -860,16 +863,18 @@ export class TursoService {
         mapsUrl = `https://www.google.com/maps?q=${coordsStr}`;
       }
 
-      const idNum = Number(identifier);
+      const idNum = Number(loc.clientId || identifier);
       const isNum = !isNaN(idNum) && idNum > 0;
       const cleanPhone = String(identifier).replace(/\D/g, '');
+      const last10 = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : '';
       const rawStr = String(identifier).trim();
+      const targetName = loc.clientName || (isNaN(Number(rawStr)) && cleanPhone.length < 10 ? rawStr : '');
 
-      let updatedCount = 0;
+      let targetIdServicio: number | null = isNum ? idNum : null;
 
-      // 1. Actualizar por id_servicio en wisphub_clients
+      // 1. Actualizar por id_servicio directo si se conoce
       if (isNum) {
-        const res = await client.execute({
+        await client.execute({
           sql: `
             UPDATE wisphub_clients 
             SET 
@@ -882,23 +887,11 @@ export class TursoService {
           `,
           args: [coordsStr || null, mapsUrl || null, loc.notas || null, loc.direccion || null, now, idNum],
         });
-        if ((res.rowsAffected || 0) > 0) {
-          updatedCount++;
-          // Sincronizar en tiempo real con WispHub API
-          try {
-            const { WispHubService } = require('./wisphub.service');
-            WispHubService.actualizarCliente(idNum, {
-              latitud: loc.lat,
-              longitud: loc.lng,
-              direccion: loc.direccion,
-            }).catch(() => {});
-          } catch {}
-        }
       }
 
-      // 2. Actualizar por teléfono en wisphub_clients
-      if (cleanPhone.length >= 10) {
-        const resWh = await client.execute({
+      // 2. Actualizar por teléfono en wisphub_clients (10 dígitos o número completo)
+      if (last10) {
+        await client.execute({
           sql: `
             UPDATE wisphub_clients 
             SET 
@@ -907,15 +900,64 @@ export class TursoService {
               ubicacion_notas = COALESCE(NULLIF(?, ''), ubicacion_notas),
               direccion = COALESCE(NULLIF(?, ''), direccion),
               updated_at = ?
-            WHERE telefono LIKE ? OR telefonos_adicionales LIKE ?
+            WHERE telefono LIKE ? OR telefonos_adicionales LIKE ? OR telefono LIKE ?
           `,
-          args: [coordsStr || null, mapsUrl || null, loc.notas || null, loc.direccion || null, now, `%${cleanPhone}%`, `%${cleanPhone}%`],
+          args: [coordsStr || null, mapsUrl || null, loc.notas || null, loc.direccion || null, now, `%${last10}%`, `%${last10}%`, `%${cleanPhone}%`],
         });
-        if ((resWh.rowsAffected || 0) > 0) updatedCount++;
+
+        if (!targetIdServicio) {
+          const findId = await client.execute({
+            sql: `SELECT id_servicio FROM wisphub_clients WHERE telefono LIKE ? OR telefonos_adicionales LIKE ? LIMIT 1`,
+            args: [`%${last10}%`, `%${last10}%`],
+          });
+          if (findId.rows.length > 0) {
+            targetIdServicio = Number(findId.rows[0].id_servicio);
+          }
+        }
       }
 
-      // 3. Actualizar en smartolt_onus si coincide teléfono o SN
-      if (cleanPhone.length >= 10 || rawStr.length >= 6) {
+      // 3. Actualizar por nombre del cliente si se proporcionó
+      if (targetName && targetName.length >= 3) {
+        const cleanTarget = cleanPersonName(targetName);
+        const nameMatches = await client.execute({
+          sql: `
+            UPDATE wisphub_clients 
+            SET 
+              coordenadas_gps = COALESCE(NULLIF(?, ''), coordenadas_gps),
+              google_maps_url = COALESCE(NULLIF(?, ''), google_maps_url),
+              ubicacion_notas = COALESCE(NULLIF(?, ''), ubicacion_notas),
+              direccion = COALESCE(NULLIF(?, ''), direccion),
+              updated_at = ?
+            WHERE nombre LIKE ? OR nombre_normalized LIKE ?
+          `,
+          args: [coordsStr || null, mapsUrl || null, loc.notas || null, loc.direccion || null, now, `%${cleanTarget}%`, `%${cleanTarget}%`],
+        });
+
+        if (!targetIdServicio) {
+          const findByName = await client.execute({
+            sql: `SELECT id_servicio FROM wisphub_clients WHERE nombre LIKE ? OR nombre_normalized LIKE ? LIMIT 1`,
+            args: [`%${cleanTarget}%`, `%${cleanTarget}%`],
+          });
+          if (findByName.rows.length > 0) {
+            targetIdServicio = Number(findByName.rows[0].id_servicio);
+          }
+        }
+      }
+
+      // Sincronizar con WispHub en vivo si tenemos el id_servicio
+      if (targetIdServicio && (loc.lat || loc.lng || loc.direccion)) {
+        try {
+          const { WispHubService } = require('./wisphub.service');
+          WispHubService.actualizarCliente(targetIdServicio, {
+            latitud: loc.lat,
+            longitud: loc.lng,
+            direccion: loc.direccion,
+          }).catch(() => {});
+        } catch {}
+      }
+
+      // 4. Actualizar en smartolt_onus si coincide teléfono, SN o nombre
+      if (last10 || rawStr.length >= 4) {
         await client.execute({
           sql: `
             UPDATE smartolt_onus 
@@ -923,14 +965,26 @@ export class TursoService {
               coordenadas_gps = COALESCE(NULLIF(?, ''), coordenadas_gps),
               google_maps_url = COALESCE(NULLIF(?, ''), google_maps_url),
               updated_at = ?
-            WHERE phone LIKE ? OR sn = ? OR unique_external_id = ?
+            WHERE phone LIKE ? OR sn = ? OR unique_external_id = ? OR name LIKE ?
           `,
-          args: [coordsStr || null, mapsUrl || null, now, `%${cleanPhone}%`, rawStr.toUpperCase(), rawStr],
+          args: [coordsStr || null, mapsUrl || null, now, `%${last10 || cleanPhone}%`, rawStr.toUpperCase(), rawStr, `%${targetName || rawStr}%`],
         });
       }
 
-      // 4. Actualizar tickets abiertos asociados a este teléfono
-      if (cleanPhone.length >= 10) {
+      // 5. Actualizar tickets (por folio o por teléfono)
+      if (loc.ticketFolio) {
+        await client.execute({
+          sql: `
+            UPDATE tickets 
+            SET 
+              coordenadas_gps = COALESCE(NULLIF(?, ''), coordenadas_gps),
+              google_maps_url = COALESCE(NULLIF(?, ''), google_maps_url),
+              updated_at = ?
+            WHERE folio = ?
+          `,
+          args: [coordsStr || null, mapsUrl || null, now, String(loc.ticketFolio)],
+        });
+      } else if (last10) {
         await client.execute({
           sql: `
             UPDATE tickets 
@@ -940,11 +994,11 @@ export class TursoService {
               updated_at = ?
             WHERE phone LIKE ? AND status != 'RESUELTO'
           `,
-          args: [coordsStr || null, mapsUrl || null, now, `%${cleanPhone}%`],
+          args: [coordsStr || null, mapsUrl || null, now, `%${last10}%`],
         });
       }
 
-      logger.info(`[Ubicación] Georreferencia guardada para identificador "${identifier}": ${coordsStr || mapsUrl}`);
+      logger.info(`[Ubicación] Georreferencia guardada para "${identifier}" (ID WH: ${targetIdServicio || 'N/A'}): ${coordsStr || mapsUrl}`);
       return true;
     } catch (err: any) {
       logger.error(`Error al actualizar ubicación para ${identifier}:`, err?.message || err);

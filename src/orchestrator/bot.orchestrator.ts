@@ -487,7 +487,16 @@ export class BotOrchestrator {
       session?.step === 'PENDIENTE_SELECCION_IP_CAMBIO_MODEM' ||
       session?.step === 'PENDIENTE_CONFIRMACION_CAMBIO_MODEM';
 
-    const esAccionTecnica = esComandoActivacion || esComandoCambioPaquete || esComandoCambioModem || esPasoTecnicoEnCurso;
+    const esComandoTecnicoExplicito = esComandoActivacion || esComandoCambioPaquete || esComandoCambioModem;
+    const esAccionTecnica = esComandoTecnicoExplicito || esPasoTecnicoEnCurso;
+
+    // Si el usuario envía un comando técnico explícito pero la sesión estaba en un paso residual residencial (ej. ESPERANDO_UBICACION_TECNICO), resetear inmediatamente a CONVERSACIONAL
+    if (esComandoTecnicoExplicito && session && !esPasoTecnicoEnCurso) {
+      session = await TursoService.upsertSession({
+        phone,
+        step: 'CONVERSACIONAL',
+      });
+    }
 
     // 1. Verificar si hay Intervención Humana activa (Memoria o Turso DB)
     // EXCEPCIÓN: Comandos técnicos, fotos de contratos y activaciones NUNCA son bloqueados por human takeover
@@ -2565,11 +2574,20 @@ export class BotOrchestrator {
     session: Session | null,
     targetJid?: string
   ): Promise<void> {
+    const lower = (rawText || '').toLowerCase().trim();
+    const esComando = /^(?:cambio\s+de\s+m[oó]dem|reemplazar\s+m[oó]dem|activar|activaci[oó]n|alta|aprovisionar|cambiar\s+plan|cambiar\s+paquete|saldo|pago|factura|soporte|internet)\b/i.test(lower);
+    if (esComando) {
+      await TursoService.upsertSession({ phone, step: 'CONVERSACIONAL' });
+      await this.procesarMensaje(event);
+      return;
+    }
+
     let meta: any = {};
     try { meta = JSON.parse(session?.metadata || '{}'); } catch {}
 
     const folio = meta.ticketFolio;
-    const nombre = session?.client_name ? ` ${session.client_name}` : '';
+    const nombreLimpio = formatDisplayName(session?.client_name, true);
+    const nombre = nombreLimpio ? ` *${nombreLimpio}*` : '';
     const ubicacionTexto = rawText || (event.isMedia ? '[Foto o archivo de ubicación]' : 'Ubicación enviada');
 
     if (folio) {
@@ -2579,6 +2597,13 @@ export class BotOrchestrator {
         `📍 Domicilio / Ubicación indicada por cliente: "${ubicacionTexto}"`
       );
     }
+
+    await TursoService.updateClientLocation(phone, {
+      direccion: ubicacionTexto,
+      clientId: session?.client_id || undefined,
+      clientName: session?.client_name || undefined,
+      ticketFolio: folio,
+    });
 
     await this.enviarYLoguear(
       phone,
@@ -3310,13 +3335,21 @@ export class BotOrchestrator {
       return;
     }
 
-    // 1. Guardar en base de datos Turso DB (wisphub_clients, smartolt_onus, tickets)
+    let meta: any = {};
+    try { meta = JSON.parse(session?.metadata || '{}'); } catch {}
+    const ticketFolio = meta.ticketFolio;
+    const esVisitaTecnica = session?.step === 'ESPERANDO_UBICACION_TECNICO' || Boolean(ticketFolio);
+
+    // 1. Guardar en base de datos Turso DB (wisphub_clients, smartolt_onus, tickets) y sincronizar a WispHub
     await TursoService.updateClientLocation(phone, {
       lat,
       lng,
       url,
       direccion,
       notas: loc.name,
+      clientId: session?.client_id || undefined,
+      clientName: session?.client_name || undefined,
+      ticketFolio,
     });
 
     // 2. Notificar vía SSE al panel de administración en tiempo real
@@ -3327,11 +3360,12 @@ export class BotOrchestrator {
         coords: coordsStr,
         url,
         direccion,
+        ticketFolio,
         timestamp: new Date().toISOString(),
       });
     } catch {}
 
-    // 3. Buscar nombre del cliente si está registrado
+    // 3. Buscar nombre del cliente si está registrado y formatear limpiamente
     let clientName = session?.client_name || '';
     if (!clientName) {
       try {
@@ -3341,23 +3375,44 @@ export class BotOrchestrator {
         }
       } catch {}
     }
-    const primerNombre = clientName ? clientName.trim().split(/\s+/)[0] : '';
+    const primerNombre = formatDisplayName(clientName, true);
     const saludo = primerNombre ? `¡Muchas gracias, *${primerNombre}*!` : `¡Muchas gracias!`;
 
-    // 4. Armar respuesta cordial y confirmar el guardado de la ubicación
-    const mensaje = 
-      `📍 *${saludo} Hemos registrado tu ubicación con éxito.*\n\n` +
-      `✅ Las coordenadas de tu domicilio han quedado guardadas en tu expediente técnico de servicio.\n\n` +
-      `🗺️ *Ubicación:* ${coordsStr || url || 'Enlace de Google Maps'}\n` +
-      (direccion ? `🏠 *Referencia:* ${direccion}\n\n` : `\n`) +
-      `Esto nos permite georreferenciar tu instalación y optimizar el tiempo de llegada en caso de visitas técnicas o soporte en sitio. 🛠️🚗\n\n` +
-      `¿Hay alguna falla que desees reportar o algún otro trámite en el que te podamos apoyar?`;
+    // 4. Resetear el step a CONVERSACIONAL para evitar que la sesión quede atrapada
+    await TursoService.upsertSession({
+      phone,
+      step: 'CONVERSACIONAL',
+      metadata: JSON.stringify({
+        ...meta,
+        ubicacionRegistrada: coordsStr,
+        consultaFinalizada: true,
+      }),
+    });
+
+    // 5. Armar respuesta según si había un ticket de visita en curso o si fue un envío general
+    let mensaje = '';
+    if (esVisitaTecnica) {
+      mensaje =
+        `📍 *${saludo} Hemos registrado tu ubicación con éxito.*\n\n` +
+        `✅ Las coordenadas de tu domicilio han quedado vinculadas a tu reporte${ticketFolio ? ` *#${ticketFolio}*` : ''}.\n\n` +
+        `🗺️ *Ubicación:* ${coordsStr || url || 'Enlace de Google Maps'}\n` +
+        (direccion ? `🏠 *Referencia:* ${direccion}\n\n` : `\n`) +
+        `🚗 Nuestro personal técnico ya cuenta con esta referencia para acudir a tu domicilio a la brevedad. ¡Que tengas un excelente día!`;
+    } else {
+      mensaje =
+        `📍 *${saludo} Hemos registrado tu ubicación con éxito.*\n\n` +
+        `✅ Las coordenadas de tu domicilio han quedado guardadas en tu expediente técnico de servicio.\n\n` +
+        `🗺️ *Ubicación:* ${coordsStr || url || 'Enlace de Google Maps'}\n` +
+        (direccion ? `🏠 *Referencia:* ${direccion}\n\n` : `\n`) +
+        `Esto nos permite georreferenciar tu instalación y optimizar el tiempo de llegada en caso de visitas técnicas o soporte en sitio. 🛠️🚗\n\n` +
+        `¿Hay alguna duda o reporte adicional en el que te podamos apoyar?`;
+    }
 
     await this.enviarYLoguear(
       phone,
       mensaje,
       'UBICACION_REGISTRADA',
-      'UBICACION_GPS_GUARDADA',
+      `UBICACION_GPS_GUARDADA_${ticketFolio || 'OK'}`,
       targetJid
     );
   }
