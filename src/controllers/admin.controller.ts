@@ -1354,6 +1354,34 @@ export class AdminController {
   }
 
   /**
+   * Activa o desactiva un pool de VLAN para asignación por el bot
+   */
+  static async toggleIpamPoolActive(req: Request, res: Response): Promise<void> {
+    try {
+      const vlan = String(req.params.vlan || req.body?.vlan || '').trim();
+      const active = req.body?.active !== false && req.body?.is_active !== 0 && req.body?.is_active !== false;
+      if (!vlan) {
+        res.status(400).json({ success: false, error: 'VLAN requerida' });
+        return;
+      }
+      const ok = await IpamService.toggleVlanPoolActive(vlan, active);
+      if (ok) {
+        res.json({
+          success: true,
+          vlan,
+          isActive: active,
+          message: active ? `Pool VLAN ${vlan} activado para el bot.` : `Pool VLAN ${vlan} pausado (el bot no asignará IPs de este pool).`
+        });
+      } else {
+        res.status(500).json({ success: false, error: 'No se pudo cambiar el estado del pool' });
+      }
+    } catch (error: any) {
+      logger.error(`Error al alternar estado de pool VLAN ${req.params.vlan}:`, error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
    * Elimina un pool de VLAN en IPAM
    */
   static async deleteIpamPool(req: Request, res: Response): Promise<void> {

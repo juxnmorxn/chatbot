@@ -113,6 +113,7 @@ router.post('/api/admin/clients/:id/phones', AdminController.updateClientPhones)
 // ==========================================
 router.get('/api/ipam/pools', AdminController.getIpamPools);
 router.post('/api/ipam/pools', AdminController.saveIpamPool);
+router.post('/api/ipam/pools/:vlan/toggle', AdminController.toggleIpamPoolActive);
 router.delete('/api/ipam/pools/:vlan', AdminController.deleteIpamPool);
 router.post('/api/ipam/pools/auto-discover', AdminController.autoDiscoverIpamPools);
 router.get('/api/ipam/available', AdminController.getIpamAvailable);

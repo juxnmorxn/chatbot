@@ -514,6 +514,48 @@ export function getAdminDashboardHtml(): string {
       border-color: var(--card-border-hover);
     }
 
+    /* Toggle Switch Components */
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 38px;
+      height: 20px;
+    }
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #4b5563;
+      transition: .25s ease-in-out;
+      border-radius: 20px;
+    }
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 14px;
+      width: 14px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: .25s ease-in-out;
+      border-radius: 50%;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+    }
+    input:checked + .slider {
+      background-color: var(--accent-emerald, #10b981);
+    }
+    input:checked + .slider:before {
+      transform: translateX(18px);
+    }
+
     .grid-metrics {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -4069,18 +4111,15 @@ export function getAdminDashboardHtml(): string {
             const subnet = p.segment ?? p.subnet ?? p.name ?? '';
             const gateway = p.gateway || '';
             const olt = p.oltName || 'OLT';
+            const isActive = p.isActive !== false;
             const badgeClass = pct > 85 ? 'badge-danger' : (pct > 60 ? 'badge-warning' : 'badge-success');
-            const safeName = (p.name || '').replace(/'/g, "\\'");
-            const safeSubnet = subnet.replace(/'/g, "\\'");
-            const safeGateway = gateway.replace(/'/g, "\\'");
-            const safeOlt = olt.replace(/'/g, "\\'");
 
             return \`
-              <div class="glass-card" style="background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.08); display: flex; flex-direction: column; justify-content: space-between;">
+              <div class="glass-card" style="background: rgba(0,0,0,0.35); border: 1px solid \${isActive ? 'rgba(255,255,255,0.08)' : 'rgba(239, 68, 68, 0.3)'}; display: flex; flex-direction: column; justify-content: space-between; \${isActive ? '' : 'opacity: 0.88;'}">
                 <div>
                   <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
                     <div>
-                      <div style="font-weight: 700; font-size: 15px; color: var(--accent-cyan);">VLAN \${escapeHtml(p.vlan)}</div>
+                      <div style="font-weight: 700; font-size: 15px; color: \${isActive ? 'var(--accent-cyan)' : 'var(--text-muted)'};">VLAN \${escapeHtml(p.vlan)}</div>
                       <div style="font-size: 12px; color: var(--text-muted);">\${escapeHtml(p.name || subnet)}</div>
                     </div>
                     <span class="badge \${badgeClass}">\${pct}% Ocupado</span>
@@ -4092,8 +4131,27 @@ export function getAdminDashboardHtml(): string {
                     <div>📡 <strong>OLT:</strong> \${escapeHtml(olt)}</div>
                   </div>
 
+                  <!-- Switch de Asignación por el Bot -->
+                  <div style="display: flex; justify-content: space-between; align-items: center; background: \${isActive ? 'rgba(16, 185, 129, 0.08)' : 'rgba(239, 68, 68, 0.08)'}; border: 1px solid \${isActive ? 'rgba(16, 185, 129, 0.25)' : 'rgba(239, 68, 68, 0.25)'}; padding: 7px 10px; border-radius: var(--radius-sm); margin-bottom: 10px;">
+                    <div style="display: flex; align-items: center; gap: 7px;">
+                      <span style="font-size: 13px;">\${isActive ? '🤖' : '⛔'}</span>
+                      <div>
+                        <div style="font-size: 11.5px; font-weight: 700; color: \${isActive ? 'var(--accent-emerald)' : 'var(--accent-rose)'};">
+                          \${isActive ? 'Bot Habilitado' : 'Ignorado por Bot'}
+                        </div>
+                        <div style="font-size: 10px; color: var(--text-dim);">
+                          \${isActive ? 'Asigna IPs automáticamente' : 'Pausado para el bot'}
+                        </div>
+                      </div>
+                    </div>
+                    <label class="switch" title="\${isActive ? 'Desactivar para que el bot ignore esta VLAN' : 'Activar para que el bot use esta VLAN'}">
+                      <input type="checkbox" \${isActive ? 'checked' : ''} onchange="togglePoolBotActive('\${escapeHtml(p.vlan)}', this.checked)">
+                      <span class="slider"></span>
+                    </label>
+                  </div>
+
                   <div style="background: rgba(255,255,255,0.08); height: 8px; border-radius: 4px; overflow: hidden; margin-bottom: 8px;">
-                    <div style="background: linear-gradient(90deg, var(--accent-cyan), var(--primary)); width: \${Math.min(100, pct)}%; height: 100%;"></div>
+                    <div style="background: \${isActive ? 'linear-gradient(90deg, var(--accent-cyan), var(--primary))' : '#6b7280'}; width: \${Math.min(100, pct)}%; height: 100%;"></div>
                   </div>
 
                   <div style="display: flex; justify-content: space-between; font-size: 11.5px; color: var(--text-muted); font-family: var(--font-mono); margin-bottom: 12px;">
@@ -4139,6 +4197,30 @@ export function getAdminDashboardHtml(): string {
         }
       } catch (err) {
         console.error('Error loading IPAM:', err);
+      }
+    }
+
+    async function togglePoolBotActive(vlan, isActive) {
+      try {
+        const res = await apiFetch(\`/api/ipam/pools/\${encodeURIComponent(vlan)}/toggle\`, {
+          method: 'POST',
+          body: JSON.stringify({ active: isActive }),
+        });
+        if (res.success) {
+          showToast(
+            isActive ? 'Pool Habilitado' : 'Pool Ignorado por Bot',
+            isActive ? \`El bot ahora usará la VLAN \${vlan} para asignar IPs.\` : \`El bot ignorará la VLAN \${vlan} (no asignará IPs de este pool).\`,
+            isActive ? 'success' : 'warning',
+            3000
+          );
+          loadIpamData();
+        } else {
+          showToast('Error', res.error || 'No se pudo cambiar el estado del pool.', 'error');
+          loadIpamData();
+        }
+      } catch (err) {
+        showToast('Error', 'Fallo de conexión al alternar el pool.', 'error');
+        loadIpamData();
       }
     }
 

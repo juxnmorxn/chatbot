@@ -14,6 +14,7 @@ export interface VlanSubnetConfig {
   endHost: number; // 253
   oltId: string; // '3'
   oltName: string; // 'OLT5800-Actopan'
+  isActive?: boolean;
   isCustom?: boolean;
 }
 
@@ -41,6 +42,7 @@ export interface PoolSummaryRecord {
   total?: number;
   used?: number;
   free?: number;
+  isActive: boolean;
 }
 
 export class IpamService {
@@ -49,20 +51,20 @@ export class IpamService {
    */
   static readonly DEFAULT_SUBNETS: VlanSubnetConfig[] = [
     // OLT5800-Actopan (VLANs 510 a 620)
-    { vlan: '510', name: '510 - Internet', segment: '172.19.1.0/24', gateway: '172.19.1.254', netmask: '255.255.255.0', startHost: 2, endHost: 253, oltId: '3', oltName: 'OLT5800-Actopan' },
-    { vlan: '520', name: '520 - Internet', segment: '172.19.2.0/24', gateway: '172.19.2.254', netmask: '255.255.255.0', startHost: 2, endHost: 253, oltId: '3', oltName: 'OLT5800-Actopan' },
-    { vlan: '530', name: '530 - Internet', segment: '172.19.3.0/24', gateway: '172.19.3.254', netmask: '255.255.255.0', startHost: 2, endHost: 253, oltId: '3', oltName: 'OLT5800-Actopan' },
-    { vlan: '540', name: '540 - Internet', segment: '172.19.4.0/24', gateway: '172.19.4.254', netmask: '255.255.255.0', startHost: 2, endHost: 253, oltId: '3', oltName: 'OLT5800-Actopan' },
-    { vlan: '550', name: '550 - Internet', segment: '172.19.5.0/24', gateway: '172.19.5.254', netmask: '255.255.255.0', startHost: 2, endHost: 253, oltId: '3', oltName: 'OLT5800-Actopan' },
-    { vlan: '560', name: '560 - Internet', segment: '172.19.6.0/24', gateway: '172.19.6.254', netmask: '255.255.255.0', startHost: 2, endHost: 253, oltId: '3', oltName: 'OLT5800-Actopan' },
-    { vlan: '570', name: '570 - Internet', segment: '172.19.7.0/24', gateway: '172.19.7.254', netmask: '255.255.255.0', startHost: 2, endHost: 253, oltId: '3', oltName: 'OLT5800-Actopan' },
-    { vlan: '580', name: '580 - Internet', segment: '172.19.8.0/24', gateway: '172.19.8.254', netmask: '255.255.255.0', startHost: 2, endHost: 253, oltId: '3', oltName: 'OLT5800-Actopan' },
-    { vlan: '590', name: '590 - Internet', segment: '172.19.9.0/24', gateway: '172.19.9.254', netmask: '255.255.255.0', startHost: 2, endHost: 253, oltId: '3', oltName: 'OLT5800-Actopan' },
-    { vlan: '600', name: '600 - Internet', segment: '172.19.10.0/24', gateway: '172.19.10.254', netmask: '255.255.255.0', startHost: 2, endHost: 253, oltId: '3', oltName: 'OLT5800-Actopan' },
-    { vlan: '610', name: '610 - Internet', segment: '172.19.11.0/24', gateway: '172.19.11.254', netmask: '255.255.255.0', startHost: 2, endHost: 253, oltId: '3', oltName: 'OLT5800-Actopan' },
-    { vlan: '620', name: '620 - Internet', segment: '172.19.12.0/24', gateway: '172.19.12.254', netmask: '255.255.255.0', startHost: 2, endHost: 253, oltId: '3', oltName: 'OLT5800-Actopan' },
+    { vlan: '510', name: '510 - Internet', segment: '172.19.1.0/24', gateway: '172.19.1.254', netmask: '255.255.255.0', startHost: 2, endHost: 253, oltId: '3', oltName: 'OLT5800-Actopan', isActive: true },
+    { vlan: '520', name: '520 - Internet', segment: '172.19.2.0/24', gateway: '172.19.2.254', netmask: '255.255.255.0', startHost: 2, endHost: 253, oltId: '3', oltName: 'OLT5800-Actopan', isActive: true },
+    { vlan: '530', name: '530 - Internet', segment: '172.19.3.0/24', gateway: '172.19.3.254', netmask: '255.255.255.0', startHost: 2, endHost: 253, oltId: '3', oltName: 'OLT5800-Actopan', isActive: true },
+    { vlan: '540', name: '540 - Internet', segment: '172.19.4.0/24', gateway: '172.19.4.254', netmask: '255.255.255.0', startHost: 2, endHost: 253, oltId: '3', oltName: 'OLT5800-Actopan', isActive: true },
+    { vlan: '550', name: '550 - Internet', segment: '172.19.5.0/24', gateway: '172.19.5.254', netmask: '255.255.255.0', startHost: 2, endHost: 253, oltId: '3', oltName: 'OLT5800-Actopan', isActive: true },
+    { vlan: '560', name: '560 - Internet', segment: '172.19.6.0/24', gateway: '172.19.6.254', netmask: '255.255.255.0', startHost: 2, endHost: 253, oltId: '3', oltName: 'OLT5800-Actopan', isActive: true },
+    { vlan: '570', name: '570 - Internet', segment: '172.19.7.0/24', gateway: '172.19.7.254', netmask: '255.255.255.0', startHost: 2, endHost: 253, oltId: '3', oltName: 'OLT5800-Actopan', isActive: true },
+    { vlan: '580', name: '580 - Internet', segment: '172.19.8.0/24', gateway: '172.19.8.254', netmask: '255.255.255.0', startHost: 2, endHost: 253, oltId: '3', oltName: 'OLT5800-Actopan', isActive: true },
+    { vlan: '590', name: '590 - Internet', segment: '172.19.9.0/24', gateway: '172.19.9.254', netmask: '255.255.255.0', startHost: 2, endHost: 253, oltId: '3', oltName: 'OLT5800-Actopan', isActive: true },
+    { vlan: '600', name: '600 - Internet', segment: '172.19.10.0/24', gateway: '172.19.10.254', netmask: '255.255.255.0', startHost: 2, endHost: 253, oltId: '3', oltName: 'OLT5800-Actopan', isActive: true },
+    { vlan: '610', name: '610 - Internet', segment: '172.19.11.0/24', gateway: '172.19.11.254', netmask: '255.255.255.0', startHost: 2, endHost: 253, oltId: '3', oltName: 'OLT5800-Actopan', isActive: true },
+    { vlan: '620', name: '620 - Internet', segment: '172.19.12.0/24', gateway: '172.19.12.254', netmask: '255.255.255.0', startHost: 2, endHost: 253, oltId: '3', oltName: 'OLT5800-Actopan', isActive: true },
     // OLT-SanAgustin (VLAN 800)
-    { vlan: '800', name: '800 - Internet San Agustín', segment: '172.16.80.0/24', gateway: '172.16.80.254', netmask: '255.255.255.0', startHost: 2, endHost: 253, oltId: '2', oltName: 'OLT-SanAgustin' },
+    { vlan: '800', name: '800 - Internet San Agustín', segment: '172.16.80.0/24', gateway: '172.16.80.254', netmask: '255.255.255.0', startHost: 2, endHost: 253, oltId: '2', oltName: 'OLT-SanAgustin', isActive: true },
   ];
 
   /**
@@ -90,7 +92,7 @@ export class IpamService {
            OR segment LIKE '172.19.5%'
       `);
 
-      const res = await client.execute(`SELECT * FROM ipam_vlan_pools WHERE is_active = 1`);
+      const res = await client.execute(`SELECT * FROM ipam_vlan_pools`);
       
       if (res.rows.length === 0) {
         // Inicializar la tabla exclusivamente con los pools oficiales de fibra óptica
@@ -117,6 +119,7 @@ export class IpamService {
           const isActopanRange = !isNaN(vlanNum) && vlanNum >= 510 && vlanNum <= 620;
           const isSanAgustinRange = !isNaN(vlanNum) && vlanNum >= 800 && vlanNum <= 899;
           const isFtthSegment = segment.startsWith('172.19.') || segment.startsWith('172.16.80.');
+          const isActive = row.is_active !== 0 && row.is_active !== '0' && row.is_active !== null;
 
           if ((isActopanRange || isSanAgustinRange) && isFtthSegment) {
             subnetsMap.set(vlan, {
@@ -129,6 +132,7 @@ export class IpamService {
               endHost: Number(row.end_host || 253),
               oltId: String(row.olt_id || (isSanAgustinRange ? '2' : '3')),
               oltName: String(row.olt_name || (isSanAgustinRange ? 'OLT-SanAgustin' : 'OLT5800-Actopan')),
+              isActive,
               isCustom: true,
             });
           }
@@ -145,6 +149,49 @@ export class IpamService {
       if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
       return a.vlan.localeCompare(b.vlan);
     });
+  }
+
+  /**
+   * Activa o desactiva un pool de VLAN para el bot (toggle switch en panel de control).
+   * Cuando isActive es false, el bot ignorará por completo esta VLAN al asignar IPs automáticamente.
+   */
+  static async toggleVlanPoolActive(vlan: string, isActive: boolean): Promise<boolean> {
+    try {
+      const client = getTursoClient();
+      const now = new Date().toISOString();
+      const cleanVlan = String(vlan).trim();
+      const activeInt = isActive ? 1 : 0;
+
+      const existing = await client.execute({
+        sql: `SELECT vlan FROM ipam_vlan_pools WHERE vlan = ?`,
+        args: [cleanVlan],
+      });
+
+      if (existing.rows.length === 0) {
+        const def = this.DEFAULT_SUBNETS.find(s => s.vlan === cleanVlan);
+        if (def) {
+          await client.execute({
+            sql: `
+              INSERT INTO ipam_vlan_pools 
+              (vlan, name, segment, gateway, netmask, start_host, end_host, olt_id, olt_name, is_active, created_at, updated_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `,
+            args: [def.vlan, def.name, def.segment, def.gateway, def.netmask, def.startHost, def.endHost, def.oltId, def.oltName, activeInt, now, now],
+          });
+        }
+      } else {
+        await client.execute({
+          sql: `UPDATE ipam_vlan_pools SET is_active = ?, updated_at = ? WHERE vlan = ?`,
+          args: [activeInt, now, cleanVlan],
+        });
+      }
+
+      logger.info(`[IPAM] Pool VLAN ${cleanVlan} configurado como: ${isActive ? 'ACTIVO (BOT ASIGNA)' : 'IGNORADO (BOT BLOQUEADO)'}`);
+      return true;
+    } catch (err: any) {
+      logger.error(`Error al alternar estado del pool VLAN ${vlan}:`, err?.message || err);
+      return false;
+    }
   }
 
   /**
@@ -321,6 +368,7 @@ export class IpamService {
         total: totalUsable,
         used: usedCount,
         free: availableCount,
+        isActive: conf.isActive !== false,
       });
     }
 
@@ -331,19 +379,24 @@ export class IpamService {
    * Obtiene la siguiente IP libre disponible para aprovisionar un módem.
    * Si se especifica VLAN la intenta primero; si está llena o no se especifica,
    * busca automáticamente en todas las VLANs correspondientes a la OLT.
+   * 
+   * IMPORTANTE: Ignora por completo cualquier pool que haya sido desactivado para el bot (isActive === false).
    */
   static async getNextAvailableIp(vlan?: string, oltId: string = '3'): Promise<{ ip: string; gateway: string; netmask: string; vlan: string; segment: string; oltName: string } | null> {
     const subnets = await this.getAllSubnets();
     const usedIps = await this.getUsedIpsSet();
 
-    // 1. Subredes candidatas según la OLT
+    // 1. Filtrar únicamente subredes HABILITADAS para asignación automática por el bot
+    const activeSubnets = subnets.filter((s) => s.isActive !== false);
+
+    // 2. Subredes candidatas según la OLT
     const targetOltId = String(oltId);
-    let candidates = subnets.filter((s) => s.oltId === targetOltId);
+    let candidates = activeSubnets.filter((s) => s.oltId === targetOltId);
     if (candidates.length === 0) {
-      candidates = subnets;
+      candidates = activeSubnets;
     }
 
-    // Si pidieron una VLAN específica, ponerla como primera prioridad
+    // Si pidieron una VLAN específica y está activa, ponerla como primera prioridad
     if (vlan) {
       const preferred = candidates.find((s) => s.vlan === vlan);
       if (preferred) {
@@ -351,7 +404,7 @@ export class IpamService {
       }
     }
 
-    // 2. Buscar la primera IP libre en las subredes candidatas
+    // 3. Buscar la primera IP libre en las subredes candidatas activas
     for (const conf of candidates) {
       const prefix = conf.segment.replace(/\.0\/24$/, '');
       for (let host = conf.startHost; host <= conf.endHost; host++) {
