@@ -1827,20 +1827,55 @@ export function getAdminDashboardHtml(): string {
 
         <!-- Recent Logs Activity -->
         <div class="glass-card">
-          <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 14px;">Últimas Interacciones del Bot</h3>
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <h3 style="font-size: 15px; font-weight: 700;">Últimas Interacciones del Bot</h3>
+              <span class="badge badge-info" style="font-size: 10px;">Filtros por Columna</span>
+            </div>
+            <button class="btn btn-secondary btn-xs" onclick="loadDashboardData()" title="Refrescar interacciones">
+              🔄 Refrescar
+            </button>
+          </div>
           <div class="table-responsive">
             <table class="data-table">
               <thead>
                 <tr>
-                  <th>Hora</th>
-                  <th>Teléfono</th>
-                  <th>Cliente</th>
-                  <th>Flujo</th>
-                  <th>Mensaje</th>
+                  <th style="min-width: 120px;">Hora</th>
+                  <th style="min-width: 140px;">Teléfono</th>
+                  <th style="min-width: 180px;">Cliente</th>
+                  <th style="min-width: 110px;">Flujo</th>
+                  <th style="min-width: 260px;">Mensaje</th>
+                  <th style="text-align: right; min-width: 80px;">Acción</th>
+                </tr>
+                <tr class="table-filter-row">
+                  <th>
+                    <input type="text" id="filter-log-time" class="table-col-filter" placeholder="Hora..." oninput="filterDashboardLogs()">
+                  </th>
+                  <th>
+                    <input type="text" id="filter-log-phone" class="table-col-filter" placeholder="Teléfono..." oninput="filterDashboardLogs()">
+                  </th>
+                  <th>
+                    <input type="text" id="filter-log-client" class="table-col-filter" placeholder="Cliente..." oninput="filterDashboardLogs()">
+                  </th>
+                  <th>
+                    <select id="filter-log-flow" class="table-col-filter" onchange="filterDashboardLogs()">
+                      <option value="">Todos</option>
+                      <option value="IN">Entrante</option>
+                      <option value="OUT">Saliente</option>
+                    </select>
+                  </th>
+                  <th>
+                    <input type="text" id="filter-log-msg" class="table-col-filter" placeholder="Buscar en texto..." oninput="filterDashboardLogs()">
+                  </th>
+                  <th style="text-align: right;">
+                    <button class="btn btn-secondary btn-xs" onclick="clearDashboardLogsFilter()" title="Limpiar filtros" style="padding: 4px 8px; font-size: 10.5px; width: 100%;">
+                      🧹 Limpiar
+                    </button>
+                  </th>
                 </tr>
               </thead>
               <tbody id="table-recent-logs-body">
-                <tr><td colspan="5" style="text-align: center; color: var(--text-dim);">Cargando interacciones...</td></tr>
+                <tr><td colspan="6" style="text-align: center; color: var(--text-dim);">Cargando interacciones...</td></tr>
               </tbody>
             </table>
           </div>
@@ -2080,17 +2115,21 @@ export function getAdminDashboardHtml(): string {
         </div>
       </section>
 
-      <!-- VIEW 3: KANBAN TICKETS BOARD -->
+      <!-- VIEW 3: KANBAN & TABLE TICKETS BOARD -->
       <section id="view-tickets" class="view-container">
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
           <div>
-            <h3 style="font-size: 16px; font-weight: 700;">Tablero de Soporte Técnico</h3>
-            <p style="font-size: 12px; color: var(--text-muted);">Mueve y asigna técnicos a los folios de servicio.</p>
+            <h3 style="font-size: 16px; font-weight: 700;">Tablero & Listado de Soporte Técnico</h3>
+            <p style="font-size: 12px; color: var(--text-muted);">Gestiona los folios de servicio con filtros por columna y vista Kanban.</p>
           </div>
-          <div style="display: flex; align-items: center; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <div style="display: flex; background: rgba(0,0,0,0.3); border-radius: var(--radius-sm); border: 1px solid var(--card-border); padding: 2px;">
+              <button class="btn btn-primary btn-xs" id="btn-tickets-view-table" onclick="setTicketsDisplayMode('table')">📋 Vista Tabla</button>
+              <button class="btn btn-secondary btn-xs" id="btn-tickets-view-kanban" onclick="setTicketsDisplayMode('kanban')">📊 Vista Kanban</button>
+            </div>
             <button class="btn btn-secondary btn-sm" onclick="loadTicketsData()">
               <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"></path></svg>
-              <span>Recargar Tablero</span>
+              <span>Recargar</span>
             </button>
             <button id="btn-clear-all-tickets" class="btn btn-danger btn-sm" style="display: none;" onclick="confirmClearAllTickets()">
               <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
@@ -2099,8 +2138,72 @@ export function getAdminDashboardHtml(): string {
           </div>
         </div>
 
+        <!-- Tickets Table View with Column Filters -->
+        <div id="tickets-table-container" class="glass-card" style="margin-bottom: 24px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <h4 style="font-size: 14.5px; font-weight: 700;">Directorio de Folios & Tickets</h4>
+              <span class="badge badge-info" style="font-size: 10px;">Filtros por Columna</span>
+            </div>
+            <span id="tickets-count-label" style="font-size: 12px; color: var(--text-muted);">Cargando tickets...</span>
+          </div>
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="min-width: 100px;">Folio</th>
+                  <th style="min-width: 180px;">Cliente</th>
+                  <th style="min-width: 140px;">Teléfono</th>
+                  <th style="min-width: 220px;">Problema / Asunto</th>
+                  <th style="min-width: 130px;">Estado</th>
+                  <th style="min-width: 150px;">Técnico Asignado</th>
+                  <th style="min-width: 130px;">Fecha</th>
+                  <th style="text-align: right; min-width: 100px;">Acciones</th>
+                </tr>
+                <tr class="table-filter-row">
+                  <th>
+                    <input type="text" id="filter-ticket-folio" class="table-col-filter" placeholder="# Folio..." oninput="filterTicketsTable()">
+                  </th>
+                  <th>
+                    <input type="text" id="filter-ticket-client" class="table-col-filter" placeholder="Cliente..." oninput="filterTicketsTable()">
+                  </th>
+                  <th>
+                    <input type="text" id="filter-ticket-phone" class="table-col-filter" placeholder="Teléfono..." oninput="filterTicketsTable()">
+                  </th>
+                  <th>
+                    <input type="text" id="filter-ticket-subject" class="table-col-filter" placeholder="Asunto o falla..." oninput="filterTicketsTable()">
+                  </th>
+                  <th>
+                    <select id="filter-ticket-status" class="table-col-filter" onchange="filterTicketsTable()">
+                      <option value="">Todos</option>
+                      <option value="ABIERTO">Abierto</option>
+                      <option value="EN_PROCESO">En Proceso</option>
+                      <option value="VISITA_TECNICA">Visita Técnica</option>
+                      <option value="RESUELTO">Resuelto</option>
+                    </select>
+                  </th>
+                  <th>
+                    <input type="text" id="filter-ticket-tech" class="table-col-filter" placeholder="Técnico..." oninput="filterTicketsTable()">
+                  </th>
+                  <th>
+                    <input type="text" id="filter-ticket-date" class="table-col-filter" placeholder="Fecha..." oninput="filterTicketsTable()">
+                  </th>
+                  <th style="text-align: right;">
+                    <button class="btn btn-secondary btn-xs" onclick="clearTicketsTableFilters()" title="Limpiar filtros" style="padding: 4px 8px; font-size: 10.5px; width: 100%;">
+                      🧹 Limpiar
+                    </button>
+                  </th>
+                </tr>
+              </thead>
+              <tbody id="table-tickets-body">
+                <tr><td colspan="8" style="text-align: center; color: var(--text-dim); padding: 20px;">Cargando tickets...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
 
-        <div class="kanban-board">
+        <!-- Kanban Board View -->
+        <div id="tickets-kanban-container" class="kanban-board" style="display: none;">
           <div class="kanban-column">
             <div class="kanban-col-header" style="border-top: 3px solid var(--accent-amber);">
               <span>ABIERTOS</span>
@@ -2159,9 +2262,9 @@ export function getAdminDashboardHtml(): string {
 
         <div class="glass-card">
           <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
-            <div>
+            <div style="display: flex; align-items: center; gap: 8px;">
               <h3 style="font-size: 15px; font-weight: 700;">ONUs Nuevas Sin Configurar en SmartOLT</h3>
-              <p style="font-size: 12px; color: var(--text-muted);">Detectadas en el PON para activación y asignación de IP.</p>
+              <span class="badge badge-info" style="font-size: 10px;">Filtros por Columna</span>
             </div>
             <button class="btn btn-secondary btn-sm" onclick="loadIpamData()">
               <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"></path></svg>
@@ -2172,11 +2275,30 @@ export function getAdminDashboardHtml(): string {
             <table class="data-table">
               <thead>
                 <tr>
-                  <th>OLT</th>
-                  <th>PON</th>
-                  <th>Serial (SN)</th>
-                  <th>Modelo</th>
-                  <th>Acción</th>
+                  <th style="min-width: 140px;">OLT</th>
+                  <th style="min-width: 110px;">PON</th>
+                  <th style="min-width: 180px;">Serial (SN)</th>
+                  <th style="min-width: 140px;">Modelo</th>
+                  <th style="text-align: right; min-width: 120px;">Acción</th>
+                </tr>
+                <tr class="table-filter-row">
+                  <th>
+                    <input type="text" id="filter-pon-olt" class="table-col-filter" placeholder="OLT..." oninput="filterUnconfiguredOnus()">
+                  </th>
+                  <th>
+                    <input type="text" id="filter-pon-port" class="table-col-filter" placeholder="PON..." oninput="filterUnconfiguredOnus()">
+                  </th>
+                  <th>
+                    <input type="text" id="filter-pon-sn" class="table-col-filter" placeholder="Serial / SN..." oninput="filterUnconfiguredOnus()">
+                  </th>
+                  <th>
+                    <input type="text" id="filter-pon-model" class="table-col-filter" placeholder="Modelo..." oninput="filterUnconfiguredOnus()">
+                  </th>
+                  <th style="text-align: right;">
+                    <button class="btn btn-secondary btn-xs" onclick="clearUnconfiguredOnusFilters()" title="Limpiar filtros" style="padding: 4px 8px; font-size: 10.5px; width: 100%;">
+                      🧹 Limpiar
+                    </button>
+                  </th>
                 </tr>
               </thead>
               <tbody id="table-unconfigured-onus-body">
@@ -2200,7 +2322,9 @@ export function getAdminDashboardHtml(): string {
               <button class="btn btn-secondary btn-sm" onclick="setAuditFilter('only_olt', this)">Solo SmartOLT</button>
               <button class="btn btn-secondary btn-sm" onclick="setAuditFilter('only_wisphub', this)">Solo WispHub</button>
             </div>
-            <input type="text" id="audit-search-input" class="form-control" style="max-width: 260px;" placeholder="Buscar por cliente, IP, folio o SN..." oninput="handleAuditSearch(this.value)">
+            <button class="btn btn-secondary btn-sm" onclick="clearAuditColFilters()" title="Limpiar todas las columnas">
+              🧹 Limpiar Filtros
+            </button>
           </div>
         </div>
 
@@ -2209,15 +2333,58 @@ export function getAdminDashboardHtml(): string {
             <table class="data-table">
               <thead>
                 <tr>
-                  <th>Cliente</th>
-                  <th>Servicio / Folio</th>
-                  <th>IP SmartOLT</th>
-                  <th>IP WispHub</th>
-                  <th>Estado IP</th>
-                  <th>TR-069</th>
-                  <th>IPv6</th>
-                  <th>Plan WispHub</th>
-                  <th>Acción</th>
+                  <th style="min-width: 180px;">Cliente</th>
+                  <th style="min-width: 130px;">Servicio / Folio</th>
+                  <th style="min-width: 130px;">IP SmartOLT</th>
+                  <th style="min-width: 130px;">IP WispHub</th>
+                  <th style="min-width: 110px;">Estado IP</th>
+                  <th style="min-width: 110px;">TR-069</th>
+                  <th style="min-width: 110px;">IPv6</th>
+                  <th style="min-width: 140px;">Plan WispHub</th>
+                  <th style="text-align: right; min-width: 100px;">Acción</th>
+                </tr>
+                <tr class="table-filter-row">
+                  <th>
+                    <input type="text" id="filter-audit-client" class="table-col-filter" placeholder="Cliente..." oninput="handleAuditColFilter()">
+                  </th>
+                  <th>
+                    <input type="text" id="filter-audit-srv" class="table-col-filter" placeholder="Servicio..." oninput="handleAuditColFilter()">
+                  </th>
+                  <th>
+                    <input type="text" id="filter-audit-ip-olt" class="table-col-filter" placeholder="IP SmartOLT..." oninput="handleAuditColFilter()">
+                  </th>
+                  <th>
+                    <input type="text" id="filter-audit-ip-wisp" class="table-col-filter" placeholder="IP WispHub..." oninput="handleAuditColFilter()">
+                  </th>
+                  <th>
+                    <select id="filter-audit-ip-status" class="table-col-filter" onchange="handleAuditColFilter()">
+                      <option value="">Todos</option>
+                      <option value="MATCH">Match</option>
+                      <option value="MISMATCH">Discrepancia</option>
+                    </select>
+                  </th>
+                  <th>
+                    <select id="filter-audit-tr069" class="table-col-filter" onchange="handleAuditColFilter()">
+                      <option value="">Todos</option>
+                      <option value="ACTIVE">Activo</option>
+                      <option value="INACTIVE">Inactivo</option>
+                    </select>
+                  </th>
+                  <th>
+                    <select id="filter-audit-ipv6" class="table-col-filter" onchange="handleAuditColFilter()">
+                      <option value="">Todos</option>
+                      <option value="ACTIVE">Dual Stack</option>
+                      <option value="INACTIVE">Solo IPv4</option>
+                    </select>
+                  </th>
+                  <th>
+                    <input type="text" id="filter-audit-plan" class="table-col-filter" placeholder="Plan..." oninput="handleAuditColFilter()">
+                  </th>
+                  <th style="text-align: right;">
+                    <button class="btn btn-secondary btn-xs" onclick="clearAuditColFilters()" title="Limpiar filtros" style="padding: 4px 8px; font-size: 10.5px; width: 100%;">
+                      🧹 Limpiar
+                    </button>
+                  </th>
                 </tr>
               </thead>
               <tbody id="table-audit-body">
@@ -2292,7 +2459,9 @@ export function getAdminDashboardHtml(): string {
               <button class="btn btn-success btn-sm" onclick="setProvFilter('ready', this)">Completados (100%)</button>
               <button class="btn btn-secondary btn-sm" onclick="setProvFilter('all', this)">Todas las ONUs</button>
             </div>
-            <input type="text" id="prov-search-input" class="form-control" style="max-width: 260px;" placeholder="Buscar cliente, SN, IP o Zona..." oninput="handleProvSearch(this.value)">
+            <button class="btn btn-secondary btn-sm" onclick="clearProvColFilters()" title="Limpiar todos los filtros">
+              🧹 Limpiar Filtros
+            </button>
           </div>
         </div>
 
@@ -2301,13 +2470,46 @@ export function getAdminDashboardHtml(): string {
             <table class="data-table">
               <thead>
                 <tr>
-                  <th>Cliente</th>
-                  <th>Serial (SN)</th>
-                  <th>IP WAN</th>
-                  <th>Zona / OLT</th>
-                  <th>Estado TR-069</th>
-                  <th>Estado IPv6</th>
-                  <th>Acción</th>
+                  <th style="min-width: 180px;">Cliente</th>
+                  <th style="min-width: 150px;">Serial (SN)</th>
+                  <th style="min-width: 140px;">IP WAN</th>
+                  <th style="min-width: 140px;">Zona / OLT</th>
+                  <th style="min-width: 120px;">Estado TR-069</th>
+                  <th style="min-width: 120px;">Estado IPv6</th>
+                  <th style="text-align: right; min-width: 100px;">Acción</th>
+                </tr>
+                <tr class="table-filter-row">
+                  <th>
+                    <input type="text" id="filter-prov-client" class="table-col-filter" placeholder="Cliente..." oninput="handleProvColFilter()">
+                  </th>
+                  <th>
+                    <input type="text" id="filter-prov-sn" class="table-col-filter" placeholder="SN ONU..." oninput="handleProvColFilter()">
+                  </th>
+                  <th>
+                    <input type="text" id="filter-prov-ip" class="table-col-filter" placeholder="IP WAN..." oninput="handleProvColFilter()">
+                  </th>
+                  <th>
+                    <input type="text" id="filter-prov-zone" class="table-col-filter" placeholder="Zona / OLT..." oninput="handleProvColFilter()">
+                  </th>
+                  <th>
+                    <select id="filter-prov-tr069" class="table-col-filter" onchange="handleProvColFilter()">
+                      <option value="">Todos</option>
+                      <option value="ACTIVE">Configurado</option>
+                      <option value="INACTIVE">Falta TR-069</option>
+                    </select>
+                  </th>
+                  <th>
+                    <select id="filter-prov-ipv6" class="table-col-filter" onchange="handleProvColFilter()">
+                      <option value="">Todos</option>
+                      <option value="ACTIVE">Dual Stack</option>
+                      <option value="INACTIVE">Falta IPv6</option>
+                    </select>
+                  </th>
+                  <th style="text-align: right;">
+                    <button class="btn btn-secondary btn-xs" onclick="clearProvColFilters()" title="Limpiar filtros" style="padding: 4px 8px; font-size: 10.5px; width: 100%;">
+                      🧹 Limpiar
+                    </button>
+                  </th>
                 </tr>
               </thead>
               <tbody id="table-prov-body">
@@ -2327,7 +2529,7 @@ export function getAdminDashboardHtml(): string {
 
       <!-- VIEW 6: TÉCNICOS & PINS -->
       <section id="view-technicians" class="view-container">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
           <div>
             <h3 style="font-size: 16px; font-weight: 700;">Técnicos de Campo Autorizados</h3>
             <p style="font-size: 12px; color: var(--text-muted);">Gestiona los PINs de 5 dígitos para consultas y diagnósticos en WhatsApp.</p>
@@ -2343,12 +2545,42 @@ export function getAdminDashboardHtml(): string {
             <table class="data-table">
               <thead>
                 <tr>
-                  <th>Nombre</th>
-                  <th>Teléfono WhatsApp</th>
-                  <th>PIN (5 Dígitos)</th>
-                  <th>Rol</th>
-                  <th>Estado</th>
-                  <th>Acciones</th>
+                  <th style="min-width: 180px;">Nombre</th>
+                  <th style="min-width: 150px;">Teléfono WhatsApp</th>
+                  <th style="min-width: 110px;">PIN (5 Dígitos)</th>
+                  <th style="min-width: 120px;">Rol</th>
+                  <th style="min-width: 110px;">Estado</th>
+                  <th style="text-align: right; min-width: 100px;">Acciones</th>
+                </tr>
+                <tr class="table-filter-row">
+                  <th>
+                    <input type="text" id="filter-tech-name" class="table-col-filter" placeholder="Nombre técnico..." oninput="filterTechniciansTable()">
+                  </th>
+                  <th>
+                    <input type="text" id="filter-tech-phone" class="table-col-filter" placeholder="Teléfono..." oninput="filterTechniciansTable()">
+                  </th>
+                  <th>
+                    <input type="text" id="filter-tech-pin" class="table-col-filter" placeholder="PIN..." oninput="filterTechniciansTable()">
+                  </th>
+                  <th>
+                    <select id="filter-tech-role" class="table-col-filter" onchange="filterTechniciansTable()">
+                      <option value="">Todos los roles</option>
+                      <option value="tecnico">Técnico</option>
+                      <option value="supervisor">Supervisor</option>
+                    </select>
+                  </th>
+                  <th>
+                    <select id="filter-tech-status" class="table-col-filter" onchange="filterTechniciansTable()">
+                      <option value="">Todos</option>
+                      <option value="ACTIVO">Activo</option>
+                      <option value="INACTIVO">Inactivo</option>
+                    </select>
+                  </th>
+                  <th style="text-align: right;">
+                    <button class="btn btn-secondary btn-xs" onclick="clearTechniciansFilters()" title="Limpiar filtros" style="padding: 4px 8px; font-size: 10.5px; width: 100%;">
+                      🧹 Limpiar
+                    </button>
+                  </th>
                 </tr>
               </thead>
               <tbody id="table-technicians-body">
@@ -2491,18 +2723,54 @@ export function getAdminDashboardHtml(): string {
             <table class="data-table">
               <thead>
                 <tr>
-                  <th>Fecha</th>
-                  <th>Cliente</th>
-                  <th>Módem Retirado (Old SN)</th>
-                  <th>Nuevo Módem (New SN)</th>
-                  <th>IP / VLAN</th>
-                  <th>Zona</th>
-                  <th>Técnico / Responsable</th>
-                  <th>Estado</th>
+                  <th style="min-width: 130px;">Fecha</th>
+                  <th style="min-width: 170px;">Cliente</th>
+                  <th style="min-width: 140px;">Módem Retirado (Old SN)</th>
+                  <th style="min-width: 140px;">Nuevo Módem (New SN)</th>
+                  <th style="min-width: 130px;">IP / VLAN</th>
+                  <th style="min-width: 120px;">Zona</th>
+                  <th style="min-width: 140px;">Técnico / Responsable</th>
+                  <th style="min-width: 110px;">Estado</th>
+                  <th style="text-align: right; min-width: 90px;">Acción</th>
+                </tr>
+                <tr class="table-filter-row">
+                  <th>
+                    <input type="text" id="filter-swap-date" class="table-col-filter" placeholder="Fecha..." oninput="filterSwapHistoryTable()">
+                  </th>
+                  <th>
+                    <input type="text" id="filter-swap-client" class="table-col-filter" placeholder="Cliente..." oninput="filterSwapHistoryTable()">
+                  </th>
+                  <th>
+                    <input type="text" id="filter-swap-oldsn" class="table-col-filter" placeholder="Old SN..." oninput="filterSwapHistoryTable()">
+                  </th>
+                  <th>
+                    <input type="text" id="filter-swap-newsn" class="table-col-filter" placeholder="New SN..." oninput="filterSwapHistoryTable()">
+                  </th>
+                  <th>
+                    <input type="text" id="filter-swap-ip" class="table-col-filter" placeholder="IP / VLAN..." oninput="filterSwapHistoryTable()">
+                  </th>
+                  <th>
+                    <input type="text" id="filter-swap-zone" class="table-col-filter" placeholder="Zona..." oninput="filterSwapHistoryTable()">
+                  </th>
+                  <th>
+                    <input type="text" id="filter-swap-tech" class="table-col-filter" placeholder="Técnico..." oninput="filterSwapHistoryTable()">
+                  </th>
+                  <th>
+                    <select id="filter-swap-status" class="table-col-filter" onchange="filterSwapHistoryTable()">
+                      <option value="">Todos</option>
+                      <option value="COMPLETADO">Completado</option>
+                      <option value="ERROR">Error</option>
+                    </select>
+                  </th>
+                  <th style="text-align: right;">
+                    <button class="btn btn-secondary btn-xs" onclick="clearSwapHistoryFilters()" title="Limpiar filtros" style="padding: 4px 8px; font-size: 10.5px; width: 100%;">
+                      🧹 Limpiar
+                    </button>
+                  </th>
                 </tr>
               </thead>
               <tbody id="table-swap-history-body">
-                <tr><td colspan="8" style="text-align: center; color: var(--text-dim);">Cargando historial...</td></tr>
+                <tr><td colspan="9" style="text-align: center; color: var(--text-dim);">Cargando historial...</td></tr>
               </tbody>
             </table>
           </div>
@@ -2797,11 +3065,36 @@ export function getAdminDashboardHtml(): string {
             <table class="data-table">
               <thead>
                 <tr>
-                  <th>Usuario</th>
-                  <th>Nombre Completo</th>
-                  <th>Rol</th>
-                  <th>Último Ingreso</th>
-                  <th>Acciones</th>
+                  <th style="min-width: 140px;">Usuario</th>
+                  <th style="min-width: 180px;">Nombre Completo</th>
+                  <th style="min-width: 120px;">Rol</th>
+                  <th style="min-width: 140px;">Último Ingreso</th>
+                  <th style="text-align: right; min-width: 90px;">Acciones</th>
+                </tr>
+                <tr class="table-filter-row">
+                  <th>
+                    <input type="text" id="filter-user-name" class="table-col-filter" placeholder="Usuario..." oninput="filterAdminUsersTable()">
+                  </th>
+                  <th>
+                    <input type="text" id="filter-user-fullname" class="table-col-filter" placeholder="Nombre completo..." oninput="filterAdminUsersTable()">
+                  </th>
+                  <th>
+                    <select id="filter-user-role" class="table-col-filter" onchange="filterAdminUsersTable()">
+                      <option value="">Todos</option>
+                      <option value="superadmin">Superadmin</option>
+                      <option value="soporte">Soporte</option>
+                      <option value="tecnico">Técnico</option>
+                      <option value="facturacion">Facturación</option>
+                    </select>
+                  </th>
+                  <th>
+                    <input type="text" id="filter-user-login" class="table-col-filter" placeholder="Fecha / Ingreso..." oninput="filterAdminUsersTable()">
+                  </th>
+                  <th style="text-align: right;">
+                    <button class="btn btn-secondary btn-xs" onclick="clearAdminUsersFilters()" title="Limpiar filtros" style="padding: 4px 8px; font-size: 10.5px; width: 100%;">
+                      🧹 Limpiar
+                    </button>
+                  </th>
                 </tr>
               </thead>
               <tbody id="table-admin-users-body">
@@ -2827,11 +3120,15 @@ export function getAdminDashboardHtml(): string {
       whatsappAreas: [],
       whatsappInstances: [],
       tickets: [],
+      ticketsDisplayMode: 'table',
+      dashboardLogs: [],
+      unconfiguredOnus: [],
       clients: { filter: 'ALL', search: '', colFilters: {}, page: 1, limit: 25, total: 0, items: [] },
-      audit: { filter: 'all', search: '', page: 1, limit: 30, total: 0 },
-      provisioning: { filter: 'pending', search: '', page: 1, limit: 30, total: 0 },
+      audit: { filter: 'all', search: '', colFilters: {}, page: 1, limit: 30, total: 0, items: [] },
+      provisioning: { filter: 'pending', search: '', colFilters: {}, page: 1, limit: 30, total: 0, items: [] },
       technicians: [],
       adminUsers: [],
+      swapHistory: [],
       outages: [],
       isSidebarCollapsed: false,
     };
@@ -3218,7 +3515,7 @@ export function getAdminDashboardHtml(): string {
           apiFetch('/api/smartolt/stats').catch(() => ({ stats: { count: 0, total_onus: 0 } })),
           apiFetch('/api/wisphub/stats').catch(() => ({ stats: { count: 0, total: 0 } })),
           apiFetch('/api/tickets/stats').catch(() => ({ stats: { total: 0, abiertos: 0 } })),
-          apiFetch('/api/logs?limit=8').catch(() => ({ logs: [] })),
+          apiFetch('/api/logs?limit=50').catch(() => ({ logs: [] })),
         ]);
 
         const onusCount = smartRes.stats?.count ?? smartRes.stats?.total_onus ?? 0;
@@ -3233,24 +3530,71 @@ export function getAdminDashboardHtml(): string {
         document.getElementById('metric-tickets').innerText = Number(ticketsTotal).toLocaleString();
         document.getElementById('metric-tickets-footer').innerText = \`\${ticketsOpen} abiertos / pendientes\`;
 
-        // Render Logs
-        const tbody = document.getElementById('table-recent-logs-body');
-        if (logsRes.logs && logsRes.logs.length > 0) {
-          tbody.innerHTML = logsRes.logs.map(l => \`
-            <tr>
-              <td style="font-family: var(--font-mono); font-size: 11px; color: var(--text-dim);">\${new Date(l.created_at).toLocaleTimeString()}</td>
-              <td style="font-family: var(--font-mono); font-weight: 600;">\${l.phone}</td>
-              <td>\${l.client_name || '<span style="color: var(--text-dim);">Desconocido</span>'}</td>
-              <td><span class="badge \${l.direction === 'IN' ? 'badge-info' : 'badge-purple'}">\${l.direction === 'IN' ? 'Entrante' : 'Saliente'}</span></td>
-              <td style="max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">\${escapeHtml(l.message)}</td>
-            </tr>
-          \`).join('');
-        } else {
-          tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-dim);">Sin registros recientes.</td></tr>';
-        }
+        // Store & Render Logs
+        state.dashboardLogs = logsRes.logs || [];
+        filterDashboardLogs();
       } catch (err) {
         console.error('Error loading dashboard:', err);
       }
+    }
+
+    function renderDashboardLogs(logs) {
+      const tbody = document.getElementById('table-recent-logs-body');
+      if (!tbody) return;
+      if (!logs || logs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-dim); padding: 20px;">No se encontraron interacciones con los filtros aplicados.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = logs.map(l => {
+        const phone = l.phone ? String(l.phone).replace(/\\D/g, '') : '';
+        return \`
+          <tr>
+            <td style="font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); white-space: nowrap;">\${new Date(l.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</td>
+            <td style="font-family: var(--font-mono); font-weight: 600;">\${phone || l.phone || '--'}</td>
+            <td>\${l.client_name || '<span style="color: var(--text-dim);">Desconocido</span>'}</td>
+            <td><span class="badge \${l.direction === 'IN' ? 'badge-info' : 'badge-purple'}">\${l.direction === 'IN' ? 'Entrante' : 'Saliente'}</span></td>
+            <td style="max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="\${escapeHtml(l.message)}">\${escapeHtml(l.message)}</td>
+            <td style="text-align: right;">
+              \${phone ? \`
+                <button class="btn btn-secondary btn-xs" onclick="selectChat('\${phone}'); navigateTo('live-chat');" title="Abrir Chat WhatsApp">
+                  💬 Chat
+                </button>
+              \` : ''}
+            </td>
+          </tr>
+        \`;
+      }).join('');
+    }
+
+    function filterDashboardLogs() {
+      const fTime = (document.getElementById('filter-log-time')?.value || '').toLowerCase().trim();
+      const fPhone = (document.getElementById('filter-log-phone')?.value || '').toLowerCase().trim();
+      const fClient = (document.getElementById('filter-log-client')?.value || '').toLowerCase().trim();
+      const fFlow = (document.getElementById('filter-log-flow')?.value || '').toUpperCase().trim();
+      const fMsg = (document.getElementById('filter-log-msg')?.value || '').toLowerCase().trim();
+
+      const filtered = (state.dashboardLogs || []).filter(l => {
+        if (fTime) {
+          const timeStr = new Date(l.created_at).toLocaleTimeString().toLowerCase();
+          if (!timeStr.includes(fTime)) return false;
+        }
+        if (fPhone && !String(l.phone || '').toLowerCase().includes(fPhone)) return false;
+        if (fClient && !String(l.client_name || '').toLowerCase().includes(fClient)) return false;
+        if (fFlow && String(l.direction || '').toUpperCase() !== fFlow) return false;
+        if (fMsg && !String(l.message || '').toLowerCase().includes(fMsg)) return false;
+        return true;
+      });
+
+      renderDashboardLogs(filtered);
+    }
+
+    function clearDashboardLogsFilter() {
+      const ids = ['filter-log-time', 'filter-log-phone', 'filter-log-client', 'filter-log-flow', 'filter-log-msg'];
+      ids.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+      });
+      renderDashboardLogs(state.dashboardLogs);
     }
 
     // Outages (Caídas Masivas y Contingencia por Zona)
@@ -4058,15 +4402,146 @@ export function getAdminDashboardHtml(): string {
     }
 
 
-    // Tickets Kanban Module
+    // Tickets Module (Table & Kanban)
+    function setTicketsDisplayMode(mode) {
+      state.ticketsDisplayMode = mode;
+      const tblCont = document.getElementById('tickets-table-container');
+      const kanCont = document.getElementById('tickets-kanban-container');
+      const btnTbl = document.getElementById('btn-tickets-view-table');
+      const btnKan = document.getElementById('btn-tickets-view-kanban');
+
+      if (mode === 'kanban') {
+        if (tblCont) tblCont.style.display = 'none';
+        if (kanCont) kanCont.style.display = 'grid';
+        if (btnTbl) { btnTbl.classList.remove('btn-primary'); btnTbl.classList.add('btn-secondary'); }
+        if (btnKan) { btnKan.classList.remove('btn-secondary'); btnKan.classList.add('btn-primary'); }
+      } else {
+        if (tblCont) tblCont.style.display = 'block';
+        if (kanCont) kanCont.style.display = 'none';
+        if (btnTbl) { btnTbl.classList.remove('btn-secondary'); btnTbl.classList.add('btn-primary'); }
+        if (btnKan) { btnKan.classList.remove('btn-primary'); btnKan.classList.add('btn-secondary'); }
+      }
+    }
+
     async function loadTicketsData() {
       try {
-        const res = await apiFetch('/api/tickets?limit=100');
+        const res = await apiFetch('/api/tickets?limit=150');
         state.tickets = res.tickets || [];
         renderKanbanBoard(state.tickets);
+        filterTicketsTable();
       } catch (err) {
         console.error('Error loading tickets:', err);
       }
+    }
+
+    function renderTicketsTable(tickets) {
+      const tbody = document.getElementById('table-tickets-body');
+      const countLabel = document.getElementById('tickets-count-label');
+      if (countLabel) {
+        countLabel.innerText = \`Total: \${tickets.length} tickets\`;
+      }
+      if (!tbody) return;
+
+      if (!tickets || tickets.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--text-dim); padding: 24px;">No se encontraron tickets con los filtros aplicados.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = tickets.map(t => {
+        const status = (t.status || 'ABIERTO').toUpperCase();
+        let statusBadge = '<span class="badge badge-warning">Abierto</span>';
+        if (status === 'EN_PROCESO') statusBadge = '<span class="badge badge-info">En Proceso</span>';
+        if (status === 'VISITA_TECNICA') statusBadge = '<span class="badge badge-purple">Visita Técnica</span>';
+        if (status === 'RESUELTO') statusBadge = '<span class="badge badge-success">Resuelto</span>';
+        if (status === 'CANCELADO') statusBadge = '<span class="badge badge-danger">Cancelado</span>';
+
+        const phone = t.phone ? String(t.phone).replace(/\\D/g, '') : '';
+
+        return \`
+          <tr>
+            <td><strong style="font-family: var(--font-mono); color: var(--accent-cyan); font-size: 13px;">#\${escapeHtml(t.folio || t.id || '')}</strong></td>
+            <td>
+              <div style="font-weight: 700; color: #fff;">\${escapeHtml(t.client_name || 'Desconocido')}</div>
+              \${t.onu_id ? \`<div style="font-size: 11px; color: var(--text-dim); font-family: var(--font-mono);">ONU: \${escapeHtml(t.onu_id)}</div>\` : ''}
+            </td>
+            <td>
+              \${phone ? \`
+                <div style="display: flex; align-items: center; gap: 4px;">
+                  <span class="badge badge-success" style="font-family: var(--font-mono); font-size: 11px; padding: 2px 6px; cursor: pointer;" onclick="selectChat('\${phone}'); navigateTo('live-chat');">
+                    📱 \${phone}
+                  </span>
+                </div>
+              \` : '<span style="color: var(--text-dim);">--</span>'}
+            </td>
+            <td>
+              <div style="max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500;" title="\${escapeHtml(t.issue_summary || '')}">
+                \${escapeHtml(t.issue_summary || 'Sin descripción')}
+              </div>
+            </td>
+            <td>\${statusBadge}</td>
+            <td>
+              \${t.assigned_technician_name ? \`
+                <span class="badge badge-info" style="font-size: 11px;">🔧 \${escapeHtml(t.assigned_technician_name)}</span>
+              \` : '<span style="color: var(--text-dim); font-size: 11.5px;">Sin asignar</span>'}
+            </td>
+            <td style="font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); white-space: nowrap;">
+              \${formatShortDate(t.created_at)}
+            </td>
+            <td style="text-align: right;">
+              <div style="display: flex; gap: 6px; justify-content: flex-end;">
+                <button class="btn btn-secondary btn-xs" onclick='openTicketDetailModal(\${JSON.stringify(t).replace(/'/g, "&apos;")})' title="Ver expediente y cambiar estado">
+                  ✏️ Gestionar
+                </button>
+                \${phone ? \`
+                  <button class="btn btn-primary btn-xs" onclick="selectChat('\${phone}'); navigateTo('live-chat');" title="Abrir Chat WhatsApp">
+                    💬
+                  </button>
+                \` : ''}
+              </div>
+            </td>
+          </tr>
+        \`;
+      }).join('');
+    }
+
+    function filterTicketsTable() {
+      const fFolio = (document.getElementById('filter-ticket-folio')?.value || '').toLowerCase().trim();
+      const fClient = (document.getElementById('filter-ticket-client')?.value || '').toLowerCase().trim();
+      const fPhone = (document.getElementById('filter-ticket-phone')?.value || '').toLowerCase().trim();
+      const fSubject = (document.getElementById('filter-ticket-subject')?.value || '').toLowerCase().trim();
+      const fStatus = (document.getElementById('filter-ticket-status')?.value || '').toUpperCase().trim();
+      const fTech = (document.getElementById('filter-ticket-tech')?.value || '').toLowerCase().trim();
+      const fDate = (document.getElementById('filter-ticket-date')?.value || '').toLowerCase().trim();
+
+      const filtered = (state.tickets || []).filter(t => {
+        if (fFolio && !String(t.folio || '').toLowerCase().includes(fFolio)) return false;
+        if (fClient && !String(t.client_name || '').toLowerCase().includes(fClient)) return false;
+        if (fPhone && !String(t.phone || '').toLowerCase().includes(fPhone)) return false;
+        if (fSubject && !String(t.issue_summary || '').toLowerCase().includes(fSubject)) return false;
+        if (fStatus && String(t.status || '').toUpperCase() !== fStatus) return false;
+        if (fTech && !String(t.assigned_technician_name || '').toLowerCase().includes(fTech)) return false;
+        if (fDate && !String(formatShortDate(t.created_at)).toLowerCase().includes(fDate)) return false;
+        return true;
+      });
+
+      renderTicketsTable(filtered);
+    }
+
+    function clearTicketsTableFilters() {
+      const ids = [
+        'filter-ticket-folio',
+        'filter-ticket-client',
+        'filter-ticket-phone',
+        'filter-ticket-subject',
+        'filter-ticket-status',
+        'filter-ticket-tech',
+        'filter-ticket-date'
+      ];
+      ids.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+      });
+      renderTicketsTable(state.tickets);
     }
 
     function renderKanbanBoard(tickets) {
@@ -4078,11 +4553,12 @@ export function getAdminDashboardHtml(): string {
       };
 
       const counts = { 'ABIERTO': 0, 'EN_PROCESO': 0, 'VISITA_TECNICA': 0, 'RESUELTO': 0 };
-      Object.values(cols).forEach(c => c.innerHTML = '');
+      Object.values(cols).forEach(c => { if (c) c.innerHTML = ''; });
 
       tickets.forEach(t => {
         const status = (t.status || 'ABIERTO').toUpperCase();
         const targetCol = cols[status] || cols['ABIERTO'];
+        if (!targetCol) return;
         counts[status] = (counts[status] || 0) + 1;
 
         const card = document.createElement('div');
@@ -4105,10 +4581,14 @@ export function getAdminDashboardHtml(): string {
         targetCol.appendChild(card);
       });
 
-      document.getElementById('badge-count-abierto').innerText = counts['ABIERTO'] || 0;
-      document.getElementById('badge-count-proceso').innerText = counts['EN_PROCESO'] || 0;
-      document.getElementById('badge-count-visita').innerText = counts['VISITA_TECNICA'] || 0;
-      document.getElementById('badge-count-resuelto').innerText = counts['RESUELTO'] || 0;
+      const bAbierto = document.getElementById('badge-count-abierto');
+      if (bAbierto) bAbierto.innerText = counts['ABIERTO'] || 0;
+      const bProceso = document.getElementById('badge-count-proceso');
+      if (bProceso) bProceso.innerText = counts['EN_PROCESO'] || 0;
+      const bVisita = document.getElementById('badge-count-visita');
+      if (bVisita) bVisita.innerText = counts['VISITA_TECNICA'] || 0;
+      const bResuelto = document.getElementById('badge-count-resuelto');
+      if (bResuelto) bResuelto.innerText = counts['RESUELTO'] || 0;
     }
 
     function openTicketDetailModal(t) {
@@ -4263,27 +4743,59 @@ export function getAdminDashboardHtml(): string {
           \`;
         }
 
-        const unconfTable = document.getElementById('table-unconfigured-onus-body');
-        if (unconfRes.unconfigured && unconfRes.unconfigured.length > 0) {
-          unconfTable.innerHTML = unconfRes.unconfigured.map(o => \`
-            <tr>
-              <td>\${escapeHtml(o.olt_name || 'OLT')}</td>
-              <td style="font-family: var(--font-mono);">\${o.pon_port || o.port || 'PON'}</td>
-              <td style="font-family: var(--font-mono); font-weight: 700; color: var(--accent-cyan);">\${o.sn}</td>
-              <td>\${escapeHtml(o.model || o.onu_type_name || 'ONU')}</td>
-              <td>
-                <button class="btn btn-primary btn-sm" onclick="openAuthorizeOnuModal('\${o.sn}', '\${o.olt_id || 3}')">
-                  Aprovisionar
-                </button>
-              </td>
-            </tr>
-          \`).join('');
-        } else {
-          unconfTable.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-dim);">No hay ONUs en espera de configuración en el PON.</td></tr>';
-        }
+        state.unconfiguredOnus = unconfRes.unconfigured || [];
+        filterUnconfiguredOnus();
       } catch (err) {
         console.error('Error loading IPAM:', err);
       }
+    }
+
+    function renderUnconfiguredOnusTable(onus) {
+      const unconfTable = document.getElementById('table-unconfigured-onus-body');
+      if (!unconfTable) return;
+      if (!onus || onus.length === 0) {
+        unconfTable.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-dim); padding: 20px;">No se encontraron ONUs sin autorizar con los filtros aplicados.</td></tr>';
+        return;
+      }
+      unconfTable.innerHTML = onus.map(o => \`
+        <tr>
+          <td>\${escapeHtml(o.olt_name || ('OLT ' + (o.olt_id || '3')))}</td>
+          <td style="font-family: var(--font-mono);">Board \${o.board ?? '--'} / Port \${o.port ?? o.pon_port ?? '--'}</td>
+          <td style="font-family: var(--font-mono); font-weight: 700; color: var(--accent-cyan);">\${escapeHtml(o.sn)}</td>
+          <td>\${escapeHtml(o.model || o.onu_type_name || o.onu_type || 'ONT')}</td>
+          <td style="text-align: right;">
+            <button class="btn btn-primary btn-xs" onclick="openAuthorizeOnuModal('\${escapeHtml(o.sn)}', '\${o.olt_id || 3}')">
+              ⚡ Aprovisionar
+            </button>
+          </td>
+        </tr>
+      \`).join('');
+    }
+
+    function filterUnconfiguredOnus() {
+      const fOlt = (document.getElementById('filter-pon-olt')?.value || '').toLowerCase().trim();
+      const fPort = (document.getElementById('filter-pon-port')?.value || '').toLowerCase().trim();
+      const fSn = (document.getElementById('filter-pon-sn')?.value || '').toLowerCase().trim();
+      const fModel = (document.getElementById('filter-pon-model')?.value || '').toLowerCase().trim();
+
+      const filtered = (state.unconfiguredOnus || []).filter(o => {
+        if (fOlt && !String(o.olt_name || o.olt_id || '').toLowerCase().includes(fOlt)) return false;
+        if (fPort && !String(o.pon_port || o.port || o.board || '').toLowerCase().includes(fPort)) return false;
+        if (fSn && !String(o.sn || '').toLowerCase().includes(fSn)) return false;
+        if (fModel && !String(o.model || o.onu_type_name || o.onu_type || '').toLowerCase().includes(fModel)) return false;
+        return true;
+      });
+
+      renderUnconfiguredOnusTable(filtered);
+    }
+
+    function clearUnconfiguredOnusFilters() {
+      const ids = ['filter-pon-olt', 'filter-pon-port', 'filter-pon-sn', 'filter-pon-model'];
+      ids.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+      });
+      renderUnconfiguredOnusTable(state.unconfiguredOnus);
     }
 
     async function togglePoolBotActive(vlan, isActive) {
@@ -4546,61 +5058,118 @@ export function getAdminDashboardHtml(): string {
 
         const res = await apiFetch('/api/audit/ip-cross?' + params.toString());
         state.audit.total = res.total || 0;
+        state.audit.items = res.items || [];
 
         const totalPages = Math.max(1, Math.ceil((res.total || 0) / state.audit.limit));
-        document.getElementById('audit-pagination-info').innerText = \`Mostrando página \${state.audit.page} de \${totalPages} (\${res.total || 0} registros)\`;
+        const pInfo = document.getElementById('audit-pagination-info');
+        if (pInfo) pInfo.innerText = \`Mostrando página \${state.audit.page} de \${totalPages} (\${res.total || 0} registros)\`;
 
-        if (res.items && res.items.length > 0) {
-          tbody.innerHTML = res.items.map(item => {
-            let statusBadge = '<span class="badge badge-success">CORRECTO</span>';
-            if (item.ip_status === 'MISMATCH') statusBadge = '<span class="badge badge-danger">DISCREPANCIA</span>';
-            if (item.ip_status === 'ONLY_SMARTOLT') statusBadge = '<span class="badge badge-info">Solo SmartOLT</span>';
-            if (item.ip_status === 'ONLY_WISPHUB') statusBadge = '<span class="badge badge-purple">Solo WispHub</span>';
-            if (item.ip_status === 'NO_IP') statusBadge = '<span class="badge badge-warning">Sin IP</span>';
-
-            let trBadge = '<span class="badge badge-success">ACTIVO</span>';
-            if (item.tr069_status === 'OMCI') trBadge = '<span class="badge badge-warning">OMCI</span>';
-            if (item.tr069_status === 'MISSING' || !item.tr069_status) trBadge = '<span class="badge badge-danger">FALTA</span>';
-
-            let ipv6Badge = '<span class="badge badge-success">DUAL STACK</span>';
-            if (item.ipv6_status === 'IPV4_ONLY') ipv6Badge = '<span class="badge badge-warning">SOLO IPv4</span>';
-            if (item.ipv6_status === 'MISSING' || !item.ipv6_status) ipv6Badge = '<span class="badge badge-danger">FALTA</span>';
-
-            let actionBtn = '<span style="font-size: 11px; color: var(--text-dim);">No en OLT</span>';
-            if (item.smartolt_id) {
-              const needsConfig = item.tr069_status !== 'ACTIVE' || item.ipv6_status !== 'DUAL_STACK';
-              if (needsConfig) {
-                const safeClient = (item.cliente || 'Cliente').replace(/'/g, "\\'");
-                actionBtn = \`
-                  <button class="btn btn-primary btn-sm" onclick="applyTr069AndIpv6Config('\${item.smartolt_id}', '\${safeClient}')" title="Aprovisionar TR-069 + IPv6">
-                    ⚡ Aprovisionar
-                  </button>
-                \`;
-              } else {
-                actionBtn = '<span class="badge badge-success" style="opacity: 0.85;">✓ Configurado</span>';
-              }
-            }
-
-            return \`
-              <tr>
-                <td style="font-weight: 600;">\${escapeHtml(item.cliente || 'Desconocido')}</td>
-                <td style="font-family: var(--font-mono); font-size: 11px;">\${escapeHtml(item.servicio || item.folio || '--')}</td>
-                <td style="font-family: var(--font-mono); color: var(--accent-cyan);">\${item.smartolt_ip || '--'}</td>
-                <td style="font-family: var(--font-mono); color: var(--accent-green);">\${item.wisphub_ip || '--'}</td>
-                <td>\${statusBadge}</td>
-                <td>\${trBadge}</td>
-                <td>\${ipv6Badge}</td>
-                <td>\${escapeHtml(item.wisphub_plan || '--')}</td>
-                <td>\${actionBtn}</td>
-              </tr>
-            \`;
-          }).join('');
-        } else {
-          tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; color: var(--text-dim);">No se encontraron registros coincidentes.</td></tr>';
-        }
+        handleAuditColFilter();
       } catch (err) {
         console.error('Error loading audit:', err);
       }
+    }
+
+    function renderAuditTable(items) {
+      const tbody = document.getElementById('table-audit-body');
+      if (!tbody) return;
+      if (!items || items.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; color: var(--text-dim); padding: 24px;">No se encontraron registros coincidentes con los filtros.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = items.map(item => {
+        let statusBadge = '<span class="badge badge-success">CORRECTO</span>';
+        if (item.ip_status === 'MISMATCH') statusBadge = '<span class="badge badge-danger">DISCREPANCIA</span>';
+        if (item.ip_status === 'ONLY_SMARTOLT') statusBadge = '<span class="badge badge-info">Solo SmartOLT</span>';
+        if (item.ip_status === 'ONLY_WISPHUB') statusBadge = '<span class="badge badge-purple">Solo WispHub</span>';
+        if (item.ip_status === 'NO_IP') statusBadge = '<span class="badge badge-warning">Sin IP</span>';
+
+        let trBadge = '<span class="badge badge-success">ACTIVO</span>';
+        if (item.tr069_status === 'OMCI') trBadge = '<span class="badge badge-warning">OMCI</span>';
+        if (item.tr069_status === 'MISSING' || !item.tr069_status) trBadge = '<span class="badge badge-danger">FALTA</span>';
+
+        let ipv6Badge = '<span class="badge badge-success">DUAL STACK</span>';
+        if (item.ipv6_status === 'IPV4_ONLY') ipv6Badge = '<span class="badge badge-warning">SOLO IPv4</span>';
+        if (item.ipv6_status === 'MISSING' || !item.ipv6_status) ipv6Badge = '<span class="badge badge-danger">FALTA</span>';
+
+        let actionBtn = '<span style="font-size: 11px; color: var(--text-dim);">No en OLT</span>';
+        if (item.smartolt_id) {
+          const needsConfig = item.tr069_status !== 'ACTIVE' || item.ipv6_status !== 'DUAL_STACK';
+          if (needsConfig) {
+            const safeClient = (item.cliente || 'Cliente').replace(/'/g, "\\'");
+            actionBtn = \`
+              <button class="btn btn-primary btn-sm" onclick="applyTr069AndIpv6Config('\${item.smartolt_id}', '\${safeClient}')" title="Aprovisionar TR-069 + IPv6">
+                ⚡ Aprovisionar
+              </button>
+            \`;
+          } else {
+            actionBtn = '<span class="badge badge-success" style="opacity: 0.85;">✓ Configurado</span>';
+          }
+        }
+
+        return \`
+          <tr>
+            <td style="font-weight: 600;">\${escapeHtml(item.cliente || 'Desconocido')}</td>
+            <td style="font-family: var(--font-mono); font-size: 11px;">\${escapeHtml(item.servicio || item.folio || '--')}</td>
+            <td style="font-family: var(--font-mono); color: var(--accent-cyan);">\${item.smartolt_ip || '--'}</td>
+            <td style="font-family: var(--font-mono); color: var(--accent-green);">\${item.wisphub_ip || '--'}</td>
+            <td>\${statusBadge}</td>
+            <td>\${trBadge}</td>
+            <td>\${ipv6Badge}</td>
+            <td>\${escapeHtml(item.wisphub_plan || '--')}</td>
+            <td style="text-align: right;">\${actionBtn}</td>
+          </tr>
+        \`;
+      }).join('');
+    }
+
+    function handleAuditColFilter() {
+      const fClient = (document.getElementById('filter-audit-client')?.value || '').toLowerCase().trim();
+      const fSrv = (document.getElementById('filter-audit-srv')?.value || '').toLowerCase().trim();
+      const fIpOlt = (document.getElementById('filter-audit-ip-olt')?.value || '').toLowerCase().trim();
+      const fIpWisp = (document.getElementById('filter-audit-ip-wisp')?.value || '').toLowerCase().trim();
+      const fIpStatus = (document.getElementById('filter-audit-ip-status')?.value || '').toUpperCase().trim();
+      const fTr = (document.getElementById('filter-audit-tr069')?.value || '').toUpperCase().trim();
+      const fV6 = (document.getElementById('filter-audit-ipv6')?.value || '').toUpperCase().trim();
+      const fPlan = (document.getElementById('filter-audit-plan')?.value || '').toLowerCase().trim();
+
+      const items = state.audit.items || [];
+      const filtered = items.filter(it => {
+        if (fClient && !String(it.cliente || '').toLowerCase().includes(fClient)) return false;
+        if (fSrv && !String(it.servicio || it.folio || '').toLowerCase().includes(fSrv)) return false;
+        if (fIpOlt && !String(it.smartolt_ip || '').toLowerCase().includes(fIpOlt)) return false;
+        if (fIpWisp && !String(it.wisphub_ip || '').toLowerCase().includes(fIpWisp)) return false;
+        if (fIpStatus) {
+          if (fIpStatus === 'MATCH' && it.ip_status !== 'MATCH' && it.ip_status !== 'OK') return false;
+          if (fIpStatus === 'MISMATCH' && it.ip_status !== 'MISMATCH') return false;
+        }
+        if (fTr) {
+          if (fTr === 'ACTIVE' && it.tr069_status !== 'ACTIVE') return false;
+          if (fTr === 'INACTIVE' && it.tr069_status === 'ACTIVE') return false;
+        }
+        if (fV6) {
+          if (fV6 === 'ACTIVE' && it.ipv6_status !== 'DUAL_STACK') return false;
+          if (fV6 === 'INACTIVE' && it.ipv6_status === 'DUAL_STACK') return false;
+        }
+        if (fPlan && !String(it.wisphub_plan || '').toLowerCase().includes(fPlan)) return false;
+        return true;
+      });
+
+      renderAuditTable(filtered);
+    }
+
+    function clearAuditColFilters() {
+      const ids = [
+        'filter-audit-client', 'filter-audit-srv', 'filter-audit-ip-olt',
+        'filter-audit-ip-wisp', 'filter-audit-ip-status', 'filter-audit-tr069',
+        'filter-audit-ipv6', 'filter-audit-plan'
+      ];
+      ids.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+      });
+      renderAuditTable(state.audit.items || []);
     }
 
     async function applyTr069AndIpv6Config(onuId, clientName) {
@@ -4681,6 +5250,7 @@ export function getAdminDashboardHtml(): string {
 
         const res = await apiFetch('/api/audit/ip-cross?' + params.toString());
         state.provisioning.total = res.total || 0;
+        state.provisioning.items = res.items || [];
 
         // Update metric cards
         const sum = res.summary || {};
@@ -4706,49 +5276,96 @@ export function getAdminDashboardHtml(): string {
         }
 
         const totalPages = Math.max(1, Math.ceil((res.total || 0) / state.provisioning.limit));
-        document.getElementById('prov-pagination-info').innerText = \`Mostrando página \${state.provisioning.page} de \${totalPages} (\${res.total || 0} registros)\`;
+        const pInfo = document.getElementById('prov-pagination-info');
+        if (pInfo) pInfo.innerText = \`Mostrando página \${state.provisioning.page} de \${totalPages} (\${res.total || 0} registros)\`;
 
-        if (res.items && res.items.length > 0) {
-          tbody.innerHTML = res.items.map(item => {
-            let trBadge = '<span class="badge badge-success">ACTIVO</span>';
-            if (item.tr069_status === 'OMCI') trBadge = '<span class="badge badge-warning">OMCI</span>';
-            if (item.tr069_status === 'MISSING' || !item.tr069_status) trBadge = '<span class="badge badge-danger">FALTA</span>';
-
-            let ipv6Badge = '<span class="badge badge-success">DUAL STACK</span>';
-            if (item.ipv6_status === 'IPV4_ONLY') ipv6Badge = '<span class="badge badge-warning">SOLO IPv4</span>';
-            if (item.ipv6_status === 'MISSING' || !item.ipv6_status) ipv6Badge = '<span class="badge badge-danger">FALTA</span>';
-
-            let actionBtn = '<span class="badge badge-success" style="opacity: 0.85;">✓ Configurado</span>';
-            const needsConfig = item.tr069_status !== 'ACTIVE' || item.ipv6_status !== 'DUAL_STACK';
-            if (item.smartolt_id && needsConfig) {
-              const safeClient = (item.cliente || 'Cliente').replace(/'/g, "\\'");
-              actionBtn = \`
-                <button class="btn btn-primary btn-sm" onclick="applyTr069AndIpv6Config('\${item.smartolt_id}', '\${safeClient}')">
-                  ⚡ Aprovisionar TR069+IPv6
-                </button>
-              \`;
-            } else if (!item.smartolt_id) {
-              actionBtn = '<span style="font-size: 11px; color: var(--text-dim);">No en OLT</span>';
-            }
-
-            return \`
-              <tr>
-                <td style="font-weight: 600;">\${escapeHtml(item.cliente || 'Desconocido')}</td>
-                <td style="font-family: var(--font-mono); font-weight: 600; color: var(--accent-cyan); font-size: 12px;">\${escapeHtml(item.sn_smartolt || item.sn_wisphub || '--')}</td>
-                <td style="font-family: var(--font-mono); color: var(--accent-green);">\${item.smartolt_ip || item.wisphub_ip || '--'}</td>
-                <td><span class="badge badge-info">\${escapeHtml(item.zona_o_router || 'Actopan')}</span></td>
-                <td>\${trBadge}</td>
-                <td>\${ipv6Badge}</td>
-                <td>\${actionBtn}</td>
-              </tr>
-            \`;
-          }).join('');
-        } else {
-          tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-dim);">No hay ONUs que requieran aprovisionamiento con el filtro actual.</td></tr>';
-        }
+        handleProvColFilter();
       } catch (err) {
         console.error('Error loading provisioning:', err);
       }
+    }
+
+    function renderProvisioningTable(items) {
+      const tbody = document.getElementById('table-prov-body');
+      if (!tbody) return;
+      if (!items || items.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-dim); padding: 24px;">No hay ONUs que requieran aprovisionamiento con los filtros aplicados.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = items.map(item => {
+        let trBadge = '<span class="badge badge-success">ACTIVO</span>';
+        if (item.tr069_status === 'OMCI') trBadge = '<span class="badge badge-warning">OMCI</span>';
+        if (item.tr069_status === 'MISSING' || !item.tr069_status) trBadge = '<span class="badge badge-danger">FALTA</span>';
+
+        let ipv6Badge = '<span class="badge badge-success">DUAL STACK</span>';
+        if (item.ipv6_status === 'IPV4_ONLY') ipv6Badge = '<span class="badge badge-warning">SOLO IPv4</span>';
+        if (item.ipv6_status === 'MISSING' || !item.ipv6_status) ipv6Badge = '<span class="badge badge-danger">FALTA</span>';
+
+        let actionBtn = '<span class="badge badge-success" style="opacity: 0.85;">✓ Configurado</span>';
+        const needsConfig = item.tr069_status !== 'ACTIVE' || item.ipv6_status !== 'DUAL_STACK';
+        if (item.smartolt_id && needsConfig) {
+          const safeClient = (item.cliente || 'Cliente').replace(/'/g, "\\'");
+          actionBtn = \`
+            <button class="btn btn-primary btn-sm" onclick="applyTr069AndIpv6Config('\${item.smartolt_id}', '\${safeClient}')">
+              ⚡ Aprovisionar TR069+IPv6
+            </button>
+          \`;
+        } else if (!item.smartolt_id) {
+          actionBtn = '<span style="font-size: 11px; color: var(--text-dim);">No en OLT</span>';
+        }
+
+        return \`
+          <tr>
+            <td style="font-weight: 600;">\${escapeHtml(item.cliente || 'Desconocido')}</td>
+            <td style="font-family: var(--font-mono); font-weight: 600; color: var(--accent-cyan); font-size: 12px;">\${escapeHtml(item.sn_smartolt || item.sn_wisphub || '--')}</td>
+            <td style="font-family: var(--font-mono); color: var(--accent-green);">\${item.smartolt_ip || item.wisphub_ip || '--'}</td>
+            <td><span class="badge badge-info">\${escapeHtml(item.zona_o_router || 'Actopan')}</span></td>
+            <td>\${trBadge}</td>
+            <td>\${ipv6Badge}</td>
+            <td style="text-align: right;">\${actionBtn}</td>
+          </tr>
+        \`;
+      }).join('');
+    }
+
+    function handleProvColFilter() {
+      const fClient = (document.getElementById('filter-prov-client')?.value || '').toLowerCase().trim();
+      const fSn = (document.getElementById('filter-prov-sn')?.value || '').toLowerCase().trim();
+      const fIp = (document.getElementById('filter-prov-ip')?.value || '').toLowerCase().trim();
+      const fZone = (document.getElementById('filter-prov-zone')?.value || '').toLowerCase().trim();
+      const fTr = (document.getElementById('filter-prov-tr069')?.value || '').toUpperCase().trim();
+      const fV6 = (document.getElementById('filter-prov-ipv6')?.value || '').toUpperCase().trim();
+
+      const items = state.provisioning.items || [];
+      const filtered = items.filter(it => {
+        if (fClient && !String(it.cliente || '').toLowerCase().includes(fClient)) return false;
+        const sn = String(it.sn_smartolt || it.sn_wisphub || '').toLowerCase();
+        if (fSn && !sn.includes(fSn)) return false;
+        const ip = String(it.smartolt_ip || it.wisphub_ip || '').toLowerCase();
+        if (fIp && !ip.includes(fIp)) return false;
+        if (fZone && !String(it.zona_o_router || '').toLowerCase().includes(fZone)) return false;
+        if (fTr) {
+          if (fTr === 'ACTIVE' && it.tr069_status !== 'ACTIVE') return false;
+          if (fTr === 'INACTIVE' && it.tr069_status === 'ACTIVE') return false;
+        }
+        if (fV6) {
+          if (fV6 === 'ACTIVE' && it.ipv6_status !== 'DUAL_STACK') return false;
+          if (fV6 === 'INACTIVE' && it.ipv6_status === 'DUAL_STACK') return false;
+        }
+        return true;
+      });
+
+      renderProvisioningTable(filtered);
+    }
+
+    function clearProvColFilters() {
+      const ids = ['filter-prov-client', 'filter-prov-sn', 'filter-prov-ip', 'filter-prov-zone', 'filter-prov-tr069', 'filter-prov-ipv6'];
+      ids.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+      });
+      renderProvisioningTable(state.provisioning.items || []);
     }
 
     function setProvFilter(f, btnElement) {
@@ -4785,7 +5402,7 @@ export function getAdminDashboardHtml(): string {
       try {
         const res = await apiFetch('/api/technicians');
         state.technicians = res.technicians || [];
-        renderTechniciansTable(state.technicians);
+        filterTechniciansTable();
       } catch (err) {
         console.error('Error loading technicians:', err);
       }
@@ -4793,8 +5410,9 @@ export function getAdminDashboardHtml(): string {
 
     function renderTechniciansTable(techs) {
       const tbody = document.getElementById('table-technicians-body');
+      if (!tbody) return;
       if (!techs || techs.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-dim);">No hay técnicos registrados.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-dim); padding: 20px;">No se encontraron técnicos con los filtros aplicados.</td></tr>';
         return;
       }
 
@@ -4809,8 +5427,8 @@ export function getAdminDashboardHtml(): string {
               \${t.is_active === 1 ? 'Activo' : 'Inactivo'}
             </span>
           </td>
-          <td>
-            <div style="display: flex; gap: 8px;">
+          <td style="text-align: right;">
+            <div style="display: flex; gap: 8px; justify-content: flex-end;">
               <button class="btn btn-secondary btn-sm" onclick="toggleTechnicianActive(\${t.id})">
                 \${t.is_active === 1 ? 'Desactivar' : 'Activar'}
               </button>
@@ -4821,6 +5439,38 @@ export function getAdminDashboardHtml(): string {
           </td>
         </tr>
       \`).join('');
+    }
+
+    function filterTechniciansTable() {
+      const fName = (document.getElementById('filter-tech-name')?.value || '').toLowerCase().trim();
+      const fPhone = (document.getElementById('filter-tech-phone')?.value || '').toLowerCase().trim();
+      const fPin = (document.getElementById('filter-tech-pin')?.value || '').toLowerCase().trim();
+      const fRole = (document.getElementById('filter-tech-role')?.value || '').toLowerCase().trim();
+      const fStatus = (document.getElementById('filter-tech-status')?.value || '').toUpperCase().trim();
+
+      const techs = state.technicians || [];
+      const filtered = techs.filter(t => {
+        if (fName && !String(t.name || '').toLowerCase().includes(fName)) return false;
+        if (fPhone && !String(t.phone || '').toLowerCase().includes(fPhone)) return false;
+        if (fPin && !String(t.pin || '').toLowerCase().includes(fPin)) return false;
+        if (fRole && !String(t.role || '').toLowerCase().includes(fRole)) return false;
+        if (fStatus) {
+          if (fStatus === 'ACTIVO' && t.is_active !== 1) return false;
+          if (fStatus === 'INACTIVO' && t.is_active === 1) return false;
+        }
+        return true;
+      });
+
+      renderTechniciansTable(filtered);
+    }
+
+    function clearTechniciansFilters() {
+      const ids = ['filter-tech-name', 'filter-tech-phone', 'filter-tech-pin', 'filter-tech-role', 'filter-tech-status'];
+      ids.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+      });
+      renderTechniciansTable(state.technicians || []);
     }
 
     function openNewTechnicianModal() {
@@ -5608,7 +6258,7 @@ export function getAdminDashboardHtml(): string {
       try {
         const res = await apiFetch('/api/admin/users');
         state.adminUsers = res.users || [];
-        renderAdminUsersTable(state.adminUsers);
+        filterAdminUsersTable();
       } catch (err) {
         console.error('Error loading users:', err);
       }
@@ -5616,8 +6266,9 @@ export function getAdminDashboardHtml(): string {
 
     function renderAdminUsersTable(users) {
       const tbody = document.getElementById('table-admin-users-body');
+      if (!tbody) return;
       if (!users || users.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-dim);">No hay usuarios registrados.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-dim); padding: 20px;">No se encontraron usuarios con los filtros aplicados.</td></tr>';
         return;
       }
 
@@ -5627,7 +6278,7 @@ export function getAdminDashboardHtml(): string {
           <td style="font-weight: 600;">\${escapeHtml(u.name)}</td>
           <td><span class="badge badge-purple">\${u.role}</span></td>
           <td style="font-family: var(--font-mono); font-size: 11.5px; color: var(--text-dim);">\${u.last_login ? new Date(u.last_login).toLocaleString() : 'Nunca'}</td>
-          <td>
+          <td style="text-align: right;">
             \${u.username !== 'admin' ? \`
               <button class="btn btn-danger btn-sm" onclick="deleteAdminUserItem(\${u.id}, '\${u.username}')">
                 Eliminar
@@ -5636,6 +6287,36 @@ export function getAdminDashboardHtml(): string {
           </td>
         </tr>
       \`).join('');
+    }
+
+    function filterAdminUsersTable() {
+      const fName = (document.getElementById('filter-user-name')?.value || '').toLowerCase().trim();
+      const fFullname = (document.getElementById('filter-user-fullname')?.value || '').toLowerCase().trim();
+      const fRole = (document.getElementById('filter-user-role')?.value || '').toLowerCase().trim();
+      const fLogin = (document.getElementById('filter-user-login')?.value || '').toLowerCase().trim();
+
+      const users = state.adminUsers || [];
+      const filtered = users.filter(u => {
+        if (fName && !String(u.username || '').toLowerCase().includes(fName)) return false;
+        if (fFullname && !String(u.name || '').toLowerCase().includes(fFullname)) return false;
+        if (fRole && !String(u.role || '').toLowerCase().includes(fRole)) return false;
+        if (fLogin) {
+          const loginStr = u.last_login ? new Date(u.last_login).toLocaleString().toLowerCase() : 'nunca';
+          if (!loginStr.includes(fLogin)) return false;
+        }
+        return true;
+      });
+
+      renderAdminUsersTable(filtered);
+    }
+
+    function clearAdminUsersFilters() {
+      const ids = ['filter-user-name', 'filter-user-fullname', 'filter-user-role', 'filter-user-login'];
+      ids.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+      });
+      renderAdminUsersTable(state.adminUsers || []);
     }
 
     function openNewAdminUserModal() {
@@ -6608,37 +7289,89 @@ export function getAdminDashboardHtml(): string {
     }
 
     async function loadModemSwapHistory() {
-      const tbody = document.getElementById('table-swap-history-body');
-      if (!tbody) return;
-
       try {
-        const res = await apiFetch('/api/modem-swap/history?limit=50');
+        const res = await apiFetch('/api/modem-swap/history?limit=100');
         if (res.success && Array.isArray(res.history)) {
-          if (res.history.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--text-dim); padding: 20px;">No hay registros de cambios de módem aún.</td></tr>';
-            return;
-          }
-
-          tbody.innerHTML = res.history.map(item => \`
-            <tr>
-              <td style="white-space: nowrap; font-size: 11.5px;">\${formatShortDate(item.created_at)}</td>
-              <td style="font-weight: 700;">\${escapeHtml(item.client_name)}</td>
-              <td><span class="badge badge-danger" style="font-family: monospace;">\${escapeHtml(item.old_sn)}</span></td>
-              <td><span class="badge badge-success" style="font-family: monospace;">\${escapeHtml(item.new_sn)}</span></td>
-              <td><strong>\${escapeHtml(item.ip_address || 'N/A')}</strong> <span style="font-size: 11px; color: var(--text-muted);">(VLAN \${escapeHtml(item.vlan || '510')})</span></td>
-              <td>\${escapeHtml(item.zone || 'Actopan')}</td>
-              <td style="font-size: 12px; color: var(--text-muted);">\${escapeHtml(item.technician_name || 'Admin')}</td>
-              <td>
-                <span class="badge \${item.status === 'COMPLETADO' ? 'badge-success' : (item.status === 'ERROR' ? 'badge-danger' : 'badge-warning')}">
-                  \${escapeHtml(item.status || 'COMPLETADO')}
-                </span>
-              </td>
-            </tr>
-          \`).join('');
+          state.swapHistory = res.history;
+          filterSwapHistoryTable();
         }
       } catch (err) {
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--accent-rose);">Error al cargar historial.</td></tr>';
+        const tbody = document.getElementById('table-swap-history-body');
+        if (tbody) tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; color: var(--accent-rose); padding: 20px;">Error al cargar historial.</td></tr>';
       }
+    }
+
+    function renderSwapHistoryTable(history) {
+      const tbody = document.getElementById('table-swap-history-body');
+      if (!tbody) return;
+      if (!history || history.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; color: var(--text-dim); padding: 20px;">No se encontraron registros de cambio de módem con los filtros aplicados.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = history.map(item => \`
+        <tr>
+          <td style="white-space: nowrap; font-size: 11.5px;">\${formatShortDate(item.created_at)}</td>
+          <td style="font-weight: 700;">\${escapeHtml(item.client_name)}</td>
+          <td><span class="badge badge-danger" style="font-family: monospace;">\${escapeHtml(item.old_sn)}</span></td>
+          <td><span class="badge badge-success" style="font-family: monospace;">\${escapeHtml(item.new_sn)}</span></td>
+          <td><strong>\${escapeHtml(item.ip_address || 'N/A')}</strong> <span style="font-size: 11px; color: var(--text-muted);">(VLAN \${escapeHtml(item.vlan || '510')})</span></td>
+          <td>\${escapeHtml(item.zone || 'Actopan')}</td>
+          <td style="font-size: 12px; color: var(--text-muted);">\${escapeHtml(item.technician_name || 'Admin')}</td>
+          <td>
+            <span class="badge \${item.status === 'COMPLETADO' ? 'badge-success' : (item.status === 'ERROR' ? 'badge-danger' : 'badge-warning')}">
+              \${escapeHtml(item.status || 'COMPLETADO')}
+            </span>
+          </td>
+          <td style="text-align: right;">
+            <button class="btn btn-secondary btn-xs" onclick="handleSelectSwapUnconfigured('\${escapeHtml(item.new_sn)}')" title="Re-inspeccionar Módem">
+              🔍 Ver
+            </button>
+          </td>
+        </tr>
+      \`).join('');
+    }
+
+    function filterSwapHistoryTable() {
+      const fDate = (document.getElementById('filter-swap-date')?.value || '').toLowerCase().trim();
+      const fClient = (document.getElementById('filter-swap-client')?.value || '').toLowerCase().trim();
+      const fOldSn = (document.getElementById('filter-swap-oldsn')?.value || '').toLowerCase().trim();
+      const fNewSn = (document.getElementById('filter-swap-newsn')?.value || '').toLowerCase().trim();
+      const fIp = (document.getElementById('filter-swap-ip')?.value || '').toLowerCase().trim();
+      const fZone = (document.getElementById('filter-swap-zone')?.value || '').toLowerCase().trim();
+      const fTech = (document.getElementById('filter-swap-tech')?.value || '').toLowerCase().trim();
+      const fStatus = (document.getElementById('filter-swap-status')?.value || '').toUpperCase().trim();
+
+      const items = state.swapHistory || [];
+      const filtered = items.filter(it => {
+        if (fDate) {
+          const dtStr = formatShortDate(it.created_at).toLowerCase();
+          if (!dtStr.includes(fDate)) return false;
+        }
+        if (fClient && !String(it.client_name || '').toLowerCase().includes(fClient)) return false;
+        if (fOldSn && !String(it.old_sn || '').toLowerCase().includes(fOldSn)) return false;
+        if (fNewSn && !String(it.new_sn || '').toLowerCase().includes(fNewSn)) return false;
+        if (fIp && !String(it.ip_address || '').toLowerCase().includes(fIp) && !String(it.vlan || '').toLowerCase().includes(fIp)) return false;
+        if (fZone && !String(it.zone || '').toLowerCase().includes(fZone)) return false;
+        if (fTech && !String(it.technician_name || '').toLowerCase().includes(fTech)) return false;
+        if (fStatus && String(it.status || '').toUpperCase() !== fStatus) return false;
+        return true;
+      });
+
+      renderSwapHistoryTable(filtered);
+    }
+
+    function clearSwapHistoryFilters() {
+      const ids = [
+        'filter-swap-date', 'filter-swap-client', 'filter-swap-oldsn',
+        'filter-swap-newsn', 'filter-swap-ip', 'filter-swap-zone',
+        'filter-swap-tech', 'filter-swap-status'
+      ];
+      ids.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+      });
+      renderSwapHistoryTable(state.swapHistory || []);
     }
 
     function formatShortDate(iso) {
