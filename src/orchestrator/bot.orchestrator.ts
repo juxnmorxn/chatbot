@@ -1147,7 +1147,7 @@ export class BotOrchestrator {
           ip: meta.ip,
         });
 
-        const tieneDeudaReal = estadoFinanciero.totalDeuda > 0 || (estadoFinanciero.facturas && estadoFinanciero.facturas.length > 0);
+        const tieneDeudaReal = estadoFinanciero.tieneDeudaReal || estadoFinanciero.totalDeuda > 0 || (estadoFinanciero.facturas && estadoFinanciero.facturas.length > 0);
 
         if (tieneDeudaReal) {
           const facturas = estadoFinanciero.facturas || [];
@@ -1193,7 +1193,7 @@ export class BotOrchestrator {
           await this.enviarYLoguear(phone, mensajeMoroso, 'CONSULTAR_SALDO', 'AVISO_SUSPENSION_SALUDO', targetJid);
           await TursoService.updateStep(phone, 'ESPERANDO_COMPROBANTE');
           return;
-        } else if (estadoFinanciero.suspendido) {
+        } else if (estadoFinanciero.suspendido && estadoFinanciero.yaPagoPeroNoActivo) {
           logger.info(`Cliente ${phone} (${session.client_name}) está suspendido en WispHub pero SIN adeudos (pagos al corriente). Solicitando reactivación...`);
           const idWispHub = estadoFinanciero.cliente?.id ||
             (session.service_id && !String(session.service_id).startsWith('HWTC') && !String(session.service_id).startsWith('ONU-') && !String(session.service_id).startsWith('ZTEG') ? session.service_id : null) ||
@@ -1626,20 +1626,48 @@ export class BotOrchestrator {
 
     logger.info(`Iniciando diagnóstico interno silencioso para cliente ${phone} (${session.client_name || 'N/A'})...`);
 
-    // --- 1. VERIFICACIÓN SILENCIOSA DE MOROSIDAD O CORTE EN WISPHUB ---
+    // --- 1. RESOLVER ONU Y VERIFICACIÓN SILENCIOSA EN SMARTOLT ---
+    let onuId = session.onu_id || meta.sn || meta.onu_id;
+    if (!onuId) {
+      try {
+        const whMatch = await TursoService.getWisphubClientByAny({
+          id: session.client_id,
+          name: session.client_name,
+          phone,
+          ip: meta.ip,
+        });
+        if (whMatch?.sn_onu) onuId = whMatch.sn_onu;
+      } catch {}
+    }
+    if (!onuId && session.client_id) {
+      onuId = `ONU-${session.client_id}`;
+    }
+
+    let diag: SmartOltStatusResult | null = null;
+    if (onuId) {
+      try {
+        diag = await SmartOLTService.obtenerEstadoONU(onuId);
+        logger.info(`Diagnóstico silencioso SmartOLT para ${phone} (ONU: ${onuId}): status=${diag.status}, potencia=${diag.opticalPowerDbm || 'N/A'} dBm`);
+      } catch (err: any) {
+        logger.warn(`Error en diagnóstico silencioso SmartOLT para ${phone}:`, err?.message || err);
+      }
+    }
+
+    // --- 2. VERIFICACIÓN SILENCIOSA DE ESTADO FINANCIERO EN WISPHUB ---
     try {
       const estadoFinanciero = await WispHubService.verificarEstadoFinanciero({
         clienteId: session.client_id,
         nombre: session.client_name,
         phone,
-        sn: meta.sn,
+        sn: meta.sn || onuId,
         ip: meta.ip,
       });
 
-      const tieneDeudaReal = estadoFinanciero.totalDeuda > 0 || (estadoFinanciero.facturas && estadoFinanciero.facturas.length > 0);
+      const tieneDeudaReal = estadoFinanciero.tieneDeudaReal || estadoFinanciero.totalDeuda > 0 || (estadoFinanciero.facturas && estadoFinanciero.facturas.length > 0);
 
+      // CASO A: CLIENTE CON ADEUDO / FACTURAS VENCIDAS -> NUNCA REACTIVAR AUTOMÁTICAMENTE
       if (tieneDeudaReal) {
-        logger.info(`Cliente ${phone} (${session.client_name}) presenta adeudo real en WispHub: Deuda=$${estadoFinanciero.totalDeuda}`);
+        logger.info(`Cliente ${phone} (${session.client_name}) presenta adeudo real en WispHub: Deuda=$${estadoFinanciero.totalDeuda}. Reactivación bloqueada por morosidad.`);
 
         const facturas = estadoFinanciero.facturas || [];
         let detalleFacturas = '';
@@ -1669,6 +1697,11 @@ export class BotOrchestrator {
           onlinePaySection = `\n🛒 *Pagar en línea con Mercado Pago / Tarjeta (Acreditación inmediata):*\n👉 ${mpUrl}\n`;
         }
 
+        let avisoFisicoAdicional = '';
+        if (diag && diag.status === 'LOS') {
+          avisoFisicoAdicional = `\n\n⚠️ *Nota de señal:* Detectamos en nuestra central que tu cable de fibra óptica presenta *Pérdida de Señal (LOS)* hacia tu domicilio. Una vez registrado tu pago, si la señal no sincroniza, un técnico pasará a revisar el cableado.`;
+        }
+
         const mensajeMoroso =
           `Hola${nombre}, revisé tu servicio y detectamos que registras un recibo pendiente por *$${estadoFinanciero.totalDeuda.toFixed(2)} MXN*.\n` +
           `${detalleFacturas}` +
@@ -1676,14 +1709,16 @@ export class BotOrchestrator {
           `💳 *También puedes pagar por Transferencia Bancaria:*\n` +
           `• Banco: *${bank}* | CLABE: *${account}*\n` +
           `• Beneficiario: *${beneficiary}*\n` +
-          `• Concepto / Referencia: *${session.client_name || phone}*\n\n` +
-          `📸 En cuanto realices tu abono, por favor envía la *foto o captura de tu comprobante* y escribe tu *Nombre completo* aquí en el chat para reactivarte de inmediato.`;
+          `• Concepto / Referencia: *${session.client_name || phone}*` +
+          `${avisoFisicoAdicional}\n\n` +
+          `📸 En cuanto realices tu pago, por favor envía la *foto o captura de tu comprobante* y escribe tu *Nombre completo* aquí en el chat para registrarlo y restablecer tu línea.`;
 
         await this.enviarYLoguear(phone, mensajeMoroso, 'CONSULTAR_SALDO', 'AVISO_MOROSIDAD_SILENCIOSA', targetJid);
         await TursoService.updateStep(phone, 'ESPERANDO_COMPROBANTE');
         return;
-      } else if (estadoFinanciero.suspendido) {
-        logger.info(`Cliente ${phone} (${session.client_name}) figura Suspendido en WispHub pero SIN facturas pendientes (pagos al corriente). Solicitando reactivación...`);
+      } else if (estadoFinanciero.suspendido && estadoFinanciero.yaPagoPeroNoActivo) {
+        // CASO B: CLIENTE SUSPENDIDO PERO VERIFICADO 100% SIN ADEUDO (AL CORRIENTE)
+        logger.info(`Cliente ${phone} (${session.client_name}) figura Suspendido en WispHub pero SIN facturas pendientes (pagos al corriente). Solicitando reactivación administrativa...`);
         const idWispHub = estadoFinanciero.cliente?.id ||
           (session.service_id && !String(session.service_id).startsWith('HWTC') && !String(session.service_id).startsWith('ONU-') && !String(session.service_id).startsWith('ZTEG') ? session.service_id : null) ||
           (session.client_id && !String(session.client_id).startsWith('HWTC') && !String(session.client_id).startsWith('ONU-') && !String(session.client_id).startsWith('ZTEG') ? session.client_id : null);
@@ -1715,9 +1750,52 @@ export class BotOrchestrator {
         }
 
         const nombreCliente = formatDisplayName(session.client_name, true) || 'Cliente';
+
+        // CRUCE CON SMARTOLT TRAS REACTIVACIÓN: SI HAY CORTE FÍSICO DE FIBRA (LOS)
+        if (diag && diag.status === 'LOS') {
+          const ticket = await TursoService.createTicket({
+            phone,
+            client_name: session.client_name,
+            onu_id: session.onu_id,
+            issue_summary: 'Problema en cableado exterior hacia domicilio (SmartOLT LOS detectado en central)',
+            checks_performed: 'Cuenta al corriente (reactivada administrativamente). Central detecta LOS (Loss of Signal / Cable cortado). Requiere cuadrilla técnica.',
+            status: 'ABIERTO',
+            is_out_of_hours: this.isFueraDeHorario() ? 1 : 0,
+          });
+
+          if (session.client_id) {
+            await WispHubService.crearTicketSoporte(
+              session.client_id,
+              `Corte de Cableado - ${ticket.folio}`,
+              `Cuenta al corriente y reactivada en sistema. SmartOLT detectó corte físico (LOS). Folio local: ${ticket.folio}`,
+              'Alta'
+            ).catch(() => {});
+          }
+
+          const msjLos =
+            `Hola *${nombreCliente}*, revisé tu cuenta y *tus pagos se encuentran al corriente* (no registras recibos pendientes). ✅ Ya enviamos la reactivación administrativa a tu línea.\n\n` +
+            `⚠️ Sin embargo, en nuestra central detectamos un inconveniente con la señal física: *Pérdida de Señal Óptica (LOS / cable de fibra sin señal)* que llega a tu domicilio.\n\n` +
+            `🛠️ Ya te generamos tu reporte con el folio *#${ticket.folio}* para canalizar una visita técnica a tu domicilio a reparar el cableado exterior.\n\n` +
+            `📍 Por favor compártenos tu *ubicación por WhatsApp* o tu *dirección completa con referencias* para registrarla en la orden de visita.`;
+
+          await TursoService.upsertSession({
+            phone,
+            step: 'ESPERANDO_UBICACION_TECNICO',
+            metadata: JSON.stringify({
+              ...meta,
+              resumenFalla: 'Corte físico de fibra (LOS) detectado tras reactivación al corriente',
+              ticketFolio: ticket.folio,
+            }),
+          });
+
+          await this.enviarYLoguear(phone, msjLos, 'FALLA_INTERNET', `REACTIVADO_CON_CORTE_FIBRA_${ticket.folio}`, targetJid);
+          return;
+        }
+
+        // Si no es LOS, proceder con reinicio normal
         const msj =
           `Hola *${nombreCliente}*, revisé tu cuenta y *tus pagos se encuentran al corriente* (no registras recibos pendientes). ✅\n\n` +
-          `⚠️ Sin embargo, tu servicio figuraba como *Suspendido* en el sistema. Ya enviamos la orden de *reactivación automática* a tu línea.\n\n` +
+          `⚠️ Tu servicio figuraba como *Suspendido* en el sistema y ya enviamos la orden de *reactivación automática* a tu línea.\n\n` +
           `🔄 Por favor desconecta tu módem de la corriente durante 30 segundos y vuélvelo a conectar para que sincronice la señal.\n\n` +
           `¿Me confirmas si al reiniciar ya tienes navegación o si necesitas que revisemos las luces de tu módem?`;
 
@@ -1727,18 +1805,6 @@ export class BotOrchestrator {
       }
     } catch (err: any) {
       logger.warn(`Error al consultar morosidad silenciosa en WispHub para ${phone}:`, err?.message || err);
-    }
-
-    // --- 2. VERIFICACIÓN SILENCIOSA DE CONECTIVIDAD EN SMARTOLT ---
-    const onuId = session.onu_id || (session.client_id ? `ONU-${session.client_id}` : null);
-    let diag: SmartOltStatusResult | null = null;
-    if (onuId) {
-      try {
-        diag = await SmartOLTService.obtenerEstadoONU(onuId);
-        logger.info(`Diagnóstico silencioso SmartOLT para ${phone} (ONU: ${onuId}): status=${diag.status}`);
-      } catch (err: any) {
-        logger.warn(`Error en diagnóstico silencioso SmartOLT para ${phone}:`, err?.message || err);
-      }
     }
 
     // CASO ESPECIAL: NO ABREN CIERTAS PÁGINAS O APLICACIONES ESPECÍFICAS (BLOQUEO / ENRUTAMIENTO / DNS)
@@ -3647,7 +3713,7 @@ export class BotOrchestrator {
         ip: meta.ip,
       });
 
-      const tieneDeudaReal = estadoFinanciero.totalDeuda > 0 || (estadoFinanciero.facturas && estadoFinanciero.facturas.length > 0);
+      const tieneDeudaReal = estadoFinanciero.tieneDeudaReal || estadoFinanciero.totalDeuda > 0 || (estadoFinanciero.facturas && estadoFinanciero.facturas.length > 0);
 
       if (tieneDeudaReal) {
         logger.info(`Intento de reinicio bloqueado: Cliente ${phone} (${session?.client_name}) con adeudo real en WispHub: $${estadoFinanciero.totalDeuda}.`);
@@ -3678,8 +3744,8 @@ export class BotOrchestrator {
         await this.enviarYLoguear(phone, msj, 'CONSULTAR_SALDO', 'REINICIO_BLOQUEADO_POR_ADEUDO', targetJid);
         await TursoService.updateStep(phone, 'ESPERANDO_COMPROBANTE');
         return;
-      } else if (estadoFinanciero.suspendido) {
-        logger.info(`Triage de soporte: Cliente ${phone} (${session?.client_name}) figura suspendido pero sin deuda. Reactivando servicio...`);
+      } else if (estadoFinanciero.suspendido && estadoFinanciero.yaPagoPeroNoActivo) {
+        logger.info(`Triage de soporte: Cliente ${phone} (${session?.client_name}) figura suspendido pero sin deuda (al corriente). Reactivando servicio...`);
         const idWispHub = estadoFinanciero.cliente?.id ||
           (session?.service_id && !String(session.service_id).startsWith('HWTC') && !String(session.service_id).startsWith('ONU-') && !String(session.service_id).startsWith('ZTEG') ? session.service_id : null) ||
           (session?.client_id && !String(session.client_id).startsWith('HWTC') && !String(session.client_id).startsWith('ONU-') && !String(session.client_id).startsWith('ZTEG') ? session.client_id : null);
@@ -3751,13 +3817,13 @@ export class BotOrchestrator {
       ? estadoFinanciero.facturas
       : (session?.client_id ? await WispHubService.obtenerFacturasPendientes(session.client_id) : []);
 
-    const tieneDeudaReal = estadoFinanciero.totalDeuda > 0 || facturas.length > 0;
+    const tieneDeudaReal = estadoFinanciero.tieneDeudaReal || estadoFinanciero.totalDeuda > 0 || facturas.length > 0;
 
     if (!tieneDeudaReal) {
       const ficha = this.getFichaBancaria(session);
       const nombreCliente = formatDisplayName(session?.client_name, true) || 'Cliente';
 
-      if (estadoFinanciero.suspendido) {
+      if (estadoFinanciero.suspendido && estadoFinanciero.yaPagoPeroNoActivo) {
         const idWispHub = estadoFinanciero.cliente?.id ||
           (session?.service_id && !String(session.service_id).startsWith('HWTC') && !String(session.service_id).startsWith('ONU-') && !String(session.service_id).startsWith('ZTEG') ? session.service_id : null) ||
           (session?.client_id && !String(session.client_id).startsWith('HWTC') && !String(session.client_id).startsWith('ONU-') && !String(session.client_id).startsWith('ZTEG') ? session.client_id : null);
