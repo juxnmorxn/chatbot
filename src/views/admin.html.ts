@@ -818,46 +818,163 @@ export function getAdminDashboardHtml(): string {
       background: rgba(255, 255, 255, 0.03);
     }
 
-    .table-filter-row th {
-      padding: 6px 8px;
-      background: rgba(15, 23, 42, 0.7);
-      border-bottom: 2px solid var(--card-border);
-      vertical-align: middle;
+    /* Topbar Contextual Search */
+    .topbar-center-search {
+      flex: 1;
+      max-width: 520px;
+      margin: 0 16px;
     }
 
-    .table-col-filter {
-      width: 100%;
+    .topbar-search-wrap {
+      display: flex;
+      align-items: center;
       background: rgba(0, 0, 0, 0.45);
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      border-radius: 6px;
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-sm);
+      padding: 6px 12px;
+      transition: var(--transition);
+      gap: 10px;
+    }
+
+    .topbar-search-wrap:focus-within {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
+      background: rgba(15, 23, 42, 0.95);
+    }
+
+    .topbar-search-input {
+      flex: 1;
+      background: transparent;
+      border: none;
       color: var(--text-main);
-      padding: 5px 8px;
-      font-size: 11.5px;
+      font-size: 13px;
       font-family: var(--font-main);
       outline: none;
-      transition: var(--transition);
-      box-sizing: border-box;
-      font-weight: 400;
     }
 
-    .table-col-filter:focus {
-      border-color: var(--primary);
-      background: rgba(30, 41, 59, 0.9);
-      box-shadow: 0 0 8px var(--primary-glow);
-    }
-
-    .table-col-filter::placeholder {
+    .topbar-search-input::placeholder {
       color: var(--text-dim);
+    }
+
+    .topbar-context-badge {
+      background: rgba(99, 102, 241, 0.15);
+      color: #818cf8;
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      padding: 2px 8px;
+      border-radius: 4px;
       font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
     }
 
-    select.table-col-filter {
+    .topbar-search-clear {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
       cursor: pointer;
+      font-size: 13px;
+      padding: 0 4px;
+      transition: color 0.15s;
     }
 
-    select.table-col-filter option {
+    .topbar-search-clear:hover {
+      color: var(--accent-rose);
+    }
+
+    /* Datatable Controls Toolbar */
+    .datatable-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 14px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    }
+
+    .datatable-search-box {
+      display: flex;
+      align-items: center;
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-sm);
+      padding: 7px 12px;
+      min-width: 250px;
+      flex: 1;
+      max-width: 380px;
+      gap: 8px;
+      transition: var(--transition);
+    }
+
+    .datatable-search-box:focus-within {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+    }
+
+    .datatable-search-box input {
+      background: transparent;
+      border: none;
+      color: var(--text-main);
+      font-size: 12.5px;
+      font-family: var(--font-main);
+      outline: none;
+      width: 100%;
+    }
+
+    .datatable-search-box input::placeholder {
+      color: var(--text-dim);
+    }
+
+    .datatable-filters-group {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .datatable-select {
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-sm);
+      color: var(--text-main);
+      padding: 7px 11px;
+      font-size: 12px;
+      font-family: var(--font-main);
+      outline: none;
+      cursor: pointer;
+      transition: var(--transition);
+    }
+
+    .datatable-select:focus {
+      border-color: var(--primary);
+    }
+
+    .datatable-select option {
       background: #0b0f19;
       color: #f8fafc;
+    }
+
+    th.sortable-th {
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.15s ease;
+    }
+
+    th.sortable-th:hover {
+      background: rgba(255, 255, 255, 0.07);
+      color: #fff;
+    }
+
+    .sort-icon {
+      font-size: 10px;
+      margin-left: 5px;
+      opacity: 0.5;
+    }
+
+    th.sort-active .sort-icon {
+      opacity: 1;
+      color: var(--accent-cyan);
     }
 
     /* Badges */
@@ -1691,6 +1808,17 @@ export function getAdminDashboardHtml(): string {
             <h2 id="current-view-title" class="view-title">Resumen General</h2>
           </div>
         </div>
+
+        <!-- Global Context-Aware Search Bar -->
+        <div class="topbar-center-search">
+          <div class="topbar-search-wrap">
+            <svg class="svg-icon svg-icon-sm" style="color: var(--text-muted); flex-shrink: 0;" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            <input type="text" id="global-context-search" class="topbar-search-input" placeholder="Buscar en la pantalla actual..." oninput="handleGlobalContextSearch(this.value)">
+            <span id="global-search-context-badge" class="topbar-context-badge">📊 Dashboard</span>
+            <button id="global-search-clear-btn" class="topbar-search-clear" onclick="clearGlobalContextSearch()" style="display: none;" title="Limpiar búsqueda">✕</button>
+          </div>
+        </div>
+
         <div class="topbar-right">
           <div id="whatsapp-live-pill" class="live-status-pill" style="cursor: pointer;" onclick="openWhatsAppInstancesModal()" title="Gestionar números e instancias de WhatsApp (Clic para ver)">
             <span class="pulse-dot"></span>
@@ -1830,48 +1958,46 @@ export function getAdminDashboardHtml(): string {
           <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
             <div style="display: flex; align-items: center; gap: 8px;">
               <h3 style="font-size: 15px; font-weight: 700;">Últimas Interacciones del Bot</h3>
-              <span class="badge badge-info" style="font-size: 10px;">Filtros por Columna</span>
+              <span id="badge-logs-count" class="badge badge-info" style="font-size: 10px;">0 registros</span>
             </div>
             <button class="btn btn-secondary btn-xs" onclick="loadDashboardData()" title="Refrescar interacciones">
               🔄 Refrescar
             </button>
           </div>
+
+          <!-- Datatable Toolbar -->
+          <div class="datatable-toolbar">
+            <div class="datatable-search-box">
+              <svg class="svg-icon svg-icon-sm" style="color: var(--text-muted); flex-shrink: 0;" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+              <input type="text" id="dashboard-logs-search" placeholder="Buscar por cliente, teléfono, mensaje..." oninput="filterDashboardLogs()">
+            </div>
+            <div class="datatable-filters-group">
+              <select id="dashboard-logs-flow" class="datatable-select" onchange="filterDashboardLogs()">
+                <option value="">🌐 Todos los Flujos</option>
+                <option value="IN">📥 Entrante (IN)</option>
+                <option value="OUT">📤 Saliente (OUT)</option>
+              </select>
+              <select id="dashboard-logs-sort" class="datatable-select" onchange="filterDashboardLogs()">
+                <option value="recent">⏱️ Más Recientes</option>
+                <option value="oldest">⏱️ Más Antiguos</option>
+                <option value="client_asc">🔤 Cliente (A-Z)</option>
+              </select>
+              <button class="btn btn-secondary btn-sm" onclick="clearDashboardLogsFilter()" title="Limpiar filtros">
+                🧹 Limpiar
+              </button>
+            </div>
+          </div>
+
           <div class="table-responsive">
             <table class="data-table">
               <thead>
                 <tr>
-                  <th style="min-width: 120px;">Hora</th>
-                  <th style="min-width: 140px;">Teléfono</th>
-                  <th style="min-width: 180px;">Cliente</th>
-                  <th style="min-width: 110px;">Flujo</th>
-                  <th style="min-width: 260px;">Mensaje</th>
+                  <th class="sortable-th" onclick="sortDashboardLogs('time')" style="min-width: 120px;">Hora <span id="sort-log-time" class="sort-icon">↕</span></th>
+                  <th class="sortable-th" onclick="sortDashboardLogs('phone')" style="min-width: 140px;">Teléfono <span id="sort-log-phone" class="sort-icon">↕</span></th>
+                  <th class="sortable-th" onclick="sortDashboardLogs('client')" style="min-width: 180px;">Cliente <span id="sort-log-client" class="sort-icon">↕</span></th>
+                  <th class="sortable-th" onclick="sortDashboardLogs('flow')" style="min-width: 110px;">Flujo <span id="sort-log-flow" class="sort-icon">↕</span></th>
+                  <th style="min-width: 280px;">Mensaje</th>
                   <th style="text-align: right; min-width: 80px;">Acción</th>
-                </tr>
-                <tr class="table-filter-row">
-                  <th>
-                    <input type="text" id="filter-log-time" class="table-col-filter" placeholder="Hora..." oninput="filterDashboardLogs()">
-                  </th>
-                  <th>
-                    <input type="text" id="filter-log-phone" class="table-col-filter" placeholder="Teléfono..." oninput="filterDashboardLogs()">
-                  </th>
-                  <th>
-                    <input type="text" id="filter-log-client" class="table-col-filter" placeholder="Cliente..." oninput="filterDashboardLogs()">
-                  </th>
-                  <th>
-                    <select id="filter-log-flow" class="table-col-filter" onchange="filterDashboardLogs()">
-                      <option value="">Todos</option>
-                      <option value="IN">Entrante</option>
-                      <option value="OUT">Saliente</option>
-                    </select>
-                  </th>
-                  <th>
-                    <input type="text" id="filter-log-msg" class="table-col-filter" placeholder="Buscar en texto..." oninput="filterDashboardLogs()">
-                  </th>
-                  <th style="text-align: right;">
-                    <button class="btn btn-secondary btn-xs" onclick="clearDashboardLogsFilter()" title="Limpiar filtros" style="padding: 4px 8px; font-size: 10.5px; width: 100%;">
-                      🧹 Limpiar
-                    </button>
-                  </th>
                 </tr>
               </thead>
               <tbody id="table-recent-logs-body">
@@ -2011,25 +2137,40 @@ export function getAdminDashboardHtml(): string {
           </div>
         </div>
 
-        <!-- Filter & Search Toolbar -->
-        <div class="glass-card" style="margin-bottom: 20px; padding: 14px 20px;">
-          <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;">
-            <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center; flex: 1;">
-              <span style="font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Filtros rápidos:</span>
-              <button class="btn btn-primary btn-sm" id="btn-client-filter-all" onclick="setClientsStatusFilter('ALL', this)">Todos (3,400+)</button>
-              <button class="btn btn-secondary btn-sm" id="btn-client-filter-act" onclick="setClientsStatusFilter('ACTIVO', this)">🟢 Activos</button>
-              <button class="btn btn-secondary btn-sm" id="btn-client-filter-susp" onclick="setClientsStatusFilter('SUSPENDIDO', this)">🔴 Suspendidos</button>
-              <button class="btn btn-secondary btn-sm" id="btn-client-filter-gps" onclick="setClientsStatusFilter('CON_GPS', this)">📍 Con GPS</button>
-              <button class="btn btn-secondary btn-sm" id="btn-client-filter-nogps" onclick="setClientsStatusFilter('SIN_GPS', this)">⚠️ Sin GPS</button>
+        <!-- Datatable Toolbar Card -->
+        <div class="glass-card" style="margin-bottom: 20px;">
+          <div class="datatable-toolbar" style="margin-bottom: 0; padding-bottom: 0; border-bottom: none;">
+            <div class="datatable-search-box">
+              <svg class="svg-icon svg-icon-sm" style="color: var(--text-muted); flex-shrink: 0;" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+              <input type="text" id="clients-datatable-search" placeholder="Buscar cliente por nombre, ID, IP, SN, teléfono..." oninput="handleClientSearchInput(this.value)">
             </div>
-            <div style="display: flex; gap: 8px; align-items: center;">
-              <button class="btn btn-secondary btn-sm" onclick="clearClientColFilters()" title="Limpiar todas las búsquedas y filtros">
-                <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M19 6L5 20M5 6l14 14"/></svg>
-                <span>Limpiar Filtros</span>
+            <div class="datatable-filters-group">
+              <select id="clients-filter-estado" class="datatable-select" onchange="handleClientDropdownFilter()">
+                <option value="">🟢 Todos los Estados</option>
+                <option value="Activo">🟢 Activos</option>
+                <option value="Suspendido">🔴 Suspendidos</option>
+                <option value="Corte">✂️ En Corte</option>
+                <option value="Gratis">🎁 Gratis / Demo</option>
+              </select>
+              <select id="clients-filter-router" class="datatable-select" onchange="handleClientDropdownFilter()">
+                <option value="">📍 Todos los Routers / Zonas</option>
+              </select>
+              <select id="clients-filter-gps" class="datatable-select" onchange="handleClientDropdownFilter()">
+                <option value="">🗺️ GPS: Todos</option>
+                <option value="CON_GPS">📍 Con Coordenadas GPS</option>
+                <option value="SIN_GPS">⚠️ Sin Coordenadas GPS</option>
+              </select>
+              <select id="clients-filter-sort" class="datatable-select" onchange="handleClientSortChange(this.value)">
+                <option value="id_asc">🔢 Orden: ID / Folio</option>
+                <option value="nombre_asc">🔤 Nombre (A-Z)</option>
+                <option value="nombre_desc">🔤 Nombre (Z-A)</option>
+                <option value="ip_asc">🌐 Dirección IP</option>
+              </select>
+              <button class="btn btn-secondary btn-sm" onclick="clearClientColFilters()" title="Limpiar todos los filtros">
+                🧹 Limpiar
               </button>
               <button class="btn btn-secondary btn-sm" onclick="triggerWisphubSync()" title="Sincronizar base de datos con WispHub en vivo">
-                <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"></path></svg>
-                <span>Sincronizar WispHub</span>
+                🔄 Sincronizar
               </button>
             </div>
           </div>
@@ -2040,7 +2181,6 @@ export function getAdminDashboardHtml(): string {
           <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 8px;">
             <div style="display: flex; align-items: center; gap: 10px;">
               <h3 style="font-size: 15px; font-weight: 700;">Directorio de Clientes & Geolocalización</h3>
-              <span class="badge badge-info" style="font-size: 10px;">Filtros por Columna Activos</span>
             </div>
             <span id="clients-count-label" style="font-size: 12px; color: var(--text-muted);">Cargando clientes...</span>
           </div>
@@ -2048,54 +2188,15 @@ export function getAdminDashboardHtml(): string {
             <table class="data-table">
               <thead>
                 <tr>
-                  <th style="min-width: 200px;">Cliente / Nombre</th>
-                  <th style="min-width: 150px;">Servicio / Contrato</th>
-                  <th style="min-width: 140px;">IP & SN</th>
-                  <th style="min-width: 120px;">Estado</th>
+                  <th class="sortable-th" onclick="sortClientsBy('nombre')" style="min-width: 200px;">Cliente / Nombre <span id="sort-client-nombre" class="sort-icon">↕</span></th>
+                  <th class="sortable-th" onclick="sortClientsBy('id_servicio')" style="min-width: 140px;">Servicio / ID <span id="sort-client-id" class="sort-icon">↕</span></th>
+                  <th class="sortable-th" onclick="sortClientsBy('ip')" style="min-width: 140px;">IP & SN <span id="sort-client-ip" class="sort-icon">↕</span></th>
+                  <th class="sortable-th" onclick="sortClientsBy('estado')" style="min-width: 120px;">Estado <span id="sort-client-estado" class="sort-icon">↕</span></th>
                   <th style="min-width: 140px;">Plan Internet</th>
-                  <th style="min-width: 140px;">Router / Zona</th>
+                  <th class="sortable-th" onclick="sortClientsBy('router')" style="min-width: 140px;">Router / Zona <span id="sort-client-router" class="sort-icon">↕</span></th>
                   <th style="min-width: 150px;">Teléfono(s)</th>
                   <th style="min-width: 160px;">Ubicación GPS</th>
                   <th style="text-align: right; min-width: 100px;">Acciones</th>
-                </tr>
-                <tr class="table-filter-row">
-                  <th>
-                    <input type="text" id="filter-client-nombre" class="table-col-filter" placeholder="Buscar nombre..." oninput="handleClientColFilter()">
-                  </th>
-                  <th>
-                    <input type="text" id="filter-client-servicio" class="table-col-filter" placeholder="Buscar servicio/ID..." oninput="handleClientColFilter()">
-                  </th>
-                  <th>
-                    <input type="text" id="filter-client-ip" class="table-col-filter" placeholder="172.x.x.x o SN..." oninput="handleClientColFilter()">
-                  </th>
-                  <th>
-                    <select id="filter-client-estado" class="table-col-filter" onchange="handleClientColFilter()">
-                      <option value="">Todos</option>
-                      <option value="Activo">🟢 Activo</option>
-                      <option value="Suspendido">🔴 Suspendido</option>
-                    </select>
-                  </th>
-                  <th>
-                    <input type="text" id="filter-client-plan" class="table-col-filter" placeholder="Plan / Megas..." oninput="handleClientColFilter()">
-                  </th>
-                  <th>
-                    <input type="text" id="filter-client-router" class="table-col-filter" placeholder="Router o Zona..." oninput="handleClientColFilter()">
-                  </th>
-                  <th>
-                    <input type="text" id="filter-client-telefono" class="table-col-filter" placeholder="Buscar teléfono..." oninput="handleClientColFilter()">
-                  </th>
-                  <th>
-                    <select id="filter-client-gps" class="table-col-filter" onchange="handleClientColFilter()">
-                      <option value="">GPS (Todos)</option>
-                      <option value="CON_GPS">📍 Con GPS</option>
-                      <option value="SIN_GPS">⚠️ Sin GPS</option>
-                    </select>
-                  </th>
-                  <th style="text-align: right;">
-                    <button class="btn btn-secondary btn-xs" onclick="clearClientColFilters()" title="Limpiar todos los filtros" style="padding: 4px 8px; font-size: 10.5px; width: 100%;">
-                      🧹 Limpiar
-                    </button>
-                  </th>
                 </tr>
               </thead>
               <tbody id="table-clients-body">
@@ -2138,61 +2239,55 @@ export function getAdminDashboardHtml(): string {
           </div>
         </div>
 
-        <!-- Tickets Table View with Column Filters -->
+        <!-- Tickets Table View -->
         <div id="tickets-table-container" class="glass-card" style="margin-bottom: 24px;">
           <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
             <div style="display: flex; align-items: center; gap: 8px;">
               <h4 style="font-size: 14.5px; font-weight: 700;">Directorio de Folios & Tickets</h4>
-              <span class="badge badge-info" style="font-size: 10px;">Filtros por Columna</span>
+              <span id="tickets-count-label" class="badge badge-info" style="font-size: 10px;">0 tickets</span>
             </div>
-            <span id="tickets-count-label" style="font-size: 12px; color: var(--text-muted);">Cargando tickets...</span>
           </div>
+
+          <!-- Datatable Toolbar -->
+          <div class="datatable-toolbar">
+            <div class="datatable-search-box">
+              <svg class="svg-icon svg-icon-sm" style="color: var(--text-muted); flex-shrink: 0;" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+              <input type="text" id="tickets-datatable-search" placeholder="Buscar por folio, cliente, falla, teléfono..." oninput="filterTicketsTable()">
+            </div>
+            <div class="datatable-filters-group">
+              <select id="tickets-filter-status" class="datatable-select" onchange="filterTicketsTable()">
+                <option value="">🎫 Todos los Estados</option>
+                <option value="ABIERTO">🟡 Abierto</option>
+                <option value="EN_PROCESO">🔵 En Proceso</option>
+                <option value="VISITA_TECNICA">🚚 Visita Técnica</option>
+                <option value="RESUELTO">🟢 Resuelto</option>
+              </select>
+              <select id="tickets-filter-tech" class="datatable-select" onchange="filterTicketsTable()">
+                <option value="">👷 Todos los Técnicos</option>
+              </select>
+              <select id="tickets-filter-sort" class="datatable-select" onchange="filterTicketsTable()">
+                <option value="recent">⏱️ Más Recientes</option>
+                <option value="oldest">⏱️ Más Antiguos</option>
+                <option value="folio_desc">🔢 Folio Mayor a Menor</option>
+              </select>
+              <button class="btn btn-secondary btn-sm" onclick="clearTicketsTableFilters()" title="Limpiar filtros">
+                🧹 Limpiar
+              </button>
+            </div>
+          </div>
+
           <div class="table-responsive">
             <table class="data-table">
               <thead>
                 <tr>
-                  <th style="min-width: 100px;">Folio</th>
-                  <th style="min-width: 180px;">Cliente</th>
-                  <th style="min-width: 140px;">Teléfono</th>
+                  <th class="sortable-th" onclick="sortTicketsBy('folio')" style="min-width: 100px;">Folio <span id="sort-ticket-folio" class="sort-icon">↕</span></th>
+                  <th class="sortable-th" onclick="sortTicketsBy('client')" style="min-width: 180px;">Cliente <span id="sort-ticket-client" class="sort-icon">↕</span></th>
+                  <th class="sortable-th" onclick="sortTicketsBy('phone')" style="min-width: 140px;">Teléfono <span id="sort-ticket-phone" class="sort-icon">↕</span></th>
                   <th style="min-width: 220px;">Problema / Asunto</th>
-                  <th style="min-width: 130px;">Estado</th>
-                  <th style="min-width: 150px;">Técnico Asignado</th>
-                  <th style="min-width: 130px;">Fecha</th>
+                  <th class="sortable-th" onclick="sortTicketsBy('status')" style="min-width: 130px;">Estado <span id="sort-ticket-status" class="sort-icon">↕</span></th>
+                  <th class="sortable-th" onclick="sortTicketsBy('tech')" style="min-width: 150px;">Técnico Asignado <span id="sort-ticket-tech" class="sort-icon">↕</span></th>
+                  <th class="sortable-th" onclick="sortTicketsBy('date')" style="min-width: 130px;">Fecha <span id="sort-ticket-date" class="sort-icon">↕</span></th>
                   <th style="text-align: right; min-width: 100px;">Acciones</th>
-                </tr>
-                <tr class="table-filter-row">
-                  <th>
-                    <input type="text" id="filter-ticket-folio" class="table-col-filter" placeholder="# Folio..." oninput="filterTicketsTable()">
-                  </th>
-                  <th>
-                    <input type="text" id="filter-ticket-client" class="table-col-filter" placeholder="Cliente..." oninput="filterTicketsTable()">
-                  </th>
-                  <th>
-                    <input type="text" id="filter-ticket-phone" class="table-col-filter" placeholder="Teléfono..." oninput="filterTicketsTable()">
-                  </th>
-                  <th>
-                    <input type="text" id="filter-ticket-subject" class="table-col-filter" placeholder="Asunto o falla..." oninput="filterTicketsTable()">
-                  </th>
-                  <th>
-                    <select id="filter-ticket-status" class="table-col-filter" onchange="filterTicketsTable()">
-                      <option value="">Todos</option>
-                      <option value="ABIERTO">Abierto</option>
-                      <option value="EN_PROCESO">En Proceso</option>
-                      <option value="VISITA_TECNICA">Visita Técnica</option>
-                      <option value="RESUELTO">Resuelto</option>
-                    </select>
-                  </th>
-                  <th>
-                    <input type="text" id="filter-ticket-tech" class="table-col-filter" placeholder="Técnico..." oninput="filterTicketsTable()">
-                  </th>
-                  <th>
-                    <input type="text" id="filter-ticket-date" class="table-col-filter" placeholder="Fecha..." oninput="filterTicketsTable()">
-                  </th>
-                  <th style="text-align: right;">
-                    <button class="btn btn-secondary btn-xs" onclick="clearTicketsTableFilters()" title="Limpiar filtros" style="padding: 4px 8px; font-size: 10.5px; width: 100%;">
-                      🧹 Limpiar
-                    </button>
-                  </th>
                 </tr>
               </thead>
               <tbody id="table-tickets-body">
@@ -2264,41 +2359,41 @@ export function getAdminDashboardHtml(): string {
           <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
             <div style="display: flex; align-items: center; gap: 8px;">
               <h3 style="font-size: 15px; font-weight: 700;">ONUs Nuevas Sin Configurar en SmartOLT</h3>
-              <span class="badge badge-info" style="font-size: 10px;">Filtros por Columna</span>
             </div>
             <button class="btn btn-secondary btn-sm" onclick="loadIpamData()">
               <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"></path></svg>
               <span>Refrescar PON</span>
             </button>
           </div>
+
+          <!-- Datatable Toolbar -->
+          <div class="datatable-toolbar">
+            <div class="datatable-search-box">
+              <svg class="svg-icon svg-icon-sm" style="color: var(--text-muted); flex-shrink: 0;" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+              <input type="text" id="ipam-onus-search" placeholder="Buscar por Serial (SN), modelo ONT, OLT, puerto..." oninput="filterUnconfiguredOnus()">
+            </div>
+            <div class="datatable-filters-group">
+              <select id="ipam-onus-olt" class="datatable-select" onchange="filterUnconfiguredOnus()">
+                <option value="">🌐 Todas las OLTs</option>
+              </select>
+              <select id="ipam-onus-model" class="datatable-select" onchange="filterUnconfiguredOnus()">
+                <option value="">📠 Todos los Modelos</option>
+              </select>
+              <button class="btn btn-secondary btn-sm" onclick="clearUnconfiguredOnusFilters()" title="Limpiar filtros">
+                🧹 Limpiar
+              </button>
+            </div>
+          </div>
+
           <div class="table-responsive">
             <table class="data-table">
               <thead>
                 <tr>
-                  <th style="min-width: 140px;">OLT</th>
-                  <th style="min-width: 110px;">PON</th>
-                  <th style="min-width: 180px;">Serial (SN)</th>
-                  <th style="min-width: 140px;">Modelo</th>
+                  <th class="sortable-th" onclick="sortUnconfiguredOnus('olt')" style="min-width: 140px;">OLT <span id="sort-pon-olt" class="sort-icon">↕</span></th>
+                  <th class="sortable-th" onclick="sortUnconfiguredOnus('port')" style="min-width: 110px;">PON <span id="sort-pon-port" class="sort-icon">↕</span></th>
+                  <th class="sortable-th" onclick="sortUnconfiguredOnus('sn')" style="min-width: 180px;">Serial (SN) <span id="sort-pon-sn" class="sort-icon">↕</span></th>
+                  <th class="sortable-th" onclick="sortUnconfiguredOnus('model')" style="min-width: 140px;">Modelo <span id="sort-pon-model" class="sort-icon">↕</span></th>
                   <th style="text-align: right; min-width: 120px;">Acción</th>
-                </tr>
-                <tr class="table-filter-row">
-                  <th>
-                    <input type="text" id="filter-pon-olt" class="table-col-filter" placeholder="OLT..." oninput="filterUnconfiguredOnus()">
-                  </th>
-                  <th>
-                    <input type="text" id="filter-pon-port" class="table-col-filter" placeholder="PON..." oninput="filterUnconfiguredOnus()">
-                  </th>
-                  <th>
-                    <input type="text" id="filter-pon-sn" class="table-col-filter" placeholder="Serial / SN..." oninput="filterUnconfiguredOnus()">
-                  </th>
-                  <th>
-                    <input type="text" id="filter-pon-model" class="table-col-filter" placeholder="Modelo..." oninput="filterUnconfiguredOnus()">
-                  </th>
-                  <th style="text-align: right;">
-                    <button class="btn btn-secondary btn-xs" onclick="clearUnconfiguredOnusFilters()" title="Limpiar filtros" style="padding: 4px 8px; font-size: 10.5px; width: 100%;">
-                      🧹 Limpiar
-                    </button>
-                  </th>
                 </tr>
               </thead>
               <tbody id="table-unconfigured-onus-body">
@@ -2311,80 +2406,55 @@ export function getAdminDashboardHtml(): string {
 
       <!-- VIEW 5: AUDITORÍA SMARTOLT VS WISPHUB -->
       <section id="view-audit" class="view-container">
-        <div class="glass-card" style="margin-bottom: 20px;">
-          <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;">
-            <div style="display: flex; gap: 8px; flex-wrap: wrap;" id="audit-filter-buttons">
-              <button class="btn btn-secondary btn-sm active" onclick="setAuditFilter('all', this)">Todos</button>
-              <button class="btn btn-danger btn-sm" onclick="setAuditFilter('mismatches', this)">Discrepancias</button>
-              <button class="btn btn-warning btn-sm" onclick="setAuditFilter('missing_tr069', this)">Falta TR-069</button>
-              <button class="btn btn-info btn-sm" onclick="setAuditFilter('missing_ipv6', this)">Falta IPv6</button>
-              <button class="btn btn-success btn-sm" onclick="setAuditFilter('matches', this)">Correctos</button>
-              <button class="btn btn-secondary btn-sm" onclick="setAuditFilter('only_olt', this)">Solo SmartOLT</button>
-              <button class="btn btn-secondary btn-sm" onclick="setAuditFilter('only_wisphub', this)">Solo WispHub</button>
-            </div>
-            <button class="btn btn-secondary btn-sm" onclick="clearAuditColFilters()" title="Limpiar todas las columnas">
-              🧹 Limpiar Filtros
-            </button>
-          </div>
-        </div>
-
         <div class="glass-card">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
+            <h3 style="font-size: 15px; font-weight: 700;">Auditoría Cruzada SmartOLT vs WispHub</h3>
+            <span id="audit-pagination-info" style="font-size: 12px; color: var(--text-muted);">Página 1</span>
+          </div>
+
+          <!-- Datatable Toolbar -->
+          <div class="datatable-toolbar">
+            <div class="datatable-search-box">
+              <svg class="svg-icon svg-icon-sm" style="color: var(--text-muted); flex-shrink: 0;" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+              <input type="text" id="audit-datatable-search" placeholder="Buscar por cliente, folio, IP OLT, IP WispHub..." oninput="handleAuditSearch(this.value)">
+            </div>
+            <div class="datatable-filters-group">
+              <select id="audit-filter-ip-status" class="datatable-select" onchange="handleAuditDropdownFilter()">
+                <option value="">🌐 Estado IP: Todos</option>
+                <option value="MATCH">🟢 Correctos (Match)</option>
+                <option value="MISMATCH">🔴 Discrepancias IP</option>
+                <option value="ONLY_SMARTOLT">ℹ️ Solo SmartOLT</option>
+                <option value="ONLY_WISPHUB">🟣 Solo WispHub</option>
+              </select>
+              <select id="audit-filter-tr069" class="datatable-select" onchange="handleAuditDropdownFilter()">
+                <option value="">⚙️ TR-069: Todos</option>
+                <option value="ACTIVE">🟢 Configurado / Activo</option>
+                <option value="INACTIVE">🔴 Falta TR-069</option>
+              </select>
+              <select id="audit-filter-ipv6" class="datatable-select" onchange="handleAuditDropdownFilter()">
+                <option value="">🌐 IPv6: Todos</option>
+                <option value="ACTIVE">🟢 Dual Stack</option>
+                <option value="INACTIVE">🟡 Solo IPv4</option>
+              </select>
+              <button class="btn btn-secondary btn-sm" onclick="clearAuditColFilters()" title="Limpiar filtros">
+                🧹 Limpiar
+              </button>
+            </div>
+          </div>
+
           <div class="table-responsive">
             <table class="data-table">
               <thead>
                 <tr>
-                  <th style="min-width: 180px;">Cliente</th>
-                  <th style="min-width: 130px;">Servicio / Folio</th>
-                  <th style="min-width: 130px;">IP SmartOLT</th>
-                  <th style="min-width: 130px;">IP WispHub</th>
-                  <th style="min-width: 110px;">Estado IP</th>
+                  <th class="sortable-th" onclick="sortAuditBy('cliente')" style="min-width: 180px;">Cliente <span id="sort-audit-client" class="sort-icon">↕</span></th>
+                  <th class="sortable-th" onclick="sortAuditBy('servicio')" style="min-width: 130px;">Servicio / Folio <span id="sort-audit-srv" class="sort-icon">↕</span></th>
+                  <th class="sortable-th" onclick="sortAuditBy('smartolt_ip')" style="min-width: 130px;">IP SmartOLT <span id="sort-audit-ip-olt" class="sort-icon">↕</span></th>
+                  <th class="sortable-th" onclick="sortAuditBy('wisphub_ip')" style="min-width: 130px;">IP WispHub <span id="sort-audit-ip-wisp" class="sort-icon">↕</span></th>
+                  <th class="sortable-th" onclick="sortAuditBy('ip_status')" style="min-width: 110px;">Estado IP <span id="sort-audit-ip-status" class="sort-icon">↕</span></th>
                   <th style="min-width: 110px;">TR-069</th>
                   <th style="min-width: 110px;">IPv6</th>
                   <th style="min-width: 140px;">Plan WispHub</th>
                   <th style="text-align: right; min-width: 100px;">Acción</th>
-                </tr>
-                <tr class="table-filter-row">
-                  <th>
-                    <input type="text" id="filter-audit-client" class="table-col-filter" placeholder="Cliente..." oninput="handleAuditColFilter()">
-                  </th>
-                  <th>
-                    <input type="text" id="filter-audit-srv" class="table-col-filter" placeholder="Servicio..." oninput="handleAuditColFilter()">
-                  </th>
-                  <th>
-                    <input type="text" id="filter-audit-ip-olt" class="table-col-filter" placeholder="IP SmartOLT..." oninput="handleAuditColFilter()">
-                  </th>
-                  <th>
-                    <input type="text" id="filter-audit-ip-wisp" class="table-col-filter" placeholder="IP WispHub..." oninput="handleAuditColFilter()">
-                  </th>
-                  <th>
-                    <select id="filter-audit-ip-status" class="table-col-filter" onchange="handleAuditColFilter()">
-                      <option value="">Todos</option>
-                      <option value="MATCH">Match</option>
-                      <option value="MISMATCH">Discrepancia</option>
-                    </select>
-                  </th>
-                  <th>
-                    <select id="filter-audit-tr069" class="table-col-filter" onchange="handleAuditColFilter()">
-                      <option value="">Todos</option>
-                      <option value="ACTIVE">Activo</option>
-                      <option value="INACTIVE">Inactivo</option>
-                    </select>
-                  </th>
-                  <th>
-                    <select id="filter-audit-ipv6" class="table-col-filter" onchange="handleAuditColFilter()">
-                      <option value="">Todos</option>
-                      <option value="ACTIVE">Dual Stack</option>
-                      <option value="INACTIVE">Solo IPv4</option>
-                    </select>
-                  </th>
-                  <th>
-                    <input type="text" id="filter-audit-plan" class="table-col-filter" placeholder="Plan..." oninput="handleAuditColFilter()">
-                  </th>
-                  <th style="text-align: right;">
-                    <button class="btn btn-secondary btn-xs" onclick="clearAuditColFilters()" title="Limpiar filtros" style="padding: 4px 8px; font-size: 10.5px; width: 100%;">
-                      🧹 Limpiar
-                    </button>
-                  </th>
                 </tr>
               </thead>
               <tbody id="table-audit-body">
@@ -2393,7 +2463,7 @@ export function getAdminDashboardHtml(): string {
             </table>
           </div>
           <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 16px;">
-            <span id="audit-pagination-info" style="font-size: 12px; color: var(--text-muted);">Página 1</span>
+            <span id="audit-pagination-info-bottom" style="font-size: 12px; color: var(--text-muted);">Página 1</span>
             <div style="display: flex; gap: 8px;">
               <button id="btn-audit-prev" class="btn btn-secondary btn-sm" onclick="changeAuditPage(-1)">◀ Anterior</button>
               <button id="btn-audit-next" class="btn btn-secondary btn-sm" onclick="changeAuditPage(1)">Siguiente ▶</button>
@@ -2466,50 +2536,47 @@ export function getAdminDashboardHtml(): string {
         </div>
 
         <div class="glass-card">
+          <!-- Datatable Toolbar -->
+          <div class="datatable-toolbar">
+            <div class="datatable-search-box">
+              <span class="search-icon">🔍</span>
+              <input type="text" id="filter-prov-search" placeholder="Buscar por cliente, SN, IP WAN o zona..." oninput="handleProvColFilter()">
+            </div>
+            <div class="datatable-filters-group">
+              <select id="filter-prov-tr069" class="datatable-select" onchange="handleProvColFilter()" title="Filtrar por TR-069">
+                <option value="">⚙️ Todos TR-069</option>
+                <option value="ACTIVE">TR-069 Configurado</option>
+                <option value="INACTIVE">Falta TR-069</option>
+              </select>
+              <select id="filter-prov-ipv6" class="datatable-select" onchange="handleProvColFilter()" title="Filtrar por IPv6">
+                <option value="">🌐 Todos IPv6</option>
+                <option value="ACTIVE">IPv6 Dual Stack</option>
+                <option value="INACTIVE">Falta IPv6</option>
+              </select>
+              <select id="filter-prov-sort" class="datatable-select" onchange="sortProvisioningBy(this.value)" title="Ordenar registros">
+                <option value="cliente_asc">Ordenar: Cliente (A-Z)</option>
+                <option value="cliente_desc">Ordenar: Cliente (Z-A)</option>
+                <option value="ip_asc">Ordenar: IP WAN</option>
+                <option value="tr069">Ordenar: Prioridad TR-069</option>
+                <option value="ipv6">Ordenar: Prioridad IPv6</option>
+              </select>
+              <button class="btn btn-secondary btn-sm" onclick="clearProvColFilters()" title="Limpiar todos los filtros">
+                🧹 Limpiar
+              </button>
+            </div>
+          </div>
+
           <div class="table-responsive">
             <table class="data-table">
               <thead>
                 <tr>
-                  <th style="min-width: 180px;">Cliente</th>
-                  <th style="min-width: 150px;">Serial (SN)</th>
-                  <th style="min-width: 140px;">IP WAN</th>
-                  <th style="min-width: 140px;">Zona / OLT</th>
-                  <th style="min-width: 120px;">Estado TR-069</th>
-                  <th style="min-width: 120px;">Estado IPv6</th>
+                  <th class="sortable-th" onclick="sortProvisioningBy('cliente')" style="min-width: 180px;">Cliente <span class="sort-icon">↕</span></th>
+                  <th class="sortable-th" onclick="sortProvisioningBy('sn')" style="min-width: 150px;">Serial (SN) <span class="sort-icon">↕</span></th>
+                  <th class="sortable-th" onclick="sortProvisioningBy('ip')" style="min-width: 140px;">IP WAN <span class="sort-icon">↕</span></th>
+                  <th class="sortable-th" onclick="sortProvisioningBy('zone')" style="min-width: 140px;">Zona / OLT <span class="sort-icon">↕</span></th>
+                  <th class="sortable-th" onclick="sortProvisioningBy('tr069')" style="min-width: 120px;">Estado TR-069 <span class="sort-icon">↕</span></th>
+                  <th class="sortable-th" onclick="sortProvisioningBy('ipv6')" style="min-width: 120px;">Estado IPv6 <span class="sort-icon">↕</span></th>
                   <th style="text-align: right; min-width: 100px;">Acción</th>
-                </tr>
-                <tr class="table-filter-row">
-                  <th>
-                    <input type="text" id="filter-prov-client" class="table-col-filter" placeholder="Cliente..." oninput="handleProvColFilter()">
-                  </th>
-                  <th>
-                    <input type="text" id="filter-prov-sn" class="table-col-filter" placeholder="SN ONU..." oninput="handleProvColFilter()">
-                  </th>
-                  <th>
-                    <input type="text" id="filter-prov-ip" class="table-col-filter" placeholder="IP WAN..." oninput="handleProvColFilter()">
-                  </th>
-                  <th>
-                    <input type="text" id="filter-prov-zone" class="table-col-filter" placeholder="Zona / OLT..." oninput="handleProvColFilter()">
-                  </th>
-                  <th>
-                    <select id="filter-prov-tr069" class="table-col-filter" onchange="handleProvColFilter()">
-                      <option value="">Todos</option>
-                      <option value="ACTIVE">Configurado</option>
-                      <option value="INACTIVE">Falta TR-069</option>
-                    </select>
-                  </th>
-                  <th>
-                    <select id="filter-prov-ipv6" class="table-col-filter" onchange="handleProvColFilter()">
-                      <option value="">Todos</option>
-                      <option value="ACTIVE">Dual Stack</option>
-                      <option value="INACTIVE">Falta IPv6</option>
-                    </select>
-                  </th>
-                  <th style="text-align: right;">
-                    <button class="btn btn-secondary btn-xs" onclick="clearProvColFilters()" title="Limpiar filtros" style="padding: 4px 8px; font-size: 10.5px; width: 100%;">
-                      🧹 Limpiar
-                    </button>
-                  </th>
                 </tr>
               </thead>
               <tbody id="table-prov-body">
@@ -2541,46 +2608,47 @@ export function getAdminDashboardHtml(): string {
         </div>
 
         <div class="glass-card">
+          <!-- Datatable Toolbar -->
+          <div class="datatable-toolbar">
+            <div class="datatable-search-box">
+              <span class="search-icon">🔍</span>
+              <input type="text" id="filter-tech-search" placeholder="Buscar por nombre, teléfono o PIN..." oninput="filterTechniciansTable()">
+            </div>
+            <div class="datatable-filters-group">
+              <select id="filter-tech-role" class="datatable-select" onchange="filterTechniciansTable()" title="Filtrar por rol">
+                <option value="">💼 Todos los roles</option>
+                <option value="instalador">Instalador</option>
+                <option value="soporte">Soporte</option>
+                <option value="supervisor">Supervisor</option>
+                <option value="tecnico">Técnico</option>
+              </select>
+              <select id="filter-tech-status" class="datatable-select" onchange="filterTechniciansTable()" title="Filtrar por estado">
+                <option value="">⚡ Todos los estados</option>
+                <option value="ACTIVO">Activo</option>
+                <option value="INACTIVO">Inactivo</option>
+              </select>
+              <select id="filter-tech-sort" class="datatable-select" onchange="sortTechniciansBy(this.value)" title="Ordenar técnicos">
+                <option value="name_asc">Ordenar: Nombre (A-Z)</option>
+                <option value="name_desc">Ordenar: Nombre (Z-A)</option>
+                <option value="phone_asc">Ordenar: Teléfono</option>
+                <option value="status_asc">Ordenar: Estado</option>
+              </select>
+              <button class="btn btn-secondary btn-sm" onclick="clearTechniciansFilters()" title="Limpiar filtros">
+                🧹 Limpiar
+              </button>
+            </div>
+          </div>
+
           <div class="table-responsive">
             <table class="data-table">
               <thead>
                 <tr>
-                  <th style="min-width: 180px;">Nombre</th>
-                  <th style="min-width: 150px;">Teléfono WhatsApp</th>
-                  <th style="min-width: 110px;">PIN (5 Dígitos)</th>
-                  <th style="min-width: 120px;">Rol</th>
-                  <th style="min-width: 110px;">Estado</th>
+                  <th class="sortable-th" onclick="sortTechniciansBy('name')" style="min-width: 180px;">Nombre <span class="sort-icon">↕</span></th>
+                  <th class="sortable-th" onclick="sortTechniciansBy('phone')" style="min-width: 150px;">Teléfono WhatsApp <span class="sort-icon">↕</span></th>
+                  <th class="sortable-th" onclick="sortTechniciansBy('pin')" style="min-width: 110px;">PIN (5 Dígitos) <span class="sort-icon">↕</span></th>
+                  <th class="sortable-th" onclick="sortTechniciansBy('role')" style="min-width: 120px;">Rol <span class="sort-icon">↕</span></th>
+                  <th class="sortable-th" onclick="sortTechniciansBy('status')" style="min-width: 110px;">Estado <span class="sort-icon">↕</span></th>
                   <th style="text-align: right; min-width: 100px;">Acciones</th>
-                </tr>
-                <tr class="table-filter-row">
-                  <th>
-                    <input type="text" id="filter-tech-name" class="table-col-filter" placeholder="Nombre técnico..." oninput="filterTechniciansTable()">
-                  </th>
-                  <th>
-                    <input type="text" id="filter-tech-phone" class="table-col-filter" placeholder="Teléfono..." oninput="filterTechniciansTable()">
-                  </th>
-                  <th>
-                    <input type="text" id="filter-tech-pin" class="table-col-filter" placeholder="PIN..." oninput="filterTechniciansTable()">
-                  </th>
-                  <th>
-                    <select id="filter-tech-role" class="table-col-filter" onchange="filterTechniciansTable()">
-                      <option value="">Todos los roles</option>
-                      <option value="tecnico">Técnico</option>
-                      <option value="supervisor">Supervisor</option>
-                    </select>
-                  </th>
-                  <th>
-                    <select id="filter-tech-status" class="table-col-filter" onchange="filterTechniciansTable()">
-                      <option value="">Todos</option>
-                      <option value="ACTIVO">Activo</option>
-                      <option value="INACTIVO">Inactivo</option>
-                    </select>
-                  </th>
-                  <th style="text-align: right;">
-                    <button class="btn btn-secondary btn-xs" onclick="clearTechniciansFilters()" title="Limpiar filtros" style="padding: 4px 8px; font-size: 10.5px; width: 100%;">
-                      🧹 Limpiar
-                    </button>
-                  </th>
                 </tr>
               </thead>
               <tbody id="table-technicians-body">
@@ -2719,54 +2787,42 @@ export function getAdminDashboardHtml(): string {
             <button class="btn btn-secondary btn-xs" onclick="loadModemSwapHistory()">🔄 Actualizar Historial</button>
           </div>
 
+          <!-- Datatable Toolbar -->
+          <div class="datatable-toolbar">
+            <div class="datatable-search-box">
+              <span class="search-icon">🔍</span>
+              <input type="text" id="filter-swap-search" placeholder="Buscar por cliente, SN anterior/nuevo, IP o técnico..." oninput="filterSwapHistoryTable()">
+            </div>
+            <div class="datatable-filters-group">
+              <select id="filter-swap-status" class="datatable-select" onchange="filterSwapHistoryTable()" title="Filtrar por estado">
+                <option value="">⚡ Todos los estados</option>
+                <option value="COMPLETADO">Completado</option>
+                <option value="ERROR">Error</option>
+              </select>
+              <select id="filter-swap-sort" class="datatable-select" onchange="sortSwapHistoryBy(this.value)" title="Ordenar historial">
+                <option value="date_desc">Ordenar: Más recientes primero</option>
+                <option value="date_asc">Ordenar: Más antiguos primero</option>
+                <option value="client_asc">Ordenar: Cliente (A-Z)</option>
+              </select>
+              <button class="btn btn-secondary btn-sm" onclick="clearSwapHistoryFilters()" title="Limpiar filtros">
+                🧹 Limpiar
+              </button>
+            </div>
+          </div>
+
           <div class="table-responsive">
             <table class="data-table">
               <thead>
                 <tr>
-                  <th style="min-width: 130px;">Fecha</th>
-                  <th style="min-width: 170px;">Cliente</th>
-                  <th style="min-width: 140px;">Módem Retirado (Old SN)</th>
-                  <th style="min-width: 140px;">Nuevo Módem (New SN)</th>
-                  <th style="min-width: 130px;">IP / VLAN</th>
-                  <th style="min-width: 120px;">Zona</th>
-                  <th style="min-width: 140px;">Técnico / Responsable</th>
-                  <th style="min-width: 110px;">Estado</th>
+                  <th class="sortable-th" onclick="sortSwapHistoryBy('date')" style="min-width: 130px;">Fecha <span class="sort-icon">↕</span></th>
+                  <th class="sortable-th" onclick="sortSwapHistoryBy('client')" style="min-width: 170px;">Cliente <span class="sort-icon">↕</span></th>
+                  <th class="sortable-th" onclick="sortSwapHistoryBy('old_sn')" style="min-width: 140px;">Módem Retirado (Old SN) <span class="sort-icon">↕</span></th>
+                  <th class="sortable-th" onclick="sortSwapHistoryBy('new_sn')" style="min-width: 140px;">Nuevo Módem (New SN) <span class="sort-icon">↕</span></th>
+                  <th class="sortable-th" onclick="sortSwapHistoryBy('ip')" style="min-width: 130px;">IP / VLAN <span class="sort-icon">↕</span></th>
+                  <th class="sortable-th" onclick="sortSwapHistoryBy('zone')" style="min-width: 120px;">Zona <span class="sort-icon">↕</span></th>
+                  <th class="sortable-th" onclick="sortSwapHistoryBy('tech')" style="min-width: 140px;">Técnico / Responsable <span class="sort-icon">↕</span></th>
+                  <th class="sortable-th" onclick="sortSwapHistoryBy('status')" style="min-width: 110px;">Estado <span class="sort-icon">↕</span></th>
                   <th style="text-align: right; min-width: 90px;">Acción</th>
-                </tr>
-                <tr class="table-filter-row">
-                  <th>
-                    <input type="text" id="filter-swap-date" class="table-col-filter" placeholder="Fecha..." oninput="filterSwapHistoryTable()">
-                  </th>
-                  <th>
-                    <input type="text" id="filter-swap-client" class="table-col-filter" placeholder="Cliente..." oninput="filterSwapHistoryTable()">
-                  </th>
-                  <th>
-                    <input type="text" id="filter-swap-oldsn" class="table-col-filter" placeholder="Old SN..." oninput="filterSwapHistoryTable()">
-                  </th>
-                  <th>
-                    <input type="text" id="filter-swap-newsn" class="table-col-filter" placeholder="New SN..." oninput="filterSwapHistoryTable()">
-                  </th>
-                  <th>
-                    <input type="text" id="filter-swap-ip" class="table-col-filter" placeholder="IP / VLAN..." oninput="filterSwapHistoryTable()">
-                  </th>
-                  <th>
-                    <input type="text" id="filter-swap-zone" class="table-col-filter" placeholder="Zona..." oninput="filterSwapHistoryTable()">
-                  </th>
-                  <th>
-                    <input type="text" id="filter-swap-tech" class="table-col-filter" placeholder="Técnico..." oninput="filterSwapHistoryTable()">
-                  </th>
-                  <th>
-                    <select id="filter-swap-status" class="table-col-filter" onchange="filterSwapHistoryTable()">
-                      <option value="">Todos</option>
-                      <option value="COMPLETADO">Completado</option>
-                      <option value="ERROR">Error</option>
-                    </select>
-                  </th>
-                  <th style="text-align: right;">
-                    <button class="btn btn-secondary btn-xs" onclick="clearSwapHistoryFilters()" title="Limpiar filtros" style="padding: 4px 8px; font-size: 10.5px; width: 100%;">
-                      🧹 Limpiar
-                    </button>
-                  </th>
                 </tr>
               </thead>
               <tbody id="table-swap-history-body">
@@ -3061,40 +3117,41 @@ export function getAdminDashboardHtml(): string {
         </div>
 
         <div class="glass-card">
+          <!-- Datatable Toolbar -->
+          <div class="datatable-toolbar">
+            <div class="datatable-search-box">
+              <span class="search-icon">🔍</span>
+              <input type="text" id="filter-user-search" placeholder="Buscar por usuario o nombre completo..." oninput="filterAdminUsersTable()">
+            </div>
+            <div class="datatable-filters-group">
+              <select id="filter-user-role" class="datatable-select" onchange="filterAdminUsersTable()" title="Filtrar por rol">
+                <option value="">👤 Todos los roles</option>
+                <option value="superadmin">Superadmin</option>
+                <option value="soporte">Soporte</option>
+                <option value="tecnico">Técnico</option>
+                <option value="facturacion">Facturación</option>
+              </select>
+              <select id="filter-user-sort" class="datatable-select" onchange="sortAdminUsersBy(this.value)" title="Ordenar usuarios">
+                <option value="username_asc">Ordenar: Usuario (A-Z)</option>
+                <option value="name_asc">Ordenar: Nombre (A-Z)</option>
+                <option value="role_asc">Ordenar: Rol</option>
+                <option value="login_desc">Ordenar: Último Ingreso</option>
+              </select>
+              <button class="btn btn-secondary btn-sm" onclick="clearAdminUsersFilters()" title="Limpiar filtros">
+                🧹 Limpiar
+              </button>
+            </div>
+          </div>
+
           <div class="table-responsive">
             <table class="data-table">
               <thead>
                 <tr>
-                  <th style="min-width: 140px;">Usuario</th>
-                  <th style="min-width: 180px;">Nombre Completo</th>
-                  <th style="min-width: 120px;">Rol</th>
-                  <th style="min-width: 140px;">Último Ingreso</th>
+                  <th class="sortable-th" onclick="sortAdminUsersBy('username')" style="min-width: 140px;">Usuario <span class="sort-icon">↕</span></th>
+                  <th class="sortable-th" onclick="sortAdminUsersBy('name')" style="min-width: 180px;">Nombre Completo <span class="sort-icon">↕</span></th>
+                  <th class="sortable-th" onclick="sortAdminUsersBy('role')" style="min-width: 120px;">Rol <span class="sort-icon">↕</span></th>
+                  <th class="sortable-th" onclick="sortAdminUsersBy('last_login')" style="min-width: 140px;">Último Ingreso <span class="sort-icon">↕</span></th>
                   <th style="text-align: right; min-width: 90px;">Acciones</th>
-                </tr>
-                <tr class="table-filter-row">
-                  <th>
-                    <input type="text" id="filter-user-name" class="table-col-filter" placeholder="Usuario..." oninput="filterAdminUsersTable()">
-                  </th>
-                  <th>
-                    <input type="text" id="filter-user-fullname" class="table-col-filter" placeholder="Nombre completo..." oninput="filterAdminUsersTable()">
-                  </th>
-                  <th>
-                    <select id="filter-user-role" class="table-col-filter" onchange="filterAdminUsersTable()">
-                      <option value="">Todos</option>
-                      <option value="superadmin">Superadmin</option>
-                      <option value="soporte">Soporte</option>
-                      <option value="tecnico">Técnico</option>
-                      <option value="facturacion">Facturación</option>
-                    </select>
-                  </th>
-                  <th>
-                    <input type="text" id="filter-user-login" class="table-col-filter" placeholder="Fecha / Ingreso..." oninput="filterAdminUsersTable()">
-                  </th>
-                  <th style="text-align: right;">
-                    <button class="btn btn-secondary btn-xs" onclick="clearAdminUsersFilters()" title="Limpiar filtros" style="padding: 4px 8px; font-size: 10.5px; width: 100%;">
-                      🧹 Limpiar
-                    </button>
-                  </th>
                 </tr>
               </thead>
               <tbody id="table-admin-users-body">
@@ -3366,7 +3423,105 @@ export function getAdminDashboardHtml(): string {
       };
       document.getElementById('current-view-title').innerText = titles[viewId] || 'Panel';
       document.getElementById('sidebar').classList.remove('mobile-open');
+      
+      // Actualizar Barra de Búsqueda Contextual del Topbar
+      updateGlobalSearchContext(viewId);
+
       loadViewData(viewId);
+    }
+
+    // Topbar Context-Aware Search Engine
+    const searchContextMap = {
+      'dashboard': { label: 'Dashboard', placeholder: 'Buscar en bitácora de eventos y logs...' },
+      'live-chat': { label: 'Live Chat', placeholder: 'Buscar cliente por nombre o teléfono...' },
+      'clients': { label: 'Clientes & GPS', placeholder: 'Buscar por cliente, folio, IP, SN o teléfono...' },
+      'tickets': { label: 'Tickets', placeholder: 'Buscar por folio, cliente o falla...' },
+      'ipam': { label: 'IPAM PON', placeholder: 'Buscar ONUs sin autorizar por SN...' },
+      'audit': { label: 'Auditoría', placeholder: 'Buscar por cliente, IP, servicio o plan...' },
+      'provisioning': { label: 'Aprovisionamiento', placeholder: 'Buscar por cliente, SN o IP WAN...' },
+      'technicians': { label: 'Técnicos', placeholder: 'Buscar técnico por nombre, teléfono o PIN...' },
+      'modem-swap': { label: 'Cambio Módem', placeholder: 'Buscar en bitácora de cambios de módem...' },
+      'settings': { label: 'Ajustes', placeholder: 'Buscar configuraciones...' },
+      'users': { label: 'Usuarios RBAC', placeholder: 'Buscar administrador por usuario o nombre...' },
+    };
+
+    function updateGlobalSearchContext(viewId) {
+      const ctx = searchContextMap[viewId] || { label: 'Sistema', placeholder: 'Buscar en el sistema...' };
+      const badge = document.getElementById('global-search-context-badge');
+      const input = document.getElementById('global-context-search');
+      if (badge) badge.innerText = ctx.label;
+      if (input) {
+        input.placeholder = ctx.placeholder;
+        if (input.value.trim()) {
+          routeSearchToCurrentView(input.value.trim());
+        }
+      }
+    }
+
+    let globalSearchDebounce = null;
+    function handleGlobalContextSearch(q) {
+      const clearBtn = document.getElementById('global-search-clear-btn');
+      if (clearBtn) clearBtn.style.display = q ? 'block' : 'none';
+      
+      clearTimeout(globalSearchDebounce);
+      globalSearchDebounce = setTimeout(() => {
+        routeSearchToCurrentView(q);
+      }, 250);
+    }
+
+    function clearGlobalContextSearch() {
+      const input = document.getElementById('global-context-search');
+      if (input) input.value = '';
+      const clearBtn = document.getElementById('global-search-clear-btn');
+      if (clearBtn) clearBtn.style.display = 'none';
+      routeSearchToCurrentView('');
+    }
+
+    function routeSearchToCurrentView(q) {
+      const v = state.currentView;
+      const query = (q || '').trim();
+
+      if (v === 'dashboard') {
+        const inp = document.getElementById('filter-logs-search');
+        if (inp) inp.value = query;
+        filterDashboardLogs();
+      } else if (v === 'live-chat') {
+        const inp = document.getElementById('chat-filter-input');
+        if (inp) inp.value = query;
+        filterChatThreads(query);
+      } else if (v === 'clients') {
+        const inp = document.getElementById('filter-clients-search');
+        if (inp) inp.value = query;
+        handleClientsSearchInput(query);
+      } else if (v === 'tickets') {
+        const inp = document.getElementById('filter-tickets-search');
+        if (inp) inp.value = query;
+        filterTicketsTable();
+      } else if (v === 'ipam') {
+        const inp = document.getElementById('filter-ipam-unconf-search');
+        if (inp) inp.value = query;
+        filterUnconfiguredOnus();
+      } else if (v === 'audit') {
+        const inp = document.getElementById('filter-audit-search');
+        if (inp) inp.value = query;
+        handleAuditColFilter();
+      } else if (v === 'provisioning') {
+        const inp = document.getElementById('filter-prov-search');
+        if (inp) inp.value = query;
+        handleProvColFilter();
+      } else if (v === 'technicians') {
+        const inp = document.getElementById('filter-tech-search');
+        if (inp) inp.value = query;
+        filterTechniciansTable();
+      } else if (v === 'modem-swap') {
+        const inp = document.getElementById('filter-swap-search');
+        if (inp) inp.value = query;
+        filterSwapHistoryTable();
+      } else if (v === 'users') {
+        const inp = document.getElementById('filter-user-search');
+        if (inp) inp.value = query;
+        filterAdminUsersTable();
+      }
     }
 
     function toggleSidebar() {
@@ -3567,33 +3722,68 @@ export function getAdminDashboardHtml(): string {
     }
 
     function filterDashboardLogs() {
-      const fTime = (document.getElementById('filter-log-time')?.value || '').toLowerCase().trim();
-      const fPhone = (document.getElementById('filter-log-phone')?.value || '').toLowerCase().trim();
-      const fClient = (document.getElementById('filter-log-client')?.value || '').toLowerCase().trim();
-      const fFlow = (document.getElementById('filter-log-flow')?.value || '').toUpperCase().trim();
-      const fMsg = (document.getElementById('filter-log-msg')?.value || '').toLowerCase().trim();
+      const q = (document.getElementById('filter-logs-search')?.value || '').toLowerCase().trim();
+      const fFlow = (document.getElementById('filter-logs-flow')?.value || '').toUpperCase().trim();
 
       const filtered = (state.dashboardLogs || []).filter(l => {
-        if (fTime) {
-          const timeStr = new Date(l.created_at).toLocaleTimeString().toLowerCase();
-          if (!timeStr.includes(fTime)) return false;
-        }
-        if (fPhone && !String(l.phone || '').toLowerCase().includes(fPhone)) return false;
-        if (fClient && !String(l.client_name || '').toLowerCase().includes(fClient)) return false;
         if (fFlow && String(l.direction || '').toUpperCase() !== fFlow) return false;
-        if (fMsg && !String(l.message || '').toLowerCase().includes(fMsg)) return false;
+        if (q) {
+          const timeStr = new Date(l.created_at).toLocaleTimeString().toLowerCase();
+          const phone = String(l.phone || '').toLowerCase();
+          const client = String(l.client_name || '').toLowerCase();
+          const msg = String(l.message || '').toLowerCase();
+          if (!timeStr.includes(q) && !phone.includes(q) && !client.includes(q) && !msg.includes(q)) return false;
+        }
         return true;
       });
 
       renderDashboardLogs(filtered);
     }
 
-    function clearDashboardLogsFilter() {
-      const ids = ['filter-log-time', 'filter-log-phone', 'filter-log-client', 'filter-log-flow', 'filter-log-msg'];
-      ids.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.value = '';
+    let currentLogsSort = { col: 'time', dir: 'desc' };
+    function sortDashboardLogs(col) {
+      if (col.includes('_')) {
+        const [c, d] = col.split('_');
+        currentLogsSort = { col: c, dir: d };
+      } else {
+        if (currentLogsSort.col === col) {
+          currentLogsSort.dir = currentLogsSort.dir === 'asc' ? 'desc' : 'asc';
+        } else {
+          currentLogsSort = { col, dir: 'asc' };
+        }
+      }
+
+      state.dashboardLogs.sort((a, b) => {
+        let valA = a[currentLogsSort.col] || '';
+        let valB = b[currentLogsSort.col] || '';
+        if (currentLogsSort.col === 'time' || currentLogsSort.col === 'created_at') {
+          valA = new Date(a.created_at).getTime();
+          valB = new Date(b.created_at).getTime();
+        } else if (currentLogsSort.col === 'client') {
+          valA = (a.client_name || '').toLowerCase();
+          valB = (b.client_name || '').toLowerCase();
+        } else if (currentLogsSort.col === 'phone') {
+          valA = (a.phone || '').toString();
+          valB = (b.phone || '').toString();
+        } else if (currentLogsSort.col === 'direction') {
+          valA = (a.direction || '').toLowerCase();
+          valB = (b.direction || '').toLowerCase();
+        }
+        if (valA < valB) return currentLogsSort.dir === 'asc' ? -1 : 1;
+        if (valA > valB) return currentLogsSort.dir === 'asc' ? 1 : -1;
+        return 0;
       });
+
+      filterDashboardLogs();
+    }
+
+    function clearDashboardLogsFilter() {
+      const inp = document.getElementById('filter-logs-search');
+      if (inp) inp.value = '';
+      const selFlow = document.getElementById('filter-logs-flow');
+      if (selFlow) selFlow.value = '';
+      const selSort = document.getElementById('filter-logs-sort');
+      if (selSort) selSort.value = 'time_desc';
       renderDashboardLogs(state.dashboardLogs);
     }
 
@@ -4427,10 +4617,29 @@ export function getAdminDashboardHtml(): string {
       try {
         const res = await apiFetch('/api/tickets?limit=150');
         state.tickets = res.tickets || [];
+        populateTicketTechniciansFilter();
         renderKanbanBoard(state.tickets);
         filterTicketsTable();
       } catch (err) {
         console.error('Error loading tickets:', err);
+      }
+    }
+
+    function populateTicketTechniciansFilter() {
+      const selTech = document.getElementById('filter-ticket-tech');
+      if (!selTech) return;
+      const currentVal = selTech.value;
+      const techSet = new Set();
+      (state.tickets || []).forEach(t => {
+        if (t.assigned_technician_name && t.assigned_technician_name.trim()) {
+          techSet.add(t.assigned_technician_name.trim());
+        }
+      });
+      const techs = Array.from(techSet).sort();
+      selTech.innerHTML = '<option value="">🔧 Todos los técnicos</option>' +
+        techs.map(tech => '<option value="' + escapeHtml(tech) + '">' + escapeHtml(tech) + '</option>').join('');
+      if (currentVal && techs.includes(currentVal)) {
+        selTech.value = currentVal;
       }
     }
 
@@ -4505,42 +4714,73 @@ export function getAdminDashboardHtml(): string {
     }
 
     function filterTicketsTable() {
-      const fFolio = (document.getElementById('filter-ticket-folio')?.value || '').toLowerCase().trim();
-      const fClient = (document.getElementById('filter-ticket-client')?.value || '').toLowerCase().trim();
-      const fPhone = (document.getElementById('filter-ticket-phone')?.value || '').toLowerCase().trim();
-      const fSubject = (document.getElementById('filter-ticket-subject')?.value || '').toLowerCase().trim();
+      const q = (document.getElementById('filter-tickets-search')?.value || '').toLowerCase().trim();
       const fStatus = (document.getElementById('filter-ticket-status')?.value || '').toUpperCase().trim();
       const fTech = (document.getElementById('filter-ticket-tech')?.value || '').toLowerCase().trim();
-      const fDate = (document.getElementById('filter-ticket-date')?.value || '').toLowerCase().trim();
 
       const filtered = (state.tickets || []).filter(t => {
-        if (fFolio && !String(t.folio || '').toLowerCase().includes(fFolio)) return false;
-        if (fClient && !String(t.client_name || '').toLowerCase().includes(fClient)) return false;
-        if (fPhone && !String(t.phone || '').toLowerCase().includes(fPhone)) return false;
-        if (fSubject && !String(t.issue_summary || '').toLowerCase().includes(fSubject)) return false;
         if (fStatus && String(t.status || '').toUpperCase() !== fStatus) return false;
         if (fTech && !String(t.assigned_technician_name || '').toLowerCase().includes(fTech)) return false;
-        if (fDate && !String(formatShortDate(t.created_at)).toLowerCase().includes(fDate)) return false;
+        if (q) {
+          const folio = String(t.folio || t.id || '').toLowerCase();
+          const client = String(t.client_name || '').toLowerCase();
+          const phone = String(t.phone || '').toLowerCase();
+          const issue = String(t.issue_summary || '').toLowerCase();
+          const tech = String(t.assigned_technician_name || '').toLowerCase();
+          if (!folio.includes(q) && !client.includes(q) && !phone.includes(q) && !issue.includes(q) && !tech.includes(q)) return false;
+        }
         return true;
       });
 
       renderTicketsTable(filtered);
     }
 
-    function clearTicketsTableFilters() {
-      const ids = [
-        'filter-ticket-folio',
-        'filter-ticket-client',
-        'filter-ticket-phone',
-        'filter-ticket-subject',
-        'filter-ticket-status',
-        'filter-ticket-tech',
-        'filter-ticket-date'
-      ];
-      ids.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.value = '';
+    let currentTicketsSort = { col: 'created_at', dir: 'desc' };
+    function sortTicketsBy(col) {
+      if (col.includes('_')) {
+        const [c, d] = col.split('_');
+        currentTicketsSort = { col: c, dir: d };
+      } else {
+        if (currentTicketsSort.col === col) {
+          currentTicketsSort.dir = currentTicketsSort.dir === 'asc' ? 'desc' : 'asc';
+        } else {
+          currentTicketsSort = { col, dir: 'asc' };
+        }
+      }
+
+      state.tickets.sort((a, b) => {
+        let valA = a[currentTicketsSort.col] || '';
+        let valB = b[currentTicketsSort.col] || '';
+        if (currentTicketsSort.col === 'date' || currentTicketsSort.col === 'created_at') {
+          valA = new Date(a.created_at).getTime();
+          valB = new Date(b.created_at).getTime();
+        } else if (currentTicketsSort.col === 'folio') {
+          valA = Number(a.folio) || 0;
+          valB = Number(b.folio) || 0;
+        } else if (currentTicketsSort.col === 'client') {
+          valA = (a.client_name || '').toLowerCase();
+          valB = (b.client_name || '').toLowerCase();
+        } else if (currentTicketsSort.col === 'status') {
+          valA = (a.status || '').toLowerCase();
+          valB = (b.status || '').toLowerCase();
+        }
+        if (valA < valB) return currentTicketsSort.dir === 'asc' ? -1 : 1;
+        if (valA > valB) return currentTicketsSort.dir === 'asc' ? 1 : -1;
+        return 0;
       });
+
+      filterTicketsTable();
+    }
+
+    function clearTicketsTableFilters() {
+      const inp = document.getElementById('filter-tickets-search');
+      if (inp) inp.value = '';
+      const selStatus = document.getElementById('filter-ticket-status');
+      if (selStatus) selStatus.value = '';
+      const selTech = document.getElementById('filter-ticket-tech');
+      if (selTech) selTech.value = '';
+      const selSort = document.getElementById('filter-tickets-sort');
+      if (selSort) selSort.value = 'date_desc';
       renderTicketsTable(state.tickets);
     }
 
@@ -4744,9 +4984,39 @@ export function getAdminDashboardHtml(): string {
         }
 
         state.unconfiguredOnus = unconfRes.unconfigured || [];
+        populateIpamUnconfiguredFilters();
         filterUnconfiguredOnus();
       } catch (err) {
         console.error('Error loading IPAM:', err);
+      }
+    }
+
+    function populateIpamUnconfiguredFilters() {
+      const selOlt = document.getElementById('filter-pon-olt');
+      const selModel = document.getElementById('filter-pon-model');
+      if (selOlt) {
+        const currentOlt = selOlt.value;
+        const oltSet = new Set();
+        (state.unconfiguredOnus || []).forEach(o => {
+          const name = (o.olt_name || ('OLT ' + (o.olt_id || '3'))).trim();
+          if (name) oltSet.add(name);
+        });
+        const olts = Array.from(oltSet).sort();
+        selOlt.innerHTML = '<option value="">📡 Todas las OLTs</option>' +
+          olts.map(olt => '<option value="' + escapeHtml(olt) + '">' + escapeHtml(olt) + '</option>').join('');
+        if (currentOlt && olts.includes(currentOlt)) selOlt.value = currentOlt;
+      }
+      if (selModel) {
+        const currentModel = selModel.value;
+        const modelSet = new Set();
+        (state.unconfiguredOnus || []).forEach(o => {
+          const m = (o.model || o.onu_type_name || o.onu_type || 'ONT').trim();
+          if (m) modelSet.add(m);
+        });
+        const models = Array.from(modelSet).sort();
+        selModel.innerHTML = '<option value="">📠 Todos los modelos</option>' +
+          models.map(m => '<option value="' + escapeHtml(m) + '">' + escapeHtml(m) + '</option>').join('');
+        if (currentModel && models.includes(currentModel)) selModel.value = currentModel;
       }
     }
 
@@ -4773,28 +5043,69 @@ export function getAdminDashboardHtml(): string {
     }
 
     function filterUnconfiguredOnus() {
+      const q = (document.getElementById('filter-ipam-unconf-search')?.value || '').toLowerCase().trim();
       const fOlt = (document.getElementById('filter-pon-olt')?.value || '').toLowerCase().trim();
-      const fPort = (document.getElementById('filter-pon-port')?.value || '').toLowerCase().trim();
-      const fSn = (document.getElementById('filter-pon-sn')?.value || '').toLowerCase().trim();
       const fModel = (document.getElementById('filter-pon-model')?.value || '').toLowerCase().trim();
 
       const filtered = (state.unconfiguredOnus || []).filter(o => {
         if (fOlt && !String(o.olt_name || o.olt_id || '').toLowerCase().includes(fOlt)) return false;
-        if (fPort && !String(o.pon_port || o.port || o.board || '').toLowerCase().includes(fPort)) return false;
-        if (fSn && !String(o.sn || '').toLowerCase().includes(fSn)) return false;
         if (fModel && !String(o.model || o.onu_type_name || o.onu_type || '').toLowerCase().includes(fModel)) return false;
+        if (q) {
+          const sn = String(o.sn || '').toLowerCase();
+          const olt = String(o.olt_name || o.olt_id || '').toLowerCase();
+          const port = String(o.pon_port || o.port || o.board || '').toLowerCase();
+          const model = String(o.model || o.onu_type_name || o.onu_type || '').toLowerCase();
+          if (!sn.includes(q) && !olt.includes(q) && !port.includes(q) && !model.includes(q)) return false;
+        }
         return true;
       });
 
       renderUnconfiguredOnusTable(filtered);
     }
 
-    function clearUnconfiguredOnusFilters() {
-      const ids = ['filter-pon-olt', 'filter-pon-port', 'filter-pon-sn', 'filter-pon-model'];
-      ids.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.value = '';
+    let currentUnconfSort = { col: 'sn', dir: 'asc' };
+    function sortUnconfiguredOnusBy(col) {
+      if (col.includes('_')) {
+        const [c, d] = col.split('_');
+        currentUnconfSort = { col: c, dir: d };
+      } else {
+        if (currentUnconfSort.col === col) {
+          currentUnconfSort.dir = currentUnconfSort.dir === 'asc' ? 'desc' : 'asc';
+        } else {
+          currentUnconfSort = { col, dir: 'asc' };
+        }
+      }
+
+      state.unconfiguredOnus.sort((a, b) => {
+        let valA = a[currentUnconfSort.col] || '';
+        let valB = b[currentUnconfSort.col] || '';
+        if (currentUnconfSort.col === 'sn') {
+          valA = (a.sn || '').toLowerCase();
+          valB = (b.sn || '').toLowerCase();
+        } else if (currentUnconfSort.col === 'olt') {
+          valA = (a.olt_name || a.olt_id || '').toString().toLowerCase();
+          valB = (b.olt_name || b.olt_id || '').toString().toLowerCase();
+        } else if (currentUnconfSort.col === 'model') {
+          valA = (a.model || a.onu_type_name || a.onu_type || '').toLowerCase();
+          valB = (b.model || b.onu_type_name || b.onu_type || '').toLowerCase();
+        }
+        if (valA < valB) return currentUnconfSort.dir === 'asc' ? -1 : 1;
+        if (valA > valB) return currentUnconfSort.dir === 'asc' ? 1 : -1;
+        return 0;
       });
+
+      filterUnconfiguredOnus();
+    }
+
+    function clearUnconfiguredOnusFilters() {
+      const inp = document.getElementById('filter-ipam-unconf-search');
+      if (inp) inp.value = '';
+      const selOlt = document.getElementById('filter-pon-olt');
+      if (selOlt) selOlt.value = '';
+      const selModel = document.getElementById('filter-pon-model');
+      if (selModel) selModel.value = '';
+      const selSort = document.getElementById('filter-ipam-unconf-sort');
+      if (selSort) selSort.value = 'sn_asc';
       renderUnconfiguredOnusTable(state.unconfiguredOnus);
     }
 
@@ -5125,21 +5436,13 @@ export function getAdminDashboardHtml(): string {
     }
 
     function handleAuditColFilter() {
-      const fClient = (document.getElementById('filter-audit-client')?.value || '').toLowerCase().trim();
-      const fSrv = (document.getElementById('filter-audit-srv')?.value || '').toLowerCase().trim();
-      const fIpOlt = (document.getElementById('filter-audit-ip-olt')?.value || '').toLowerCase().trim();
-      const fIpWisp = (document.getElementById('filter-audit-ip-wisp')?.value || '').toLowerCase().trim();
+      const q = (document.getElementById('filter-audit-search')?.value || '').toLowerCase().trim();
       const fIpStatus = (document.getElementById('filter-audit-ip-status')?.value || '').toUpperCase().trim();
       const fTr = (document.getElementById('filter-audit-tr069')?.value || '').toUpperCase().trim();
       const fV6 = (document.getElementById('filter-audit-ipv6')?.value || '').toUpperCase().trim();
-      const fPlan = (document.getElementById('filter-audit-plan')?.value || '').toLowerCase().trim();
 
       const items = state.audit.items || [];
       const filtered = items.filter(it => {
-        if (fClient && !String(it.cliente || '').toLowerCase().includes(fClient)) return false;
-        if (fSrv && !String(it.servicio || it.folio || '').toLowerCase().includes(fSrv)) return false;
-        if (fIpOlt && !String(it.smartolt_ip || '').toLowerCase().includes(fIpOlt)) return false;
-        if (fIpWisp && !String(it.wisphub_ip || '').toLowerCase().includes(fIpWisp)) return false;
         if (fIpStatus) {
           if (fIpStatus === 'MATCH' && it.ip_status !== 'MATCH' && it.ip_status !== 'OK') return false;
           if (fIpStatus === 'MISMATCH' && it.ip_status !== 'MISMATCH') return false;
@@ -5152,23 +5455,71 @@ export function getAdminDashboardHtml(): string {
           if (fV6 === 'ACTIVE' && it.ipv6_status !== 'DUAL_STACK') return false;
           if (fV6 === 'INACTIVE' && it.ipv6_status === 'DUAL_STACK') return false;
         }
-        if (fPlan && !String(it.wisphub_plan || '').toLowerCase().includes(fPlan)) return false;
+        if (q) {
+          const client = String(it.cliente || '').toLowerCase();
+          const srv = String(it.servicio || it.folio || '').toLowerCase();
+          const ipOlt = String(it.smartolt_ip || '').toLowerCase();
+          const ipWisp = String(it.wisphub_ip || '').toLowerCase();
+          const plan = String(it.wisphub_plan || '').toLowerCase();
+          if (!client.includes(q) && !srv.includes(q) && !ipOlt.includes(q) && !ipWisp.includes(q) && !plan.includes(q)) return false;
+        }
         return true;
       });
 
       renderAuditTable(filtered);
     }
 
-    function clearAuditColFilters() {
-      const ids = [
-        'filter-audit-client', 'filter-audit-srv', 'filter-audit-ip-olt',
-        'filter-audit-ip-wisp', 'filter-audit-ip-status', 'filter-audit-tr069',
-        'filter-audit-ipv6', 'filter-audit-plan'
-      ];
-      ids.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.value = '';
+    let currentAuditSort = { col: 'cliente', dir: 'asc' };
+    function sortAuditBy(col) {
+      if (col.includes('_')) {
+        const [c, d] = col.split('_');
+        currentAuditSort = { col: c, dir: d };
+      } else {
+        if (currentAuditSort.col === col) {
+          currentAuditSort.dir = currentAuditSort.dir === 'asc' ? 'desc' : 'asc';
+        } else {
+          currentAuditSort = { col, dir: 'asc' };
+        }
+      }
+
+      state.audit.items.sort((a, b) => {
+        let valA = a[currentAuditSort.col] || '';
+        let valB = b[currentAuditSort.col] || '';
+        if (currentAuditSort.col === 'cliente') {
+          valA = (a.cliente || '').toLowerCase();
+          valB = (b.cliente || '').toLowerCase();
+        } else if (currentAuditSort.col === 'service' || currentAuditSort.col === 'servicio') {
+          valA = (a.servicio || a.folio || '').toString().toLowerCase();
+          valB = (b.servicio || b.folio || '').toString().toLowerCase();
+        } else if (currentAuditSort.col === 'smartolt_ip') {
+          valA = (a.smartolt_ip || '').toLowerCase();
+          valB = (b.smartolt_ip || '').toLowerCase();
+        } else if (currentAuditSort.col === 'wisphub_ip') {
+          valA = (a.wisphub_ip || '').toLowerCase();
+          valB = (b.wisphub_ip || '').toLowerCase();
+        } else if (currentAuditSort.col === 'ip_status') {
+          valA = (a.ip_status || '').toLowerCase();
+          valB = (b.ip_status || '').toLowerCase();
+        }
+        if (valA < valB) return currentAuditSort.dir === 'asc' ? -1 : 1;
+        if (valA > valB) return currentAuditSort.dir === 'asc' ? 1 : -1;
+        return 0;
       });
+
+      handleAuditColFilter();
+    }
+
+    function clearAuditColFilters() {
+      const inp = document.getElementById('filter-audit-search');
+      if (inp) inp.value = '';
+      const selIp = document.getElementById('filter-audit-ip-status');
+      if (selIp) selIp.value = '';
+      const selTr = document.getElementById('filter-audit-tr069');
+      if (selTr) selTr.value = '';
+      const selV6 = document.getElementById('filter-audit-ipv6');
+      if (selV6) selV6.value = '';
+      const selSort = document.getElementById('filter-audit-sort');
+      if (selSort) selSort.value = 'cliente_asc';
       renderAuditTable(state.audit.items || []);
     }
 
@@ -5330,21 +5681,12 @@ export function getAdminDashboardHtml(): string {
     }
 
     function handleProvColFilter() {
-      const fClient = (document.getElementById('filter-prov-client')?.value || '').toLowerCase().trim();
-      const fSn = (document.getElementById('filter-prov-sn')?.value || '').toLowerCase().trim();
-      const fIp = (document.getElementById('filter-prov-ip')?.value || '').toLowerCase().trim();
-      const fZone = (document.getElementById('filter-prov-zone')?.value || '').toLowerCase().trim();
+      const q = (document.getElementById('filter-prov-search')?.value || '').toLowerCase().trim();
       const fTr = (document.getElementById('filter-prov-tr069')?.value || '').toUpperCase().trim();
       const fV6 = (document.getElementById('filter-prov-ipv6')?.value || '').toUpperCase().trim();
 
       const items = state.provisioning.items || [];
       const filtered = items.filter(it => {
-        if (fClient && !String(it.cliente || '').toLowerCase().includes(fClient)) return false;
-        const sn = String(it.sn_smartolt || it.sn_wisphub || '').toLowerCase();
-        if (fSn && !sn.includes(fSn)) return false;
-        const ip = String(it.smartolt_ip || it.wisphub_ip || '').toLowerCase();
-        if (fIp && !ip.includes(fIp)) return false;
-        if (fZone && !String(it.zona_o_router || '').toLowerCase().includes(fZone)) return false;
         if (fTr) {
           if (fTr === 'ACTIVE' && it.tr069_status !== 'ACTIVE') return false;
           if (fTr === 'INACTIVE' && it.tr069_status === 'ACTIVE') return false;
@@ -5353,18 +5695,71 @@ export function getAdminDashboardHtml(): string {
           if (fV6 === 'ACTIVE' && it.ipv6_status !== 'DUAL_STACK') return false;
           if (fV6 === 'INACTIVE' && it.ipv6_status === 'DUAL_STACK') return false;
         }
+        if (q) {
+          const client = String(it.cliente || '').toLowerCase();
+          const sn = String(it.sn_smartolt || it.sn_wisphub || '').toLowerCase();
+          const ip = String(it.smartolt_ip || it.wisphub_ip || '').toLowerCase();
+          const zone = String(it.zona_o_router || '').toLowerCase();
+          if (!client.includes(q) && !sn.includes(q) && !ip.includes(q) && !zone.includes(q)) return false;
+        }
         return true;
       });
 
       renderProvisioningTable(filtered);
     }
 
-    function clearProvColFilters() {
-      const ids = ['filter-prov-client', 'filter-prov-sn', 'filter-prov-ip', 'filter-prov-zone', 'filter-prov-tr069', 'filter-prov-ipv6'];
-      ids.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.value = '';
+    let currentProvSort = { col: 'cliente', dir: 'asc' };
+    function sortProvisioningBy(col) {
+      if (col.includes('_')) {
+        const [c, d] = col.split('_');
+        currentProvSort = { col: c, dir: d };
+      } else {
+        if (currentProvSort.col === col) {
+          currentProvSort.dir = currentProvSort.dir === 'asc' ? 'desc' : 'asc';
+        } else {
+          currentProvSort = { col, dir: 'asc' };
+        }
+      }
+
+      state.provisioning.items.sort((a, b) => {
+        let valA = a[currentProvSort.col] || '';
+        let valB = b[currentProvSort.col] || '';
+        if (currentProvSort.col === 'cliente') {
+          valA = (a.cliente || '').toLowerCase();
+          valB = (b.cliente || '').toLowerCase();
+        } else if (currentProvSort.col === 'sn') {
+          valA = (a.sn_smartolt || a.sn_wisphub || '').toLowerCase();
+          valB = (b.sn_smartolt || b.sn_wisphub || '').toLowerCase();
+        } else if (currentProvSort.col === 'ip') {
+          valA = (a.smartolt_ip || a.wisphub_ip || '').toLowerCase();
+          valB = (b.smartolt_ip || b.wisphub_ip || '').toLowerCase();
+        } else if (currentProvSort.col === 'zone') {
+          valA = (a.zona_o_router || '').toLowerCase();
+          valB = (b.zona_o_router || '').toLowerCase();
+        } else if (currentProvSort.col === 'tr069') {
+          valA = a.tr069_status === 'ACTIVE' ? 1 : 0;
+          valB = b.tr069_status === 'ACTIVE' ? 1 : 0;
+        } else if (currentProvSort.col === 'ipv6') {
+          valA = a.ipv6_status === 'DUAL_STACK' ? 1 : 0;
+          valB = b.ipv6_status === 'DUAL_STACK' ? 1 : 0;
+        }
+        if (valA < valB) return currentProvSort.dir === 'asc' ? -1 : 1;
+        if (valA > valB) return currentProvSort.dir === 'asc' ? 1 : -1;
+        return 0;
       });
+
+      handleProvColFilter();
+    }
+
+    function clearProvColFilters() {
+      const inp = document.getElementById('filter-prov-search');
+      if (inp) inp.value = '';
+      const selTr = document.getElementById('filter-prov-tr069');
+      if (selTr) selTr.value = '';
+      const selV6 = document.getElementById('filter-prov-ipv6');
+      if (selV6) selV6.value = '';
+      const selSort = document.getElementById('filter-prov-sort');
+      if (selSort) selSort.value = 'cliente_asc';
       renderProvisioningTable(state.provisioning.items || []);
     }
 
@@ -5442,21 +5837,23 @@ export function getAdminDashboardHtml(): string {
     }
 
     function filterTechniciansTable() {
-      const fName = (document.getElementById('filter-tech-name')?.value || '').toLowerCase().trim();
-      const fPhone = (document.getElementById('filter-tech-phone')?.value || '').toLowerCase().trim();
-      const fPin = (document.getElementById('filter-tech-pin')?.value || '').toLowerCase().trim();
+      const q = (document.getElementById('filter-tech-search')?.value || '').toLowerCase().trim();
       const fRole = (document.getElementById('filter-tech-role')?.value || '').toLowerCase().trim();
       const fStatus = (document.getElementById('filter-tech-status')?.value || '').toUpperCase().trim();
 
       const techs = state.technicians || [];
       const filtered = techs.filter(t => {
-        if (fName && !String(t.name || '').toLowerCase().includes(fName)) return false;
-        if (fPhone && !String(t.phone || '').toLowerCase().includes(fPhone)) return false;
-        if (fPin && !String(t.pin || '').toLowerCase().includes(fPin)) return false;
         if (fRole && !String(t.role || '').toLowerCase().includes(fRole)) return false;
         if (fStatus) {
           if (fStatus === 'ACTIVO' && t.is_active !== 1) return false;
           if (fStatus === 'INACTIVO' && t.is_active === 1) return false;
+        }
+        if (q) {
+          const name = String(t.name || '').toLowerCase();
+          const phone = String(t.phone || '').toLowerCase();
+          const pin = String(t.pin || '').toLowerCase();
+          const role = String(t.role || '').toLowerCase();
+          if (!name.includes(q) && !phone.includes(q) && !pin.includes(q) && !role.includes(q)) return false;
         }
         return true;
       });
@@ -5464,12 +5861,55 @@ export function getAdminDashboardHtml(): string {
       renderTechniciansTable(filtered);
     }
 
-    function clearTechniciansFilters() {
-      const ids = ['filter-tech-name', 'filter-tech-phone', 'filter-tech-pin', 'filter-tech-role', 'filter-tech-status'];
-      ids.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.value = '';
+    let currentTechSort = { col: 'name', dir: 'asc' };
+    function sortTechniciansBy(col) {
+      if (col.includes('_')) {
+        const [c, d] = col.split('_');
+        currentTechSort = { col: c, dir: d };
+      } else {
+        if (currentTechSort.col === col) {
+          currentTechSort.dir = currentTechSort.dir === 'asc' ? 'desc' : 'asc';
+        } else {
+          currentTechSort = { col, dir: 'asc' };
+        }
+      }
+
+      state.technicians.sort((a, b) => {
+        let valA = a[currentTechSort.col] || '';
+        let valB = b[currentTechSort.col] || '';
+        if (currentTechSort.col === 'name') {
+          valA = (a.name || '').toLowerCase();
+          valB = (b.name || '').toLowerCase();
+        } else if (currentTechSort.col === 'phone') {
+          valA = (a.phone || '').toString();
+          valB = (b.phone || '').toString();
+        } else if (currentTechSort.col === 'pin') {
+          valA = (a.pin || '').toString();
+          valB = (b.pin || '').toString();
+        } else if (currentTechSort.col === 'role') {
+          valA = (a.role || '').toLowerCase();
+          valB = (b.role || '').toLowerCase();
+        } else if (currentTechSort.col === 'status') {
+          valA = a.is_active === 1 ? 1 : 0;
+          valB = b.is_active === 1 ? 1 : 0;
+        }
+        if (valA < valB) return currentTechSort.dir === 'asc' ? -1 : 1;
+        if (valA > valB) return currentTechSort.dir === 'asc' ? 1 : -1;
+        return 0;
       });
+
+      filterTechniciansTable();
+    }
+
+    function clearTechniciansFilters() {
+      const inp = document.getElementById('filter-tech-search');
+      if (inp) inp.value = '';
+      const selRole = document.getElementById('filter-tech-role');
+      if (selRole) selRole.value = '';
+      const selStatus = document.getElementById('filter-tech-status');
+      if (selStatus) selStatus.value = '';
+      const selSort = document.getElementById('filter-tech-sort');
+      if (selSort) selSort.value = 'name_asc';
       renderTechniciansTable(state.technicians || []);
     }
 
@@ -6290,19 +6730,17 @@ export function getAdminDashboardHtml(): string {
     }
 
     function filterAdminUsersTable() {
-      const fName = (document.getElementById('filter-user-name')?.value || '').toLowerCase().trim();
-      const fFullname = (document.getElementById('filter-user-fullname')?.value || '').toLowerCase().trim();
+      const q = (document.getElementById('filter-user-search')?.value || '').toLowerCase().trim();
       const fRole = (document.getElementById('filter-user-role')?.value || '').toLowerCase().trim();
-      const fLogin = (document.getElementById('filter-user-login')?.value || '').toLowerCase().trim();
 
       const users = state.adminUsers || [];
       const filtered = users.filter(u => {
-        if (fName && !String(u.username || '').toLowerCase().includes(fName)) return false;
-        if (fFullname && !String(u.name || '').toLowerCase().includes(fFullname)) return false;
         if (fRole && !String(u.role || '').toLowerCase().includes(fRole)) return false;
-        if (fLogin) {
-          const loginStr = u.last_login ? new Date(u.last_login).toLocaleString().toLowerCase() : 'nunca';
-          if (!loginStr.includes(fLogin)) return false;
+        if (q) {
+          const username = String(u.username || '').toLowerCase();
+          const name = String(u.name || '').toLowerCase();
+          const role = String(u.role || '').toLowerCase();
+          if (!username.includes(q) && !name.includes(q) && !role.includes(q)) return false;
         }
         return true;
       });
@@ -6310,12 +6748,50 @@ export function getAdminDashboardHtml(): string {
       renderAdminUsersTable(filtered);
     }
 
-    function clearAdminUsersFilters() {
-      const ids = ['filter-user-name', 'filter-user-fullname', 'filter-user-role', 'filter-user-login'];
-      ids.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.value = '';
+    let currentUsersSort = { col: 'username', dir: 'asc' };
+    function sortAdminUsersBy(col) {
+      if (col.includes('_')) {
+        const [c, d] = col.split('_');
+        currentUsersSort = { col: c, dir: d };
+      } else {
+        if (currentUsersSort.col === col) {
+          currentUsersSort.dir = currentUsersSort.dir === 'asc' ? 'desc' : 'asc';
+        } else {
+          currentUsersSort = { col, dir: 'asc' };
+        }
+      }
+
+      state.adminUsers.sort((a, b) => {
+        let valA = a[currentUsersSort.col] || '';
+        let valB = b[currentUsersSort.col] || '';
+        if (currentUsersSort.col === 'username') {
+          valA = (a.username || '').toLowerCase();
+          valB = (b.username || '').toLowerCase();
+        } else if (currentUsersSort.col === 'name') {
+          valA = (a.name || '').toLowerCase();
+          valB = (b.name || '').toLowerCase();
+        } else if (currentUsersSort.col === 'role') {
+          valA = (a.role || '').toLowerCase();
+          valB = (b.role || '').toLowerCase();
+        } else if (currentUsersSort.col === 'last_login' || currentUsersSort.col === 'login') {
+          valA = a.last_login ? new Date(a.last_login).getTime() : 0;
+          valB = b.last_login ? new Date(b.last_login).getTime() : 0;
+        }
+        if (valA < valB) return currentUsersSort.dir === 'asc' ? -1 : 1;
+        if (valA > valB) return currentUsersSort.dir === 'asc' ? 1 : -1;
+        return 0;
       });
+
+      filterAdminUsersTable();
+    }
+
+    function clearAdminUsersFilters() {
+      const inp = document.getElementById('filter-user-search');
+      if (inp) inp.value = '';
+      const selRole = document.getElementById('filter-user-role');
+      if (selRole) selRole.value = '';
+      const selSort = document.getElementById('filter-user-sort');
+      if (selSort) selSort.value = 'username_asc';
       renderAdminUsersTable(state.adminUsers || []);
     }
 
@@ -6416,6 +6892,8 @@ export function getAdminDashboardHtml(): string {
         state.clients.items = res.clients || [];
         state.clients.total = res.total || 0;
 
+        populateClientsRouterFilter();
+
         // Actualizar métricas en tiempo real
         const elTotal = document.getElementById('metric-clients-total');
         if (elTotal) elTotal.innerText = Number(res.total || 0).toLocaleString();
@@ -6458,171 +6936,30 @@ export function getAdminDashboardHtml(): string {
       }
     }
 
-    function renderClientsTable(clients) {
-      const tbody = document.getElementById('table-clients-body');
-      if (!tbody) return;
-
-      if (!clients || clients.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; color: var(--text-dim); padding: 24px;">No se encontraron clientes con los filtros aplicados.</td></tr>';
-        return;
+    function populateClientsRouterFilter() {
+      const selRouter = document.getElementById('filter-client-router');
+      if (!selRouter) return;
+      const currentVal = selRouter.value;
+      const routerSet = new Set();
+      (state.clients.items || []).forEach(c => {
+        if (c.router && c.router.trim()) routerSet.add(c.router.trim());
+      });
+      if (routerSet.size > 0) {
+        const routers = Array.from(routerSet).sort();
+        selRouter.innerHTML = '<option value="">📍 Todos los Routers/Zonas</option>' +
+          routers.map(r => '<option value="' + escapeHtml(r) + '">' + escapeHtml(r) + '</option>').join('');
+        if (currentVal && routers.includes(currentVal)) {
+          selRouter.value = currentVal;
+        }
       }
-
-      tbody.innerHTML = clients.map(c => {
-        const isActivo = String(c.estado || '').toLowerCase().includes('act');
-        const estadoBadge = isActivo
-          ? '<span class="badge badge-success">Activo</span>'
-          : '<span class="badge badge-danger">Suspendido</span>';
-
-        const facturasBadge = String(c.estado_facturas || '').toLowerCase().includes('pagad')
-          ? '<span class="badge badge-info" style="font-size: 10px;">Pagadas</span>'
-          : '<span class="badge badge-warning" style="font-size: 10px;">Pendientes</span>';
-
-        // Render Teléfonos (Principal + Adicionales/Familiares)
-        const primaryPhone = c.telefono_principal ? String(c.telefono_principal).replace(/\\D/g, '') : '';
-        const extraPhones = Array.isArray(c.telefonos_adicionales) ? c.telefonos_adicionales : [];
-
-        let phonesHtml = '';
-        if (primaryPhone) {
-          phonesHtml += \`
-            <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 4px;">
-              <span class="badge badge-success" style="font-family: var(--font-mono); font-size: 11px; padding: 3px 8px; cursor: pointer;" title="Teléfono Principal de WhatsApp" onclick="selectChat('\${primaryPhone}'); navigateTo('live-chat');">
-                📱 \${primaryPhone}
-              </span>
-              <a href="https://wa.me/52\${primaryPhone}" target="_blank" class="btn btn-secondary btn-sm" style="padding: 2px 6px; font-size: 10px;" title="Abrir en WhatsApp">
-                💬
-              </a>
-            </div>
-          \`;
-        }
-
-        if (extraPhones.length > 0) {
-          phonesHtml += \`
-            <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px;">
-              \${extraPhones.map(ep => \`
-                <span class="badge badge-purple" style="font-family: var(--font-mono); font-size: 10px; padding: 2px 6px; cursor: pointer;" title="Número adicional / Familiar" onclick="copyToClipboard('\${ep}')">
-                  📞 \${ep}
-                </span>
-              \`).join('')}
-            </div>
-          \`;
-        }
-
-        if (!primaryPhone && extraPhones.length === 0) {
-          phonesHtml = '<span style="color: var(--text-dim); font-size: 11px;">Sin teléfono</span>';
-        }
-
-        phonesHtml += \`
-          <button class="btn btn-secondary btn-sm" style="padding: 2px 6px; font-size: 10px; margin-top: 2px;" onclick='openClientPhonesModal(\${JSON.stringify(c).replace(/'/g, "&apos;")})'>
-            ✏️ Teléfonos
-          </button>
-        \`;
-
-        // Render Ubicación & GPS
-        let gpsHtml = '';
-        const coords = c.coordenadas_gps;
-        const mapsUrl = c.google_maps_url || (coords ? \`https://www.google.com/maps?q=\${coords}\` : '');
-
-        if (coords || mapsUrl) {
-          gpsHtml = \`
-            <div style="display: flex; flex-direction: column; gap: 4px;">
-              <div style="display: flex; align-items: center; gap: 6px;">
-                <span class="badge badge-success" style="font-family: var(--font-mono); font-size: 11px; padding: 2px 6px;">
-                  📍 \${coords || 'GPS'}
-                </span>
-                <a href="\${mapsUrl || '#'}" target="_blank" class="btn btn-primary btn-sm" style="padding: 3px 8px; font-size: 10.5px; text-decoration: none;" title="Abrir en Google Maps">
-                  🗺️ Maps
-                </a>
-              </div>
-              \${c.direccion ? \`<span style="font-size: 11px; color: var(--text-dim); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="\${escapeHtml(c.direccion)}">🏠 \${escapeHtml(c.direccion)}</span>\` : ''}
-              <button class="btn btn-secondary btn-sm" style="padding: 2px 6px; font-size: 10px; align-self: flex-start;" onclick='openClientLocationModal(\${JSON.stringify(c).replace(/'/g, "&apos;")})'>
-                ✏️ Editar GPS
-              </button>
-            </div>
-          \`;
-        } else {
-          gpsHtml = \`
-            <div style="display: flex; flex-direction: column; gap: 4px;">
-              <span class="badge badge-warning" style="font-size: 10px; padding: 2px 6px;">
-                ⚠️ Sin ubicación GPS
-              </span>
-              \${c.direccion ? \`<span style="font-size: 11px; color: var(--text-dim); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="\${escapeHtml(c.direccion)}">\${escapeHtml(c.direccion)}</span>\` : ''}
-              <button class="btn btn-secondary btn-sm" style="padding: 2px 6px; font-size: 10.5px; align-self: flex-start;" onclick='openClientLocationModal(\${JSON.stringify(c).replace(/'/g, "&apos;")})'>
-                📍 Asignar GPS
-              </button>
-            </div>
-          \`;
-        }
-
-        // Col 1: Cliente / Nombre
-        // Col 2: Servicio / Contrato
-        // Col 3: IP & SN
-        // Col 4: Estado
-        // Col 5: Plan Internet
-        // Col 6: Router / Zona
-        // Col 7: Teléfonos
-        // Col 8: Ubicación GPS
-        // Col 9: Acciones
-        return \`
-          <tr>
-            <td>
-              <div style="font-weight: 700; font-size: 13px; color: #fff;">\${escapeHtml(c.nombre)}</div>
-              \${c.comentarios ? \`<div style="font-size: 10.5px; color: var(--text-dim); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">\${escapeHtml(c.comentarios)}</div>\` : ''}
-            </td>
-            <td>
-              <div style="font-family: var(--font-mono); color: var(--primary); font-weight: 700; font-size: 12px;">#\${c.id_servicio || '--'}</div>
-              <div style="font-size: 11px; color: var(--text-muted); max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">\${escapeHtml(c.servicio || '')}</div>
-            </td>
-            <td>
-              <div style="display: flex; flex-direction: column; gap: 2px; font-size: 11.5px;">
-                <div><span style="color: var(--text-dim);">IP:</span> <span style="font-family: var(--font-mono); font-weight: 600; color: #38bdf8;">\${c.ip || '--'}</span></div>
-                <div><span style="color: var(--text-dim);">SN:</span> <span style="font-family: var(--font-mono); color: var(--accent-cyan); font-weight: 600;">\${c.sn_onu || '--'}</span></div>
-              </div>
-            </td>
-            <td>
-              <div style="display: flex; flex-direction: column; gap: 4px;">
-                \${estadoBadge}
-                \${facturasBadge}
-              </div>
-            </td>
-            <td>
-              <span class="badge badge-purple" style="font-size: 11px; font-weight: 600; white-space: nowrap;">
-                \${escapeHtml(c.plan_internet || '--')}
-              </span>
-            </td>
-            <td>
-              <div style="font-size: 11.5px; font-weight: 600; color: var(--text-main);">\${escapeHtml(c.router || '--')}</div>
-              \${c.zona ? \`<div style="font-size: 10.5px; color: var(--text-dim);">\${escapeHtml(c.zona)}</div>\` : ''}
-            </td>
-            <td>\${phonesHtml}</td>
-            <td>\${gpsHtml}</td>
-            <td style="text-align: right;">
-              <div style="display: flex; gap: 6px; justify-content: flex-end;">
-                <button class="btn btn-secondary btn-sm" onclick="openClientDetailModal(\${c.id_servicio})" title="Ver Expediente Completo">
-                  👁️ Ficha
-                </button>
-                \${primaryPhone ? \`
-                  <button class="btn btn-primary btn-sm" onclick="selectChat('\${primaryPhone}'); navigateTo('live-chat');" title="Abrir Chat WhatsApp">
-                    💬 Chat
-                  </button>
-                \` : ''}
-              </div>
-            </td>
-          </tr>
-        \`;
-      }).join('');
     }
 
     function handleClientColFilter() {
       if (clientsSearchDebounce) clearTimeout(clientsSearchDebounce);
       clientsSearchDebounce = setTimeout(() => {
         state.clients.colFilters = {
-          nombre: (document.getElementById('filter-client-nombre')?.value || '').trim(),
-          servicio: (document.getElementById('filter-client-servicio')?.value || '').trim(),
-          ip: (document.getElementById('filter-client-ip')?.value || '').trim(),
           estado: document.getElementById('filter-client-estado')?.value || '',
-          plan: (document.getElementById('filter-client-plan')?.value || '').trim(),
           router: (document.getElementById('filter-client-router')?.value || '').trim(),
-          telefono: (document.getElementById('filter-client-telefono')?.value || '').trim(),
           gps: document.getElementById('filter-client-gps')?.value || '',
         };
         state.clients.page = 1;
@@ -6630,21 +6967,55 @@ export function getAdminDashboardHtml(): string {
       }, 300);
     }
 
-    function clearClientColFilters() {
-      const inputs = [
-        'filter-client-nombre',
-        'filter-client-servicio',
-        'filter-client-ip',
-        'filter-client-estado',
-        'filter-client-plan',
-        'filter-client-router',
-        'filter-client-telefono',
-        'filter-client-gps'
-      ];
-      inputs.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.value = '';
+    let currentClientsSort = { col: 'nombre', dir: 'asc' };
+    function sortClientsBy(col) {
+      if (col.includes('_')) {
+        const [c, d] = col.split('_');
+        currentClientsSort = { col: c, dir: d };
+      } else {
+        if (currentClientsSort.col === col) {
+          currentClientsSort.dir = currentClientsSort.dir === 'asc' ? 'desc' : 'asc';
+        } else {
+          currentClientsSort = { col, dir: 'asc' };
+        }
+      }
+
+      state.clients.items.sort((a, b) => {
+        let valA = a[currentClientsSort.col] || '';
+        let valB = b[currentClientsSort.col] || '';
+        if (currentClientsSort.col === 'nombre') {
+          valA = (a.nombre || '').toLowerCase();
+          valB = (b.nombre || '').toLowerCase();
+        } else if (currentClientsSort.col === 'servicio' || currentClientsSort.col === 'id_servicio') {
+          valA = Number(a.id_servicio) || 0;
+          valB = Number(b.id_servicio) || 0;
+        } else if (currentClientsSort.col === 'ip') {
+          valA = (a.ip || '').toLowerCase();
+          valB = (b.ip || '').toLowerCase();
+        } else if (currentClientsSort.col === 'estado') {
+          valA = (a.estado || '').toLowerCase();
+          valB = (b.estado || '').toLowerCase();
+        }
+        if (valA < valB) return currentClientsSort.dir === 'asc' ? -1 : 1;
+        if (valA > valB) return currentClientsSort.dir === 'asc' ? 1 : -1;
+        return 0;
       });
+
+      renderClientsTable(state.clients.items);
+    }
+
+    function clearClientColFilters() {
+      const inpSearch = document.getElementById('filter-clients-search');
+      if (inpSearch) inpSearch.value = '';
+      const selEstado = document.getElementById('filter-client-estado');
+      if (selEstado) selEstado.value = '';
+      const selRouter = document.getElementById('filter-client-router');
+      if (selRouter) selRouter.value = '';
+      const selGps = document.getElementById('filter-client-gps');
+      if (selGps) selGps.value = '';
+      const selSort = document.getElementById('filter-clients-sort');
+      if (selSort) selSort.value = 'nombre_asc';
+
       state.clients.colFilters = {};
       state.clients.filter = 'ALL';
       state.clients.search = '';
@@ -7333,44 +7704,78 @@ export function getAdminDashboardHtml(): string {
     }
 
     function filterSwapHistoryTable() {
-      const fDate = (document.getElementById('filter-swap-date')?.value || '').toLowerCase().trim();
-      const fClient = (document.getElementById('filter-swap-client')?.value || '').toLowerCase().trim();
-      const fOldSn = (document.getElementById('filter-swap-oldsn')?.value || '').toLowerCase().trim();
-      const fNewSn = (document.getElementById('filter-swap-newsn')?.value || '').toLowerCase().trim();
-      const fIp = (document.getElementById('filter-swap-ip')?.value || '').toLowerCase().trim();
-      const fZone = (document.getElementById('filter-swap-zone')?.value || '').toLowerCase().trim();
-      const fTech = (document.getElementById('filter-swap-tech')?.value || '').toLowerCase().trim();
+      const q = (document.getElementById('filter-swap-search')?.value || '').toLowerCase().trim();
       const fStatus = (document.getElementById('filter-swap-status')?.value || '').toUpperCase().trim();
 
       const items = state.swapHistory || [];
       const filtered = items.filter(it => {
-        if (fDate) {
-          const dtStr = formatShortDate(it.created_at).toLowerCase();
-          if (!dtStr.includes(fDate)) return false;
-        }
-        if (fClient && !String(it.client_name || '').toLowerCase().includes(fClient)) return false;
-        if (fOldSn && !String(it.old_sn || '').toLowerCase().includes(fOldSn)) return false;
-        if (fNewSn && !String(it.new_sn || '').toLowerCase().includes(fNewSn)) return false;
-        if (fIp && !String(it.ip_address || '').toLowerCase().includes(fIp) && !String(it.vlan || '').toLowerCase().includes(fIp)) return false;
-        if (fZone && !String(it.zone || '').toLowerCase().includes(fZone)) return false;
-        if (fTech && !String(it.technician_name || '').toLowerCase().includes(fTech)) return false;
         if (fStatus && String(it.status || '').toUpperCase() !== fStatus) return false;
+        if (q) {
+          const dtStr = formatShortDate(it.created_at).toLowerCase();
+          const client = String(it.client_name || '').toLowerCase();
+          const oldSn = String(it.old_sn || '').toLowerCase();
+          const newSn = String(it.new_sn || '').toLowerCase();
+          const ip = String(it.ip_address || '').toLowerCase();
+          const zone = String(it.zone || '').toLowerCase();
+          const tech = String(it.technician_name || '').toLowerCase();
+          if (!dtStr.includes(q) && !client.includes(q) && !oldSn.includes(q) && !newSn.includes(q) && !ip.includes(q) && !zone.includes(q) && !tech.includes(q)) return false;
+        }
         return true;
       });
 
       renderSwapHistoryTable(filtered);
     }
 
-    function clearSwapHistoryFilters() {
-      const ids = [
-        'filter-swap-date', 'filter-swap-client', 'filter-swap-oldsn',
-        'filter-swap-newsn', 'filter-swap-ip', 'filter-swap-zone',
-        'filter-swap-tech', 'filter-swap-status'
-      ];
-      ids.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.value = '';
+    let currentSwapSort = { col: 'date', dir: 'desc' };
+    function sortSwapHistoryBy(col) {
+      if (col.includes('_')) {
+        const [c, d] = col.split('_');
+        currentSwapSort = { col: c, dir: d };
+      } else {
+        if (currentSwapSort.col === col) {
+          currentSwapSort.dir = currentSwapSort.dir === 'asc' ? 'desc' : 'asc';
+        } else {
+          currentSwapSort = { col, dir: 'asc' };
+        }
+      }
+
+      state.swapHistory.sort((a, b) => {
+        let valA = a[currentSwapSort.col] || '';
+        let valB = b[currentSwapSort.col] || '';
+        if (currentSwapSort.col === 'date' || currentSwapSort.col === 'created_at') {
+          valA = new Date(a.created_at).getTime();
+          valB = new Date(b.created_at).getTime();
+        } else if (currentSwapSort.col === 'client' || currentSwapSort.col === 'client_name') {
+          valA = (a.client_name || '').toLowerCase();
+          valB = (b.client_name || '').toLowerCase();
+        } else if (currentSwapSort.col === 'old_sn') {
+          valA = (a.old_sn || '').toLowerCase();
+          valB = (b.old_sn || '').toLowerCase();
+        } else if (currentSwapSort.col === 'new_sn') {
+          valA = (a.new_sn || '').toLowerCase();
+          valB = (b.new_sn || '').toLowerCase();
+        } else if (currentSwapSort.col === 'ip') {
+          valA = (a.ip_address || '').toLowerCase();
+          valB = (b.ip_address || '').toLowerCase();
+        } else if (currentSwapSort.col === 'status') {
+          valA = (a.status || '').toLowerCase();
+          valB = (b.status || '').toLowerCase();
+        }
+        if (valA < valB) return currentSwapSort.dir === 'asc' ? -1 : 1;
+        if (valA > valB) return currentSwapSort.dir === 'asc' ? 1 : -1;
+        return 0;
       });
+
+      filterSwapHistoryTable();
+    }
+
+    function clearSwapHistoryFilters() {
+      const inp = document.getElementById('filter-swap-search');
+      if (inp) inp.value = '';
+      const selStatus = document.getElementById('filter-swap-status');
+      if (selStatus) selStatus.value = '';
+      const selSort = document.getElementById('filter-swap-sort');
+      if (selSort) selSort.value = 'date_desc';
       renderSwapHistoryTable(state.swapHistory || []);
     }
 
