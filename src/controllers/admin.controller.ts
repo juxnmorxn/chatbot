@@ -1291,74 +1291,20 @@ export class AdminController {
   }
 
   /**
-   * Realiza la auditoría de cruce de datos entre SmartOLT y WispHub (MAC, IPv4, IPv6, VLANs)
+   * Realiza la auditoría de cruce de IPs entre SmartOLT y WispHub
    */
   static async getAuditIpCross(req: Request, res: Response): Promise<void> {
     try {
       const filter = (req.query.filter as any) || 'all';
-      const vlan = (req.query.vlan as string) || '';
       const search = (req.query.search as string) || '';
       const page = parseInt(req.query.page as string, 10) || 1;
       const limit = parseInt(req.query.limit as string, 10) || 50;
 
-      const result = await TursoService.getAuditIpCross({ filter, vlan, search, page, limit });
+      const result = await TursoService.getAuditIpCross({ filter, search, page, limit });
       res.json({ success: true, ...result });
     } catch (error: any) {
-      logger.error('Error al auditar cruce de datos SmartOLT vs WispHub:', error?.message || error);
+      logger.error('Error al auditar cruce de IPs:', error?.message || error);
       res.status(500).json({ success: false, error: error?.message || error });
-    }
-  }
-
-  /**
-   * Sincroniza los datos técnicos de un cliente (MAC, IPv6, IP, SN) hacia WispHub
-   */
-  static async syncAuditClient(req: Request, res: Response): Promise<void> {
-    try {
-      const wisphubId = req.params.id || req.body?.wisphub_id;
-      const { smartolt_id, mac, remote_ipv6_prefix, ip, sn, vlan } = req.body || {};
-
-      if (!wisphubId) {
-        res.status(400).json({ success: false, message: 'ID de servicio WispHub es requerido.' });
-        return;
-      }
-
-      const result = await TursoService.syncAuditClient({
-        wisphub_id: wisphubId,
-        smartolt_id,
-        mac,
-        remote_ipv6_prefix,
-        ip,
-        sn,
-        vlan,
-      });
-
-      if (result.success) {
-        res.json(result);
-      } else {
-        res.status(400).json({ success: false, message: result.message });
-      }
-    } catch (error: any) {
-      logger.error('Error al sincronizar cliente con WispHub:', error?.message || error);
-      res.status(500).json({ success: false, message: error?.message || 'Error interno' });
-    }
-  }
-
-  /**
-   * Sincroniza en lote todos los clientes desincronizados de una VLAN hacia WispHub
-   */
-  static async syncAuditVlan(req: Request, res: Response): Promise<void> {
-    try {
-      const { vlan } = req.body || {};
-      if (!vlan) {
-        res.status(400).json({ success: false, message: 'Debe especificar la VLAN a sincronizar.' });
-        return;
-      }
-
-      const result = await TursoService.syncAuditVlan(vlan);
-      res.json(result);
-    } catch (error: any) {
-      logger.error('Error al sincronizar lote de VLAN con WispHub:', error?.message || error);
-      res.status(500).json({ success: false, message: error?.message || 'Error interno' });
     }
   }
 
@@ -1510,6 +1456,105 @@ export class AdminController {
       }
     } catch (error: any) {
       logger.error('Error al configurar TR-069/IPv6:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  // ==========================================
+  // CAMBIO DE MÓDEM (REEMPLAZO DE ONU)
+  // ==========================================
+
+  /**
+   * Obtiene la lista de ONUs activas para el buscador de cambio de módem
+   */
+  static async getModemSwapOnus(req: Request, res: Response): Promise<void> {
+    try {
+      const search = String(req.query.q || '').trim();
+      const limit = Math.min(parseInt(String(req.query.limit || '30'), 10), 100);
+
+      if (search) {
+        const matches = await TursoService.searchOnusFuzzy(search, limit);
+        res.json({ success: true, count: matches.length, onus: matches });
+      } else {
+        const active = await TursoService.getAllSmartOltOnus();
+        res.json({ success: true, count: active.length, onus: active.slice(0, limit) });
+      }
+    } catch (error: any) {
+      logger.error('Error al listar ONUs para cambio de módem:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Obtiene los detalles completos de una ONU para la tarjeta de cambio de módem
+   */
+  static async getModemSwapOnuDetails(req: Request, res: Response): Promise<void> {
+    try {
+      const id = String(req.params.id || '').trim();
+      if (!id) {
+        res.status(400).json({ success: false, error: 'Identificador de ONU requerido' });
+        return;
+      }
+
+      const details = await SmartOLTService.getOnuDetails(id);
+      if (details) {
+        res.json({ success: true, details });
+      } else {
+        res.status(404).json({ success: false, error: 'ONU no encontrada' });
+      }
+    } catch (error: any) {
+      logger.error('Error al obtener detalles de ONU para cambio de módem:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Ejecuta el cambio de módem
+   */
+  static async executeModemSwap(req: Request, res: Response): Promise<void> {
+    try {
+      const { old_onu_id, new_sn, technician_name, technician_phone, override_olt_id, override_board, override_port, notify_group } = req.body;
+
+      if (!old_onu_id || !new_sn) {
+        res.status(400).json({ success: false, error: 'Se requieren old_onu_id y new_sn' });
+        return;
+      }
+
+      const user = (req as any).user;
+      const techName = technician_name || user?.name || user?.username || 'Administrador Web';
+
+      const result = await SmartOLTService.executeModemSwap({
+        oldOnuIdOrSn: old_onu_id,
+        newSn: new_sn,
+        technicianName: techName,
+        technicianPhone: technician_phone || null,
+        overrideOltId: override_olt_id,
+        overrideBoard: override_board,
+        overridePort: override_port,
+        notifyGroup: notify_group !== false,
+      });
+
+      if (result.success) {
+        res.json(result);
+      } else {
+        res.status(400).json(result);
+      }
+    } catch (error: any) {
+      logger.error('Error al ejecutar cambio de módem:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Obtiene el historial de cambios de módem
+   */
+  static async getModemSwapHistory(req: Request, res: Response): Promise<void> {
+    try {
+      const limit = Math.min(parseInt(String(req.query.limit || '50'), 10), 200);
+      const history = await TursoService.getModemSwaps(limit);
+      res.json({ success: true, count: history.length, history });
+    } catch (error: any) {
+      logger.error('Error al obtener historial de cambios de módem:', error?.message || error);
       res.status(500).json({ success: false, error: error?.message || error });
     }
   }

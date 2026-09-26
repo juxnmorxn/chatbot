@@ -98,9 +98,6 @@ export async function initTursoDatabase(): Promise<void> {
     try { await client.execute(`ALTER TABLE smartolt_onus ADD COLUMN ip_address TEXT;`); } catch (_) {}
     try { await client.execute(`ALTER TABLE smartolt_onus ADD COLUMN coordenadas_gps TEXT;`); } catch (_) {}
     try { await client.execute(`ALTER TABLE smartolt_onus ADD COLUMN google_maps_url TEXT;`); } catch (_) {}
-    try { await client.execute(`ALTER TABLE smartolt_onus ADD COLUMN vlan TEXT;`); } catch (_) {}
-    try { await client.execute(`ALTER TABLE smartolt_onus ADD COLUMN mac TEXT;`); } catch (_) {}
-    try { await client.execute(`ALTER TABLE smartolt_onus ADD COLUMN remote_ipv6_prefix TEXT;`); } catch (_) {}
 
     // Índices para búsquedas rápidas
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_onus_name_norm ON smartolt_onus(name_normalized);`);
@@ -131,9 +128,6 @@ export async function initTursoDatabase(): Promise<void> {
         direccion TEXT,
         dia_corte TEXT,
         fecha_corte TEXT,
-        mac TEXT,
-        remote_ipv6_prefix TEXT,
-        vlan TEXT,
         raw_data TEXT,
         updated_at TEXT
       );
@@ -144,9 +138,6 @@ export async function initTursoDatabase(): Promise<void> {
     try { await client.execute(`ALTER TABLE wisphub_clients ADD COLUMN coordenadas_gps TEXT;`); } catch (_) {}
     try { await client.execute(`ALTER TABLE wisphub_clients ADD COLUMN google_maps_url TEXT;`); } catch (_) {}
     try { await client.execute(`ALTER TABLE wisphub_clients ADD COLUMN ubicacion_notas TEXT;`); } catch (_) {}
-    try { await client.execute(`ALTER TABLE wisphub_clients ADD COLUMN mac TEXT;`); } catch (_) {}
-    try { await client.execute(`ALTER TABLE wisphub_clients ADD COLUMN remote_ipv6_prefix TEXT;`); } catch (_) {}
-    try { await client.execute(`ALTER TABLE wisphub_clients ADD COLUMN vlan TEXT;`); } catch (_) {}
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_wh_nombre_norm ON wisphub_clients(nombre_normalized);`);
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_wh_servicio ON wisphub_clients(servicio);`);
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_wh_ip ON wisphub_clients(ip);`);
@@ -270,6 +261,32 @@ export async function initTursoDatabase(): Promise<void> {
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_wa_inst_area ON whatsapp_instances(area_name);`);
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_wa_inst_active ON whatsapp_instances(is_active);`);
 
+    // Tabla de Historial y Bitácora de Cambios de Módem (Reemplazo de ONU)
+    await client.execute(`
+      CREATE TABLE IF NOT EXISTS modem_swaps (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_name TEXT NOT NULL,
+        old_sn TEXT NOT NULL,
+        new_sn TEXT NOT NULL,
+        old_onu_id TEXT,
+        new_onu_id TEXT,
+        ip_address TEXT,
+        vlan TEXT,
+        zone TEXT,
+        speed_profile TEXT,
+        old_data_json TEXT,
+        technician_phone TEXT,
+        technician_name TEXT,
+        status TEXT DEFAULT 'COMPLETADO',
+        error_message TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_modem_swaps_client ON modem_swaps(client_name);`);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_modem_swaps_old_sn ON modem_swaps(old_sn);`);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_modem_swaps_new_sn ON modem_swaps(new_sn);`);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_modem_swaps_created ON modem_swaps(created_at);`);
+
     // Sembrar superadmin inicial si la tabla está vacía
     const { hashPassword } = await import('../utils/auth');
     const existingAdmins = await client.execute(`SELECT COUNT(*) as count FROM admin_users`);
@@ -283,7 +300,7 @@ export async function initTursoDatabase(): Promise<void> {
       logger.info('Usuario inicial "admin" (superadmin) creado exitosamente en Turso DB.');
     }
 
-    logger.info('Tablas "sessions", "settings", "conversation_logs", "smartolt_onus", "wisphub_clients", "tickets", "technicians", "admin_users", "ipam_vlan_pools", "network_outages" y "whatsapp_instances" listas en Turso.');
+    logger.info('Tablas "sessions", "settings", "conversation_logs", "smartolt_onus", "wisphub_clients", "tickets", "technicians", "admin_users", "ipam_vlan_pools", "network_outages", "whatsapp_instances" y "modem_swaps" listas en Turso.');
   } catch (error: any) {
     logger.error('Error al inicializar Turso DB:', error?.message || error);
     throw error;

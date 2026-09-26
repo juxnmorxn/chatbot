@@ -1541,17 +1541,17 @@ export function getAdminDashboardHtml(): string {
           <span class="nav-text">IPAM & Pools</span>
           <span id="badge-unconfigured-onus" class="nav-badge" style="display: none;">0</span>
         </div>
-        <div class="nav-item" data-view="audit" onclick="navigateTo('audit')" title="Comparativa SmartOLT vs WispHub & Sincronización por VLAN">
+        <div class="nav-item" data-view="audit" onclick="navigateTo('audit')" title="Auditoría SmartOLT">
           <span class="nav-icon">
             <svg class="svg-icon" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg>
           </span>
-          <span class="nav-text">Comparar & Sync WispHub</span>
+          <span class="nav-text">Auditoría SmartOLT</span>
         </div>
-        <div class="nav-item" data-view="provisioning" onclick="navigateTo('provisioning')" title="Aprovisionamiento TR-069 & IPv6 Dual Stack">
+        <div class="nav-item" data-view="provisioning" onclick="navigateTo('provisioning')" title="Aprovisionamiento TR-069 & IPv6">
           <span class="nav-icon">
             <svg class="svg-icon" viewBox="0 0 24 24"><path d="m13 2-2 2.5h3L11 9h4l-5 7 1.5-4.5H8.5L13 2z"></path></svg>
           </span>
-          <span class="nav-text">Aprovisionar IPv6 & Sync</span>
+          <span class="nav-text">Aprovisionar IPv6</span>
           <span id="badge-prov-pending" class="nav-badge alert-badge" style="display: none;">0</span>
         </div>
         <div class="nav-item" data-view="technicians" onclick="navigateTo('technicians')" title="Técnicos & PINs">
@@ -1559,6 +1559,12 @@ export function getAdminDashboardHtml(): string {
             <svg class="svg-icon" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><polyline points="16 11 18 13 22 9"></polyline></svg>
           </span>
           <span class="nav-text">Técnicos & PINs</span>
+        </div>
+        <div class="nav-item" data-view="modem-swap" onclick="navigateTo('modem-swap')" title="Cambio de Módem">
+          <span class="nav-icon">
+            <svg class="svg-icon" viewBox="0 0 24 24"><path d="M21 2v6h-6"></path><path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path><path d="M3 22v-6h6"></path><path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path></svg>
+          </span>
+          <span class="nav-text">Cambio de Módem</span>
         </div>
 
         <div class="nav-category">Sistema</div>
@@ -2053,105 +2059,41 @@ export function getAdminDashboardHtml(): string {
         </div>
       </section>
 
-      <!-- VIEW 5: AUDITORÍA Y SINCRONIZACIÓN SMARTOLT VS WISPHUB -->
+      <!-- VIEW 5: AUDITORÍA SMARTOLT VS WISPHUB -->
       <section id="view-audit" class="view-container">
-        <!-- Metric Cards -->
-        <div class="grid-metrics" style="margin-bottom: 20px;">
-          <div class="glass-card metric-card">
-            <div class="metric-header">
-              <span>Total Auditados</span>
-              <div class="metric-icon-box" style="color: var(--accent-cyan);">
-                <svg class="svg-icon" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg>
-              </div>
-            </div>
-            <div id="metric-audit-total" class="metric-value">--</div>
-            <div class="metric-footer" id="metric-audit-vlan-label">Todas las VLANs</div>
-          </div>
-
-          <div class="glass-card metric-card">
-            <div class="metric-header">
-              <span>100% Sincronizados</span>
-              <div class="metric-icon-box" style="color: var(--accent-green);">
-                <svg class="svg-icon" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
-              </div>
-            </div>
-            <div id="metric-audit-synced" class="metric-value" style="color: var(--accent-green);">--</div>
-            <div class="metric-footer">MAC + IPv4 + IPv6 idénticos</div>
-          </div>
-
-          <div class="glass-card metric-card">
-            <div class="metric-header">
-              <span>Falta IPv6 en WispHub</span>
-              <div class="metric-icon-box" style="color: var(--accent-amber);">
-                <svg class="svg-icon" viewBox="0 0 24 24"><path d="m10.29 3.86-8.47 14.14A2 2 0 0 0 3.53 21h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path></svg>
-              </div>
-            </div>
-            <div id="metric-audit-missing-ipv6" class="metric-value" style="color: var(--accent-amber);">--</div>
-            <div class="metric-footer">Riesgo de fuga en corte por IPv6</div>
-          </div>
-
-          <div class="glass-card metric-card">
-            <div class="metric-header">
-              <span>Falta MAC en WispHub</span>
-              <div class="metric-icon-box" style="color: var(--accent-rose);">
-                <svg class="svg-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
-              </div>
-            </div>
-            <div id="metric-audit-missing-mac" class="metric-value" style="color: var(--accent-rose);">--</div>
-            <div class="metric-footer">Sin MAC_CPE en WispHub</div>
-          </div>
-        </div>
-
-        <!-- Filters & Batch Control Bar -->
         <div class="glass-card" style="margin-bottom: 20px;">
           <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;">
-            <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
-              <!-- VLAN Selector -->
-              <div style="display: flex; align-items: center; gap: 6px;">
-                <label style="font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">VLAN:</label>
-                <select id="audit-vlan-filter" class="form-control" style="font-size: 13px; font-weight: 600; padding: 6px 12px; min-width: 170px; background: rgba(0,0,0,0.35); border-color: var(--card-border-hover);" onchange="handleAuditVlanChange(this.value)">
-                  <option value="">Todas las VLANs</option>
-                </select>
-              </div>
-
-              <!-- Filter Buttons -->
-              <div style="display: flex; gap: 6px; flex-wrap: wrap;" id="audit-filter-buttons">
-                <button class="btn btn-secondary btn-sm active" onclick="setAuditFilter('all', this)">Todos</button>
-                <button class="btn btn-warning btn-sm" onclick="setAuditFilter('desync', this)" title="Cualquier dato desalineado">⚠️ Desincronizados</button>
-                <button class="btn btn-info btn-sm" onclick="setAuditFilter('missing_ipv6', this)" title="Falta Prefijo IPv6 en WispHub">⚡ Falta IPv6</button>
-                <button class="btn btn-danger btn-sm" onclick="setAuditFilter('missing_mac', this)" title="Falta MAC CPE en WispHub">🔍 Falta MAC</button>
-                <button class="btn btn-success btn-sm" onclick="setAuditFilter('synced', this)">🟢 100% Empatados</button>
-                <button class="btn btn-secondary btn-sm" onclick="setAuditFilter('only_olt', this)">Solo OLT</button>
-                <button class="btn btn-secondary btn-sm" onclick="setAuditFilter('only_wisphub', this)">Solo WispHub</button>
-              </div>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;" id="audit-filter-buttons">
+              <button class="btn btn-secondary btn-sm active" onclick="setAuditFilter('all', this)">Todos</button>
+              <button class="btn btn-danger btn-sm" onclick="setAuditFilter('mismatches', this)">Discrepancias</button>
+              <button class="btn btn-warning btn-sm" onclick="setAuditFilter('missing_tr069', this)">Falta TR-069</button>
+              <button class="btn btn-info btn-sm" onclick="setAuditFilter('missing_ipv6', this)">Falta IPv6</button>
+              <button class="btn btn-success btn-sm" onclick="setAuditFilter('matches', this)">Correctos</button>
+              <button class="btn btn-secondary btn-sm" onclick="setAuditFilter('only_olt', this)">Solo SmartOLT</button>
+              <button class="btn btn-secondary btn-sm" onclick="setAuditFilter('only_wisphub', this)">Solo WispHub</button>
             </div>
-
-            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-              <button id="btn-sync-current-vlan" class="btn btn-primary btn-sm" onclick="syncCurrentVlanBatch()" title="Sincronizar automáticamente todos los clientes desincronizados de la VLAN seleccionada">
-                ⚡ Sincronizar VLAN a WispHub
-              </button>
-              <input type="text" id="audit-search-input" class="form-control" style="max-width: 240px; font-size: 12px;" placeholder="Buscar cliente, MAC, IPv6, IP..." oninput="handleAuditSearch(this.value)">
-            </div>
+            <input type="text" id="audit-search-input" class="form-control" style="max-width: 260px;" placeholder="Buscar por cliente, IP, folio o SN..." oninput="handleAuditSearch(this.value)">
           </div>
         </div>
 
-        <!-- Comparison Table -->
         <div class="glass-card">
           <div class="table-responsive">
             <table class="data-table">
               <thead>
                 <tr>
-                  <th>Cliente / Folio</th>
-                  <th>VLAN / OLT</th>
-                  <th>IP WAN (SmartOLT vs WispHub)</th>
-                  <th>MAC CPE (SmartOLT vs WispHub)</th>
-                  <th>Prefijo IPv6 (SmartOLT vs WispHub)</th>
-                  <th>Estado Sync</th>
-                  <th style="text-align: center;">Acción</th>
+                  <th>Cliente</th>
+                  <th>Servicio / Folio</th>
+                  <th>IP SmartOLT</th>
+                  <th>IP WispHub</th>
+                  <th>Estado IP</th>
+                  <th>TR-069</th>
+                  <th>IPv6</th>
+                  <th>Plan WispHub</th>
+                  <th>Acción</th>
                 </tr>
               </thead>
               <tbody id="table-audit-body">
-                <tr><td colspan="7" style="text-align: center; color: var(--text-dim);">Cargando auditoría...</td></tr>
+                <tr><td colspan="9" style="text-align: center; color: var(--text-dim);">Cargando auditoría...</td></tr>
               </tbody>
             </table>
           </div>
@@ -2165,7 +2107,7 @@ export function getAdminDashboardHtml(): string {
         </div>
       </section>
 
-      <!-- VIEW: APROVISIONAMIENTO TR-069 & IPV6 CON COMPARACIÓN WISPHUB -->
+      <!-- VIEW: APROVISIONAMIENTO TR-069 & IPV6 -->
       <section id="view-provisioning" class="view-container">
         <div class="grid-metrics" style="margin-bottom: 20px;">
           <div class="glass-card metric-card">
@@ -2176,7 +2118,7 @@ export function getAdminDashboardHtml(): string {
               </div>
             </div>
             <div id="metric-prov-total" class="metric-value">--</div>
-            <div class="metric-footer" id="metric-prov-vlan-label">Registradas en la red</div>
+            <div class="metric-footer">Registradas en la red</div>
           </div>
 
           <div class="glass-card metric-card">
@@ -2192,55 +2134,37 @@ export function getAdminDashboardHtml(): string {
 
           <div class="glass-card metric-card">
             <div class="metric-header">
-              <span>Falta IPv6 en WispHub</span>
+              <span>Falta IPv6</span>
               <div class="metric-icon-box" style="color: #38bdf8;">
                 <svg class="svg-icon" viewBox="0 0 24 24"><path d="M12 2v20M2 12h20"></path></svg>
               </div>
             </div>
             <div id="metric-prov-ipv6" class="metric-value" style="color: #38bdf8;">--</div>
-            <div class="metric-footer">Sin prefijo delegado en WispHub</div>
+            <div class="metric-footer">Solo IPv4 (Sin Dual Stack)</div>
           </div>
 
           <div class="glass-card metric-card">
             <div class="metric-header">
-              <span>100% Sincronizados</span>
+              <span>100% Configurados</span>
               <div class="metric-icon-box" style="color: var(--accent-green);">
                 <svg class="svg-icon" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
               </div>
             </div>
             <div id="metric-prov-ready" class="metric-value" style="color: var(--accent-green);">--</div>
-            <div class="metric-footer">TR-069 + IPv6 + MAC empatados</div>
+            <div class="metric-footer">TR-069 + IPv6 Dual Stack</div>
           </div>
         </div>
 
         <div class="glass-card" style="margin-bottom: 20px;">
           <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;">
-            <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
-              <!-- VLAN Selector -->
-              <div style="display: flex; align-items: center; gap: 6px;">
-                <label style="font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">VLAN:</label>
-                <select id="prov-vlan-filter" class="form-control" style="font-size: 13px; font-weight: 600; padding: 6px 12px; min-width: 170px; background: rgba(0,0,0,0.35); border-color: var(--card-border-hover);" onchange="handleProvVlanChange(this.value)">
-                  <option value="">Todas las VLANs</option>
-                </select>
-              </div>
-
-              <!-- Filter Buttons -->
-              <div style="display: flex; gap: 6px; flex-wrap: wrap;" id="prov-filter-buttons">
-                <button class="btn btn-warning btn-sm active" onclick="setProvFilter('pending', this)">Pendientes (TR-069 / IPv6)</button>
-                <button class="btn btn-info btn-sm" onclick="setProvFilter('missing_ipv6', this)">⚡ Falta IPv6 WispHub</button>
-                <button class="btn btn-danger btn-sm" onclick="setProvFilter('missing_mac', this)">🔍 Falta MAC WispHub</button>
-                <button class="btn btn-secondary btn-sm" onclick="setProvFilter('missing_tr069', this)">Falta TR-069</button>
-                <button class="btn btn-success btn-sm" onclick="setProvFilter('ready', this)">🟢 100% Sincronizados</button>
-                <button class="btn btn-secondary btn-sm" onclick="setProvFilter('all', this)">Todas las ONUs</button>
-              </div>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;" id="prov-filter-buttons">
+              <button class="btn btn-warning btn-sm active" onclick="setProvFilter('pending', this)">Pendientes (TR-069 / IPv6)</button>
+              <button class="btn btn-secondary btn-sm" onclick="setProvFilter('missing_tr069', this)">Solo Falta TR-069</button>
+              <button class="btn btn-secondary btn-sm" onclick="setProvFilter('missing_ipv6', this)">Solo Falta IPv6</button>
+              <button class="btn btn-success btn-sm" onclick="setProvFilter('ready', this)">Completados (100%)</button>
+              <button class="btn btn-secondary btn-sm" onclick="setProvFilter('all', this)">Todas las ONUs</button>
             </div>
-
-            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-              <button id="btn-sync-prov-vlan" class="btn btn-primary btn-sm" onclick="syncCurrentProvVlanBatch()" title="Sincronizar automáticamente todos los clientes desincronizados de la VLAN seleccionada hacia WispHub">
-                ⚡ Sincronizar VLAN a WispHub
-              </button>
-              <input type="text" id="prov-search-input" class="form-control" style="max-width: 240px; font-size: 12px;" placeholder="Buscar cliente, SN, IP, MAC o VLAN..." oninput="handleProvSearch(this.value)">
-            </div>
+            <input type="text" id="prov-search-input" class="form-control" style="max-width: 260px;" placeholder="Buscar cliente, SN, IP o Zona..." oninput="handleProvSearch(this.value)">
           </div>
         </div>
 
@@ -2249,17 +2173,17 @@ export function getAdminDashboardHtml(): string {
             <table class="data-table">
               <thead>
                 <tr>
-                  <th>Cliente / Folio</th>
-                  <th>VLAN / OLT</th>
-                  <th>IP WAN (SmartOLT vs WispHub)</th>
-                  <th>MAC CPE (SmartOLT vs WispHub)</th>
-                  <th>Prefijo IPv6 (SmartOLT vs WispHub)</th>
-                  <th>Estado TR-069 / Sync</th>
-                  <th style="text-align: center;">Acciones</th>
+                  <th>Cliente</th>
+                  <th>Serial (SN)</th>
+                  <th>IP WAN</th>
+                  <th>Zona / OLT</th>
+                  <th>Estado TR-069</th>
+                  <th>Estado IPv6</th>
+                  <th>Acción</th>
                 </tr>
               </thead>
               <tbody id="table-prov-body">
-                <tr><td colspan="7" style="text-align: center; color: var(--text-dim);">Cargando aprovisionamiento y sincronización...</td></tr>
+                <tr><td colspan="7" style="text-align: center; color: var(--text-dim);">Cargando aprovisionamiento...</td></tr>
               </tbody>
             </table>
           </div>
@@ -2301,6 +2225,156 @@ export function getAdminDashboardHtml(): string {
               </thead>
               <tbody id="table-technicians-body">
                 <tr><td colspan="6" style="text-align: center; color: var(--text-dim);">Cargando técnicos...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW: CAMBIO DE MÓDEM (REEMPLAZO DE ONU) -->
+      <section id="view-modem-swap" class="view-container">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
+          <div>
+            <h3 style="font-size: 17px; font-weight: 800; letter-spacing: -0.3px; display: flex; align-items: center; gap: 8px;">
+              <span>🔄</span> Cambio de Módem (Reemplazo de ONU)
+            </h3>
+            <p style="font-size: 12.5px; color: var(--text-muted); margin-top: 4px;">
+              Reemplaza un módem conservando su IP, VLAN, Cliente, Plan y Zona. Respalda en BD, desvincula en SmartOLT y da de alta el nuevo equipo con notificación al grupo de WhatsApp.
+            </p>
+          </div>
+          <div style="display: flex; gap: 10px;">
+            <button class="btn btn-secondary btn-sm" onclick="loadModemSwapData()">
+              <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M21 2v6h-6"></path><path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path><path d="M3 22v-6h6"></path><path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path></svg>
+              <span>Refrescar</span>
+            </button>
+            <button class="btn btn-secondary btn-sm" onclick="document.getElementById('swap-history-card').scrollIntoView({ behavior: 'smooth' })">
+              <span>📋 Ver Historial</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 2 Column Layout: Old Modem vs New Modem -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 20px; margin-bottom: 20px;">
+          
+          <!-- Card 1: Old Modem to Replace -->
+          <div class="glass-card" style="border-top: 3px solid var(--accent-rose);">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+              <h4 style="font-size: 15px; font-weight: 700; color: var(--accent-rose); display: flex; align-items: center; gap: 6px;">
+                <span>🔴 1.</span> Módem Actual a Retirar (SmartOLT)
+              </h4>
+              <span class="badge badge-danger" style="font-size: 10px;">Se eliminará de OLT</span>
+            </div>
+            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">
+              Busca el cliente o módem actual. Sus parámetros de red (IP, VLAN, Plan, Zona) se transferirán automáticamente al nuevo equipo.
+            </p>
+
+            <div class="form-group" style="position: relative;">
+              <label class="form-label">Buscar por Nombre de Cliente, Folio, IP o Serie SN</label>
+              <div style="display: flex; gap: 8px;">
+                <input type="text" id="swap-search-old-input" class="form-control" placeholder="Ej: Diana Laura, 2982, 172.19.2.178 o HWTCE9C840B3..." oninput="debounceSwapSearchOld(this.value)" autocomplete="off">
+                <button type="button" class="btn btn-secondary btn-sm" onclick="searchSwapOldOnus(document.getElementById('swap-search-old-input').value)">🔍</button>
+              </div>
+              <!-- Dropdown results -->
+              <div id="swap-old-dropdown-results" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: rgba(15, 23, 42, 0.98); border: 1px solid var(--card-border); border-radius: var(--radius-sm); max-height: 220px; overflow-y: auto; z-index: 100; box-shadow: var(--shadow-lg); margin-top: 4px;"></div>
+            </div>
+
+            <!-- Selected Old ONU Details Card -->
+            <div id="swap-old-selected-card" style="background: rgba(0, 0, 0, 0.3); border: 1px solid var(--card-border); border-radius: var(--radius-sm); padding: 14px; margin-top: 14px;">
+              <div style="text-align: center; color: var(--text-dim); padding: 20px 10px; font-size: 12.5px;">
+                👈 Utiliza el buscador para seleccionar el cliente o módem actual.
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 2: New Modem to Authorize -->
+          <div class="glass-card" style="border-top: 3px solid var(--accent-emerald);">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+              <h4 style="font-size: 15px; font-weight: 700; color: var(--accent-emerald); display: flex; align-items: center; gap: 6px;">
+                <span>🟢 2.</span> Nuevo Módem a Instalar (Alta)
+              </h4>
+              <button class="btn btn-secondary btn-xs" onclick="loadSwapUnconfiguredOnus()" title="Escanear ONUs no autorizadas en SmartOLT">
+                <span>🔄 Escanear OLT</span>
+              </button>
+            </div>
+            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">
+              Selecciona el nuevo equipo de la lista de ONUs sin autorizar detectadas en SmartOLT o escribe su número de serie.
+            </p>
+
+            <div class="form-group">
+              <label class="form-label">ONUs Sin Autorizar Detectadas en SmartOLT</label>
+              <select id="swap-select-unconfigured" class="form-control" onchange="handleSelectSwapUnconfigured(this.value)">
+                <option value="">-- Seleccionar de ONUs no autorizadas --</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">O Ingresar Número de Serie (SN) del Nuevo Módem</label>
+              <input type="text" id="swap-input-new-sn" class="form-control" placeholder="Ej: HWTC4317B500 o ZTEG12345678" style="font-family: monospace; font-weight: 700; text-transform: uppercase;" oninput="this.value = this.value.toUpperCase()">
+            </div>
+
+            <!-- New ONU Detected Info -->
+            <div id="swap-new-selected-card" style="background: rgba(0, 0, 0, 0.3); border: 1px solid var(--card-border); border-radius: var(--radius-sm); padding: 14px; margin-top: 14px;">
+              <div style="text-align: center; color: var(--text-dim); padding: 20px 10px; font-size: 12.5px;">
+                ⚡ Selecciona una ONU sin autorizar o ingresa el SN del nuevo módem.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card 3: Execution and Confirmation Summary -->
+        <div class="glass-card" style="margin-bottom: 24px; border: 1px solid var(--primary);">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
+            <h4 style="font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+              <span>⚡</span> 3. Confirmación y Notificación Automática
+            </h4>
+            <div style="display: flex; align-items: center; gap: 10px; background: rgba(0,0,0,0.3); padding: 6px 12px; border-radius: var(--radius-sm); border: 1px solid var(--card-border);">
+              <input type="checkbox" id="swap-checkbox-notify-group" style="transform: scale(1.2); cursor: pointer;" checked>
+              <label for="swap-checkbox-notify-group" style="font-size: 12px; font-weight: 600; cursor: pointer; margin-bottom: 0;">
+                📢 Notificar al grupo de WhatsApp con formato <code style="color: var(--accent-cyan);">CAMBIO DE MODEM</code>
+              </label>
+            </div>
+          </div>
+
+          <div id="swap-summary-box" style="background: rgba(15, 23, 42, 0.6); border: 1px dashed var(--card-border); border-radius: var(--radius-sm); padding: 16px; margin-bottom: 16px;">
+            <div style="font-size: 13px; color: var(--text-muted); text-align: center;">
+              Completa el Paso 1 (Módem Actual) y el Paso 2 (Nuevo Módem) para habilitar la ejecución del reemplazo.
+            </div>
+          </div>
+
+          <div style="display: flex; justify-content: flex-end; gap: 12px; align-items: center;">
+            <div id="swap-execution-status" style="font-size: 12.5px; font-weight: 600; color: var(--text-muted);"></div>
+            <button type="button" id="btn-execute-swap" class="btn btn-primary" onclick="handleExecuteModemSwap()" style="padding: 12px 28px; font-size: 14px;" disabled>
+              🔄 Ejecutar Cambio de Módem
+            </button>
+          </div>
+        </div>
+
+        <!-- Card 4: Modem Swaps History Table -->
+        <div id="swap-history-card" class="glass-card">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
+            <div>
+              <h4 style="font-size: 15px; font-weight: 700;">📋 Historial de Cambios de Módem Realizados</h4>
+              <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Bitácora de reemplazos y respaldos de equipos en Turso DB.</p>
+            </div>
+            <button class="btn btn-secondary btn-xs" onclick="loadModemSwapHistory()">🔄 Actualizar Historial</button>
+          </div>
+
+          <div class="table-responsive">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Cliente</th>
+                  <th>Módem Retirado (Old SN)</th>
+                  <th>Nuevo Módem (New SN)</th>
+                  <th>IP / VLAN</th>
+                  <th>Zona</th>
+                  <th>Técnico / Responsable</th>
+                  <th>Estado</th>
+                </tr>
+              </thead>
+              <tbody id="table-swap-history-body">
+                <tr><td colspan="8" style="text-align: center; color: var(--text-dim);">Cargando historial...</td></tr>
               </tbody>
             </table>
           </div>
@@ -2626,8 +2700,8 @@ export function getAdminDashboardHtml(): string {
       whatsappInstances: [],
       tickets: [],
       clients: { filter: 'ALL', search: '', page: 1, limit: 25, total: 0, items: [] },
-      audit: { filter: 'all', search: '', vlan: '', page: 1, limit: 30, total: 0 },
-      provisioning: { filter: 'pending', search: '', vlan: '', page: 1, limit: 30, total: 0 },
+      audit: { filter: 'all', search: '', page: 1, limit: 30, total: 0 },
+      provisioning: { filter: 'pending', search: '', page: 1, limit: 30, total: 0 },
       technicians: [],
       adminUsers: [],
       outages: [],
@@ -2858,9 +2932,10 @@ export function getAdminDashboardHtml(): string {
         'clients': 'Directorio de Clientes & Geolocalización GPS',
         'tickets': 'Mesa de Tickets (Kanban)',
         'ipam': 'IPAM & Gestión de Pools VLAN',
-        'audit': 'Comparativa SmartOLT vs WispHub & Sincronización',
+        'audit': 'Auditoría SmartOLT vs WispHub',
         'provisioning': 'Aprovisionamiento TR-069 & IPv6 Dual Stack',
         'technicians': 'Técnicos Autorizados & PINs',
+        'modem-swap': 'Cambio de Módem (Reemplazo de ONU)',
         'settings': 'Configuración del Sistema',
         'users': 'Usuarios & Roles de Acceso',
       };
@@ -2897,6 +2972,7 @@ export function getAdminDashboardHtml(): string {
         case 'audit': loadAuditData(); break;
         case 'provisioning': loadProvisioningData(); break;
         case 'technicians': loadTechniciansData(); break;
+        case 'modem-swap': loadModemSwapData(); break;
         case 'settings': loadSettingsData(); break;
         case 'users': loadAdminUsersData(); break;
       }
@@ -4278,15 +4354,15 @@ export function getAdminDashboardHtml(): string {
       }, 'Aprovisionar en SmartOLT');
     }
 
-    // Audit & Cross-Sync Module (SmartOLT <-> WispHub)
+    // Audit Module
     async function loadAuditData() {
       const tbody = document.getElementById('table-audit-body');
       if (tbody) {
         tbody.innerHTML = \`
           <tr>
-            <td colspan="7" style="text-align: center; padding: 36px 20px;">
+            <td colspan="9" style="text-align: center; padding: 36px 20px;">
               <div class="spinner" style="margin-bottom: 10px;"></div>
-              <div style="font-size: 13px; color: var(--text-dim);">Comparando SmartOLT vs WispHub y calculando estados...</div>
+              <div style="font-size: 13px; color: var(--text-dim);">Consultando datos y aplicando filtros...</div>
             </td>
           </tr>
         \`;
@@ -4296,7 +4372,6 @@ export function getAdminDashboardHtml(): string {
         const params = new URLSearchParams({
           filter: state.audit.filter || 'all',
           search: state.audit.search || '',
-          vlan: state.audit.vlan || '',
           page: state.audit.page || 1,
           limit: state.audit.limit || 30,
         });
@@ -4304,306 +4379,85 @@ export function getAdminDashboardHtml(): string {
         const res = await apiFetch('/api/audit/ip-cross?' + params.toString());
         state.audit.total = res.total || 0;
 
-        // Populate VLAN selector options if provided
-        if (res.vlans && Array.isArray(res.vlans)) {
-          const vlanSelect = document.getElementById('audit-vlan-filter');
-          if (vlanSelect) {
-            const currentSelected = state.audit.vlan || '';
-            let optionsHtml = '<option value="">Todas las VLANs</option>';
-            res.vlans.forEach(v => {
-              const sel = (v.vlan === currentSelected) ? 'selected' : '';
-              optionsHtml += \`<option value="\${escapeHtml(v.vlan)}" \${sel}>VLAN \${escapeHtml(v.vlan)} (\${v.count} clientes)</option>\`;
-            });
-            vlanSelect.innerHTML = optionsHtml;
-          }
-        }
-
-        // Update metric counters
-        if (res.metrics) {
-          const elTotal = document.getElementById('metric-audit-total');
-          const elSynced = document.getElementById('metric-audit-synced');
-          const elMissingIpv6 = document.getElementById('metric-audit-missing-ipv6');
-          const elMissingMac = document.getElementById('metric-audit-missing-mac');
-          const elVlanLabel = document.getElementById('metric-audit-vlan-label');
-
-          if (elTotal) elTotal.innerText = res.metrics.total || 0;
-          if (elSynced) elSynced.innerText = res.metrics.synced || 0;
-          if (elMissingIpv6) elMissingIpv6.innerText = res.metrics.missing_ipv6 || 0;
-          if (elMissingMac) elMissingMac.innerText = res.metrics.missing_mac || 0;
-          if (elVlanLabel) {
-            elVlanLabel.innerText = state.audit.vlan ? \`VLAN \${state.audit.vlan}\` : 'Todas las VLANs';
-          }
-        }
-
         const totalPages = Math.max(1, Math.ceil((res.total || 0) / state.audit.limit));
-        const pagInfo = document.getElementById('audit-pagination-info');
-        if (pagInfo) {
-          pagInfo.innerText = \`Mostrando página \${state.audit.page} de \${totalPages} (\${res.total || 0} registros)\`;
-        }
+        document.getElementById('audit-pagination-info').innerText = \`Mostrando página \${state.audit.page} de \${totalPages} (\${res.total || 0} registros)\`;
 
         if (res.items && res.items.length > 0) {
-          tbody.innerHTML = res.items.map((item, idx) => {
-            const rowId = \`audit-row-\${idx}\`;
-            
-            // Sync status badge
-            let syncBadge = '<span class="badge badge-success">🟢 Sincronizado</span>';
-            if (item.sync_status === 'MISSING_IPV6') {
-              syncBadge = '<span class="badge badge-warning" title="WispHub no tiene prefijo IPv6">🟡 Falta IPv6</span>';
-            } else if (item.sync_status === 'MISSING_MAC') {
-              syncBadge = '<span class="badge badge-danger" title="WispHub no tiene MAC registrada">🟠 Falta MAC</span>';
-            } else if (item.sync_status === 'MISMATCH_IP') {
-              syncBadge = '<span class="badge badge-danger" title="La IP no coincide">🔴 IP Diferente</span>';
-            } else if (item.sync_status === 'ONLY_SMARTOLT') {
-              syncBadge = '<span class="badge badge-info">🔵 Solo SmartOLT</span>';
-            } else if (item.sync_status === 'ONLY_WISPHUB') {
-              syncBadge = '<span class="badge badge-purple">🟣 Solo WispHub</span>';
-            } else if (item.sync_status === 'DESYNCHRONIZED') {
-              syncBadge = '<span class="badge badge-danger">🔴 Desincronizado</span>';
-            }
+          tbody.innerHTML = res.items.map(item => {
+            let statusBadge = '<span class="badge badge-success">CORRECTO</span>';
+            if (item.ip_status === 'MISMATCH') statusBadge = '<span class="badge badge-danger">DISCREPANCIA</span>';
+            if (item.ip_status === 'ONLY_SMARTOLT') statusBadge = '<span class="badge badge-info">Solo SmartOLT</span>';
+            if (item.ip_status === 'ONLY_WISPHUB') statusBadge = '<span class="badge badge-purple">Solo WispHub</span>';
+            if (item.ip_status === 'NO_IP') statusBadge = '<span class="badge badge-warning">Sin IP</span>';
 
-            // IP comparison
-            const oltIp = item.smartolt_ip ? \`<span style="color: var(--accent-cyan);">\${escapeHtml(item.smartolt_ip)}</span>\` : '<span style="color: var(--text-dim);">--</span>';
-            const whIp = item.wisphub_ip ? \`<span style="color: var(--accent-green);">\${escapeHtml(item.wisphub_ip)}</span>\` : '<span style="color: var(--text-dim);">--</span>';
-            const ipDisplay = \`
-              <div style="font-family: var(--font-mono); font-size: 11.5px; line-height: 1.4;">
-                <div><span style="font-size: 9px; color: var(--text-dim); text-transform: uppercase;">OLT:</span> \${oltIp}</div>
-                <div><span style="font-size: 9px; color: var(--text-dim); text-transform: uppercase;">WH:</span> \${whIp}</div>
-              </div>
-            \`;
+            let trBadge = '<span class="badge badge-success">ACTIVO</span>';
+            if (item.tr069_status === 'OMCI') trBadge = '<span class="badge badge-warning">OMCI</span>';
+            if (item.tr069_status === 'MISSING' || !item.tr069_status) trBadge = '<span class="badge badge-danger">FALTA</span>';
 
-            // MAC comparison
-            const oltMac = item.mac_smartolt ? \`<span style="color: var(--accent-cyan); font-weight: 600;">\${escapeHtml(item.mac_smartolt)}</span>\` : '<span style="color: var(--text-dim);">--</span>';
-            const whMac = item.mac_wisphub ? \`<span style="color: var(--accent-green); font-weight: 600;">\${escapeHtml(item.mac_wisphub)}</span>\` : '<span style="color: var(--accent-rose); font-style: italic;">Sin MAC</span>';
-            const macDisplay = \`
-              <div style="font-family: var(--font-mono); font-size: 11px; line-height: 1.4;">
-                <div><span style="font-size: 9px; color: var(--text-dim);">OLT:</span> \${oltMac}</div>
-                <div><span style="font-size: 9px; color: var(--text-dim);">WH:</span> \${whMac}</div>
-              </div>
-            \`;
+            let ipv6Badge = '<span class="badge badge-success">DUAL STACK</span>';
+            if (item.ipv6_status === 'IPV4_ONLY') ipv6Badge = '<span class="badge badge-warning">SOLO IPv4</span>';
+            if (item.ipv6_status === 'MISSING' || !item.ipv6_status) ipv6Badge = '<span class="badge badge-danger">FALTA</span>';
 
-            // IPv6 Prefix comparison
-            const oltIpv6 = item.ipv6_smartolt ? \`<span style="color: #38bdf8;">\${escapeHtml(item.ipv6_smartolt)}</span>\` : '<span style="color: var(--text-dim);">--</span>';
-            const whIpv6 = item.ipv6_wisphub ? \`<span style="color: var(--accent-green);">\${escapeHtml(item.ipv6_wisphub)}</span>\` : '<span style="color: var(--accent-amber); font-weight: 600;">⚠️ Sin IPv6</span>';
-            const ipv6Display = \`
-              <div style="font-family: var(--font-mono); font-size: 11px; line-height: 1.4;">
-                <div><span style="font-size: 9px; color: var(--text-dim);">OLT:</span> \${oltIpv6}</div>
-                <div><span style="font-size: 9px; color: var(--text-dim);">WH:</span> \${whIpv6}</div>
-              </div>
-            \`;
-
-            // VLAN & Zone
-            const vlanBadge = item.vlan ? \`<span class="badge" style="background: rgba(99, 102, 241, 0.2); color: #a5b4fc; border: 1px solid rgba(99, 102, 241, 0.4); font-weight: 700;">VLAN \${escapeHtml(item.vlan)}</span>\` : '<span style="color: var(--text-dim); font-size: 11px;">S/VLAN</span>';
-            const oltZone = item.smartolt_name ? \`<div style="font-size: 10.5px; color: var(--text-dim); margin-top: 3px;">\${escapeHtml(item.smartolt_name)}</div>\` : '';
-
-            // Action Button
-            let actionBtn = '<span style="font-size: 11px; color: var(--text-dim);">--</span>';
-            if (item.wisphub_id) {
-              const syncData = {
-                wisphub_id: item.wisphub_id,
-                smartolt_id: item.smartolt_id || '',
-                mac: item.mac_wisphub || item.mac_smartolt || '',
-                ipv6_prefix: item.ipv6_wisphub || (item.ipv6_smartolt && !item.ipv6_smartolt.includes('Solo') ? item.ipv6_smartolt : '') || '',
-                ip: item.smartolt_ip || item.wisphub_ip || '',
-                sn: item.sn || item.sn_smartolt || item.sn_wisphub || '',
-                cliente: item.cliente || '',
-                folio: item.folio || item.servicio || '',
-                router: item.zona_o_router || ''
-              };
-              const jsonStr = encodeURIComponent(JSON.stringify(syncData));
-
-              if (item.sync_status === 'SYNCED') {
+            let actionBtn = '<span style="font-size: 11px; color: var(--text-dim);">No en OLT</span>';
+            if (item.smartolt_id) {
+              const needsConfig = item.tr069_status !== 'ACTIVE' || item.ipv6_status !== 'DUAL_STACK';
+              if (needsConfig) {
+                const safeClient = (item.cliente || 'Cliente').replace(/'/g, "\\'");
                 actionBtn = \`
-                  <div style="display: flex; gap: 4px; align-items: center; justify-content: center;">
-                    <span class="badge badge-success" style="opacity: 0.9; font-size: 11px;">✓ Sincronizado</span>
-                    <button class="btn btn-secondary btn-sm" onclick="openSyncClientModal('\${jsonStr}', '\${rowId}')" title="Editar MAC o IPv6" style="padding: 2px 6px; font-size: 11px;">✏️</button>
-                  </div>
-                \`;
-              } else {
-                actionBtn = \`
-                  <button id="btn-sync-cli-\${item.wisphub_id}" class="btn btn-primary btn-sm" onclick="openSyncClientModal('\${jsonStr}', '\${rowId}')" title="Completar MAC e IPv6 en WispHub" style="font-size: 11.5px; padding: 5px 10px;">
-                    ⚡ Sincronizar WH
+                  <button class="btn btn-primary btn-sm" onclick="applyTr069AndIpv6Config('\${item.smartolt_id}', '\${safeClient}')" title="Aprovisionar TR-069 + IPv6">
+                    ⚡ Aprovisionar
                   </button>
                 \`;
+              } else {
+                actionBtn = '<span class="badge badge-success" style="opacity: 0.85;">✓ Configurado</span>';
               }
-            } else if (item.smartolt_id) {
-              actionBtn = '<span style="font-size: 11px; color: var(--accent-cyan);">Solo en OLT</span>';
             }
 
             return \`
-              <tr id="\${rowId}">
-                <td>
-                  <div style="font-weight: 600; color: var(--text-main);">\${escapeHtml(item.cliente || 'Desconocido')}</div>
-                  <div style="font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); margin-top: 2px;">
-                    Folio: \${escapeHtml(item.folio || item.servicio || '--')} | SN: \${escapeHtml(item.sn || item.sn_smartolt || item.sn_wisphub || '--')}
-                  </div>
-                </td>
-                <td>
-                  \${vlanBadge}
-                  \${oltZone}
-                </td>
-                <td>\${ipDisplay}</td>
-                <td>\${macDisplay}</td>
-                <td>\${ipv6Display}</td>
-                <td id="\${rowId}-status">\${syncBadge}</td>
-                <td id="\${rowId}-action" style="text-align: center;">\${actionBtn}</td>
+              <tr>
+                <td style="font-weight: 600;">\${escapeHtml(item.cliente || 'Desconocido')}</td>
+                <td style="font-family: var(--font-mono); font-size: 11px;">\${escapeHtml(item.servicio || item.folio || '--')}</td>
+                <td style="font-family: var(--font-mono); color: var(--accent-cyan);">\${item.smartolt_ip || '--'}</td>
+                <td style="font-family: var(--font-mono); color: var(--accent-green);">\${item.wisphub_ip || '--'}</td>
+                <td>\${statusBadge}</td>
+                <td>\${trBadge}</td>
+                <td>\${ipv6Badge}</td>
+                <td>\${escapeHtml(item.wisphub_plan || '--')}</td>
+                <td>\${actionBtn}</td>
               </tr>
             \`;
           }).join('');
         } else {
-          tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-dim); padding: 30px;">No se encontraron registros coincidentes con los filtros seleccionados.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; color: var(--text-dim);">No se encontraron registros coincidentes.</td></tr>';
         }
       } catch (err) {
         console.error('Error loading audit:', err);
-        if (tbody) {
-          tbody.innerHTML = \`<tr><td colspan="7" style="text-align: center; color: var(--accent-rose); padding: 24px;">Error al cargar auditoría: \${escapeHtml(err.message || 'Error')}</td></tr>\`;
-        }
       }
     }
 
-    function openSyncClientModal(jsonEncoded, rowId) {
-      let data = {};
-      try {
-        data = JSON.parse(decodeURIComponent(jsonEncoded));
-      } catch (e) {
-        console.error('Error decoding sync payload:', e);
-        return;
-      }
-
-      const modalHtml = \`
-        <div style="display: flex; flex-direction: column; gap: 14px;">
-          <div style="background: rgba(99,102,241,0.1); border: 1px solid rgba(99,102,241,0.25); border-radius: 8px; padding: 12px;">
-            <div style="font-weight: 700; font-size: 14px; color: #fff;">\${escapeHtml(data.cliente || 'Cliente')}</div>
-            <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px; font-family: var(--font-mono);">
-              IP: <strong style="color: var(--accent-cyan);">\${escapeHtml(data.ip || '--')}</strong> | 
-              SN: <strong style="color: var(--accent-green);">\${escapeHtml(data.sn || '--')}</strong> | 
-              WispHub ID: <strong>#\${escapeHtml(String(data.wisphub_id))}</strong>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label" style="font-weight: 600; display: flex; justify-content: space-between;">
-              <span>Dirección MAC CPE (Antena / Router)</span>
-              <span style="font-size: 11px; color: var(--text-dim); font-weight: normal;">Guardar en WispHub (mac_cpe)</span>
-            </label>
-            <input type="text" id="sync-input-mac" class="form-control" placeholder="Ej: 48:D8:69:27:69:F6" value="\${escapeHtml(data.mac || '')}" style="font-family: var(--font-mono); text-transform: uppercase;">
-            <small style="color: var(--text-muted); font-size: 11px; margin-top: 4px; display: block;">
-              💡 Si la conoces o la obtuviste de ARP / etiqueta física, ingrésala para empatar el cliente.
-            </small>
-          </div>
-
-          <div class="form-group">
-            <label class="form-label" style="font-weight: 600; display: flex; justify-content: space-between;">
-              <span>Prefijo IPv6 Delegado (Remote IPv6 Prefix)</span>
-              <span style="font-size: 11px; color: var(--accent-amber); font-weight: normal;">Bloquea fugas en corte</span>
-            </label>
-            <input type="text" id="sync-input-ipv6" class="form-control" placeholder="Ej: 2806:108e:xxxx:xxxx::/64" value="\${escapeHtml(data.ipv6_prefix || '')}" style="font-family: var(--font-mono);">
-            <small style="color: var(--text-muted); font-size: 11px; margin-top: 4px; display: block;">
-              💡 Prefijo IPv6 de MikroTik DHCPv6 / TR-069. Al guardarlo, WispHub cortará IPv6 correctamente al suspender.
-            </small>
-          </div>
-        </div>
-      \`;
-
-      openModal(
-        \`Sincronizar Datos en WispHub (#\${data.wisphub_id})\`,
-        modalHtml,
-        async () => {
-          const macVal = (document.getElementById('sync-input-mac')?.value || '').trim().toUpperCase();
-          const ipv6Val = (document.getElementById('sync-input-ipv6')?.value || '').trim();
-
-          const payload = {
-            ...data,
-            mac: macVal,
-            remote_ipv6_prefix: ipv6Val,
-          };
-
-          showToast('Sincronizando', \`Guardando MAC e IPv6 en WispHub para \${data.cliente}...\`, 'info', 3000);
-
-          try {
-            const res = await apiFetch('/api/audit/sync-client', {
-              method: 'POST',
-              body: JSON.stringify(payload),
-            });
-
-            if (res.success) {
-              showToast('Sincronizado', \`Datos guardados con éxito en WispHub para \${data.cliente}.\`, 'success', 4000);
-              
-              // Dynamically update row UI
-              const statusEl = document.getElementById(\`\${rowId}-status\`);
-              const actionEl = document.getElementById(\`\${rowId}-action\`);
-              
-              const isFullySynced = macVal.length > 0 && ipv6Val.length > 0;
-              if (statusEl) {
-                statusEl.innerHTML = isFullySynced ? '<span class="badge badge-success">🟢 Sincronizado</span>' : '<span class="badge badge-warning">🟡 Actualizado</span>';
-              }
-              if (actionEl) {
-                const newJson = encodeURIComponent(JSON.stringify({ ...data, mac: macVal, ipv6_prefix: ipv6Val }));
-                actionEl.innerHTML = \`
-                  <div style="display: flex; gap: 4px; align-items: center; justify-content: center;">
-                    <span class="badge badge-success" style="font-size: 11px;">✓ Guardado</span>
-                    <button class="btn btn-secondary btn-sm" onclick="openSyncClientModal('\${newJson}', '\${rowId}')" title="Editar de nuevo" style="padding: 2px 6px; font-size: 11px;">✏️</button>
-                  </div>
-                \`;
-              }
-
-              return true;
-            } else {
-              showToast('Error', res.error || res.message || 'No se pudo guardar en WispHub.', 'error', 5000);
-              return false;
-            }
-          } catch (err) {
-            showToast('Error', err.message || 'Fallo de red', 'error');
-            return false;
-          }
-        },
-        '💾 Guardar en WispHub'
-      );
-    }
-
-    async function syncCurrentVlanBatch() {
-      const currentVlan = state.audit.vlan;
-      const vlanLabel = currentVlan ? \`VLAN \${currentVlan}\` : 'todas las VLANs';
-      
+    async function applyTr069AndIpv6Config(onuId, clientName) {
       showConfirmDialog(
-        \`Sincronizar \${vlanLabel} a WispHub\`,
-        \`¿Deseas sincronizar automáticamente la MAC y el Prefijo IPv6 de SmartOLT a WispHub para todos los clientes desincronizados de \${vlanLabel}?\`,
+        'Aprovisionar TR-069 + IPv6',
+        \`¿Deseas configurar automáticamente el perfil TR-069 de SmartOLT (VLAN de gestión) y WAN IPv4/IPv6 Dual Stack para <strong>\${clientName}</strong>?\`,
         async () => {
-          const btn = document.getElementById('btn-sync-current-vlan');
-          if (btn) {
-            btn.disabled = true;
-            btn.innerText = '⏳ Sincronizando Lote...';
-          }
-          showToast('Sincronización Masiva', \`Iniciando sincronización para \${vlanLabel}...\`, 'info', 4000);
-
+          showToast('Configurando', \`Enviando configuración a SmartOLT para \${clientName}...\`, 'info', 4000);
           try {
-            const res = await apiFetch('/api/audit/sync-vlan', {
+            const res = await apiFetch(\`/api/smartolt/configure-tr069/\${encodeURIComponent(onuId)}\`, {
               method: 'POST',
-              body: JSON.stringify({ vlan: currentVlan }),
             });
-
             if (res.success) {
-              showToast('Lote Completado', \`Sincronizados: \${res.synced_count || 0} clientes de \${vlanLabel}.\`, 'success', 5000);
-              loadAuditData();
+              showToast('Éxito', res.message || 'TR-069 e IPv6 Dual Stack configurados exitosamente.', 'success', 5000);
+              if (state.currentView === 'audit') loadAuditData();
+              if (state.currentView === 'provisioning') loadProvisioningData();
             } else {
-              showToast('Error', res.error || 'Fallo en la sincronización del lote', 'error', 5000);
+              showToast('Error', res.message || res.error || 'No se pudo aplicar la configuración.', 'error', 5000);
             }
           } catch (err) {
-            showToast('Error', err.message || 'Error de comunicación', 'error');
-          } finally {
-            if (btn) {
-              btn.disabled = false;
-              btn.innerText = '⚡ Sincronizar VLAN a WispHub';
-            }
+            showToast('Error', err.message || 'Fallo de conexión', 'error');
           }
         },
         false
       );
-    }
-
-    function handleAuditVlanChange(vlan) {
-      state.audit.vlan = (vlan || '').trim();
-      state.audit.page = 1;
-      loadAuditData();
     }
 
     function setAuditFilter(f, btnElement) {
@@ -4635,7 +4489,7 @@ export function getAdminDashboardHtml(): string {
       }
     }
 
-    // Provisioning & IPv6 Module (SmartOLT + WispHub Sync)
+    // Provisioning Dedicated Module
     async function loadProvisioningData() {
       const tbody = document.getElementById('table-prov-body');
       if (tbody) {
@@ -4643,7 +4497,7 @@ export function getAdminDashboardHtml(): string {
           <tr>
             <td colspan="7" style="text-align: center; padding: 36px 20px;">
               <div class="spinner" style="margin-bottom: 10px;"></div>
-              <div style="font-size: 13px; color: var(--text-dim);">Comparando SmartOLT vs WispHub por VLAN...</div>
+              <div style="font-size: 13px; color: var(--text-dim);">Consultando estado de aprovisionamiento...</div>
             </td>
           </tr>
         \`;
@@ -4653,7 +4507,6 @@ export function getAdminDashboardHtml(): string {
         const params = new URLSearchParams({
           filter: state.provisioning.filter || 'pending',
           search: state.provisioning.search || '',
-          vlan: state.provisioning.vlan || '',
           page: state.provisioning.page || 1,
           limit: state.provisioning.limit || 30,
         });
@@ -4661,40 +4514,17 @@ export function getAdminDashboardHtml(): string {
         const res = await apiFetch('/api/audit/ip-cross?' + params.toString());
         state.provisioning.total = res.total || 0;
 
-        // Populate VLAN selector options if provided
-        if (res.vlans && Array.isArray(res.vlans)) {
-          const vlanSelect = document.getElementById('prov-vlan-filter');
-          if (vlanSelect) {
-            const currentSelected = state.provisioning.vlan || '';
-            let optionsHtml = '<option value="">Todas las VLANs</option>';
-            res.vlans.forEach(v => {
-              const sel = (v.vlan === currentSelected) ? 'selected' : '';
-              optionsHtml += \`<option value="\${escapeHtml(v.vlan)}" \${sel}>VLAN \${escapeHtml(v.vlan)} (\${v.count} clientes)</option>\`;
-            });
-            vlanSelect.innerHTML = optionsHtml;
-          }
-        }
-
         // Update metric cards
         const sum = res.summary || {};
         const missingTr = sum.missingTr069 || 0;
         const missingV6 = sum.missingIpv6 || 0;
         const totalOlt = sum.totalSmartOlt || 0;
-        const readyCount = sum.synced || Math.max(0, totalOlt - Math.max(missingTr, missingV6));
+        const readyCount = Math.max(0, totalOlt - Math.max(missingTr, missingV6));
 
-        const elTot = document.getElementById('metric-prov-total');
-        const elTr = document.getElementById('metric-prov-tr069');
-        const elV6 = document.getElementById('metric-prov-ipv6');
-        const elReady = document.getElementById('metric-prov-ready');
-        const elVlanLbl = document.getElementById('metric-prov-vlan-label');
-
-        if (elTot) elTot.innerText = Number(totalOlt).toLocaleString();
-        if (elTr) elTr.innerText = Number(missingTr).toLocaleString();
-        if (elV6) elV6.innerText = Number(missingV6).toLocaleString();
-        if (elReady) elReady.innerText = Number(readyCount).toLocaleString();
-        if (elVlanLbl) {
-          elVlanLbl.innerText = state.provisioning.vlan ? \`VLAN \${state.provisioning.vlan}\` : 'Todas las VLANs';
-        }
+        document.getElementById('metric-prov-total').innerText = Number(totalOlt).toLocaleString();
+        document.getElementById('metric-prov-tr069').innerText = Number(missingTr).toLocaleString();
+        document.getElementById('metric-prov-ipv6').innerText = Number(missingV6).toLocaleString();
+        document.getElementById('metric-prov-ready').innerText = Number(readyCount).toLocaleString();
 
         const bProv = document.getElementById('badge-prov-pending');
         const pendingTotal = Math.max(missingTr, missingV6);
@@ -4708,189 +4538,49 @@ export function getAdminDashboardHtml(): string {
         }
 
         const totalPages = Math.max(1, Math.ceil((res.total || 0) / state.provisioning.limit));
-        const pInfo = document.getElementById('prov-pagination-info');
-        if (pInfo) {
-          pInfo.innerText = \`Mostrando página \${state.provisioning.page} de \${totalPages} (\${res.total || 0} registros)\`;
-        }
+        document.getElementById('prov-pagination-info').innerText = \`Mostrando página \${state.provisioning.page} de \${totalPages} (\${res.total || 0} registros)\`;
 
         if (res.items && res.items.length > 0) {
-          tbody.innerHTML = res.items.map((item, idx) => {
-            const rowId = \`prov-row-\${idx}\`;
-
-            // TR-069 badge
+          tbody.innerHTML = res.items.map(item => {
             let trBadge = '<span class="badge badge-success">ACTIVO</span>';
             if (item.tr069_status === 'OMCI') trBadge = '<span class="badge badge-warning">OMCI</span>';
-            if (item.tr069_status === 'MISSING' || !item.tr069_status) trBadge = '<span class="badge badge-danger">FALTA TR069</span>';
+            if (item.tr069_status === 'MISSING' || !item.tr069_status) trBadge = '<span class="badge badge-danger">FALTA</span>';
 
-            // Sync status badge
-            let syncBadge = '<span class="badge badge-success" style="margin-top: 3px; display: inline-block;">🟢 SYNC</span>';
-            if (item.sync_status === 'MISSING_IPV6') {
-              syncBadge = '<span class="badge badge-warning" style="margin-top: 3px; display: inline-block;">🟡 Falta IPv6 WH</span>';
-            } else if (item.sync_status === 'MISSING_MAC') {
-              syncBadge = '<span class="badge badge-danger" style="margin-top: 3px; display: inline-block;">🟠 Falta MAC WH</span>';
-            } else if (item.sync_status === 'MISMATCH_IP') {
-              syncBadge = '<span class="badge badge-danger" style="margin-top: 3px; display: inline-block;">🔴 IP Dif</span>';
-            }
+            let ipv6Badge = '<span class="badge badge-success">DUAL STACK</span>';
+            if (item.ipv6_status === 'IPV4_ONLY') ipv6Badge = '<span class="badge badge-warning">SOLO IPv4</span>';
+            if (item.ipv6_status === 'MISSING' || !item.ipv6_status) ipv6Badge = '<span class="badge badge-danger">FALTA</span>';
 
-            // IP comparison
-            const oltIp = item.smartolt_ip ? \`<span style="color: var(--accent-cyan);">\${escapeHtml(item.smartolt_ip)}</span>\` : '<span style="color: var(--text-dim);">--</span>';
-            const whIp = item.wisphub_ip ? \`<span style="color: var(--accent-green);">\${escapeHtml(item.wisphub_ip)}</span>\` : '<span style="color: var(--text-dim);">--</span>';
-            const ipDisplay = \`
-              <div style="font-family: var(--font-mono); font-size: 11px; line-height: 1.4;">
-                <div><span style="font-size: 9px; color: var(--text-dim);">OLT:</span> \${oltIp}</div>
-                <div><span style="font-size: 9px; color: var(--text-dim);">WH:</span> \${whIp}</div>
-              </div>
-            \`;
-
-            // MAC comparison
-            const oltMac = item.mac_smartolt ? \`<span style="color: var(--accent-cyan); font-weight: 600;">\${escapeHtml(item.mac_smartolt)}</span>\` : '<span style="color: var(--text-dim);">--</span>';
-            const whMac = item.mac_wisphub ? \`<span style="color: var(--accent-green); font-weight: 600;">\${escapeHtml(item.mac_wisphub)}</span>\` : '<span style="color: var(--accent-rose); font-style: italic;">Sin MAC</span>';
-            const macDisplay = \`
-              <div style="font-family: var(--font-mono); font-size: 11px; line-height: 1.4;">
-                <div><span style="font-size: 9px; color: var(--text-dim);">OLT:</span> \${oltMac}</div>
-                <div><span style="font-size: 9px; color: var(--text-dim);">WH:</span> \${whMac}</div>
-              </div>
-            \`;
-
-            // IPv6 comparison
-            const oltIpv6 = item.ipv6_smartolt ? \`<span style="color: #38bdf8;">\${escapeHtml(item.ipv6_smartolt)}</span>\` : '<span style="color: var(--text-dim);">--</span>';
-            const whIpv6 = item.ipv6_wisphub ? \`<span style="color: var(--accent-green);">\${escapeHtml(item.ipv6_wisphub)}</span>\` : '<span style="color: var(--accent-amber); font-weight: 600;">⚠️ Sin IPv6</span>';
-            const ipv6Display = \`
-              <div style="font-family: var(--font-mono); font-size: 11px; line-height: 1.4;">
-                <div><span style="font-size: 9px; color: var(--text-dim);">OLT:</span> \${oltIpv6}</div>
-                <div><span style="font-size: 9px; color: var(--text-dim);">WH:</span> \${whIpv6}</div>
-              </div>
-            \`;
-
-            // VLAN & Zone
-            const vlanBadge = item.vlan ? \`<span class="badge" style="background: rgba(99, 102, 241, 0.2); color: #a5b4fc; border: 1px solid rgba(99, 102, 241, 0.4); font-weight: 700;">VLAN \${escapeHtml(item.vlan)}</span>\` : '<span style="color: var(--text-dim); font-size: 11px;">S/VLAN</span>';
-            const oltZone = item.smartolt_name || item.zona_o_router ? \`<div style="font-size: 10px; color: var(--text-dim); margin-top: 2px;">\${escapeHtml(item.smartolt_name || item.zona_o_router)}</div>\` : '';
-
-            // Actions (Sync to WispHub + Configure SmartOLT)
-            const actions = [];
-
-            // 1. Sync button for WispHub
-            if (item.wisphub_id) {
-              const syncData = {
-                wisphub_id: item.wisphub_id,
-                smartolt_id: item.smartolt_id || '',
-                mac: item.mac_wisphub || item.mac_smartolt || '',
-                ipv6_prefix: item.ipv6_wisphub || (item.ipv6_smartolt && !item.ipv6_smartolt.includes('Solo') ? item.ipv6_smartolt : '') || '',
-                ip: item.smartolt_ip || item.wisphub_ip || '',
-                sn: item.sn || item.sn_smartolt || item.sn_wisphub || '',
-                cliente: item.cliente || '',
-                folio: item.folio || item.servicio || '',
-                router: item.zona_o_router || ''
-              };
-              const jsonStr = encodeURIComponent(JSON.stringify(syncData));
-
-              if (item.sync_status === 'SYNCED') {
-                actions.push(\`
-                  <div style="display: flex; gap: 4px; align-items: center; justify-content: center;">
-                    <span class="badge badge-success" style="font-size: 10.5px;">✓ WH Sincronizado</span>
-                    <button class="btn btn-secondary btn-sm" onclick="openSyncClientModal('\${jsonStr}', '\${rowId}')" title="Editar MAC o IPv6" style="padding: 2px 6px; font-size: 10px;">✏️</button>
-                  </div>
-                \`);
-              } else {
-                actions.push(\`
-                  <button id="btn-prov-sync-\${item.wisphub_id}" class="btn btn-primary btn-sm" onclick="openSyncClientModal('\${jsonStr}', '\${rowId}')" title="Completar MAC e IPv6 en WispHub" style="font-size: 11px; padding: 4px 8px;">
-                    ⚡ Sincronizar WH
-                  </button>
-                \`);
-              }
-            }
-
-            // 2. SmartOLT Provisioning Button (TR-069 + IPv6 in OLT)
-            const needsOltConfig = item.tr069_status !== 'ACTIVE' || item.ipv6_status !== 'DUAL_STACK';
-            if (item.smartolt_id && needsOltConfig) {
+            let actionBtn = '<span class="badge badge-success" style="opacity: 0.85;">✓ Configurado</span>';
+            const needsConfig = item.tr069_status !== 'ACTIVE' || item.ipv6_status !== 'DUAL_STACK';
+            if (item.smartolt_id && needsConfig) {
               const safeClient = (item.cliente || 'Cliente').replace(/'/g, "\\'");
-              actions.push(\`
-                <button class="btn btn-warning btn-sm" onclick="applyTr069AndIpv6Config('\${item.smartolt_id}', '\${safeClient}')" title="Aprovisionar perfil TR-069 en SmartOLT" style="font-size: 11px; padding: 4px 8px;">
-                  🔧 Config OLT
+              actionBtn = \`
+                <button class="btn btn-primary btn-sm" onclick="applyTr069AndIpv6Config('\${item.smartolt_id}', '\${safeClient}')">
+                  ⚡ Aprovisionar TR069+IPv6
                 </button>
-              \`);
+              \`;
+            } else if (!item.smartolt_id) {
+              actionBtn = '<span style="font-size: 11px; color: var(--text-dim);">No en OLT</span>';
             }
-
-            const actionsHtml = actions.length > 0 ? \`<div style="display: flex; gap: 4px; justify-content: center; flex-wrap: wrap;">\${actions.join('')}</div>\` : '<span style="font-size: 11px; color: var(--text-dim);">--</span>';
 
             return \`
-              <tr id="\${rowId}">
-                <td>
-                  <div style="font-weight: 600; color: var(--text-main);">\${escapeHtml(item.cliente || 'Desconocido')}</div>
-                  <div style="font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); margin-top: 2px;">
-                    SN: \${escapeHtml(item.sn || item.sn_smartolt || item.sn_wisphub || '--')}
-                  </div>
-                </td>
-                <td>
-                  \${vlanBadge}
-                  \${oltZone}
-                </td>
-                <td>\${ipDisplay}</td>
-                <td>\${macDisplay}</td>
-                <td>\${ipv6Display}</td>
-                <td id="\${rowId}-status">
-                  <div>\${trBadge}</div>
-                  <div>\${syncBadge}</div>
-                </td>
-                <td id="\${rowId}-action" style="text-align: center;">\${actionsHtml}</td>
+              <tr>
+                <td style="font-weight: 600;">\${escapeHtml(item.cliente || 'Desconocido')}</td>
+                <td style="font-family: var(--font-mono); font-weight: 600; color: var(--accent-cyan); font-size: 12px;">\${escapeHtml(item.sn_smartolt || item.sn_wisphub || '--')}</td>
+                <td style="font-family: var(--font-mono); color: var(--accent-green);">\${item.smartolt_ip || item.wisphub_ip || '--'}</td>
+                <td><span class="badge badge-info">\${escapeHtml(item.zona_o_router || 'Actopan')}</span></td>
+                <td>\${trBadge}</td>
+                <td>\${ipv6Badge}</td>
+                <td>\${actionBtn}</td>
               </tr>
             \`;
           }).join('');
         } else {
-          tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-dim); padding: 30px;">No se encontraron ONUs con los filtros seleccionados.</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-dim);">No hay ONUs que requieran aprovisionamiento con el filtro actual.</td></tr>';
         }
       } catch (err) {
         console.error('Error loading provisioning:', err);
-        if (tbody) {
-          tbody.innerHTML = \`<tr><td colspan="7" style="text-align: center; color: var(--accent-rose); padding: 24px;">Error al cargar datos: \${escapeHtml(err.message || 'Error')}</td></tr>\`;
-        }
       }
-    }
-
-    function handleProvVlanChange(vlan) {
-      state.provisioning.vlan = (vlan || '').trim();
-      state.provisioning.page = 1;
-      loadProvisioningData();
-    }
-
-    async function syncCurrentProvVlanBatch() {
-      const currentVlan = state.provisioning.vlan;
-      const vlanLabel = currentVlan ? \`VLAN \${currentVlan}\` : 'todas las VLANs';
-      
-      showConfirmDialog(
-        \`Sincronizar \${vlanLabel} a WispHub\`,
-        \`¿Deseas sincronizar automáticamente la MAC y el Prefijo IPv6 de SmartOLT a WispHub para todos los clientes desincronizados de \${vlanLabel}?\`,
-        async () => {
-          const btn = document.getElementById('btn-sync-prov-vlan');
-          if (btn) {
-            btn.disabled = true;
-            btn.innerText = '⏳ Sincronizando Lote...';
-          }
-          showToast('Sincronización Masiva', \`Iniciando sincronización para \${vlanLabel}...\`, 'info', 4000);
-
-          try {
-            const res = await apiFetch('/api/audit/sync-vlan', {
-              method: 'POST',
-              body: JSON.stringify({ vlan: currentVlan }),
-            });
-
-            if (res.success) {
-              showToast('Lote Completado', \`Sincronizados: \${res.synced_count || 0} clientes de \${vlanLabel}.\`, 'success', 5000);
-              loadProvisioningData();
-            } else {
-              showToast('Error', res.error || 'Fallo en la sincronización del lote', 'error', 5000);
-            }
-          } catch (err) {
-            showToast('Error', err.message || 'Error de comunicación', 'error');
-          } finally {
-            if (btn) {
-              btn.disabled = false;
-              btn.innerText = '⚡ Sincronizar VLAN a WispHub';
-            }
-          }
-        },
-        false
-      );
     }
 
     function setProvFilter(f, btnElement) {
@@ -6407,6 +6097,317 @@ export function getAdminDashboardHtml(): string {
       if (navigator.clipboard) {
         navigator.clipboard.writeText(text);
         showToast('Copiado', \`Teléfono \${text} copiado al portapapeles.\`, 'info', 1800);
+      }
+    }
+
+    // ==========================================
+    // CAMBIO DE MÓDEM (REEMPLAZO DE ONU)
+    // ==========================================
+    state.swap = {
+      oldOnu: null,
+      unconfigured: [],
+      newOnu: null,
+      history: [],
+      debounceTimer: null,
+    };
+
+    async function loadModemSwapData() {
+      loadSwapUnconfiguredOnus();
+      loadModemSwapHistory();
+    }
+
+    function debounceSwapSearchOld(val) {
+      clearTimeout(state.swap.debounceTimer);
+      state.swap.debounceTimer = setTimeout(() => {
+        searchSwapOldOnus(val);
+      }, 300);
+    }
+
+    async function searchSwapOldOnus(query) {
+      const dropdown = document.getElementById('swap-old-dropdown-results');
+      const q = (query || '').trim();
+      if (!q || q.length < 2) {
+        dropdown.style.display = 'none';
+        return;
+      }
+
+      try {
+        const res = await apiFetch(\`/api/modem-swap/onus?q=\${encodeURIComponent(q)}&limit=15\`);
+        if (!res.success || !res.onus || res.onus.length === 0) {
+          dropdown.innerHTML = '<div style="padding: 10px 14px; color: var(--text-dim); font-size: 12px;">No se encontraron ONUs activas.</div>';
+          dropdown.style.display = 'block';
+          return;
+        }
+
+        dropdown.innerHTML = res.onus.map(o => \`
+          <div class="swap-search-item" onclick="selectSwapOldOnu('\${escapeHtml(o.unique_external_id || o.sn)}')" style="padding: 10px 14px; border-bottom: 1px solid var(--card-border); cursor: pointer; transition: background 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='transparent'">
+            <div style="font-weight: 700; font-size: 13px; color: var(--text-main);">\${escapeHtml(o.name || 'Sin Nombre')}</div>
+            <div style="font-size: 11.5px; color: var(--text-muted); display: flex; gap: 12px; margin-top: 3px; flex-wrap: wrap;">
+              <span>🆔 SN: <strong style="color: var(--accent-cyan);">\${escapeHtml(o.sn || o.unique_external_id)}</strong></span>
+              <span>🌐 IP: <strong>\${escapeHtml(o.ip_address || 'N/A')}</strong></span>
+              <span>📍 Zona: \${escapeHtml(o.zone_name || 'Actopan')}</span>
+              <span>📦 Plan: \${escapeHtml(o.speed_profile || '40MB')}</span>
+            </div>
+          </div>
+        \`).join('');
+        dropdown.style.display = 'block';
+      } catch (err) {
+        dropdown.style.display = 'none';
+      }
+    }
+
+    async function selectSwapOldOnu(id) {
+      const dropdown = document.getElementById('swap-old-dropdown-results');
+      dropdown.style.display = 'none';
+      const card = document.getElementById('swap-old-selected-card');
+      card.innerHTML = '<div style="text-align: center; color: var(--text-dim); padding: 14px;">Cargando datos completos de la ONU...</div>';
+
+      try {
+        const res = await apiFetch(\`/api/modem-swap/onu-details/\${encodeURIComponent(id)}\`);
+        if (res.success && res.details) {
+          state.swap.oldOnu = res.details;
+          const d = res.details;
+          card.innerHTML = \`
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+              <div>
+                <div style="font-size: 14px; font-weight: 800; color: var(--text-main);">\${escapeHtml(d.name)}</div>
+                <div style="font-size: 11px; color: var(--text-muted);">ID Externo: \${escapeHtml(d.unique_external_id)}</div>
+              </div>
+              <span class="badge badge-danger">Módem a Retirar</span>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px; margin-top: 8px; background: rgba(0,0,0,0.25); padding: 10px; border-radius: var(--radius-sm);">
+              <div>🆔 <strong>SN Actual:</strong> <span style="font-family: monospace; color: var(--accent-rose); font-weight: 700;">\${escapeHtml(d.sn)}</span></div>
+              <div>🌐 <strong>IP Asignada:</strong> <span style="font-weight: 700; color: var(--accent-cyan);">\${escapeHtml(d.ip_address || 'N/A')}</span></div>
+              <div>📡 <strong>VLAN:</strong> \${escapeHtml(d.vlan || '510')}</div>
+              <div>📍 <strong>Zona:</strong> \${escapeHtml(d.zone || 'Actopan')}</div>
+              <div>📦 <strong>Plan / Velocidad:</strong> \${escapeHtml(d.download_speed_profile_name || '40MB')}</div>
+              <div>🚪 <strong>OLT / Puerto:</strong> \${escapeHtml(d.olt_name || d.olt_id || 'OLT-Actopan')} (B:\${d.board}/P:\${d.port})</div>
+              <div>🛡️ <strong>Gateway:</strong> \${escapeHtml(d.gateway || '172.19.2.254')}</div>
+              <div>📠 <strong>Modelo ONT:</strong> \${escapeHtml(d.onu_type || 'EG8041V5')}</div>
+            </div>
+          \`;
+          document.getElementById('swap-search-old-input').value = d.name;
+          updateSwapSummary();
+        } else {
+          card.innerHTML = '<div style="color: var(--accent-rose); padding: 10px; font-size: 12px;">Error al obtener datos de la ONU.</div>';
+        }
+      } catch (err) {
+        card.innerHTML = '<div style="color: var(--accent-rose); padding: 10px; font-size: 12px;">No se pudo contactar al servidor.</div>';
+      }
+    }
+
+    async function loadSwapUnconfiguredOnus() {
+      const select = document.getElementById('swap-select-unconfigured');
+      select.innerHTML = '<option value="">Escanear OLTs en curso...</option>';
+
+      try {
+        const res = await apiFetch('/api/smartolt/unconfigured');
+        if (res.success && Array.isArray(res.unconfigured)) {
+          state.swap.unconfigured = res.unconfigured;
+          if (res.unconfigured.length === 0) {
+            select.innerHTML = '<option value="">-- No hay ONUs sin autorizar detectadas en SmartOLT --</option>';
+          } else {
+            select.innerHTML = '<option value="">-- Seleccionar ONU Sin Autorizar (' + res.unconfigured.length + ' detectadas) --</option>' +
+              res.unconfigured.map(u => \`
+                <option value="\${escapeHtml(u.sn)}">\${escapeHtml(u.sn)} | \${escapeHtml(u.onu_type_name || u.onu_type || 'ONT')} | \${escapeHtml(u.olt_name || ('OLT ' + u.olt_id))} (B:\${u.board}/P:\${u.port}) [\${escapeHtml(u.onu_signal_1490 || u.onu_signal || 'Rx')}]</option>
+              \`).join('');
+          }
+        } else {
+          select.innerHTML = '<option value="">-- Error al consultar ONUs sin autorizar --</option>';
+        }
+      } catch (err) {
+        select.innerHTML = '<option value="">-- No se pudo conectar con SmartOLT --</option>';
+      }
+    }
+
+    function handleSelectSwapUnconfigured(sn) {
+      if (!sn) return;
+      document.getElementById('swap-input-new-sn').value = sn;
+      const found = state.swap.unconfigured.find(u => u.sn === sn);
+      const card = document.getElementById('swap-new-selected-card');
+
+      if (found) {
+        state.swap.newOnu = found;
+        card.innerHTML = \`
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+            <div>
+              <div style="font-size: 14px; font-weight: 800; color: var(--accent-emerald);">Módem Sin Configurar Detectado</div>
+              <div style="font-size: 11px; color: var(--text-muted);">\${escapeHtml(found.olt_name || ('OLT ID: ' + found.olt_id))}</div>
+            </div>
+            <span class="badge badge-success">Nuevo Equipo</span>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px; margin-top: 8px; background: rgba(0,0,0,0.25); padding: 10px; border-radius: var(--radius-sm);">
+            <div>🆔 <strong>Nuevo SN:</strong> <span style="font-family: monospace; color: var(--accent-emerald); font-weight: 700;">\${escapeHtml(found.sn)}</span></div>
+            <div>📠 <strong>Modelo:</strong> \${escapeHtml(found.onu_type_name || found.onu_type || 'EG8041V5')}</div>
+            <div>🚪 <strong>Board / Puerto:</strong> Board \${found.board} / Puerto \${found.port}</div>
+            <div>📶 <strong>Señal Óptica Rx:</strong> <span style="color: var(--accent-cyan); font-weight: 700;">\${escapeHtml(found.onu_signal_1490 || found.onu_signal || 'Detectada')}</span></div>
+          </div>
+        \`;
+      } else {
+        state.swap.newOnu = { sn };
+        card.innerHTML = \`
+          <div style="font-size: 13px; font-weight: 700; color: var(--accent-emerald);">Nuevo SN Ingresado: <code>\${escapeHtml(sn)}</code></div>
+          <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Se autorizará en SmartOLT con los mismos parámetros de red del cliente.</div>
+        \`;
+      }
+      updateSwapSummary();
+    }
+
+    function updateSwapSummary() {
+      const summaryBox = document.getElementById('swap-summary-box');
+      const btnExecute = document.getElementById('btn-execute-swap');
+      const oldOnu = state.swap.oldOnu;
+      const newSn = document.getElementById('swap-input-new-sn')?.value?.trim().toUpperCase() || state.swap.newOnu?.sn;
+
+      if (!oldOnu || !newSn) {
+        summaryBox.innerHTML = \`
+          <div style="font-size: 13px; color: var(--text-muted); text-align: center;">
+            Completa el Paso 1 (Módem Actual) y el Paso 2 (Nuevo Módem) para habilitar la ejecución del reemplazo.
+          </div>
+        \`;
+        if (btnExecute) btnExecute.disabled = true;
+        return;
+      }
+
+      if (oldOnu.sn === newSn) {
+        summaryBox.innerHTML = \`
+          <div style="font-size: 13px; color: var(--accent-rose); text-align: center; font-weight: 700;">
+            ⚠️ El nuevo número de serie (SN) no puede ser idéntico al módem actual (\${oldOnu.sn}).
+          </div>
+        \`;
+        if (btnExecute) btnExecute.disabled = true;
+        return;
+      }
+
+      summaryBox.innerHTML = \`
+        <div style="display: grid; grid-template-columns: 1fr auto 1fr; gap: 14px; align-items: center;">
+          <div style="background: rgba(244, 63, 94, 0.1); border: 1px solid rgba(244, 63, 94, 0.3); border-radius: var(--radius-sm); padding: 12px;">
+            <div style="font-size: 11px; font-weight: 700; color: var(--accent-rose); text-transform: uppercase;">🔴 Módem Anterior (Retirar)</div>
+            <div style="font-size: 13px; font-weight: 700; color: var(--text-main); margin-top: 4px;">\${escapeHtml(oldOnu.name)}</div>
+            <div style="font-size: 11.5px; color: var(--text-muted); margin-top: 2px;">SN: <strong style="color: var(--accent-rose);">\${escapeHtml(oldOnu.sn)}</strong></div>
+            <div style="font-size: 11px; color: var(--accent-cyan); margin-top: 4px;">IP: \${escapeHtml(oldOnu.ip_address || 'N/A')} | VLAN: \${escapeHtml(oldOnu.vlan || '510')}</div>
+          </div>
+
+          <div style="font-size: 24px; color: var(--primary); text-align: center;">➔</div>
+
+          <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: var(--radius-sm); padding: 12px;">
+            <div style="font-size: 11px; font-weight: 700; color: var(--accent-emerald); text-transform: uppercase;">🟢 Nuevo Módem (Dar de Alta)</div>
+            <div style="font-size: 13px; font-weight: 700; color: var(--text-main); margin-top: 4px;">\${escapeHtml(oldOnu.name)}</div>
+            <div style="font-size: 11.5px; color: var(--text-muted); margin-top: 2px;">Nuevo SN: <strong style="color: var(--accent-emerald);">\${escapeHtml(newSn)}</strong></div>
+            <div style="font-size: 11px; color: var(--accent-cyan); margin-top: 4px;">Conserva IP: \${escapeHtml(oldOnu.ip_address || 'N/A')} (Mismos datos)</div>
+          </div>
+        </div>
+      \`;
+
+      if (btnExecute) btnExecute.disabled = false;
+    }
+
+    async function handleExecuteModemSwap() {
+      const oldOnu = state.swap.oldOnu;
+      const newSn = document.getElementById('swap-input-new-sn')?.value?.trim().toUpperCase();
+      const notifyGroup = document.getElementById('swap-checkbox-notify-group')?.checked !== false;
+
+      if (!oldOnu || !newSn) {
+        showToast('Atención', 'Selecciona el módem actual y el nuevo SN.', 'warning');
+        return;
+      }
+
+      showConfirmDialog(
+        'Confirmar Cambio de Módem',
+        \`¿Estás seguro de realizar el cambio de módem para <strong>\${escapeHtml(oldOnu.name)}</strong>?<br><br>
+        • Se eliminará de SmartOLT el módem anterior <code>\${escapeHtml(oldOnu.sn)}</code>.<br>
+        • Se autorizará el nuevo módem <code>\${escapeHtml(newSn)}</code> con la <strong>misma IP (\${escapeHtml(oldOnu.ip_address)})</strong> y misma VLAN (\${escapeHtml(oldOnu.vlan)}).<br>
+        • Se enviará notificación al grupo de WhatsApp con formato: <code>\${escapeHtml(oldOnu.name)} \${escapeHtml(oldOnu.ip_address)} \${escapeHtml(oldOnu.zone || 'Actopan')} CAMBIO DE MODEM</code>.\`,
+        async () => {
+          const btn = document.getElementById('btn-execute-swap');
+          const statusDiv = document.getElementById('swap-execution-status');
+          btn.disabled = true;
+          btn.innerText = '⏳ Ejecutando Cambio...';
+          statusDiv.innerText = 'Eliminando módem anterior y aprovisionando nuevo equipo en SmartOLT...';
+
+          try {
+            const res = await apiFetch('/api/modem-swap/execute', {
+              method: 'POST',
+              body: JSON.stringify({
+                old_onu_id: oldOnu.unique_external_id || oldOnu.sn,
+                new_sn: newSn,
+                notify_group: notifyGroup,
+              }),
+            });
+
+            if (res.success) {
+              showToast('¡Cambio Exitoso!', res.message || 'Módem reemplazado y configurado en SmartOLT.', 'success', 6000);
+              statusDiv.innerHTML = '<span style="color: var(--accent-emerald);">✅ ¡Cambio de módem completado exitosamente!</span>';
+              
+              // Limpiar selección
+              state.swap.oldOnu = null;
+              state.swap.newOnu = null;
+              document.getElementById('swap-search-old-input').value = '';
+              document.getElementById('swap-input-new-sn').value = '';
+              document.getElementById('swap-old-selected-card').innerHTML = '<div style="text-align: center; color: var(--text-dim); padding: 20px 10px; font-size: 12.5px;">👈 Utiliza el buscador para seleccionar el cliente o módem actual.</div>';
+              document.getElementById('swap-new-selected-card').innerHTML = '<div style="text-align: center; color: var(--text-dim); padding: 20px 10px; font-size: 12.5px;">⚡ Selecciona una ONU sin autorizar o ingresa el SN del nuevo módem.</div>';
+              updateSwapSummary();
+
+              // Recargar datos
+              loadSwapUnconfiguredOnus();
+              loadModemSwapHistory();
+            } else {
+              showToast('Error en Cambio', res.message || res.error || 'No se pudo completar el cambio.', 'error', 6000);
+              statusDiv.innerHTML = \`<span style="color: var(--accent-rose);">❌ \${escapeHtml(res.message || res.error)}</span>\`;
+            }
+          } catch (err) {
+            showToast('Error', 'Fallo de conexión al ejecutar el cambio de módem.', 'error');
+            statusDiv.innerHTML = '<span style="color: var(--accent-rose);">❌ Fallo de conexión con el servidor.</span>';
+          } finally {
+            btn.disabled = false;
+            btn.innerText = '🔄 Ejecutar Cambio de Módem';
+          }
+        },
+        false
+      );
+    }
+
+    async function loadModemSwapHistory() {
+      const tbody = document.getElementById('table-swap-history-body');
+      if (!tbody) return;
+
+      try {
+        const res = await apiFetch('/api/modem-swap/history?limit=50');
+        if (res.success && Array.isArray(res.history)) {
+          if (res.history.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--text-dim); padding: 20px;">No hay registros de cambios de módem aún.</td></tr>';
+            return;
+          }
+
+          tbody.innerHTML = res.history.map(item => \`
+            <tr>
+              <td style="white-space: nowrap; font-size: 11.5px;">\${formatShortDate(item.created_at)}</td>
+              <td style="font-weight: 700;">\${escapeHtml(item.client_name)}</td>
+              <td><span class="badge badge-danger" style="font-family: monospace;">\${escapeHtml(item.old_sn)}</span></td>
+              <td><span class="badge badge-success" style="font-family: monospace;">\${escapeHtml(item.new_sn)}</span></td>
+              <td><strong>\${escapeHtml(item.ip_address || 'N/A')}</strong> <span style="font-size: 11px; color: var(--text-muted);">(VLAN \${escapeHtml(item.vlan || '510')})</span></td>
+              <td>\${escapeHtml(item.zone || 'Actopan')}</td>
+              <td style="font-size: 12px; color: var(--text-muted);">\${escapeHtml(item.technician_name || 'Admin')}</td>
+              <td>
+                <span class="badge \${item.status === 'COMPLETADO' ? 'badge-success' : (item.status === 'ERROR' ? 'badge-danger' : 'badge-warning')}">
+                  \${escapeHtml(item.status || 'COMPLETADO')}
+                </span>
+              </td>
+            </tr>
+          \`).join('');
+        }
+      } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: var(--accent-rose);">Error al cargar historial.</td></tr>';
+      }
+    }
+
+    function formatShortDate(iso) {
+      if (!iso) return '';
+      try {
+        const d = new Date(iso);
+        return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      } catch {
+        return iso;
       }
     }
 

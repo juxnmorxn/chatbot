@@ -99,9 +99,6 @@ router.get('/api/smartolt/search', AdminController.searchClients);
 router.post('/api/wisphub/sync', AdminController.syncWisphub);
 router.get('/api/wisphub/stats', AdminController.getWisphubStats);
 router.get('/api/audit/ip-cross', AdminController.getAuditIpCross);
-router.post('/api/audit/sync-client/:id', AdminController.syncAuditClient);
-router.post('/api/audit/sync-client', AdminController.syncAuditClient);
-router.post('/api/audit/sync-vlan', AdminController.syncAuditVlan);
 
 // ==========================================
 // DIRECTORIO DE CLIENTES, MULTI-TELÉFONOS Y GPS
@@ -123,6 +120,14 @@ router.get('/api/smartolt/unconfigured', AdminController.getSmartOltUnconfigured
 router.post('/api/smartolt/authorize', AdminController.authorizeSmartOltOnu);
 router.post('/api/smartolt/configure-tr069/:id', AdminController.configureSmartOltTr069);
 router.post('/api/smartolt/configure-tr069', AdminController.configureSmartOltTr069);
+
+// ==========================================
+// CAMBIO DE MÓDEM (REEMPLAZO DE ONU)
+// ==========================================
+router.get('/api/modem-swap/onus', AdminController.getModemSwapOnus);
+router.get('/api/modem-swap/onu-details/:id', AdminController.getModemSwapOnuDetails);
+router.post('/api/modem-swap/execute', AdminController.executeModemSwap);
+router.get('/api/modem-swap/history', AdminController.getModemSwapHistory);
 
 // ==========================================
 // GESTIÓN DE TÉCNICOS AUTORIZADOS Y PINS

@@ -910,17 +910,10 @@ export class WispHubService {
             direccion: String(c.direccion || ''),
             dia_corte: diaCorteVal,
             fecha_corte: c.fecha_corte ? String(c.fecha_corte) : undefined,
-            mac: String(c.mac_cpe || c.mac || '').trim(),
-            remote_ipv6_prefix: String(c.remote_ipv6_prefix || c.ipv6_prefix || '').trim(),
-            vlan: String(c.vlan || c.interfaz_lan || '').trim(),
             raw_data: JSON.stringify({
               fecha_corte: c.fecha_corte,
               ultimo_cambio: c.ultimo_cambio,
               usuario: c.usuario,
-              mac_cpe: c.mac_cpe || c.mac || '',
-              remote_ipv6_prefix: c.remote_ipv6_prefix || c.ipv6_prefix || '',
-              interfaz_lan: c.interfaz_lan || '',
-              sn_onu: c.sn_onu || '',
             }),
           };
         });
@@ -953,107 +946,4 @@ export class WispHubService {
       this.isSyncing = false;
     }
   }
-
-  /**
-   * Actualiza los parámetros técnicos de un servicio en WispHub (MAC, IPv6 Prefix, IP, SN, Interfaz)
-   * Realiza un PATCH a la API de WispHub y sincroniza de inmediato la base de datos local en Turso.
-   */
-  static async actualizarServicioCliente(
-    idServicio: number | string,
-    datos: {
-      mac_cpe?: string | null;
-      mac?: string | null;
-      remote_ipv6_prefix?: string | null;
-      ipv6_prefix?: string | null;
-      ip?: string | null;
-      sn_onu?: string | null;
-      interfaz_lan?: string | null;
-      coordenadas?: string | null;
-    }
-  ): Promise<{ success: boolean; data?: any; message?: string }> {
-    const cleanId = Number(idServicio);
-    if (!cleanId || isNaN(cleanId)) {
-      return { success: false, message: 'ID de servicio inválido.' };
-    }
-
-    const payload: Record<string, any> = {};
-    if (datos.mac_cpe !== undefined) payload.mac_cpe = datos.mac_cpe;
-    else if (datos.mac !== undefined) payload.mac_cpe = datos.mac;
-
-    if (datos.remote_ipv6_prefix !== undefined) payload.remote_ipv6_prefix = datos.remote_ipv6_prefix;
-    else if (datos.ipv6_prefix !== undefined) payload.remote_ipv6_prefix = datos.ipv6_prefix;
-
-    if (datos.ip !== undefined) payload.ip = datos.ip;
-    if (datos.sn_onu !== undefined) payload.sn_onu = datos.sn_onu;
-    if (datos.interfaz_lan !== undefined) payload.interfaz_lan = datos.interfaz_lan;
-    if (datos.coordenadas !== undefined) payload.coordenadas = datos.coordenadas;
-
-    try {
-      const api = this.getApi();
-      logger.info(`[WispHub Service Update] Enviando PATCH a /clientes/${cleanId}/ con payload:`, JSON.stringify(payload));
-      
-      const response = await api.patch(`/clientes/${cleanId}/`, payload);
-      logger.info(`[WispHub Service Update] ✅ Servicio ${cleanId} actualizado exitosamente en WispHub.`);
-
-      // Sincronizar en la base de datos local en Turso DB
-      try {
-        const { getTursoClient } = await import('../database/turso');
-        const client = getTursoClient();
-        
-        // Obtener cliente actual para actualizar su raw_data
-        const existingRes = await client.execute({
-          sql: 'SELECT * FROM wisphub_clients WHERE id_servicio = ? LIMIT 1',
-          args: [cleanId],
-        });
-
-        let rawObj: any = {};
-        if (existingRes.rows.length > 0 && existingRes.rows[0].raw_data) {
-          try { rawObj = JSON.parse(String(existingRes.rows[0].raw_data)); } catch {}
-        }
-
-        if (payload.mac_cpe) rawObj.mac_cpe = payload.mac_cpe;
-        if (payload.remote_ipv6_prefix) rawObj.remote_ipv6_prefix = payload.remote_ipv6_prefix;
-        if (payload.sn_onu) rawObj.sn_onu = payload.sn_onu;
-
-        await client.execute({
-          sql: `
-            UPDATE wisphub_clients
-            SET
-              mac = COALESCE(?, mac),
-              remote_ipv6_prefix = COALESCE(?, remote_ipv6_prefix),
-              ip = COALESCE(?, ip),
-              sn_onu = COALESCE(?, sn_onu),
-              raw_data = ?,
-              updated_at = ?
-            WHERE id_servicio = ?
-          `,
-          args: [
-            payload.mac_cpe || null,
-            payload.remote_ipv6_prefix || null,
-            payload.ip || null,
-            payload.sn_onu || null,
-            JSON.stringify(rawObj),
-            new Date().toISOString(),
-            cleanId,
-          ],
-        });
-      } catch (dbErr: any) {
-        logger.warn(`Error al actualizar wisphub_clients local tras PATCH ${cleanId}:`, dbErr?.message || dbErr);
-      }
-
-      return {
-        success: true,
-        data: response.data,
-        message: 'Servicio actualizado correctamente en WispHub.',
-      };
-    } catch (error: any) {
-      logger.error(`[WispHub Service Update] Error al actualizar servicio ${cleanId}:`, error?.response?.data || error?.message || error);
-      const errMsg = error?.response?.data?.detail || error?.response?.data?.message || error?.message || 'Error al comunicarse con WispHub';
-      return {
-        success: false,
-        message: `Error de WispHub: ${errMsg}`,
-      };
-    }
-  }
 }
-

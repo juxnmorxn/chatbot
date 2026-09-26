@@ -70,6 +70,27 @@ export interface AuthorizeOnuResult {
   details?: any;
 }
 
+export interface ModemSwapParams {
+  oldOnuIdOrSn: string;
+  newSn: string;
+  technicianName?: string;
+  technicianPhone?: string;
+  overrideOltId?: string | number;
+  overrideBoard?: string | number;
+  overridePort?: string | number;
+  notifyGroup?: boolean;
+}
+
+export interface ModemSwapResult {
+  success: boolean;
+  message: string;
+  swapId?: number;
+  oldOnu?: any;
+  newOnu?: any;
+  authorizationResult?: AuthorizeOnuResult;
+  whatsappNotified?: boolean;
+}
+
 export interface SpeedProfileItem {
   id: string;
   name: string;
@@ -231,9 +252,6 @@ export class SmartOLTService {
         ip_address: item.ip_address || item.ip || null,
         zone_name: item.zone || item.zone_name || item.location || 'Actopan',
         onu_type_name: item.onu_type_name || item.model || item.type || '',
-        vlan: String(item.vlan || item.mgmt_vlan || item.service_ports?.[0]?.vlan || '').trim(),
-        mac: String(item.mac || item.mac_address || item.onu_mac || '').trim(),
-        remote_ipv6_prefix: String(item.remote_ipv6_prefix || item.ipv6_prefix || '').trim(),
         raw_data: JSON.stringify(item),
         updated_at: new Date().toISOString(),
       }));
@@ -1239,5 +1257,255 @@ export class SmartOLTService {
         message: `Error en SmartOLT: ${errMsg}`,
       };
     }
+  }
+
+  /**
+   * Obtiene los detalles completos y configuración de una ONU desde SmartOLT o Turso DB
+   */
+  static async getOnuDetails(uniqueExternalId: string): Promise<any> {
+    const cleanId = String(uniqueExternalId || '').trim();
+    if (!cleanId) return null;
+
+    const apiKey = this.getApiKey();
+    if (apiKey && !apiKey.includes('tu_token')) {
+      try {
+        const api = this.getApi();
+        const res = await api.get(`/onu/get_onu_details/${encodeURIComponent(cleanId)}`);
+        if (res.data?.status === true || res.data?.response_code === 'success' || res.data?.onu_details) {
+          const det = res.data.onu_details || res.data;
+          const isSanAgustin = String(det.olt_id) === '2' || (det.zone || det.zone_name || '').toLowerCase().includes('san agustin');
+          return {
+            unique_external_id: det.unique_external_id || cleanId,
+            sn: String(det.sn || det.onu_sn || cleanId).toUpperCase(),
+            name: det.name || det.onu_name || '',
+            address: det.address || '',
+            zone: det.zone || det.zone_name || (isSanAgustin ? 'San Agustin Tlaxiaca' : 'Actopan'),
+            olt_id: det.olt_id || det.olt || (isSanAgustin ? '2' : '3'),
+            olt_name: det.olt_name || (isSanAgustin ? 'OLT-SanAgustin' : 'OLT5800-Actopan'),
+            board: det.board ?? det.slot ?? '0',
+            port: det.port ?? det.pon ?? '0',
+            vlan: det.vlan || (isSanAgustin ? '800' : '510'),
+            ip_address: det.ip_address || det.ip || '',
+            netmask: det.subnet_mask || det.netmask || '255.255.255.0',
+            gateway: det.default_gateway || det.gateway || (isSanAgustin ? '172.19.6.254' : '172.19.2.254'),
+            download_speed_profile_name: det.download_speed_profile_name || det.speed_profile || '40MB-DOWN',
+            upload_speed_profile_name: det.upload_speed_profile_name || '40MB-UP',
+            onu_type: det.onu_type_name || det.onu_type || det.model || 'EG8041V5',
+            onu_mode: det.mode || det.onu_mode || 'Routing',
+            wan_mode: det.wan_mode || 'Static',
+            raw: det,
+          };
+        }
+      } catch (err: any) {
+        logger.warn(`Error al consultar get_onu_details en SmartOLT para ${cleanId}, consultando Turso DB...`, err?.message || err);
+      }
+    }
+
+    // Fallback: Consultar en Turso DB
+    let onu = await TursoService.getOnuById(cleanId);
+    if (!onu) {
+      const match = await TursoService.searchOnusFuzzy(cleanId, 1);
+      if (match.length > 0) onu = match[0];
+    }
+
+    if (onu) {
+      let rawObj: any = {};
+      try { rawObj = JSON.parse(onu.raw_data || '{}'); } catch {}
+      const isSanAgustin = (onu.zone_name || '').toLowerCase().includes('san agustin') || (onu.olt_name || '').toLowerCase().includes('san agustin');
+      return {
+        unique_external_id: onu.unique_external_id,
+        sn: (onu.sn || cleanId).toUpperCase(),
+        name: onu.name || rawObj.name || '',
+        address: onu.address || rawObj.address || '',
+        zone: onu.zone_name || rawObj.zone || (isSanAgustin ? 'San Agustin Tlaxiaca' : 'Actopan'),
+        olt_id: rawObj.olt_id || (isSanAgustin ? '2' : '3'),
+        olt_name: onu.olt_name || (isSanAgustin ? 'OLT-SanAgustin' : 'OLT5800-Actopan'),
+        board: rawObj.board ?? rawObj.slot ?? '0',
+        port: rawObj.port ?? rawObj.pon ?? '0',
+        vlan: rawObj.vlan || (isSanAgustin ? '800' : '510'),
+        ip_address: onu.ip_address || rawObj.ip_address || '',
+        netmask: rawObj.netmask || rawObj.subnet_mask || '255.255.255.0',
+        gateway: rawObj.gateway || rawObj.default_gateway || (isSanAgustin ? '172.19.6.254' : '172.19.2.254'),
+        download_speed_profile_name: onu.speed_profile || rawObj.download_speed_profile_name || '40MB-DOWN',
+        upload_speed_profile_name: rawObj.upload_speed_profile_name || '40MB-UP',
+        onu_type: rawObj.onu_type_name || rawObj.onu_type || 'EG8041V5',
+        onu_mode: rawObj.onu_mode || 'Routing',
+        wan_mode: rawObj.wan_mode || 'Static',
+        raw: rawObj,
+      };
+    }
+
+    return null;
+  }
+
+  /**
+   * Ejecuta el flujo completo de Cambio de Módem (Reemplazo de ONU):
+   * 1. Obtiene los datos del módem actual (IP, VLAN, Cliente, Zona, etc.)
+   * 2. Respalda la información en Turso DB (tabla modem_swaps)
+   * 3. Elimina el módem anterior en SmartOLT
+   * 4. Autoriza y aprovisiona el nuevo módem con los MISMOS datos
+   * 5. Actualiza base de datos y referencias de cliente
+   * 6. Envía mensaje al grupo de WhatsApp con formato "CAMBIO DE MODEM"
+   */
+  static async executeModemSwap(params: ModemSwapParams): Promise<ModemSwapResult> {
+    const cleanOld = String(params.oldOnuIdOrSn || '').trim();
+    const cleanNewSn = String(params.newSn || '').trim().toUpperCase();
+
+    logger.info(`[Cambio de Módem] Iniciando reemplazo: Anterior="${cleanOld}" -> Nuevo="${cleanNewSn}"`);
+
+    if (!cleanOld || !cleanNewSn) {
+      return { success: false, message: 'Se requiere el identificador del módem actual y el SN del nuevo módem.' };
+    }
+
+    if (cleanOld.toUpperCase() === cleanNewSn) {
+      return { success: false, message: 'El nuevo número de serie (SN) no puede ser igual al módem anterior.' };
+    }
+
+    // 1. Obtener datos de la ONU actual
+    const oldOnu = await this.getOnuDetails(cleanOld);
+    if (!oldOnu) {
+      return { success: false, message: `No se encontraron datos del módem anterior (${cleanOld}) en SmartOLT ni en la base de datos.` };
+    }
+
+    logger.info(`[Cambio de Módem] Datos de ONU anterior localizados: Cliente="${oldOnu.name}", IP="${oldOnu.ip_address}", VLAN="${oldOnu.vlan}", Zona="${oldOnu.zone}", SN="${oldOnu.sn}"`);
+
+    // 2. Respaldar en Turso DB (Crear registro de swap)
+    const swapId = await TursoService.saveModemSwap({
+      client_name: oldOnu.name,
+      old_sn: oldOnu.sn || cleanOld,
+      new_sn: cleanNewSn,
+      old_onu_id: oldOnu.unique_external_id,
+      ip_address: oldOnu.ip_address,
+      vlan: String(oldOnu.vlan),
+      zone: oldOnu.zone,
+      speed_profile: oldOnu.download_speed_profile_name,
+      old_data_json: JSON.stringify(oldOnu),
+      technician_name: params.technicianName || 'Admin Web',
+      technician_phone: params.technicianPhone || null,
+      status: 'EN_PROCESO',
+    });
+
+    // 3. Buscar si el nuevo módem ya fue detectado en SmartOLT unconfigured_onus
+    let unconfiguredMatch: UnconfiguredOnu | null = null;
+    try {
+      unconfiguredMatch = await this.findUnconfiguredOnuBySnSuffix(cleanNewSn);
+    } catch (uErr: any) {
+      logger.warn(`No se pudo consultar unconfigured_onus para ${cleanNewSn}:`, uErr?.message);
+    }
+
+    const targetOltId = params.overrideOltId || unconfiguredMatch?.olt_id || oldOnu.olt_id || 3;
+    const targetBoard = params.overrideBoard ?? unconfiguredMatch?.board ?? oldOnu.board ?? 0;
+    const targetPort = params.overridePort ?? unconfiguredMatch?.port ?? oldOnu.port ?? 0;
+    const targetPonType = unconfiguredMatch?.pon_type || oldOnu.pon_type || 'gpon';
+    const targetOnuType = this.normalizeOnuType(unconfiguredMatch?.onu_type_name || unconfiguredMatch?.onu_type || oldOnu.onu_type, cleanNewSn);
+
+    // 4. Eliminar el módem anterior de SmartOLT
+    logger.info(`[Cambio de Módem] Eliminando módem anterior (${oldOnu.unique_external_id})...`);
+    const deleteRes = await this.deleteOnu(oldOnu.unique_external_id);
+    if (!deleteRes.success) {
+      logger.warn(`[Cambio de Módem] Advertencia al eliminar ONU anterior: ${deleteRes.message}. Continuando con la autorización del nuevo equipo.`);
+    }
+
+    // Pequeña pausa para asegurar que SmartOLT libere el slot/IP
+    await new Promise(r => setTimeout(r, 1200));
+
+    // 5. Autorizar el nuevo módem con los MISMOS datos
+    const payload: AuthorizeOnuPayload = {
+      olt_id: targetOltId,
+      pon_type: targetPonType,
+      board: targetBoard,
+      port: targetPort,
+      sn: cleanNewSn,
+      onu_type: targetOnuType,
+      name: oldOnu.name,
+      onu_mode: oldOnu.onu_mode || 'Routing',
+      vlan: String(oldOnu.vlan || '510'),
+      ip_address: oldOnu.ip_address,
+      netmask: oldOnu.netmask || '255.255.255.0',
+      gateway: oldOnu.gateway || '172.19.2.254',
+      line_profile: 'VLAN mapping',
+      download_speed_profile_name: oldOnu.download_speed_profile_name || '40MB-DOWN',
+      upload_speed_profile_name: oldOnu.upload_speed_profile_name || '40MB-UP',
+      zone: oldOnu.zone || 'Actopan',
+      address: oldOnu.address,
+      comment: `Cambio de módem (reemplazo de ${oldOnu.sn || oldOnu.unique_external_id})`,
+    };
+
+    logger.info(`[Cambio de Módem] Autorizando nuevo módem ${cleanNewSn} con IP ${payload.ip_address}...`);
+    const authResult = await this.authorizeOnu(payload);
+
+    if (!authResult.success) {
+      logger.error(`[Cambio de Módem] Falló la autorización del nuevo módem: ${authResult.message}`);
+      if (swapId > 0) {
+        await TursoService.updateModemSwap(swapId, {
+          status: 'ERROR',
+          error_message: authResult.message,
+        });
+      }
+      return {
+        success: false,
+        message: `El módem anterior fue desvinculado, pero falló la activación del nuevo módem: ${authResult.message}`,
+        swapId,
+        oldOnu,
+        authorizationResult: authResult,
+      };
+    }
+
+    const newOnuId = authResult.onu_id || cleanNewSn;
+
+    // 6. Actualizar referencias en base de datos
+    if (swapId > 0) {
+      await TursoService.updateModemSwap(swapId, {
+        status: 'COMPLETADO',
+        new_onu_id: newOnuId,
+      });
+    }
+    await TursoService.updateClientOnuReferences(oldOnu.sn, cleanNewSn, newOnuId);
+
+    // 7. Enviar notificación al grupo de WhatsApp de Activaciones
+    // Formato exacto solicitado: "[Nombre] [IP] [Zona] CAMBIO DE MODEM"
+    let waNotified = false;
+    const shouldNotify = params.notifyGroup !== false;
+
+    if (shouldNotify) {
+      try {
+        const { EvolutionService } = await import('./evolution.service');
+        const groupMsg = `${payload.name} ${payload.ip_address} ${payload.zone || 'Actopan'} CAMBIO DE MODEM`;
+
+        let configuredGroupJid = SettingsService.get(
+          'ACTIVATIONS_GROUP_JID',
+          'ACTIVATIONS_GROUP_JID',
+          SettingsService.get('GRUPO_ACTIVACIONES', 'GRUPO_ACTIVACIONES', '')
+        ).trim();
+
+        if (configuredGroupJid) {
+          if (!configuredGroupJid.endsWith('@g.us')) {
+            const resolved = await EvolutionService.resolveAndJoinGroupInvite(configuredGroupJid);
+            if (resolved.success && resolved.jid) {
+              configuredGroupJid = resolved.jid;
+              await SettingsService.set('ACTIVATIONS_GROUP_JID', resolved.jid).catch(() => {});
+            }
+          }
+
+          if (configuredGroupJid.endsWith('@g.us')) {
+            await EvolutionService.enviarTexto(configuredGroupJid, groupMsg, { instant: true });
+            waNotified = true;
+            logger.info(`[Cambio de Módem] Notificación enviada al grupo WhatsApp: "${groupMsg}"`);
+          }
+        }
+      } catch (waErr: any) {
+        logger.warn('[Cambio de Módem] No se pudo enviar notificación a WhatsApp:', waErr?.message || waErr);
+      }
+    }
+
+    return {
+      success: true,
+      message: `¡Cambio de módem exitoso! Módem anterior (${oldOnu.sn}) reemplazado por ${cleanNewSn} con IP ${payload.ip_address}.`,
+      swapId,
+      oldOnu,
+      newOnu: { ...payload, onu_id: newOnuId },
+      authorizationResult: authResult,
+      whatsappNotified: waNotified,
+    };
   }
 }

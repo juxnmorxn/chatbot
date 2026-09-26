@@ -467,6 +467,9 @@ export class BotOrchestrator {
     const esComandoCambioPaquete = /(?:cambiar|modificar|actualizar|subir|bajar)\s+(?:de\s+)?(?:paquete|plan|velocidad|megas)\b/i.test(rawText) ||
       /^cambiar\s+(?:paquete|plan)\b/i.test(lowerMsg);
 
+    const esComandoCambioModem = /^(?:cambio\s+de\s+m[oó]dem|reemplazar\s+m[oó]dem|reemplazo\s+de\s+m[oó]dem|cambiar\s+m[oó]dem|swap\s+modem|swap\s+onu)\b/i.test(lowerMsg) ||
+      /\b(?:cambio|reemplazo)\s+de\s+m[oó]dem\b/i.test(lowerMsg);
+
     const esComandoActivacion = buttonId === 'BTN_ACTIVAR_MODEM' ||
       /^(?:activar|activaci[oó]n|alta|aprovisionar|registrar)\b/i.test(lowerMsg) ||
       /(?:activar|activaci[oó]n|alta|aprovisionar|registrar)\s*(?:de\s+)?(?:cliente|modem|onu|equipo|serie)?[:\s]*/i.test(rawText) ||
@@ -480,9 +483,11 @@ export class BotOrchestrator {
 
     const esPasoTecnicoEnCurso = session?.step?.startsWith('ACTIVACION_') ||
       session?.step === 'PENDIENTE_CONFIRMACION_ACTIVACION_ONU' ||
-      session?.step === 'PENDIENTE_SN_ACTIVACION';
+      session?.step === 'PENDIENTE_SN_ACTIVACION' ||
+      session?.step === 'PENDIENTE_SELECCION_IP_CAMBIO_MODEM' ||
+      session?.step === 'PENDIENTE_CONFIRMACION_CAMBIO_MODEM';
 
-    const esAccionTecnica = esComandoActivacion || esComandoCambioPaquete || esPasoTecnicoEnCurso;
+    const esAccionTecnica = esComandoActivacion || esComandoCambioPaquete || esComandoCambioModem || esPasoTecnicoEnCurso;
 
     // 1. Verificar si hay Intervención Humana activa (Memoria o Turso DB)
     // EXCEPCIÓN: Comandos técnicos, fotos de contratos y activaciones NUNCA son bloqueados por human takeover
@@ -649,6 +654,29 @@ export class BotOrchestrator {
       return;
     }
 
+    // D.1 Selección de IP / Servicio en Cambio de Módem cuando hay múltiples servicios
+    if (session?.step === 'PENDIENTE_SELECCION_IP_CAMBIO_MODEM') {
+      await this.procesarSeleccionIpCambioModem(phone, rawText, session, targetJid);
+      return;
+    }
+
+    // D.2 Confirmación de cambio de módem pendiente (SÍ / NO)
+    if (session?.step === 'PENDIENTE_CONFIRMACION_CAMBIO_MODEM') {
+      const esConfirmacion = buttonId === 'BTN_CONFIRMAR_CAMBIO_MODEM' ||
+        /^(si|sí|confirmar|confirmo|adelante|autorizar|dale|ok|1|cambiar|ejecutar|reemplazar)\b/i.test(lowerMsg);
+      const esCancelacion = buttonId === 'BTN_CANCELAR_CAMBIO_MODEM' ||
+        /^(no|cancelar|cancelo|rechazar|abortar|0)\b/i.test(lowerMsg);
+
+      if (esConfirmacion) {
+        await this.procesarConfirmacionCambioModemTecnico(phone, session, targetJid, true);
+        return;
+      }
+      if (esCancelacion) {
+        await this.procesarConfirmacionCambioModemTecnico(phone, session, targetJid, false);
+        return;
+      }
+    }
+
     // 2.0 CONTROL INTELIGENTE DE COMANDOS TÉCNICOS VS CLIENTES
     const authTecnico = await this.verificarAutorizacionTecnico(phone, rawText);
 
@@ -665,7 +693,13 @@ export class BotOrchestrator {
         return;
       }
 
-      // Caso 3: El técnico envía comando de activación
+      // Caso 3: El técnico envía comando de cambio / reemplazo de módem
+      if (esComandoCambioModem) {
+        await this.procesarSolicitudCambioModemTecnico(phone, rawText, session, targetJid);
+        return;
+      }
+
+      // Caso 4: El técnico envía comando de activación
       if (esComandoActivacion) {
         await this.procesarSolicitudActivacionTecnico(phone, rawText, session, targetJid);
         return;
@@ -715,6 +749,8 @@ export class BotOrchestrator {
       'ACTIVACION_ESPERANDO_NOMBRE',
       'ACTIVACION_ESPERANDO_ZONA',
       'PENDIENTE_CONFIRMACION_ACTIVACION_ONU',
+      'PENDIENTE_SELECCION_IP_CAMBIO_MODEM',
+      'PENDIENTE_CONFIRMACION_CAMBIO_MODEM',
       'COMPROBACION_STREAMING_TV',
       'MONITOREO_POST_REINICIO',
       'DIAGNOSTICO_TRIAGE_DISPOSITIVOS',
@@ -5290,6 +5326,417 @@ ${techInfo}───────────────────────
         `❌ *Error al autorizar en SmartOLT:*\n\n${result.message}\n\nPor favor verifica el estado de la OLT o intenta nuevamente.`,
         'ACTIVACION_TECNICO',
         'ERROR_AUTORIZACION',
+        targetJid
+      );
+    }
+  }
+
+  /**
+   * Procesa la solicitud de Cambio de Módem (Reemplazo de ONU) solicitada por un técnico en campo
+   * Comando: "cambio de modem [6 dígitos SN Nuevo] [Cliente / SN Viejo / IP]"
+   */
+  private static async procesarSolicitudCambioModemTecnico(
+    phone: string,
+    rawText: string,
+    session: Session | null,
+    targetJid?: string
+  ): Promise<void> {
+    const auth = await this.verificarAutorizacionTecnico(phone, rawText);
+    if (!auth.autorizado) {
+      await this.enviarYLoguear(
+        phone,
+        `⚠️ *Acceso Restringido - Área Técnica*\n\nTu número (*${phone}*) no está registrado como técnico autorizado para realizar cambios de módem en SmartOLT.\n\n👉 Solicita tu alta o proporciona tu *PIN de seguridad* al administrador en el panel de control.`,
+        'ACTIVACION_TECNICO',
+        'NO_AUTORIZADO',
+        targetJid
+      );
+      return;
+    }
+
+    // Extraer argumentos del mensaje:
+    const cleanParams = rawText
+      .replace(/^(?:cambio\s+de\s+m[oó]dem|reemplazar\s+m[oó]dem|reemplazo\s+de\s+m[oó]dem|cambiar\s+m[oó]dem|swap\s+modem|swap\s+onu)[:\s]*/i, '')
+      .trim();
+
+    const parts = cleanParams.split(/\s+/).filter(Boolean);
+    const newSnSuffix = parts[0] || '';
+    const oldIdentifier = parts.slice(1).join(' ') || '';
+
+    if (!newSnSuffix || !oldIdentifier || newSnSuffix.length < 4) {
+      await this.enviarYLoguear(
+        phone,
+        `🔄 *Cambio de Módem en SmartOLT (Reemplazo de Equipo)*\n\n` +
+        `Para reemplazar un módem conservando su IP, VLAN, Cliente y Plan:\n\n` +
+        `👉 *cambio de modem [6 dígitos SN Nuevo] [Folio-Nombre o SN Anterior o IP]*\n\n` +
+        `_Ejemplos para copiar y rellenar:_\n` +
+        `• \`cambio de modem 4317B5 3456-Juan Perez\`\n` +
+        `• \`cambio de modem 4317B5 HWTCE9C840B3\`\n` +
+        `• \`cambio de modem 4317B5 172.19.2.178\``,
+        'ACTIVACION_TECNICO',
+        'AYUDA_CAMBIO_MODEM',
+        targetJid
+      );
+      return;
+    }
+
+    await this.enviarYLoguear(
+      phone,
+      `🔍 Buscando nuevo módem (*${newSnSuffix}*) y localizando datos del módem anterior (*${oldIdentifier}*)...`,
+      'ACTIVACION_TECNICO',
+      'BUSCANDO_DATOS_SWAP',
+      targetJid
+    );
+
+    // 1. Localizar la nueva ONU sin autorizar en SmartOLT
+    const unconfigured = await SmartOLTService.findUnconfiguredOnuBySnSuffix(newSnSuffix);
+    if (!unconfigured) {
+      await this.enviarYLoguear(
+        phone,
+        `❌ *Nuevo módem no detectado en SmartOLT*\n\nNo se localizó ninguna ONU sin configurar con terminación *${newSnSuffix}*.\n\n💡 Asegúrate de que el nuevo módem esté conectado a la fibra óptica y con la luz PON sincronizando.`,
+        'ACTIVACION_TECNICO',
+        'NUEVA_ONU_NO_ENCONTRADA',
+        targetJid
+      );
+      return;
+    }
+
+    // 2. Localizar datos del módem anterior
+    const isIp = /^172\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(oldIdentifier.trim()) || /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(oldIdentifier.trim());
+    const isFullSn = oldIdentifier.trim().length >= 12;
+
+    let oldOnu: any = null;
+
+    if (isIp || isFullSn) {
+      oldOnu = await SmartOLTService.getOnuDetails(oldIdentifier);
+    } else {
+      // Buscar coincidencias de ONUs / Servicios por nombre o folio en Turso DB
+      const matches = await TursoService.searchOnusFuzzy(oldIdentifier, 8);
+
+      // Filtrar a servicios únicos con IP o SN distinto
+      const distinctMatches: typeof matches = [];
+      const seenKeys = new Set<string>();
+      for (const m of matches) {
+        const key = `${m.unique_external_id || ''}-${m.ip_address || ''}-${m.sn || ''}`;
+        if (!seenKeys.has(key)) {
+          seenKeys.add(key);
+          distinctMatches.push(m);
+        }
+      }
+
+      if (distinctMatches.length > 1) {
+        // El cliente tiene 2 o más servicios registrados. Preguntar qué IP o servicio desea cambiar.
+        let msg = `⚠️ *Se encontraron ${distinctMatches.length} servicios registrados para "${oldIdentifier}":*\n\n`;
+        distinctMatches.forEach((m, idx) => {
+          const numEmoji = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣'][idx] || `${idx + 1}️⃣`;
+          const plan = (m.speed_profile || '40MB').replace(/MB-DOWN|MB/i, ' Megas');
+          msg += `${numEmoji} *IP:* \`${m.ip_address || 'Sin IP'}\`\n`;
+          msg += `   • *Titular:* ${m.name}\n`;
+          msg += `   • *SN Módem:* \`${m.sn}\`\n`;
+          if (m.address) msg += `   • *Dirección:* ${m.address}\n`;
+          msg += `   • *Zona:* ${m.zone_name || 'Actopan'} | *Plan:* ${plan}\n\n`;
+        });
+
+        msg += `👉 *¿A qué IP o servicio corresponde este cambio de módem?*\n`;
+        msg += `_Responde con la *IP* (ej: \`${distinctMatches[0].ip_address || '172.19.2.x'}\`) o el número de opción (ej: *1* ó *2*)._`;
+
+        let metaObj: any = {};
+        try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
+        metaObj.pendingModemSwapChoice = {
+          newSnSuffix,
+          unconfigured,
+          candidates: distinctMatches,
+        };
+
+        await TursoService.upsertSession({
+          phone,
+          step: 'PENDIENTE_SELECCION_IP_CAMBIO_MODEM',
+          metadata: JSON.stringify(metaObj),
+        });
+
+        await this.enviarYLoguear(
+          phone,
+          msg,
+          'ACTIVACION_TECNICO',
+          'SELECCION_IP_MULTISERVICIO_SWAP',
+          targetJid
+        );
+        return;
+      } else if (distinctMatches.length === 1) {
+        oldOnu = await SmartOLTService.getOnuDetails(distinctMatches[0].unique_external_id || distinctMatches[0].sn);
+      } else {
+        oldOnu = await SmartOLTService.getOnuDetails(oldIdentifier);
+      }
+    }
+
+    if (!oldOnu) {
+      await this.enviarYLoguear(
+        phone,
+        `❌ *Módem anterior no encontrado*\n\nNo se encontró ninguna ONU activa con el identificador o cliente: *"${oldIdentifier}"* en SmartOLT ni en la base de datos.\n\n💡 Verifica que el nombre, folio, IP o SN anterior sean correctos.`,
+        'ACTIVACION_TECNICO',
+        'VIEJA_ONU_NO_ENCONTRADA',
+        targetJid
+      );
+      return;
+    }
+
+    let metaObj: any = {};
+    try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
+    metaObj.pendingModemSwap = {
+      oldOnuId: oldOnu.unique_external_id,
+      oldSn: oldOnu.sn,
+      newSn: unconfigured.sn,
+      clientName: oldOnu.name,
+      ip: oldOnu.ip_address,
+      vlan: oldOnu.vlan,
+      zone: oldOnu.zone,
+      speedProfile: oldOnu.download_speed_profile_name,
+      oltId: unconfigured.olt_id || oldOnu.olt_id,
+      board: unconfigured.board,
+      port: unconfigured.port,
+      model: unconfigured.onu_type_name || unconfigured.onu_type || oldOnu.onu_type,
+    };
+
+    await TursoService.upsertSession({
+      phone,
+      step: 'PENDIENTE_CONFIRMACION_CAMBIO_MODEM',
+      metadata: JSON.stringify(metaObj),
+    });
+
+    const signalText = unconfigured.onu_signal_1490 || unconfigured.onu_signal || 'Detectado';
+    const planDisplay = (oldOnu.download_speed_profile_name || '40MB').replace(/MB-DOWN|MB/i, ' Megas');
+
+    const cardMsg = `🔄 *RESUMEN DE CAMBIO DE MÓDEM*
+──────────────────────────────
+• *Cliente / Folio:* *${oldOnu.name}*
+• *Zona:* *${oldOnu.zone || 'Actopan'}*
+• *IP Asignada a Conservar:* *${oldOnu.ip_address}* (VLAN ${oldOnu.vlan})
+• *Paquete:* *${planDisplay}*
+• *Módem Anterior (a retirar):* *${oldOnu.sn}*
+• *Nuevo Módem (a instalar):* *${unconfigured.sn}* (${unconfigured.onu_type_name || 'EG8041V5'})
+• *Nivel Óptico Detectado:* *${signalText}*
+──────────────────────────────
+⚠️ *Al confirmar, se eliminará el módem anterior (${oldOnu.ip_address}) de SmartOLT y se activará el nuevo con los mismos datos.*
+
+👉 Responde *SÍ* para ejecutar el cambio o *NO* para cancelar.`;
+
+    await this.enviarYLoguear(
+      phone,
+      cardMsg,
+      'ACTIVACION_TECNICO',
+      'ESPERANDO_CONFIRMACION_SWAP',
+      targetJid
+    );
+  }
+
+  /**
+   * Procesa la selección de IP o servicio cuando el cliente tiene múltiples servicios y se solicitó un cambio de módem
+   */
+  private static async procesarSeleccionIpCambioModem(
+    phone: string,
+    rawText: string,
+    session: Session | null,
+    targetJid?: string
+  ): Promise<void> {
+    const lower = rawText.trim().toLowerCase();
+    let metaObj: any = {};
+    try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
+    const choiceData = metaObj.pendingModemSwapChoice;
+
+    if (!choiceData || !Array.isArray(choiceData.candidates) || choiceData.candidates.length === 0) {
+      await TursoService.upsertSession({ phone, step: 'CONVERSACIONAL' });
+      await this.enviarYLoguear(phone, '⚠️ No hay ninguna selección de cambio de módem pendiente. Inicia nuevamente con el comando: `cambio de modem [SN Nuevo] [Cliente]`', 'ACTIVACION_TECNICO', 'ERROR_SESION', targetJid);
+      return;
+    }
+
+    if (/^(no|cancelar|cancelo|abortar|0)\b/i.test(lower)) {
+      metaObj.pendingModemSwapChoice = null;
+      await TursoService.upsertSession({
+        phone,
+        step: 'CONVERSACIONAL',
+        metadata: JSON.stringify(metaObj),
+      });
+      await this.enviarYLoguear(phone, '❌ Cambio de módem cancelado.', 'ACTIVACION_TECNICO', 'SWAP_CANCELADO', targetJid);
+      return;
+    }
+
+    const candidates: any[] = choiceData.candidates;
+    let selectedCandidate: any = null;
+
+    // 1. Verificar si respondió con número de opción (1, 2, 3...)
+    const numMatch = lower.match(/^(\d+)(?:[.)]|\s|$)/);
+    if (numMatch) {
+      const idx = parseInt(numMatch[1], 10) - 1;
+      if (idx >= 0 && idx < candidates.length) {
+        selectedCandidate = candidates[idx];
+      }
+    }
+
+    // 2. Verificar si respondió con una IP (ej: 172.19.2.45)
+    if (!selectedCandidate) {
+      const ipInText = rawText.match(/\b(?:\d{1,3}\.){3}\d{1,3}\b/);
+      if (ipInText) {
+        const foundByIp = candidates.find(c => (c.ip_address || '').trim() === ipInText[0].trim());
+        if (foundByIp) selectedCandidate = foundByIp;
+      }
+    }
+
+    // 3. Verificar si respondió con un SN
+    if (!selectedCandidate) {
+      const cleanUpper = rawText.trim().toUpperCase();
+      const foundBySn = candidates.find(c => (c.sn || '').toUpperCase().includes(cleanUpper) || cleanUpper.includes((c.sn || '').toUpperCase()));
+      if (foundBySn) selectedCandidate = foundBySn;
+    }
+
+    if (!selectedCandidate) {
+      let retryMsg = `⚠️ No logré identificar el servicio con esa respuesta.\n\n`;
+      retryMsg += `Por favor responde con el *número de opción* o la *IP* exacta del servicio a cambiar:\n\n`;
+      candidates.forEach((m: any, idx: number) => {
+        retryMsg += `*${idx + 1}* ➔ IP: \`${m.ip_address || 'Sin IP'}\` | SN: \`${m.sn}\` (${m.name})\n`;
+      });
+      retryMsg += `\n_O escribe *cancelar* para salir._`;
+      await this.enviarYLoguear(phone, retryMsg, 'ACTIVACION_TECNICO', 'REINTENTO_SELECCION_IP', targetJid);
+      return;
+    }
+
+    // Obtener detalles completos de la ONU seleccionada
+    const unconfigured = choiceData.unconfigured;
+    const oldOnu = await SmartOLTService.getOnuDetails(selectedCandidate.unique_external_id || selectedCandidate.sn);
+
+    if (!oldOnu) {
+      await this.enviarYLoguear(phone, `❌ Error al consultar los detalles de la ONU seleccionada (${selectedCandidate.sn}). Por favor intenta nuevamente.`, 'ACTIVACION_TECNICO', 'ERROR_DETALLES_ONU', targetJid);
+      return;
+    }
+
+    metaObj.pendingModemSwapChoice = null;
+    metaObj.pendingModemSwap = {
+      oldOnuId: oldOnu.unique_external_id,
+      oldSn: oldOnu.sn,
+      newSn: unconfigured.sn,
+      clientName: oldOnu.name,
+      ip: oldOnu.ip_address,
+      vlan: oldOnu.vlan,
+      zone: oldOnu.zone,
+      speedProfile: oldOnu.download_speed_profile_name,
+      oltId: unconfigured.olt_id || oldOnu.olt_id,
+      board: unconfigured.board,
+      port: unconfigured.port,
+      model: unconfigured.onu_type_name || unconfigured.onu_type || oldOnu.onu_type,
+    };
+
+    await TursoService.upsertSession({
+      phone,
+      step: 'PENDIENTE_CONFIRMACION_CAMBIO_MODEM',
+      metadata: JSON.stringify(metaObj),
+    });
+
+    const signalText = unconfigured.onu_signal_1490 || unconfigured.onu_signal || 'Detectado';
+    const planDisplay = (oldOnu.download_speed_profile_name || '40MB').replace(/MB-DOWN|MB/i, ' Megas');
+
+    const cardMsg = `🔄 *RESUMEN DE CAMBIO DE MÓDEM*
+──────────────────────────────
+• *Cliente / Folio:* *${oldOnu.name}*
+• *Zona:* *${oldOnu.zone || 'Actopan'}*
+• *IP Asignada a Conservar:* *${oldOnu.ip_address}* (VLAN ${oldOnu.vlan})
+• *Paquete:* *${planDisplay}*
+• *Módem Anterior (a retirar):* *${oldOnu.sn}*
+• *Nuevo Módem (a instalar):* *${unconfigured.sn}* (${unconfigured.onu_type_name || 'EG8041V5'})
+• *Nivel Óptico Detectado:* *${signalText}*
+──────────────────────────────
+⚠️ *Al confirmar, se eliminará el módem anterior (${oldOnu.ip_address}) de SmartOLT y se activará el nuevo con los mismos datos.*
+
+👉 Responde *SÍ* para ejecutar el cambio o *NO* para cancelar.`;
+
+    await this.enviarYLoguear(
+      phone,
+      cardMsg,
+      'ACTIVACION_TECNICO',
+      'ESPERANDO_CONFIRMACION_SWAP',
+      targetJid
+    );
+  }
+
+  /**
+   * Procesa la confirmación explícita (SÍ / NO) del cambio de módem solicitado por el técnico
+   */
+  private static async procesarConfirmacionCambioModemTecnico(
+    phone: string,
+    session: Session | null,
+    targetJid: string | undefined,
+    confirmar: boolean = true
+  ): Promise<void> {
+    let metaObj: any = {};
+    try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
+    const swapData = metaObj.pendingModemSwap;
+
+    if (!confirmar || !swapData) {
+      metaObj.pendingModemSwap = null;
+      await TursoService.upsertSession({
+        phone,
+        step: 'CONVERSACIONAL',
+        metadata: JSON.stringify(metaObj),
+      });
+
+      await this.enviarYLoguear(
+        phone,
+        `❌ *Cambio de módem cancelado.* No se realizó ninguna modificación en SmartOLT.`,
+        'ACTIVACION_TECNICO',
+        'SWAP_CANCELADO',
+        targetJid
+      );
+      return;
+    }
+
+    await this.enviarYLoguear(
+      phone,
+      `⏳ Ejecutando cambio de módem en SmartOLT (eliminando equipo anterior y autorizando nuevo equipo *${swapData.newSn}*)... Por favor espera un momento.`,
+      'ACTIVACION_TECNICO',
+      'EJECUTANDO_SWAP',
+      targetJid
+    );
+
+    const result = await SmartOLTService.executeModemSwap({
+      oldOnuIdOrSn: swapData.oldOnuId || swapData.oldSn,
+      newSn: swapData.newSn,
+      technicianPhone: phone,
+      technicianName: `Técnico WhatsApp (${phone})`,
+      overrideOltId: swapData.oltId,
+      overrideBoard: swapData.board,
+      overridePort: swapData.port,
+      notifyGroup: true,
+    });
+
+    metaObj.pendingModemSwap = null;
+    await TursoService.upsertSession({
+      phone,
+      step: 'CONVERSACIONAL',
+      metadata: JSON.stringify(metaObj),
+    });
+
+    if (result.success) {
+      const successMsg = `🔄 *¡CAMBIO DE MÓDEM COMPLETADO CON ÉXITO!*
+──────────────────────────────
+• *Cliente:* *${swapData.clientName}*
+• *Zona:* *${swapData.zone || 'Actopan'}*
+• *IP Conservada:* *${swapData.ip}* (VLAN ${swapData.vlan})
+• *Módem Anterior Retirado:* *${swapData.oldSn}*
+• *Nuevo Módem Instalado:* *${swapData.newSn}* (${swapData.model})
+──────────────────────────────
+✅ Equipo anterior eliminado de SmartOLT y nuevo módem aprovisionado en línea.
+📲 Notificación enviada al grupo de WhatsApp con formato *CAMBIO DE MODEM*.`;
+
+      await this.enviarYLoguear(
+        phone,
+        successMsg,
+        'ACTIVACION_TECNICO',
+        'SWAP_EXITOSO',
+        targetJid
+      );
+    } else {
+      await this.enviarYLoguear(
+        phone,
+        `⚠️ *Atención durante el cambio de módem:*\n\n${result.message}`,
+        'ACTIVACION_TECNICO',
+        'SWAP_ERROR',
         targetJid
       );
     }
