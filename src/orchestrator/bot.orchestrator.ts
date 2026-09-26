@@ -1997,9 +1997,8 @@ export class BotOrchestrator {
       return;
     }
 
-    // CASO C3: GENERAL, TODOS LOS DISPOSITIVOS O INESTABILIDAD RECURRENTE (PROTOCOLO DE 4 PASOS) - CAPTURA 2
-    // Se ejecuta si el cliente ya indicó que es general/todos, o si reporta lentitud o fallas en varios días (ej: Aurora Sánchez)
-    if (c.alcance_dispositivos === 'TODOS' || c.reporta_lentitud || esSinInternet || detalleQueja.toLowerCase().includes('faltando') || detalleQueja.toLowerCase().includes('dias') || detalleQueja.toLowerCase().includes('días')) {
+    // CASO C3: EL CLIENTE YA ESPECIFICÓ DIRECTAMENTE QUE ES EN TODOS SUS APARATOS
+    if (c.alcance_dispositivos === 'TODOS') {
       if (onuId) {
         SmartOLTService.rebootONU(onuId).then(res => {
           logger.info(`Reinicio de ONU ${onuId} ordenado automáticamente para ${phone}: ${res.message}`);
@@ -2008,13 +2007,12 @@ export class BotOrchestrator {
         });
       }
 
-      const mensaje4Pasos =
-        `¡Buenas noticias${nombre}! Realizamos ajustes en el sistema para mejorar tu conexión. 🚀\n\n` +
-        `Para finalizar, solo necesitamos tu ayuda con estos 4 pasos rápidos:\n\n` +
-        `1️⃣ *Cambio de red:* Conéctate a la señal *5G* usando tu contraseña de siempre. 📶\n` +
-        `2️⃣ *Reinicio:* En este momento reiniciamos tu equipo a distancia (perderás conexión por unos 2 minutos). ⏳\n` +
-        `3️⃣ *Foto del módem:* Por favor, envíanos una foto de tu equipo encendido para validar que las luces estén correctas. 📸\n` +
-        `4️⃣ *Monitoreo:* Prueba tu navegación el resto del día. Si notas cualquier detalle, avísanos de inmediato para agendar una visita técnica. ¡Quedamos atentos! 😊`;
+      const mensajeReinicioDirecto =
+        `Listo${nombre}, acabo de enviar una señal para *reiniciar tu módem remotamente*.\n\n` +
+        `⏳ Tardará aprox. 1 a 2 minutos en estabilizarse. En cuanto vuelvan a encender sus luces:\n` +
+        `1️⃣ Conéctate a tu red Wi-Fi *5G* cerca del módem.\n` +
+        `2️⃣ Haz un test en https://www.speedtest.net\n` +
+        `3️⃣ Mándame aquí la *captura de pantalla de tu Speedtest* para verificar tu velocidad.`;
 
       await TursoService.upsertSession({
         phone,
@@ -2025,18 +2023,17 @@ export class BotOrchestrator {
           onuIdParaReinicio: onuId,
           triageAlcance: 'TODOS_DISPOSITIVOS',
           rebootTriggeredAt: new Date().toISOString(),
-          esperandoFotoModem: true,
         }),
       });
 
-      await this.enviarYLoguear(phone, mensaje4Pasos, 'FALLA_INTERNET', 'PROTOCOLO_4_PASOS_REINICIO', targetJid);
+      await this.enviarYLoguear(phone, mensajeReinicioDirecto, 'FALLA_INTERNET', 'REINICIO_DIRECTO_TODOS', targetJid);
       return;
     }
 
-    // CASO C4: CASO INDETERMINADO O PRIMER CONTACTO BREVE
+    // CASO C4: CASO INDETERMINADO O PRIMER CONTACTO ("No tengo internet", "Lento", etc.)
     const mensajeTriage =
-      `Hola${nombre}, revisé tu línea y tu módem aparece conectado y con señal física estable. 📶\n\n` +
-      `¿El inconveniente de navegación te ocurre en todos tus aparatos o principalmente en uno en específico?`;
+      `Hola${nombre}, tu módem aparece conectado y con buena señal. 📶\n\n` +
+      `¿El problema te ocurre en todos tus dispositivos o solo en uno en específico?`;
 
     await TursoService.upsertSession({
       phone,
