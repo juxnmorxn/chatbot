@@ -1722,8 +1722,8 @@ export function getAdminDashboardHtml(): string {
       </div>
 
       <nav class="sidebar-nav">
-        <div class="nav-category">Operación</div>
-        <div class="nav-item active" data-view="dashboard" onclick="navigateTo('dashboard')" title="Dashboard">
+        <div class="nav-category">Operación Chatbot</div>
+        <div class="nav-item active" data-view="dashboard" onclick="navigateTo('dashboard')" title="Dashboard General">
           <span class="nav-icon">
             <svg class="svg-icon" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect></svg>
           </span>
@@ -1736,13 +1736,8 @@ export function getAdminDashboardHtml(): string {
           <span class="nav-text">Live WhatsApp</span>
           <span id="badge-live-chat" class="nav-badge" style="display: none;">0</span>
         </div>
-        <div class="nav-item" data-view="clients" onclick="navigateTo('clients')" title="Directorio de Clientes & GPS">
-          <span class="nav-icon">
-            <svg class="svg-icon" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M20 8c0 3-4 7-4 7s-4-4-4-7a4 4 0 0 1 8 0z"></path><circle cx="16" cy="8" r="1.5"></circle></svg>
-          </span>
-          <span class="nav-text">Clientes & GPS</span>
-          <span id="badge-clients-total" class="nav-badge" style="display: none;">0</span>
-        </div>
+
+        <div class="nav-category">Gestión & Soporte</div>
         <div class="nav-item" data-view="tickets" onclick="navigateTo('tickets')" title="Mesa de Tickets">
           <span class="nav-icon">
             <svg class="svg-icon" viewBox="0 0 24 24"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"></path><path d="M13 5v2"></path><path d="M13 17v2"></path><path d="M13 11v2"></path></svg>
@@ -1750,13 +1745,20 @@ export function getAdminDashboardHtml(): string {
           <span class="nav-text">Mesa de Tickets</span>
           <span id="badge-tickets-open" class="nav-badge alert-badge" style="display: none;">0</span>
         </div>
+        <div class="nav-item" data-view="clients" onclick="navigateTo('clients')" title="Directorio de Clientes & GPS">
+          <span class="nav-icon">
+            <svg class="svg-icon" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M20 8c0 3-4 7-4 7s-4-4-4-7a4 4 0 0 1 8 0z"></path><circle cx="16" cy="8" r="1.5"></circle></svg>
+          </span>
+          <span class="nav-text">Clientes & GPS</span>
+          <span id="badge-clients-total" class="nav-badge" style="display: none;">0</span>
+        </div>
 
-        <div class="nav-category">Red & Gestión</div>
-        <div class="nav-item" data-view="ipam" onclick="navigateTo('ipam')" title="IPAM & Pools">
+        <div class="nav-category">Red & Operación Bot</div>
+        <div class="nav-item" data-view="ipam" onclick="navigateTo('ipam')" title="Control de Pools IP">
           <span class="nav-icon">
             <svg class="svg-icon" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
           </span>
-          <span class="nav-text">IPAM & Pools</span>
+          <span class="nav-text">Control de Pools IP</span>
           <span id="badge-unconfigured-onus" class="nav-badge" style="display: none;">0</span>
         </div>
         <div class="nav-item" data-view="audit" onclick="navigateTo('audit')" title="Auditoría SmartOLT">
@@ -1764,13 +1766,6 @@ export function getAdminDashboardHtml(): string {
             <svg class="svg-icon" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg>
           </span>
           <span class="nav-text">Auditoría SmartOLT</span>
-        </div>
-        <div class="nav-item" data-view="provisioning" onclick="navigateTo('provisioning')" title="Aprovisionamiento TR-069 & IPv6">
-          <span class="nav-icon">
-            <svg class="svg-icon" viewBox="0 0 24 24"><path d="m13 2-2 2.5h3L11 9h4l-5 7 1.5-4.5H8.5L13 2z"></path></svg>
-          </span>
-          <span class="nav-text">Aprovisionar IPv6</span>
-          <span id="badge-prov-pending" class="nav-badge alert-badge" style="display: none;">0</span>
         </div>
         <div class="nav-item" data-view="technicians" onclick="navigateTo('technicians')" title="Técnicos & PINs">
           <span class="nav-icon">
@@ -1831,7 +1826,7 @@ export function getAdminDashboardHtml(): string {
           <div class="topbar-search-wrap">
             <svg class="svg-icon svg-icon-sm" style="color: var(--text-muted); flex-shrink: 0;" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
             <input type="text" id="global-context-search" class="topbar-search-input" placeholder="Buscar en la pantalla actual..." oninput="handleGlobalContextSearch(this.value)">
-            <span id="global-search-context-badge" class="topbar-context-badge">📊 Dashboard</span>
+            <span id="global-search-context-badge" class="topbar-context-badge">Dashboard</span>
             <button id="global-search-clear-btn" class="topbar-search-clear" onclick="clearGlobalContextSearch()" style="display: none;" title="Limpiar búsqueda">✕</button>
           </div>
         </div>
@@ -1977,18 +1972,18 @@ export function getAdminDashboardHtml(): string {
           <div class="datatable-toolbar" style="justify-content: flex-end;">
             <div class="datatable-filters-group">
               <select id="filter-logs-flow" class="datatable-select" onchange="filterDashboardLogs()">
-                <option value="">🌐 Todos los Flujos</option>
-                <option value="IN">📥 Entrante (IN)</option>
-                <option value="OUT">📤 Saliente (OUT)</option>
+                <option value="">Todos los Flujos</option>
+                <option value="IN">Entrante (IN)</option>
+                <option value="OUT">Saliente (OUT)</option>
               </select>
               <select id="filter-logs-sort" class="datatable-select" onchange="sortDashboardLogs(this.value)">
-                <option value="time_desc">⏱️ Más Recientes</option>
-                <option value="time_asc">⏱️ Más Antiguos</option>
-                <option value="client_asc">🔤 Cliente (A-Z)</option>
-                <option value="direction_asc">↕️ Flujo</option>
+                <option value="time_desc">Más Recientes</option>
+                <option value="time_asc">Más Antiguos</option>
+                <option value="client_asc">Cliente (A-Z)</option>
+                <option value="direction_asc">Flujo</option>
               </select>
               <button class="btn btn-secondary btn-sm" onclick="clearDashboardLogsFilter()" title="Limpiar filtros">
-                🧹 Limpiar
+                Limpiar
               </button>
             </div>
           </div>
@@ -2147,32 +2142,32 @@ export function getAdminDashboardHtml(): string {
           <div class="datatable-toolbar" style="margin-bottom: 0; padding-bottom: 0; border-bottom: none; justify-content: flex-end;">
             <div class="datatable-filters-group">
               <select id="filter-client-estado" class="datatable-select" onchange="handleClientColFilter()">
-                <option value="">🟢 Todos los Estados</option>
-                <option value="Activo">🟢 Activos</option>
-                <option value="Suspendido">🔴 Suspendidos</option>
-                <option value="Corte">✂️ En Corte</option>
-                <option value="Gratis">🎁 Gratis / Demo</option>
+                <option value="">Todos los Estados</option>
+                <option value="Activo">Activos</option>
+                <option value="Suspendido">Suspendidos</option>
+                <option value="Corte">En Corte</option>
+                <option value="Gratis">Gratis / Demo</option>
               </select>
               <select id="filter-client-router" class="datatable-select" onchange="handleClientColFilter()">
-                <option value="">📍 Todos los Routers / Zonas</option>
+                <option value="">Todos los Routers / Zonas</option>
               </select>
               <select id="filter-client-gps" class="datatable-select" onchange="handleClientColFilter()">
-                <option value="">🗺️ GPS: Todos</option>
-                <option value="CON_GPS">📍 Con Coordenadas GPS</option>
-                <option value="SIN_GPS">⚠️ Sin Coordenadas GPS</option>
+                <option value="">GPS: Todos</option>
+                <option value="CON_GPS">Con Coordenadas GPS</option>
+                <option value="SIN_GPS">Sin Coordenadas GPS</option>
               </select>
               <select id="filter-clients-sort" class="datatable-select" onchange="sortClientsBy(this.value)">
-                <option value="id_servicio_asc">🔢 Orden: ID / Folio</option>
-                <option value="nombre_asc">🔤 Nombre (A-Z)</option>
-                <option value="nombre_desc">🔤 Nombre (Z-A)</option>
-                <option value="ip_asc">🌐 Dirección IP</option>
-                <option value="estado_asc">⚡ Estado</option>
+                <option value="id_servicio_asc">Orden: ID / Folio</option>
+                <option value="nombre_asc">Nombre (A-Z)</option>
+                <option value="nombre_desc">Nombre (Z-A)</option>
+                <option value="ip_asc">Dirección IP</option>
+                <option value="estado_asc">Estado</option>
               </select>
               <button class="btn btn-secondary btn-sm" onclick="clearClientColFilters()" title="Limpiar todos los filtros">
-                🧹 Limpiar
+                Limpiar
               </button>
               <button class="btn btn-secondary btn-sm" onclick="triggerWisphubSync()" title="Sincronizar base de datos con WispHub en vivo">
-                🔄 Sincronizar
+                Sincronizar
               </button>
             </div>
           </div>
@@ -2227,8 +2222,8 @@ export function getAdminDashboardHtml(): string {
           </div>
           <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
             <div style="display: flex; background: rgba(0,0,0,0.3); border-radius: var(--radius-sm); border: 1px solid var(--card-border); padding: 2px;">
-              <button class="btn btn-primary btn-xs" id="btn-tickets-view-table" onclick="setTicketsDisplayMode('table')">📋 Vista Tabla</button>
-              <button class="btn btn-secondary btn-xs" id="btn-tickets-view-kanban" onclick="setTicketsDisplayMode('kanban')">📊 Vista Kanban</button>
+              <button class="btn btn-primary btn-xs" id="btn-tickets-view-table" onclick="setTicketsDisplayMode('table')">Vista Tabla</button>
+              <button class="btn btn-secondary btn-xs" id="btn-tickets-view-kanban" onclick="setTicketsDisplayMode('kanban')">Vista Kanban</button>
             </div>
             <button class="btn btn-secondary btn-sm" onclick="loadTicketsData()">
               <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"></path></svg>
@@ -2254,24 +2249,24 @@ export function getAdminDashboardHtml(): string {
           <div class="datatable-toolbar" style="justify-content: flex-end;">
             <div class="datatable-filters-group">
               <select id="filter-ticket-status" class="datatable-select" onchange="filterTicketsTable()">
-                <option value="">🎫 Todos los Estados</option>
-                <option value="ABIERTO">🟡 Abierto</option>
-                <option value="EN_PROCESO">🔵 En Proceso</option>
-                <option value="VISITA_TECNICA">🚚 Visita Técnica</option>
-                <option value="RESUELTO">🟢 Resuelto</option>
+                <option value="">Todos los Estados</option>
+                <option value="ABIERTO">Abierto</option>
+                <option value="EN_PROCESO">En Proceso</option>
+                <option value="VISITA_TECNICA">Visita Técnica</option>
+                <option value="RESUELTO">Resuelto</option>
               </select>
               <select id="filter-ticket-tech" class="datatable-select" onchange="filterTicketsTable()">
-                <option value="">👷 Todos los Técnicos</option>
+                <option value="">Todos los Técnicos</option>
               </select>
               <select id="filter-tickets-sort" class="datatable-select" onchange="sortTicketsBy(this.value)">
-                <option value="created_at_desc">⏱️ Más Recientes</option>
-                <option value="created_at_asc">⏱️ Más Antiguos</option>
-                <option value="folio_desc">🔢 Folio Mayor a Menor</option>
-                <option value="folio_asc">🔢 Folio Menor a Mayor</option>
-                <option value="client_asc">🔤 Cliente (A-Z)</option>
+                <option value="created_at_desc">Más Recientes</option>
+                <option value="created_at_asc">Más Antiguos</option>
+                <option value="folio_desc">Folio Mayor a Menor</option>
+                <option value="folio_asc">Folio Menor a Mayor</option>
+                <option value="client_asc">Cliente (A-Z)</option>
               </select>
               <button class="btn btn-secondary btn-sm" onclick="clearTicketsTableFilters()" title="Limpiar filtros">
-                🧹 Limpiar
+                Limpiar
               </button>
             </div>
           </div>
@@ -2344,7 +2339,7 @@ export function getAdminDashboardHtml(): string {
             <div style="display: flex; gap: 8px; flex-wrap: wrap;">
               <button class="btn btn-secondary btn-sm" onclick="triggerAutoDiscoverVlans()" title="Escanear base de datos y detectar nuevas subredes de ONUs automáticamente">
                 <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                <span>🔍 Auto-Detectar Subredes</span>
+                <span>Auto-Detectar Subredes</span>
               </button>
               <button class="btn btn-secondary btn-sm" onclick="loadIpamData()" title="Refrescar ocupación">
                 <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"></path></svg>
@@ -2370,19 +2365,19 @@ export function getAdminDashboardHtml(): string {
           <div class="datatable-toolbar" style="justify-content: flex-end;">
             <div class="datatable-filters-group">
               <select id="filter-pon-olt" class="datatable-select" onchange="filterUnconfiguredOnus()">
-                <option value="">📡 Todas las OLTs</option>
+                <option value="">Todas las OLTs</option>
               </select>
               <select id="filter-pon-model" class="datatable-select" onchange="filterUnconfiguredOnus()">
-                <option value="">📠 Todos los Modelos</option>
+                <option value="">Todos los Modelos</option>
               </select>
               <select id="filter-ipam-unconf-sort" class="datatable-select" onchange="sortUnconfiguredOnusBy(this.value)">
-                <option value="sn_asc">🆔 Serial (A-Z)</option>
-                <option value="olt_asc">📡 OLT</option>
-                <option value="port_asc">🚪 Puerto PON</option>
-                <option value="model_asc">📠 Modelo ONT</option>
+                <option value="sn_asc">Serial (A-Z)</option>
+                <option value="olt_asc">OLT</option>
+                <option value="port_asc">Puerto PON</option>
+                <option value="model_asc">Modelo ONT</option>
               </select>
               <button class="btn btn-secondary btn-sm" onclick="clearUnconfiguredOnusFilters()" title="Limpiar filtros">
-                🧹 Limpiar
+                Limpiar
               </button>
             </div>
           </div>
@@ -2472,124 +2467,6 @@ export function getAdminDashboardHtml(): string {
             <div style="display: flex; gap: 8px;">
               <button id="btn-audit-prev" class="btn btn-secondary btn-sm" onclick="changeAuditPage(-1)">◀ Anterior</button>
               <button id="btn-audit-next" class="btn btn-secondary btn-sm" onclick="changeAuditPage(1)">Siguiente ▶</button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- VIEW: APROVISIONAMIENTO TR-069 & IPV6 -->
-      <section id="view-provisioning" class="view-container">
-        <div class="grid-metrics" style="margin-bottom: 20px;">
-          <div class="glass-card metric-card">
-            <div class="metric-header">
-              <span>Total ONUs en SmartOLT</span>
-              <div class="metric-icon-box" style="color: var(--accent-cyan);">
-                <svg class="svg-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line></svg>
-              </div>
-            </div>
-            <div id="metric-prov-total" class="metric-value">--</div>
-            <div class="metric-footer">Registradas en la red</div>
-          </div>
-
-          <div class="glass-card metric-card">
-            <div class="metric-header">
-              <span>Falta TR-069</span>
-              <div class="metric-icon-box" style="color: var(--accent-amber);">
-                <svg class="svg-icon" viewBox="0 0 24 24"><path d="m10.29 3.86-8.47 14.14A2 2 0 0 0 3.53 21h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path></svg>
-              </div>
-            </div>
-            <div id="metric-prov-tr069" class="metric-value" style="color: var(--accent-amber);">--</div>
-            <div class="metric-footer">Sin perfil TR-069 activo</div>
-          </div>
-
-          <div class="glass-card metric-card">
-            <div class="metric-header">
-              <span>Falta IPv6</span>
-              <div class="metric-icon-box" style="color: #38bdf8;">
-                <svg class="svg-icon" viewBox="0 0 24 24"><path d="M12 2v20M2 12h20"></path></svg>
-              </div>
-            </div>
-            <div id="metric-prov-ipv6" class="metric-value" style="color: #38bdf8;">--</div>
-            <div class="metric-footer">Solo IPv4 (Sin Dual Stack)</div>
-          </div>
-
-          <div class="glass-card metric-card">
-            <div class="metric-header">
-              <span>100% Configurados</span>
-              <div class="metric-icon-box" style="color: var(--accent-green);">
-                <svg class="svg-icon" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-              </div>
-            </div>
-            <div id="metric-prov-ready" class="metric-value" style="color: var(--accent-green);">--</div>
-            <div class="metric-footer">TR-069 + IPv6 Dual Stack</div>
-          </div>
-        </div>
-
-        <div class="glass-card" style="margin-bottom: 20px;">
-          <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;">
-            <div style="display: flex; gap: 8px; flex-wrap: wrap;" id="prov-filter-buttons">
-              <button class="btn btn-warning btn-sm active" onclick="setProvFilter('pending', this)">Pendientes (TR-069 / IPv6)</button>
-              <button class="btn btn-secondary btn-sm" onclick="setProvFilter('missing_tr069', this)">Solo Falta TR-069</button>
-              <button class="btn btn-secondary btn-sm" onclick="setProvFilter('missing_ipv6', this)">Solo Falta IPv6</button>
-              <button class="btn btn-success btn-sm" onclick="setProvFilter('ready', this)">Completados (100%)</button>
-              <button class="btn btn-secondary btn-sm" onclick="setProvFilter('all', this)">Todas las ONUs</button>
-            </div>
-            <button class="btn btn-secondary btn-sm" onclick="clearProvColFilters()" title="Limpiar todos los filtros">
-              🧹 Limpiar Filtros
-            </button>
-          </div>
-        </div>
-
-        <div class="glass-card">
-          <!-- Datatable Toolbar -->
-          <div class="datatable-toolbar" style="justify-content: flex-end;">
-            <div class="datatable-filters-group">
-              <select id="filter-prov-tr069" class="datatable-select" onchange="handleProvColFilter()" title="Filtrar por TR-069">
-                <option value="">⚙️ Todos TR-069</option>
-                <option value="ACTIVE">TR-069 Configurado</option>
-                <option value="INACTIVE">Falta TR-069</option>
-              </select>
-              <select id="filter-prov-ipv6" class="datatable-select" onchange="handleProvColFilter()" title="Filtrar por IPv6">
-                <option value="">🌐 Todos IPv6</option>
-                <option value="ACTIVE">IPv6 Dual Stack</option>
-                <option value="INACTIVE">Falta IPv6</option>
-              </select>
-              <select id="filter-prov-sort" class="datatable-select" onchange="sortProvisioningBy(this.value)" title="Ordenar registros">
-                <option value="cliente_asc">Ordenar: Cliente (A-Z)</option>
-                <option value="cliente_desc">Ordenar: Cliente (Z-A)</option>
-                <option value="ip_asc">Ordenar: IP WAN</option>
-                <option value="tr069">Ordenar: Prioridad TR-069</option>
-                <option value="ipv6">Ordenar: Prioridad IPv6</option>
-              </select>
-              <button class="btn btn-secondary btn-sm" onclick="clearProvColFilters()" title="Limpiar todos los filtros">
-                🧹 Limpiar
-              </button>
-            </div>
-          </div>
-
-          <div class="table-responsive">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th class="sortable-th" onclick="sortProvisioningBy('cliente')" style="min-width: 180px;">Cliente <span class="sort-icon">↕</span></th>
-                  <th class="sortable-th" onclick="sortProvisioningBy('sn')" style="min-width: 150px;">Serial (SN) <span class="sort-icon">↕</span></th>
-                  <th class="sortable-th" onclick="sortProvisioningBy('ip')" style="min-width: 140px;">IP WAN <span class="sort-icon">↕</span></th>
-                  <th class="sortable-th" onclick="sortProvisioningBy('zone')" style="min-width: 140px;">Zona / OLT <span class="sort-icon">↕</span></th>
-                  <th class="sortable-th" onclick="sortProvisioningBy('tr069')" style="min-width: 120px;">Estado TR-069 <span class="sort-icon">↕</span></th>
-                  <th class="sortable-th" onclick="sortProvisioningBy('ipv6')" style="min-width: 120px;">Estado IPv6 <span class="sort-icon">↕</span></th>
-                  <th style="text-align: right; min-width: 100px;">Acción</th>
-                </tr>
-              </thead>
-              <tbody id="table-prov-body">
-                <tr><td colspan="7" style="text-align: center; color: var(--text-dim);">Cargando aprovisionamiento...</td></tr>
-              </tbody>
-            </table>
-          </div>
-          <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 16px;">
-            <span id="prov-pagination-info" style="font-size: 12px; color: var(--text-muted);">Página 1</span>
-            <div style="display: flex; gap: 8px;">
-              <button id="btn-prov-prev" class="btn btn-secondary btn-sm" onclick="changeProvPage(-1)">◀ Anterior</button>
-              <button id="btn-prov-next" class="btn btn-secondary btn-sm" onclick="changeProvPage(1)">Siguiente ▶</button>
             </div>
           </div>
         </div>
@@ -3399,14 +3276,13 @@ export function getAdminDashboardHtml(): string {
 
       const titles = {
         'dashboard': 'Resumen General',
-        'live-chat': 'Live WhatsApp & Human Takeover',
+        'live-chat': 'Live WhatsApp & Atención en Vivo',
         'clients': 'Directorio de Clientes & Geolocalización GPS',
-        'tickets': 'Mesa de Tickets (Kanban)',
-        'ipam': 'IPAM & Gestión de Pools VLAN',
+        'tickets': 'Mesa de Tickets & Órdenes de Servicio',
+        'ipam': 'Control de Subredes & Pools de IP',
         'audit': 'Auditoría SmartOLT vs WispHub',
-        'provisioning': 'Aprovisionamiento TR-069 & IPv6 Dual Stack',
         'technicians': 'Técnicos Autorizados & PINs',
-        'modem-swap': 'Cambio de Módem (Reemplazo de ONU)',
+        'modem-swap': 'Cambio de Módem (Historial & Reemplazo)',
         'settings': 'Configuración del Sistema',
         'users': 'Usuarios & Roles de Acceso',
       };
@@ -3425,9 +3301,8 @@ export function getAdminDashboardHtml(): string {
       'live-chat': { label: 'Live Chat', placeholder: 'Buscar cliente por nombre o teléfono...' },
       'clients': { label: 'Clientes & GPS', placeholder: 'Buscar por cliente, folio, IP, SN o teléfono...' },
       'tickets': { label: 'Tickets', placeholder: 'Buscar por folio, cliente o falla...' },
-      'ipam': { label: 'IPAM PON', placeholder: 'Buscar ONUs sin autorizar por SN...' },
+      'ipam': { label: 'Pools IP', placeholder: 'Buscar ONUs o subredes...' },
       'audit': { label: 'Auditoría', placeholder: 'Buscar por cliente, IP, servicio o plan...' },
-      'provisioning': { label: 'Aprovisionamiento', placeholder: 'Buscar por cliente, SN o IP WAN...' },
       'technicians': { label: 'Técnicos', placeholder: 'Buscar técnico por nombre, teléfono o PIN...' },
       'modem-swap': { label: 'Cambio Módem', placeholder: 'Buscar en bitácora de cambios de módem...' },
       'settings': { label: 'Ajustes', placeholder: 'Buscar configuraciones...' },
@@ -3493,8 +3368,6 @@ export function getAdminDashboardHtml(): string {
         filterUnconfiguredOnus();
       } else if (v === 'audit') {
         handleAuditColFilter();
-      } else if (v === 'provisioning') {
-        handleProvColFilter();
       } else if (v === 'technicians') {
         filterTechniciansTable();
       } else if (v === 'modem-swap') {
@@ -3588,7 +3461,6 @@ export function getAdminDashboardHtml(): string {
         case 'tickets': loadTicketsData(); break;
         case 'ipam': loadIpamData(); break;
         case 'audit': loadAuditData(); break;
-        case 'provisioning': loadProvisioningData(); break;
         case 'technicians': loadTechniciansData(); break;
         case 'modem-swap': loadModemSwapData(); break;
         case 'settings': loadSettingsData(); break;
