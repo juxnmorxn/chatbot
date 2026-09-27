@@ -2190,7 +2190,7 @@ export function getAdminDashboardHtml(): string {
                   <th class="sortable-th" onclick="sortClientsBy('estado')" style="min-width: 130px;">Estado & Plan <span id="sort-client-estado" class="sort-icon">↕</span></th>
                   <th style="min-width: 140px;">Contacto</th>
                   <th style="min-width: 190px;">Geolocalización GPS & Domicilio</th>
-                  <th style="text-align: right; min-width: 170px;">Acciones & Despacho</th>
+                  <th style="text-align: right; min-width: 140px;">Acciones</th>
                 </tr>
               </thead>
               <tbody id="table-clients-body">
@@ -6881,7 +6881,7 @@ export function getAdminDashboardHtml(): string {
         return \`
           <tr>
             <td>
-              <div style="font-weight: 700; font-size: 13px; color: #fff;">\${escapeHtml(c.nombre)}</div>
+              <div style="font-weight: 700; font-size: 13px; color: #fff; cursor: pointer;" onclick="openClientDetailModal(\${c.id_servicio})" title="Click para ver expediente completo">\${escapeHtml(c.nombre)}</div>
               <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
                 <span style="font-family: var(--font-mono); color: var(--primary); font-weight: 700;">#\${c.id_servicio || '--'}</span>
                 \${c.servicio ? \` &bull; \${escapeHtml(c.servicio)}\` : ''}
@@ -6908,12 +6908,9 @@ export function getAdminDashboardHtml(): string {
             <td>\${phonesHtml}</td>
             <td>\${gpsHtml}</td>
             <td style="text-align: right;">
-              <div style="display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap;">
-                <button class="btn btn-primary btn-sm" onclick='openDispatchModal(\${JSON.stringify(c).replace(/'/g, "&apos;")})' title="Despachar orden de visita a técnicos vía WhatsApp">
-                  Despachar
-                </button>
-                <button class="btn btn-secondary btn-sm" onclick="openClientDetailModal(\${c.id_servicio})" title="Ver Expediente Completo">
-                  Ficha
+              <div style="display: flex; gap: 6px; justify-content: flex-end; align-items: center;">
+                <button class="btn btn-primary btn-sm" onclick='openDispatchModal(\${JSON.stringify(c).replace(/'/g, "&apos;")})' title="Asignar orden de visita técnica vía WhatsApp">
+                  Asignar
                 </button>
                 \${primaryPhone ? \`
                   <button class="btn btn-secondary btn-sm" onclick="selectChat('\${primaryPhone}'); navigateTo('live-chat');" title="Abrir Chat WhatsApp">
@@ -7336,7 +7333,7 @@ export function getAdminDashboardHtml(): string {
         </div>
       \`;
 
-      openModal('Despachar Orden de Trabajo a Cuadrilla Técnica', content, async () => {
+      openModal('Asignar Orden de Trabajo a Técnicos', content, async () => {
         const checkboxes = document.querySelectorAll('.dispatch-tech-checkbox:checked');
         const selectedPhones = Array.from(checkboxes).map(cb => cb.value);
         const customPhone = (document.getElementById('dispatch-custom-phone')?.value || '').trim().replace(/\\D/g, '');
@@ -7351,7 +7348,7 @@ export function getAdminDashboardHtml(): string {
 
         const customNotes = (document.getElementById('dispatch-custom-notes')?.value || '').trim();
 
-        showToast('Enviando Orden', \`Despachando a \${selectedPhones.length} técnico(s)...\`, 'info', 2000);
+        showToast('Asignando Orden', \`Enviando a \${selectedPhones.length} técnico(s)...\`, 'info', 2000);
 
         const res = await apiFetch(\`/api/admin/clients/\${client.id_servicio}/dispatch\`, {
           method: 'POST',
@@ -7362,11 +7359,11 @@ export function getAdminDashboardHtml(): string {
         });
 
         if (res.success) {
-          showToast('Despacho Exitoso', res.message || \`Orden enviada a \${res.sent_count} técnico(s) por WhatsApp.\`, 'success');
+          showToast('Asignación Exitosa', res.message || \`Orden enviada a \${res.sent_count} técnico(s) por WhatsApp.\`, 'success');
         } else {
-          showToast('Error en Despacho', res.error || 'No se pudo enviar la orden.', 'error');
+          showToast('Error de Asignación', res.error || 'No se pudo enviar la orden.', 'error');
         }
-      }, 'Enviar Orden por WhatsApp');
+      }, 'Asignar por WhatsApp');
     }
 
     function toggleAllDispatchTechs(btn) {
