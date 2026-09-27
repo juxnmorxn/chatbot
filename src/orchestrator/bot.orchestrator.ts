@@ -1119,7 +1119,7 @@ export class BotOrchestrator {
           return;
         }
 
-        // Si es un saludo o no dio su nombre, le solicitamos amablemente su nombre completo
+        // Si es un saludo o no dio su nombre, le solicitamos amablemente su nombre completo preservando la consulta original
         if (clasif.intencion === 'SALUDO' || clasif.intencion === 'DESCONOCIDO') {
           await this.enviarYLoguear(
             phone,
@@ -1128,7 +1128,17 @@ export class BotOrchestrator {
             'SOLICITAR_IDENTIFICACION',
             targetJid
           );
-          await TursoService.updateStep(phone, 'ESPERANDO_IDENTIFICACION');
+          await TursoService.upsertSession({
+            phone,
+            step: 'ESPERANDO_IDENTIFICACION',
+            metadata: JSON.stringify({
+              ...metaObjPre,
+              initialQuery: rawText,
+              initialIntent: clasif.intencion,
+              initialClasif: clasif,
+              resumen_queja: clasif.resumen_queja,
+            }),
+          });
           return;
         }
 
@@ -1145,6 +1155,7 @@ export class BotOrchestrator {
           phone,
           step: 'ESPERANDO_IDENTIFICACION',
           metadata: JSON.stringify({
+            ...metaObjPre,
             initialQuery: rawText,
             initialIntent: clasif.intencion,
             initialClasif: clasif,
@@ -1345,7 +1356,16 @@ export class BotOrchestrator {
             'SOLICITAR_IDENTIFICACION',
             targetJid
           );
-          await TursoService.updateStep(phone, 'ESPERANDO_IDENTIFICACION');
+          await TursoService.upsertSession({
+            phone,
+            step: 'ESPERANDO_IDENTIFICACION',
+            metadata: JSON.stringify({
+              initialQuery: mensajeOriginal,
+              initialIntent: c.intencion,
+              initialClasif: c,
+              resumen_queja: c.resumen_queja,
+            }),
+          });
         } else {
           // Cliente ya registrado / conocido: saludo cordial y directo a su problema
           const nombre = session.client_name ? ` *${session.client_name}*` : '';
@@ -1502,7 +1522,16 @@ export class BotOrchestrator {
             'DESCONOCIDO',
             'SOLICITAR_IDENTIFICACION'
           );
-          await TursoService.updateStep(phone, 'ESPERANDO_IDENTIFICACION');
+          await TursoService.upsertSession({
+            phone,
+            step: 'ESPERANDO_IDENTIFICACION',
+            metadata: JSON.stringify({
+              initialQuery: mensajeOriginal,
+              initialIntent: c.intencion,
+              initialClasif: c,
+              resumen_queja: c.resumen_queja,
+            }),
+          });
         } else {
           // El cliente ya es conocido: reconocemos lo que dijo y ofrecemos ayuda personalizada
           const nombre = session.client_name ? ` *${session.client_name}*` : '';
@@ -1582,7 +1611,16 @@ export class BotOrchestrator {
         'SOLICITAR_NOMBRE_PARA_DIAGNOSTICO',
         targetJid
       );
-      await TursoService.updateStep(phone, 'ESPERANDO_IDENTIFICACION');
+      await TursoService.upsertSession({
+        phone,
+        step: 'ESPERANDO_IDENTIFICACION',
+        metadata: JSON.stringify({
+          initialQuery: c.resumen_queja || 'Falla de internet',
+          initialIntent: 'FALLA_INTERNET',
+          initialClasif: c,
+          resumen_queja: c.resumen_queja,
+        }),
+      });
       return;
     }
 
@@ -5028,11 +5066,55 @@ export class BotOrchestrator {
     const initialClasif = meta.initialClasif;
     const quejaTexto = meta.resumen_queja || (typeof initialQuery === 'string' ? initialQuery : '');
 
-    // Detección proactiva si venía una queja en la consulta inicial para no preguntar doble
-    if (!initialIntent && typeof initialQuery === 'string') {
+    // Detección proactiva si venía una queja o consulta en el mensaje inicial (ej. "hola no tengo internet", "quiero pagar", etc.)
+    if (typeof initialQuery === 'string' && initialQuery.trim().length > 0) {
       const qLower = initialQuery.toLowerCase();
-      if (qLower.includes('no tengo internet') || qLower.includes('sin internet') || qLower.includes('falla') || qLower.includes('lento') || qLower.includes('faltando') || qLower.includes('netflix') || qLower.includes('youtube') || qLower.includes('circulo') || qLower.includes('círculo')) {
+      // Si la consulta contiene reportes técnicos de falla o lentitud
+      if (
+        qLower.includes('no tengo internet') ||
+        qLower.includes('sin internet') ||
+        qLower.includes('no hay internet') ||
+        qLower.includes('no tengo conexion') ||
+        qLower.includes('no agarra') ||
+        qLower.includes('no sirve') ||
+        qLower.includes('falla') ||
+        qLower.includes('lento') ||
+        qLower.includes('lentitud') ||
+        qLower.includes('faltando') ||
+        qLower.includes('netflix') ||
+        qLower.includes('youtube') ||
+        qLower.includes('circulo') ||
+        qLower.includes('círculo') ||
+        qLower.includes('rojo') ||
+        qLower.includes('los') ||
+        qLower.includes('desconectado') ||
+        qLower.includes('apago')
+      ) {
         initialIntent = 'FALLA_INTERNET';
+      } else if (
+        qLower.includes('pagar') ||
+        qLower.includes('pago') ||
+        qLower.includes('saldo') ||
+        qLower.includes('debo') ||
+        qLower.includes('cuenta') ||
+        qLower.includes('recibo') ||
+        qLower.includes('factura')
+      ) {
+        initialIntent = 'CONSULTAR_SALDO';
+      } else if (
+        qLower.includes('contras') ||
+        qLower.includes('clave') ||
+        qLower.includes('wifi') ||
+        qLower.includes('wi-fi')
+      ) {
+        initialIntent = 'DATOS_WIFI';
+      } else if (
+        qLower.includes('velocidad') ||
+        qLower.includes('megas') ||
+        qLower.includes('plan') ||
+        qLower.includes('paquete')
+      ) {
+        initialIntent = 'CONSULTAR_PLAN';
       }
     }
 
