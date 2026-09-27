@@ -1156,8 +1156,9 @@ export class BotOrchestrator {
         });
 
         const tieneDeudaReal = estadoFinanciero.tieneDeudaReal || estadoFinanciero.totalDeuda > 0 || (estadoFinanciero.facturas && estadoFinanciero.facturas.length > 0);
+        const esCorteRealPorMorosidad = estadoFinanciero.suspendido && tieneDeudaReal;
 
-        if (tieneDeudaReal) {
+        if (esCorteRealPorMorosidad) {
           const facturas = estadoFinanciero.facturas || [];
           let detalleFacturas = '';
           if (facturas.length > 0) {
@@ -1174,7 +1175,7 @@ export class BotOrchestrator {
           const nombreCliente = formatDisplayName(session.client_name, true) || 'Cliente';
           const mensajeMoroso =
             `¡Hola, *${nombreCliente}*! 👋\n\n` +
-            `Revisé tu cuenta en nuestro sistema y detectamos que registras un saldo/recibo pendiente por *$${estadoFinanciero.totalDeuda.toFixed(2)} MXN*.\n` +
+            `Revisé tu cuenta en nuestro sistema y detectamos que tu servicio figura suspendido con un saldo/recibo pendiente por *$${estadoFinanciero.totalDeuda.toFixed(2)} MXN*.\n` +
             `${detalleFacturas}\n` +
             `🏦 *Pago por Transferencia Bancaria (BBVA):*\n` +
             `• Banco: *${bank}*\n` +
@@ -1186,8 +1187,8 @@ export class BotOrchestrator {
           await this.enviarYLoguear(phone, mensajeMoroso, 'CONSULTAR_SALDO', 'AVISO_SUSPENSION_SALUDO', targetJid);
           await TursoService.updateStep(phone, 'ESPERANDO_COMPROBANTE');
           return;
-        } else if (estadoFinanciero.suspendido && estadoFinanciero.yaPagoPeroNoActivo) {
-          logger.info(`Cliente ${phone} (${session.client_name}) está suspendido en WispHub pero SIN adeudos (pagos al corriente). Solicitando reactivación...`);
+        } else if (estadoFinanciero.suspendido && (estadoFinanciero.yaPagoPeroNoActivo || !tieneDeudaReal)) {
+          logger.info(`Cliente ${phone} (${session.client_name}) está suspendido en WispHub pero SIN adeudos (pagos al corriente). Solicitando reactivación automática...`);
           const idWispHub = estadoFinanciero.cliente?.id ||
             (session.service_id && !String(session.service_id).startsWith('HWTC') && !String(session.service_id).startsWith('ONU-') && !String(session.service_id).startsWith('ZTEG') ? session.service_id : null) ||
             (session.client_id && !String(session.client_id).startsWith('HWTC') && !String(session.client_id).startsWith('ONU-') && !String(session.client_id).startsWith('ZTEG') ? session.client_id : null);
@@ -1208,6 +1209,7 @@ export class BotOrchestrator {
               phone,
               service_id: String(estadoFinanciero.cliente.id),
               metadata: JSON.stringify({
+                ...meta,
                 wisphub_id: estadoFinanciero.cliente.id,
                 wisphub_ip: estadoFinanciero.cliente.ip,
                 ip: estadoFinanciero.cliente.ip,
@@ -1657,10 +1659,11 @@ export class BotOrchestrator {
       });
 
       const tieneDeudaReal = estadoFinanciero.tieneDeudaReal || estadoFinanciero.totalDeuda > 0 || (estadoFinanciero.facturas && estadoFinanciero.facturas.length > 0);
+      const esCorteRealPorMorosidad = estadoFinanciero.suspendido && tieneDeudaReal;
 
-      // CASO A: CLIENTE CON ADEUDO / FACTURAS VENCIDAS -> NUNCA REACTIVAR AUTOMÁTICAMENTE
-      if (tieneDeudaReal) {
-        logger.info(`Cliente ${phone} (${session.client_name}) presenta adeudo real en WispHub: Deuda=$${estadoFinanciero.totalDeuda}. Reactivación bloqueada por morosidad.`);
+      // CASO A: CLIENTE SUSPENDIDO EN WISPHUB CON ADEUDO REAL
+      if (esCorteRealPorMorosidad) {
+        logger.info(`Cliente ${phone} (${session.client_name}) figura suspendido por morosidad en WispHub: Deuda=$${estadoFinanciero.totalDeuda}. Reactivación bloqueada hasta recibir pago.`);
 
         const facturas = estadoFinanciero.facturas || [];
         let detalleFacturas = '';
@@ -1681,7 +1684,7 @@ export class BotOrchestrator {
         }
 
         const mensajeMoroso =
-          `Hola${nombre}, revisé tu servicio y detectamos que registras un recibo pendiente por *$${estadoFinanciero.totalDeuda.toFixed(2)} MXN*.\n` +
+          `Hola${nombre}, revisé tu servicio y detectamos que tu cuenta figura suspendida con un recibo pendiente por *$${estadoFinanciero.totalDeuda.toFixed(2)} MXN*.\n` +
           `${detalleFacturas}\n` +
           `🏦 *Pago por Transferencia Bancaria (BBVA):*\n` +
           `• Banco: *${bank}*\n` +
@@ -1694,8 +1697,8 @@ export class BotOrchestrator {
         await this.enviarYLoguear(phone, mensajeMoroso, 'CONSULTAR_SALDO', 'AVISO_MOROSIDAD_SILENCIOSA', targetJid);
         await TursoService.updateStep(phone, 'ESPERANDO_COMPROBANTE');
         return;
-      } else if (estadoFinanciero.suspendido && estadoFinanciero.yaPagoPeroNoActivo) {
-        // CASO B: CLIENTE SUSPENDIDO PERO VERIFICADO 100% SIN ADEUDO (AL CORRIENTE)
+      } else if (estadoFinanciero.suspendido && (estadoFinanciero.yaPagoPeroNoActivo || !tieneDeudaReal)) {
+        // CASO B: CLIENTE SUSPENDIDO PERO VERIFICADO 100% SIN ADEUDO (AL CORRIENTE) -> AUTO REACTIVAR Y CONTINUAR A TRIAGE TÉCNICO
         logger.info(`Cliente ${phone} (${session.client_name}) figura Suspendido en WispHub pero SIN facturas pendientes (pagos al corriente). Solicitando reactivación administrativa...`);
         const idWispHub = estadoFinanciero.cliente?.id ||
           (session.service_id && !String(session.service_id).startsWith('HWTC') && !String(session.service_id).startsWith('ONU-') && !String(session.service_id).startsWith('ZTEG') ? session.service_id : null) ||
@@ -3692,14 +3695,15 @@ export class BotOrchestrator {
       });
 
       const tieneDeudaReal = estadoFinanciero.tieneDeudaReal || estadoFinanciero.totalDeuda > 0 || (estadoFinanciero.facturas && estadoFinanciero.facturas.length > 0);
+      const esCorteRealPorMorosidad = estadoFinanciero.suspendido && tieneDeudaReal;
 
-      if (tieneDeudaReal) {
-        logger.info(`Intento de reinicio bloqueado: Cliente ${phone} (${session?.client_name}) con adeudo real en WispHub: $${estadoFinanciero.totalDeuda}.`);
+      if (esCorteRealPorMorosidad) {
+        logger.info(`Intento de reinicio bloqueado: Cliente ${phone} (${session?.client_name}) suspendido por adeudo real en WispHub: $${estadoFinanciero.totalDeuda}.`);
         const bank = SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK', 'BBVA Bancomer');
         const account = SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', '012 180 0152433212 90');
         const beneficiary = SettingsService.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', this.getIspName());
 
-        const msj = `Hola${nombre}, revisé tu línea antes de proceder con el reinicio y detectamos que registras un saldo pendiente por *$${estadoFinanciero.totalDeuda.toFixed(2)} MXN*.\n\n` +
+        const msj = `Hola${nombre}, revisé tu línea antes de proceder con el reinicio y detectamos que tu servicio figura suspendido con un saldo pendiente por *$${estadoFinanciero.totalDeuda.toFixed(2)} MXN*.\n\n` +
           `🏦 *Pago por Transferencia Bancaria (BBVA):*\n` +
           `• Banco: *${bank}*\n` +
           `• CLABE / Cuenta: \`${account}\`\n` +
@@ -3710,7 +3714,7 @@ export class BotOrchestrator {
         await this.enviarYLoguear(phone, msj, 'CONSULTAR_SALDO', 'REINICIO_BLOQUEADO_POR_ADEUDO', targetJid);
         await TursoService.updateStep(phone, 'ESPERANDO_COMPROBANTE');
         return;
-      } else if (estadoFinanciero.suspendido && estadoFinanciero.yaPagoPeroNoActivo) {
+      } else if (estadoFinanciero.suspendido && (estadoFinanciero.yaPagoPeroNoActivo || !tieneDeudaReal)) {
         logger.info(`Triage de soporte: Cliente ${phone} (${session?.client_name}) figura suspendido pero sin deuda (al corriente). Reactivando servicio...`);
         const idWispHub = estadoFinanciero.cliente?.id ||
           (session?.service_id && !String(session.service_id).startsWith('HWTC') && !String(session.service_id).startsWith('ONU-') && !String(session.service_id).startsWith('ZTEG') ? session.service_id : null) ||
@@ -3789,7 +3793,7 @@ export class BotOrchestrator {
       const ficha = this.getFichaBancaria(session);
       const nombreCliente = formatDisplayName(session?.client_name, true) || 'Cliente';
 
-      if (estadoFinanciero.suspendido && estadoFinanciero.yaPagoPeroNoActivo) {
+      if (estadoFinanciero.suspendido && (estadoFinanciero.yaPagoPeroNoActivo || !tieneDeudaReal)) {
         const idWispHub = estadoFinanciero.cliente?.id ||
           (session?.service_id && !String(session.service_id).startsWith('HWTC') && !String(session.service_id).startsWith('ONU-') && !String(session.service_id).startsWith('ZTEG') ? session.service_id : null) ||
           (session?.client_id && !String(session.client_id).startsWith('HWTC') && !String(session.client_id).startsWith('ONU-') && !String(session.client_id).startsWith('ZTEG') ? session.client_id : null);
