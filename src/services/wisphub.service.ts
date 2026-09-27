@@ -367,16 +367,19 @@ export class WispHubService {
     if (estadoRaw === 1 || estadoRaw === '1') return 'Activo';
     if (estadoRaw === 2 || estadoRaw === '2') return 'Suspendido';
     if (estadoRaw === 3 || estadoRaw === '3') return 'Cancelado';
-    if (estadoRaw === 4 || estadoRaw === '4') return 'Desactivado';
+    if (estadoRaw === 4 || estadoRaw === '4') return 'Gratis';
+    if (estadoRaw === 5 || estadoRaw === '5') return 'Desactivado';
     const s = String(estadoRaw || '').toLowerCase().trim();
+    if (s.includes('grat') || s.includes('free') || s.includes('cortes') || s.includes('demo')) return 'Gratis';
     if (s.includes('susp')) return 'Suspendido';
     if (s.includes('cort')) return 'Suspendido';
     if (s.includes('inact')) return 'Inactivo';
     if (s.includes('desact')) return 'Desactivado';
     if (s.includes('canc')) return 'Cancelado';
-    if (s.includes('baja')) return 'Baja';
+    if (s.includes('baja') || s.includes('retir')) return 'Cancelado';
+    if (s.includes('aviso')) return 'Aviso';
     if (s.includes('act')) return 'Activo';
-    return s || 'Activo';
+    return s ? (s.charAt(0).toUpperCase() + s.slice(1)) : 'Activo';
   }
 
   /**
@@ -1064,7 +1067,7 @@ export class WispHubService {
             nombre: String(c.nombre || `${c.nombre || ''} ${c.apellidos || ''}`).trim(),
             servicio: String(c.servicio || c.nombre || '').trim(),
             ip: String(c.ip || '').trim(),
-            estado: String(c.estado || 'Activo'),
+            estado: this.normalizarEstado(c.estado !== undefined && c.estado !== null ? c.estado : (c.estado_servicio || 'Activo')),
             estado_facturas: String(c.estado_facturas || 'Pagadas'),
             precio_plan: String(c.precio_plan || '0'),
             saldo: String(c.saldo || '0'),

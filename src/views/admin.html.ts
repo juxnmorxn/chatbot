@@ -8085,10 +8085,21 @@ export function getAdminDashboardHtml(): string {
       }
 
       tbody.innerHTML = clients.map(c => {
-        const isActivo = String(c.estado || '').toLowerCase().includes('act');
-        const estadoBadge = isActivo
-          ? '<span class="badge badge-success">Activo</span>'
-          : '<span class="badge badge-danger">Suspendido</span>';
+        const rawEstado = String(c.estado || '').toLowerCase().trim();
+        let estadoBadge = '<span class="badge badge-success">Activo</span>';
+        if (rawEstado.includes('grat') || rawEstado.includes('cortes') || rawEstado.includes('free') || rawEstado === '4') {
+          estadoBadge = '<span class="badge badge-cyan" style="background: rgba(6,182,212,0.18); color: #22d3ee; border: 1px solid rgba(6,182,212,0.35); font-weight: 700;">Gratis</span>';
+        } else if (rawEstado.includes('susp') || rawEstado.includes('cort') || rawEstado === '2') {
+          estadoBadge = '<span class="badge badge-danger">Suspendido</span>';
+        } else if (rawEstado.includes('canc') || rawEstado.includes('baja') || rawEstado === '3') {
+          estadoBadge = '<span class="badge badge-rose" style="opacity: 0.75;">Cancelado</span>';
+        } else if (rawEstado.includes('desact') || rawEstado.includes('inact') || rawEstado === '5') {
+          estadoBadge = '<span class="badge badge-warning">Desactivado</span>';
+        } else if (rawEstado.includes('aviso')) {
+          estadoBadge = '<span class="badge badge-warning">Aviso</span>';
+        } else if (!rawEstado.includes('act') && rawEstado !== '1') {
+          estadoBadge = '<span class="badge badge-info">' + escapeHtml(c.estado || 'Activo') + '</span>';
+        }
 
         const facturasBadge = String(c.estado_facturas || '').toLowerCase().includes('pagad')
           ? '<span class="badge badge-info" style="font-size: 10px;">Pagadas</span>'
@@ -8690,8 +8701,8 @@ export function getAdminDashboardHtml(): string {
                 </div>
               </div>
               <div style="display: flex; gap: 6px;">
-                <span class="badge \${String(c.estado).toLowerCase().includes('act') ? 'badge-success' : 'badge-danger'}">
-                  \${c.estado}
+                <span class="badge ${String(c.estado).toLowerCase().includes('grat') || String(c.estado).toLowerCase().includes('free') ? 'badge-cyan' : (String(c.estado).toLowerCase().includes('act') ? 'badge-success' : 'badge-danger')}">
+                  \${escapeHtml(c.estado || 'Activo')}
                 </span>
                 <span class="badge badge-purple">
                   Corte Día \${c.dia_corte || '--'}

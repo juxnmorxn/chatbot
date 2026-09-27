@@ -1204,8 +1204,8 @@ export class TursoService {
         client.execute(`
           SELECT 
             COUNT(*) as total,
-            SUM(CASE WHEN LOWER(estado) LIKE '%act%' THEN 1 ELSE 0 END) as total_active,
-            SUM(CASE WHEN LOWER(estado) LIKE '%susp%' OR LOWER(estado) LIKE '%cort%' THEN 1 ELSE 0 END) as total_suspended,
+            SUM(CASE WHEN LOWER(estado) LIKE '%act%' OR LOWER(estado) LIKE '%grat%' OR LOWER(estado) LIKE '%free%' OR LOWER(estado) LIKE '%cortes%' OR estado = '1' OR estado = '4' THEN 1 ELSE 0 END) as total_active,
+            SUM(CASE WHEN LOWER(estado) LIKE '%susp%' OR LOWER(estado) LIKE '%cort%' OR estado = '2' THEN 1 ELSE 0 END) as total_suspended,
             SUM(CASE WHEN (coordenadas_gps IS NOT NULL AND LENGTH(coordenadas_gps) > 3) OR (google_maps_url IS NOT NULL AND LENGTH(google_maps_url) > 5) THEN 1 ELSE 0 END) as total_with_gps
           FROM wisphub_clients
         `),
@@ -1279,10 +1279,16 @@ export class TursoService {
 
       if (options.search_estado) {
         const val = options.search_estado.trim().toLowerCase();
-        if (val.includes('act')) {
-          whereClauses.push(`LOWER(w.estado) LIKE '%act%'`);
-        } else if (val.includes('susp') || val.includes('cort')) {
-          whereClauses.push(`(LOWER(w.estado) LIKE '%susp%' OR LOWER(w.estado) LIKE '%cort%')`);
+        if (val.includes('grat') || val.includes('free') || val.includes('cortes') || val === '4') {
+          whereClauses.push(`(LOWER(w.estado) LIKE '%grat%' OR LOWER(w.estado) LIKE '%free%' OR LOWER(w.estado) LIKE '%cortes%' OR w.estado = '4')`);
+        } else if (val.includes('act') || val === '1') {
+          whereClauses.push(`(LOWER(w.estado) LIKE '%act%' OR w.estado = '1')`);
+        } else if (val.includes('susp') || val.includes('cort') || val === '2') {
+          whereClauses.push(`(LOWER(w.estado) LIKE '%susp%' OR LOWER(w.estado) LIKE '%cort%' OR w.estado = '2')`);
+        } else if (val.includes('canc') || val.includes('baja') || val === '3') {
+          whereClauses.push(`(LOWER(w.estado) LIKE '%canc%' OR LOWER(w.estado) LIKE '%baja%' OR w.estado = '3')`);
+        } else if (val.includes('desact') || val.includes('inact') || val === '5') {
+          whereClauses.push(`(LOWER(w.estado) LIKE '%desact%' OR LOWER(w.estado) LIKE '%inact%' OR w.estado = '5')`);
         } else if (val) {
           whereClauses.push(`LOWER(w.estado) LIKE ?`);
           args.push(`%${val}%`);
