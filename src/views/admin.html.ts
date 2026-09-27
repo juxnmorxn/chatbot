@@ -4826,90 +4826,81 @@ export function getAdminDashboardHtml(): string {
     function openTransferChatModal() {
       if (!state.activeChatPhone) return;
       const chat = state.chats.find(c => c.phone === state.activeChatPhone);
-      const currentDept = chat?.department || 'General';
+      const currentInstance = (chat?.last_instance || '').toLowerCase();
 
       // Filtrar instancias activas de WhatsApp
       const liveInstances = (state.whatsappAreas || []).filter(a => a.is_connected || a.connection_status === 'open');
-      const defaultActiveInst = liveInstances.length > 0 ? liveInstances[0].instance_name : '';
-      const defaultPhone = liveInstances.length > 0 ? formatMexPhone(liveInstances[0].phone_number) : '';
 
-      // Lista de áreas estándar organizadas
-      const standardDepts = [
-        { name: 'Soporte Técnico', icon: '🔧' },
-        { name: 'Atención al Cliente', icon: '💬' },
-        { name: 'Cobranza', icon: '💳' },
-        { name: 'Ventas', icon: '💼' },
-        { name: 'Red e Infraestructura', icon: '🌐' },
-      ];
+      // Si solo hay 1 o 0 números conectados en el sistema, no se puede traspasar a otra línea
+      if (liveInstances.length <= 1) {
+        const singlePhone = liveInstances.length === 1 ? formatMexPhone(liveInstances[0].phone_number) : 'Sin número conectado';
+        const singleInstName = liveInstances.length === 1 ? liveInstances[0].instance_name : '';
+        const singleArea = liveInstances.length === 1 ? (liveInstances[0].area_name || 'General') : '';
+
+        const content = '<div style="text-align: center; padding: 12px 6px;">' +
+          '<div style="width: 52px; height: 52px; border-radius: 50%; background: rgba(59, 130, 246, 0.12); border: 1px solid rgba(59, 130, 246, 0.3); display: flex; align-items: center; justify-content: center; margin: 0 auto 14px; font-size: 24px;">' +
+            '📱' +
+          '</div>' +
+          '<h4 style="color: #fff; font-size: 15.5px; font-weight: 700; margin-bottom: 8px;">Solo tienes 1 número de WhatsApp conectado</h4>' +
+          '<p style="font-size: 13px; color: var(--text-muted); line-height: 1.6; max-width: 380px; margin: 0 auto 14px;">' +
+            'Actualmente todas las conversaciones operan bajo la única línea registrada: <br>' +
+            '<strong style="color: var(--accent-cyan); font-size: 13.5px;">' + singlePhone + ' [' + escapeHtml(singleInstName) + ' • ' + escapeHtml(singleArea) + ']</strong>.' +
+          '</p>' +
+          '<div style="background: rgba(255,255,255,0.03); border: 1px solid var(--card-border); border-radius: var(--radius-sm); padding: 12px 14px; text-align: left; font-size: 12px; color: var(--text-dim); line-height: 1.5;">' +
+            '💡 <strong>¿Cómo funciona el traspaso?</strong><br>' +
+            'Para traspasar conversaciones a otra sucursal o área, primero debes vincular un segundo número de WhatsApp en <strong>Configuración > Números de WhatsApp</strong>.' +
+          '</div>' +
+        '</div>';
+
+        openModal('📱 Traspasar a Otra Línea', content, () => {
+          navigateTo('settings');
+        }, 'Ir a Configuración de Números');
+        return;
+      }
+
+      // Si hay 2 o más números conectados, mostrar ÚNICAMENTE los otros números reales disponibles
+      const otherInstances = liveInstances.filter(inst => inst.instance_name.toLowerCase() !== currentInstance);
+      const targetList = otherInstances.length > 0 ? otherInstances : liveInstances;
 
       let areaOptions = '';
-
-      if (liveInstances.length > 1) {
-        // Modo Multi-Número: Mostrar departamentos con su línea asignada
-        liveInstances.forEach(inst => {
-          const isSelected = inst.area_name.toLowerCase() === currentDept.toLowerCase();
-          const phoneTxt = inst.phone_number ? ' (' + formatMexPhone(inst.phone_number) + ')' : '';
-          const icon = inst.area_name.toLowerCase().includes('soporte') ? '🔧' : (inst.area_name.toLowerCase().includes('atencion') ? '💬' : (inst.area_name.toLowerCase().includes('cobranza') ? '💳' : (inst.area_name.toLowerCase().includes('ventas') ? '💼' : '🏢')));
-          const label = icon + ' ' + escapeHtml(inst.area_name) + ' — Línea: ' + escapeHtml(inst.instance_name) + phoneTxt;
-          areaOptions += '<option value="' + escapeHtml(inst.area_name) + '" data-instance="' + escapeHtml(inst.instance_name) + '"' + (isSelected ? ' selected' : '') + '>' + label + '</option>';
-        });
-      } else {
-        // Modo Número Único / Principal: Selección limpia de departamentos
-        standardDepts.forEach(d => {
-          const isSelected = d.name.toLowerCase() === currentDept.toLowerCase();
-          const label = d.icon + ' ' + d.name;
-          areaOptions += '<option value="' + escapeHtml(d.name) + '" data-instance="' + escapeHtml(defaultActiveInst) + '"' + (isSelected ? ' selected' : '') + '>' + label + '</option>';
-        });
-      }
-
-      // Si el chat tiene un área personalizada que no está en la lista, incluirla
-      if (currentDept && currentDept !== 'General' && !standardDepts.some(d => d.name.toLowerCase() === currentDept.toLowerCase()) && !liveInstances.some(i => i.area_name.toLowerCase() === currentDept.toLowerCase())) {
-        areaOptions = '<option value="' + escapeHtml(currentDept) + '" selected>🏢 ' + escapeHtml(currentDept) + ' (Actual)</option>' + areaOptions;
-      }
+      targetList.forEach(inst => {
+        const phoneTxt = inst.phone_number ? ' (' + formatMexPhone(inst.phone_number) + ')' : '';
+        const areaTxt = inst.area_name ? escapeHtml(inst.area_name) + ' — ' : '';
+        const label = '📱 ' + areaTxt + phoneTxt + ' [' + escapeHtml(inst.instance_name) + ']';
+        areaOptions += '<option value="' + escapeHtml(inst.area_name || inst.instance_name) + '" data-instance="' + escapeHtml(inst.instance_name) + '">' + label + '</option>';
+      });
 
       const clientName = escapeHtml(chat?.client_name || state.activeChatPhone || '');
-      const lineNotice = defaultPhone
-        ? '<div style="font-size: 11.5px; color: var(--accent-cyan); display: flex; align-items: center; gap: 6px; margin-top: 4px;">' +
-            '<span>📱 Canal de salida: <strong>' + defaultPhone + '</strong> (' + escapeHtml(defaultActiveInst || 'WhatsApp') + ')</span>' +
-          '</div>'
-        : '';
-
       const content = '<div style="display: flex; flex-direction: column; gap: 14px;">' +
         '<p style="font-size: 13px; color: var(--text-muted); line-height: 1.5; margin: 0;">' +
-          'Canaliza la conversación de <strong>' + clientName + '</strong> al área correspondiente para su atención y seguimiento.' +
+          'Traspasa la conversación de <strong>' + clientName + '</strong> a otro número de WhatsApp activo del sistema.' +
         '</p>' +
         '<div class="form-group" style="margin-bottom: 0;">' +
-          '<label class="form-label" style="font-weight: 600; margin-bottom: 6px;">Área o Departamento de Destino</label>' +
-          '<select id="transfer-modal-area-select" class="form-control" onchange="handleTransferAreaChange(this)">' +
+          '<label class="form-label" style="font-weight: 600; margin-bottom: 6px;">Selecciona el Número de Destino</label>' +
+          '<select id="transfer-modal-area-select" class="form-control">' +
             areaOptions +
-            '<option value="__CUSTOM__">➕ Otra área personalizada...</option>' +
           '</select>' +
-          lineNotice +
-          '<input type="text" id="transfer-modal-area-custom" class="form-control" placeholder="Escribe el nombre de la nueva área..." style="display: none; margin-top: 8px;">' +
         '</div>' +
         '<div class="form-group" style="background: rgba(0,0,0,0.25); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--card-border); margin-bottom: 0;">' +
           '<label style="display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none;">' +
             '<div>' +
               '<strong style="font-size: 13px; color: var(--text-main);">💬 Notificar al cliente por WhatsApp</strong>' +
-              '<div style="font-size: 11px; color: var(--text-dim);">Envía un mensaje automático avisando que su caso fue canalizado</div>' +
+              '<div style="font-size: 11px; color: var(--text-dim);">Envía un mensaje automático avisando el traspaso de línea</div>' +
             '</div>' +
             '<input type="checkbox" id="transfer-modal-notify-toggle" style="transform: scale(1.3); cursor: pointer;" checked onchange="toggleTransferModalMsg(this.checked)">' +
           '</label>' +
           '<div id="transfer-modal-msg-wrap" style="margin-top: 10px;">' +
-            '<textarea id="transfer-modal-custom-msg" class="form-control" rows="2" placeholder="Tu conversación ha sido transferida al área de..."></textarea>' +
+            '<textarea id="transfer-modal-custom-msg" class="form-control" rows="2" placeholder="Tu conversación ha sido canalizada a nuestra otra línea..."></textarea>' +
           '</div>' +
         '</div>' +
       '</div>';
 
-      openModal('🔄 Traspasar Conversación a Línea / Área', content, async () => {
+      openModal('🔄 Traspasar Conversación de Línea', content, async () => {
         const select = document.getElementById('transfer-modal-area-select');
-        let selectedArea = select.value;
-        if (selectedArea === '__CUSTOM__') {
-          selectedArea = document.getElementById('transfer-modal-area-custom')?.value.trim();
-        }
+        const selectedArea = select.value;
 
         if (!selectedArea) {
-          showToast('Área requerida', 'Debes seleccionar o escribir un área de destino', 'warning');
+          showToast('Línea requerida', 'Debes seleccionar un número de destino', 'warning');
           return false;
         }
 
