@@ -3524,6 +3524,64 @@ export function getAdminDashboardHtml(): string {
       }
     }
 
+    // Universal Datatable Sorting & IP Math Helpers
+    function ipToNumeric(ip) {
+      if (!ip || typeof ip !== 'string') return -1;
+      const match = ip.match(/(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/);
+      if (!match) return -1;
+      return ((+match[1] * 16777216) + (+match[2] * 65536) + (+match[3] * 256) + (+match[4])) >>> 0;
+    }
+
+    function parseSortParam(param, currentSort) {
+      if (typeof param === 'string' && (param.endsWith('_asc') || param.endsWith('_desc'))) {
+        const lastUnderscore = param.lastIndexOf('_');
+        return {
+          col: param.substring(0, lastUnderscore),
+          dir: param.substring(lastUnderscore + 1),
+        };
+      }
+      if (currentSort && currentSort.col === param) {
+        return {
+          col: param,
+          dir: currentSort.dir === 'asc' ? 'desc' : 'asc',
+        };
+      }
+      return { col: param, dir: 'asc' };
+    }
+
+    function universalCompare(valA, valB, dir = 'asc') {
+      const isNilA = valA === null || valA === undefined || valA === '';
+      const isNilB = valB === null || valB === undefined || valB === '';
+      if (isNilA && isNilB) return 0;
+      if (isNilA) return 1;
+      if (isNilB) return -1;
+
+      let res = 0;
+      const strA = String(valA).trim();
+      const strB = String(valB).trim();
+
+      // IPv4 Numeric Comparison
+      const ipRegex = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/;
+      if (ipRegex.test(strA) && ipRegex.test(strB)) {
+        res = ipToNumeric(strA) - ipToNumeric(strB);
+      } else if (!isNaN(Number(strA)) && !isNaN(Number(strB)) && typeof valA !== 'boolean' && typeof valB !== 'boolean') {
+        // Numeric Comparison (IDs, Folios, Board, Port, PIN)
+        res = Number(strA) - Number(strB);
+      } else {
+        // Date / Timestamp ISO comparison
+        const dateA = Date.parse(strA);
+        const dateB = Date.parse(strB);
+        if (!isNaN(dateA) && !isNaN(dateB) && (strA.includes('T') || strA.includes('-') || strA.includes('/')) && strA.length > 7 && strB.length > 7) {
+          res = dateA - dateB;
+        } else {
+          // Natural Alphanumeric String Comparison
+          res = strA.localeCompare(strB, undefined, { numeric: true, sensitivity: 'base' });
+        }
+      }
+
+      return dir === 'asc' ? res : -res;
+    }
+
     function toggleSidebar() {
       const sidebar = document.getElementById('sidebar');
       state.isSidebarCollapsed = !state.isSidebarCollapsed;
@@ -3742,36 +3800,28 @@ export function getAdminDashboardHtml(): string {
 
     let currentLogsSort = { col: 'time', dir: 'desc' };
     function sortDashboardLogs(col) {
-      if (col.includes('_')) {
-        const [c, d] = col.split('_');
-        currentLogsSort = { col: c, dir: d };
-      } else {
-        if (currentLogsSort.col === col) {
-          currentLogsSort.dir = currentLogsSort.dir === 'asc' ? 'desc' : 'asc';
-        } else {
-          currentLogsSort = { col, dir: 'asc' };
-        }
-      }
+      currentLogsSort = parseSortParam(col, currentLogsSort);
 
       state.dashboardLogs.sort((a, b) => {
-        let valA = a[currentLogsSort.col] || '';
-        let valB = b[currentLogsSort.col] || '';
+        let valA = a[currentLogsSort.col];
+        let valB = b[currentLogsSort.col];
         if (currentLogsSort.col === 'time' || currentLogsSort.col === 'created_at') {
-          valA = new Date(a.created_at).getTime();
-          valB = new Date(b.created_at).getTime();
-        } else if (currentLogsSort.col === 'client') {
-          valA = (a.client_name || '').toLowerCase();
-          valB = (b.client_name || '').toLowerCase();
+          valA = a.created_at;
+          valB = b.created_at;
+        } else if (currentLogsSort.col === 'client' || currentLogsSort.col === 'client_name') {
+          valA = a.client_name;
+          valB = b.client_name;
         } else if (currentLogsSort.col === 'phone') {
-          valA = (a.phone || '').toString();
-          valB = (b.phone || '').toString();
+          valA = a.phone;
+          valB = b.phone;
         } else if (currentLogsSort.col === 'direction') {
-          valA = (a.direction || '').toLowerCase();
-          valB = (b.direction || '').toLowerCase();
+          valA = a.direction;
+          valB = b.direction;
+        } else if (currentLogsSort.col === 'message') {
+          valA = a.message;
+          valB = b.message;
         }
-        if (valA < valB) return currentLogsSort.dir === 'asc' ? -1 : 1;
-        if (valA > valB) return currentLogsSort.dir === 'asc' ? 1 : -1;
-        return 0;
+        return universalCompare(valA, valB, currentLogsSort.dir);
       });
 
       filterDashboardLogs();
@@ -4737,36 +4787,31 @@ export function getAdminDashboardHtml(): string {
 
     let currentTicketsSort = { col: 'created_at', dir: 'desc' };
     function sortTicketsBy(col) {
-      if (col.includes('_')) {
-        const [c, d] = col.split('_');
-        currentTicketsSort = { col: c, dir: d };
-      } else {
-        if (currentTicketsSort.col === col) {
-          currentTicketsSort.dir = currentTicketsSort.dir === 'asc' ? 'desc' : 'asc';
-        } else {
-          currentTicketsSort = { col, dir: 'asc' };
-        }
-      }
+      currentTicketsSort = parseSortParam(col, currentTicketsSort);
 
       state.tickets.sort((a, b) => {
-        let valA = a[currentTicketsSort.col] || '';
-        let valB = b[currentTicketsSort.col] || '';
+        let valA = a[currentTicketsSort.col];
+        let valB = b[currentTicketsSort.col];
         if (currentTicketsSort.col === 'date' || currentTicketsSort.col === 'created_at') {
-          valA = new Date(a.created_at).getTime();
-          valB = new Date(b.created_at).getTime();
-        } else if (currentTicketsSort.col === 'folio') {
-          valA = Number(a.folio) || 0;
-          valB = Number(b.folio) || 0;
-        } else if (currentTicketsSort.col === 'client') {
-          valA = (a.client_name || '').toLowerCase();
-          valB = (b.client_name || '').toLowerCase();
+          valA = a.created_at;
+          valB = b.created_at;
+        } else if (currentTicketsSort.col === 'folio' || currentTicketsSort.col === 'id') {
+          valA = a.folio || a.id;
+          valB = b.folio || b.id;
+        } else if (currentTicketsSort.col === 'client' || currentTicketsSort.col === 'client_name') {
+          valA = a.client_name;
+          valB = b.client_name;
+        } else if (currentTicketsSort.col === 'phone') {
+          valA = a.phone;
+          valB = b.phone;
         } else if (currentTicketsSort.col === 'status') {
-          valA = (a.status || '').toLowerCase();
-          valB = (b.status || '').toLowerCase();
+          valA = a.status;
+          valB = b.status;
+        } else if (currentTicketsSort.col === 'tech' || currentTicketsSort.col === 'assigned_technician_name') {
+          valA = a.assigned_technician_name;
+          valB = b.assigned_technician_name;
         }
-        if (valA < valB) return currentTicketsSort.dir === 'asc' ? -1 : 1;
-        if (valA > valB) return currentTicketsSort.dir === 'asc' ? 1 : -1;
-        return 0;
+        return universalCompare(valA, valB, currentTicketsSort.dir);
       });
 
       filterTicketsTable();
@@ -5065,33 +5110,25 @@ export function getAdminDashboardHtml(): string {
 
     let currentUnconfSort = { col: 'sn', dir: 'asc' };
     function sortUnconfiguredOnusBy(col) {
-      if (col.includes('_')) {
-        const [c, d] = col.split('_');
-        currentUnconfSort = { col: c, dir: d };
-      } else {
-        if (currentUnconfSort.col === col) {
-          currentUnconfSort.dir = currentUnconfSort.dir === 'asc' ? 'desc' : 'asc';
-        } else {
-          currentUnconfSort = { col, dir: 'asc' };
-        }
-      }
+      currentUnconfSort = parseSortParam(col, currentUnconfSort);
 
       state.unconfiguredOnus.sort((a, b) => {
-        let valA = a[currentUnconfSort.col] || '';
-        let valB = b[currentUnconfSort.col] || '';
+        let valA = a[currentUnconfSort.col];
+        let valB = b[currentUnconfSort.col];
         if (currentUnconfSort.col === 'sn') {
-          valA = (a.sn || '').toLowerCase();
-          valB = (b.sn || '').toLowerCase();
+          valA = a.sn;
+          valB = b.sn;
         } else if (currentUnconfSort.col === 'olt') {
-          valA = (a.olt_name || a.olt_id || '').toString().toLowerCase();
-          valB = (b.olt_name || b.olt_id || '').toString().toLowerCase();
+          valA = a.olt_name || a.olt_id;
+          valB = b.olt_name || b.olt_id;
+        } else if (currentUnconfSort.col === 'port' || currentUnconfSort.col === 'board_port') {
+          valA = (Number(a.board) || 0) * 100 + (Number(a.port ?? a.pon_port) || 0);
+          valB = (Number(b.board) || 0) * 100 + (Number(b.port ?? b.pon_port) || 0);
         } else if (currentUnconfSort.col === 'model') {
-          valA = (a.model || a.onu_type_name || a.onu_type || '').toLowerCase();
-          valB = (b.model || b.onu_type_name || b.onu_type || '').toLowerCase();
+          valA = a.model || a.onu_type_name || a.onu_type;
+          valB = b.model || b.onu_type_name || b.onu_type;
         }
-        if (valA < valB) return currentUnconfSort.dir === 'asc' ? -1 : 1;
-        if (valA > valB) return currentUnconfSort.dir === 'asc' ? 1 : -1;
-        return 0;
+        return universalCompare(valA, valB, currentUnconfSort.dir);
       });
 
       filterUnconfiguredOnus();
@@ -5471,39 +5508,34 @@ export function getAdminDashboardHtml(): string {
 
     let currentAuditSort = { col: 'cliente', dir: 'asc' };
     function sortAuditBy(col) {
-      if (col.includes('_')) {
-        const [c, d] = col.split('_');
-        currentAuditSort = { col: c, dir: d };
-      } else {
-        if (currentAuditSort.col === col) {
-          currentAuditSort.dir = currentAuditSort.dir === 'asc' ? 'desc' : 'asc';
-        } else {
-          currentAuditSort = { col, dir: 'asc' };
-        }
-      }
+      currentAuditSort = parseSortParam(col, currentAuditSort);
 
       state.audit.items.sort((a, b) => {
-        let valA = a[currentAuditSort.col] || '';
-        let valB = b[currentAuditSort.col] || '';
+        let valA = a[currentAuditSort.col];
+        let valB = b[currentAuditSort.col];
         if (currentAuditSort.col === 'cliente') {
-          valA = (a.cliente || '').toLowerCase();
-          valB = (b.cliente || '').toLowerCase();
+          valA = a.cliente;
+          valB = b.cliente;
         } else if (currentAuditSort.col === 'service' || currentAuditSort.col === 'servicio') {
-          valA = (a.servicio || a.folio || '').toString().toLowerCase();
-          valB = (b.servicio || b.folio || '').toString().toLowerCase();
+          valA = a.servicio || a.folio;
+          valB = b.servicio || b.folio;
         } else if (currentAuditSort.col === 'smartolt_ip') {
-          valA = (a.smartolt_ip || '').toLowerCase();
-          valB = (b.smartolt_ip || '').toLowerCase();
+          valA = a.smartolt_ip;
+          valB = b.smartolt_ip;
         } else if (currentAuditSort.col === 'wisphub_ip') {
-          valA = (a.wisphub_ip || '').toLowerCase();
-          valB = (b.wisphub_ip || '').toLowerCase();
+          valA = a.wisphub_ip;
+          valB = b.wisphub_ip;
         } else if (currentAuditSort.col === 'ip_status') {
-          valA = (a.ip_status || '').toLowerCase();
-          valB = (b.ip_status || '').toLowerCase();
+          valA = a.ip_status;
+          valB = b.ip_status;
+        } else if (currentAuditSort.col === 'tr069' || currentAuditSort.col === 'tr069_status') {
+          valA = a.tr069_status;
+          valB = b.tr069_status;
+        } else if (currentAuditSort.col === 'ipv6' || currentAuditSort.col === 'ipv6_status') {
+          valA = a.ipv6_status;
+          valB = b.ipv6_status;
         }
-        if (valA < valB) return currentAuditSort.dir === 'asc' ? -1 : 1;
-        if (valA > valB) return currentAuditSort.dir === 'asc' ? 1 : -1;
-        return 0;
+        return universalCompare(valA, valB, currentAuditSort.dir);
       });
 
       handleAuditColFilter();
@@ -5710,42 +5742,31 @@ export function getAdminDashboardHtml(): string {
 
     let currentProvSort = { col: 'cliente', dir: 'asc' };
     function sortProvisioningBy(col) {
-      if (col.includes('_')) {
-        const [c, d] = col.split('_');
-        currentProvSort = { col: c, dir: d };
-      } else {
-        if (currentProvSort.col === col) {
-          currentProvSort.dir = currentProvSort.dir === 'asc' ? 'desc' : 'asc';
-        } else {
-          currentProvSort = { col, dir: 'asc' };
-        }
-      }
+      currentProvSort = parseSortParam(col, currentProvSort);
 
       state.provisioning.items.sort((a, b) => {
-        let valA = a[currentProvSort.col] || '';
-        let valB = b[currentProvSort.col] || '';
+        let valA = a[currentProvSort.col];
+        let valB = b[currentProvSort.col];
         if (currentProvSort.col === 'cliente') {
-          valA = (a.cliente || '').toLowerCase();
-          valB = (b.cliente || '').toLowerCase();
+          valA = a.cliente;
+          valB = b.cliente;
         } else if (currentProvSort.col === 'sn') {
-          valA = (a.sn_smartolt || a.sn_wisphub || '').toLowerCase();
-          valB = (b.sn_smartolt || b.sn_wisphub || '').toLowerCase();
+          valA = a.sn_smartolt || a.sn_wisphub;
+          valB = b.sn_smartolt || b.sn_wisphub;
         } else if (currentProvSort.col === 'ip') {
-          valA = (a.smartolt_ip || a.wisphub_ip || '').toLowerCase();
-          valB = (b.smartolt_ip || b.wisphub_ip || '').toLowerCase();
+          valA = a.smartolt_ip || a.wisphub_ip;
+          valB = b.smartolt_ip || b.wisphub_ip;
         } else if (currentProvSort.col === 'zone') {
-          valA = (a.zona_o_router || '').toLowerCase();
-          valB = (b.zona_o_router || '').toLowerCase();
+          valA = a.zona_o_router;
+          valB = b.zona_o_router;
         } else if (currentProvSort.col === 'tr069') {
-          valA = a.tr069_status === 'ACTIVE' ? 1 : 0;
-          valB = b.tr069_status === 'ACTIVE' ? 1 : 0;
+          valA = a.tr069_status;
+          valB = b.tr069_status;
         } else if (currentProvSort.col === 'ipv6') {
-          valA = a.ipv6_status === 'DUAL_STACK' ? 1 : 0;
-          valB = b.ipv6_status === 'DUAL_STACK' ? 1 : 0;
+          valA = a.ipv6_status;
+          valB = b.ipv6_status;
         }
-        if (valA < valB) return currentProvSort.dir === 'asc' ? -1 : 1;
-        if (valA > valB) return currentProvSort.dir === 'asc' ? 1 : -1;
-        return 0;
+        return universalCompare(valA, valB, currentProvSort.dir);
       });
 
       handleProvColFilter();
@@ -5863,39 +5884,28 @@ export function getAdminDashboardHtml(): string {
 
     let currentTechSort = { col: 'name', dir: 'asc' };
     function sortTechniciansBy(col) {
-      if (col.includes('_')) {
-        const [c, d] = col.split('_');
-        currentTechSort = { col: c, dir: d };
-      } else {
-        if (currentTechSort.col === col) {
-          currentTechSort.dir = currentTechSort.dir === 'asc' ? 'desc' : 'asc';
-        } else {
-          currentTechSort = { col, dir: 'asc' };
-        }
-      }
+      currentTechSort = parseSortParam(col, currentTechSort);
 
       state.technicians.sort((a, b) => {
-        let valA = a[currentTechSort.col] || '';
-        let valB = b[currentTechSort.col] || '';
+        let valA = a[currentTechSort.col];
+        let valB = b[currentTechSort.col];
         if (currentTechSort.col === 'name') {
-          valA = (a.name || '').toLowerCase();
-          valB = (b.name || '').toLowerCase();
+          valA = a.name;
+          valB = b.name;
         } else if (currentTechSort.col === 'phone') {
-          valA = (a.phone || '').toString();
-          valB = (b.phone || '').toString();
+          valA = a.phone;
+          valB = b.phone;
         } else if (currentTechSort.col === 'pin') {
-          valA = (a.pin || '').toString();
-          valB = (b.pin || '').toString();
+          valA = a.pin;
+          valB = b.pin;
         } else if (currentTechSort.col === 'role') {
-          valA = (a.role || '').toLowerCase();
-          valB = (b.role || '').toLowerCase();
+          valA = a.role;
+          valB = b.role;
         } else if (currentTechSort.col === 'status') {
-          valA = a.is_active === 1 ? 1 : 0;
-          valB = b.is_active === 1 ? 1 : 0;
+          valA = a.is_active;
+          valB = b.is_active;
         }
-        if (valA < valB) return currentTechSort.dir === 'asc' ? -1 : 1;
-        if (valA > valB) return currentTechSort.dir === 'asc' ? 1 : -1;
-        return 0;
+        return universalCompare(valA, valB, currentTechSort.dir);
       });
 
       filterTechniciansTable();
@@ -6750,36 +6760,25 @@ export function getAdminDashboardHtml(): string {
 
     let currentUsersSort = { col: 'username', dir: 'asc' };
     function sortAdminUsersBy(col) {
-      if (col.includes('_')) {
-        const [c, d] = col.split('_');
-        currentUsersSort = { col: c, dir: d };
-      } else {
-        if (currentUsersSort.col === col) {
-          currentUsersSort.dir = currentUsersSort.dir === 'asc' ? 'desc' : 'asc';
-        } else {
-          currentUsersSort = { col, dir: 'asc' };
-        }
-      }
+      currentUsersSort = parseSortParam(col, currentUsersSort);
 
       state.adminUsers.sort((a, b) => {
-        let valA = a[currentUsersSort.col] || '';
-        let valB = b[currentUsersSort.col] || '';
+        let valA = a[currentUsersSort.col];
+        let valB = b[currentUsersSort.col];
         if (currentUsersSort.col === 'username') {
-          valA = (a.username || '').toLowerCase();
-          valB = (b.username || '').toLowerCase();
+          valA = a.username;
+          valB = b.username;
         } else if (currentUsersSort.col === 'name') {
-          valA = (a.name || '').toLowerCase();
-          valB = (b.name || '').toLowerCase();
+          valA = a.name;
+          valB = b.name;
         } else if (currentUsersSort.col === 'role') {
-          valA = (a.role || '').toLowerCase();
-          valB = (b.role || '').toLowerCase();
+          valA = a.role;
+          valB = b.role;
         } else if (currentUsersSort.col === 'last_login' || currentUsersSort.col === 'login') {
-          valA = a.last_login ? new Date(a.last_login).getTime() : 0;
-          valB = b.last_login ? new Date(b.last_login).getTime() : 0;
+          valA = a.last_login;
+          valB = b.last_login;
         }
-        if (valA < valB) return currentUsersSort.dir === 'asc' ? -1 : 1;
-        if (valA > valB) return currentUsersSort.dir === 'asc' ? 1 : -1;
-        return 0;
+        return universalCompare(valA, valB, currentUsersSort.dir);
       });
 
       filterAdminUsersTable();
@@ -6969,36 +6968,31 @@ export function getAdminDashboardHtml(): string {
 
     let currentClientsSort = { col: 'nombre', dir: 'asc' };
     function sortClientsBy(col) {
-      if (col.includes('_')) {
-        const [c, d] = col.split('_');
-        currentClientsSort = { col: c, dir: d };
-      } else {
-        if (currentClientsSort.col === col) {
-          currentClientsSort.dir = currentClientsSort.dir === 'asc' ? 'desc' : 'asc';
-        } else {
-          currentClientsSort = { col, dir: 'asc' };
-        }
-      }
+      currentClientsSort = parseSortParam(col, currentClientsSort);
 
       state.clients.items.sort((a, b) => {
-        let valA = a[currentClientsSort.col] || '';
-        let valB = b[currentClientsSort.col] || '';
+        let valA = a[currentClientsSort.col];
+        let valB = b[currentClientsSort.col];
         if (currentClientsSort.col === 'nombre') {
-          valA = (a.nombre || '').toLowerCase();
-          valB = (b.nombre || '').toLowerCase();
+          valA = a.nombre;
+          valB = b.nombre;
         } else if (currentClientsSort.col === 'servicio' || currentClientsSort.col === 'id_servicio') {
-          valA = Number(a.id_servicio) || 0;
-          valB = Number(b.id_servicio) || 0;
+          valA = a.id_servicio || a.servicio;
+          valB = b.id_servicio || b.servicio;
         } else if (currentClientsSort.col === 'ip') {
-          valA = (a.ip || '').toLowerCase();
-          valB = (b.ip || '').toLowerCase();
+          valA = a.ip;
+          valB = b.ip;
+        } else if (currentClientsSort.col === 'router') {
+          valA = a.router;
+          valB = b.router;
         } else if (currentClientsSort.col === 'estado') {
-          valA = (a.estado || '').toLowerCase();
-          valB = (b.estado || '').toLowerCase();
+          valA = a.estado;
+          valB = b.estado;
+        } else if (currentClientsSort.col === 'gps') {
+          valA = Boolean((a.coordenadas_gps && a.coordenadas_gps.length > 3) || (a.google_maps_url && a.google_maps_url.length > 5));
+          valB = Boolean((b.coordenadas_gps && b.coordenadas_gps.length > 3) || (b.google_maps_url && b.google_maps_url.length > 5));
         }
-        if (valA < valB) return currentClientsSort.dir === 'asc' ? -1 : 1;
-        if (valA > valB) return currentClientsSort.dir === 'asc' ? 1 : -1;
-        return 0;
+        return universalCompare(valA, valB, currentClientsSort.dir);
       });
 
       renderClientsTable(state.clients.items);
@@ -7728,42 +7722,37 @@ export function getAdminDashboardHtml(): string {
 
     let currentSwapSort = { col: 'date', dir: 'desc' };
     function sortSwapHistoryBy(col) {
-      if (col.includes('_')) {
-        const [c, d] = col.split('_');
-        currentSwapSort = { col: c, dir: d };
-      } else {
-        if (currentSwapSort.col === col) {
-          currentSwapSort.dir = currentSwapSort.dir === 'asc' ? 'desc' : 'asc';
-        } else {
-          currentSwapSort = { col, dir: 'asc' };
-        }
-      }
+      currentSwapSort = parseSortParam(col, currentSwapSort);
 
       state.swapHistory.sort((a, b) => {
-        let valA = a[currentSwapSort.col] || '';
-        let valB = b[currentSwapSort.col] || '';
+        let valA = a[currentSwapSort.col];
+        let valB = b[currentSwapSort.col];
         if (currentSwapSort.col === 'date' || currentSwapSort.col === 'created_at') {
-          valA = new Date(a.created_at).getTime();
-          valB = new Date(b.created_at).getTime();
+          valA = a.created_at;
+          valB = b.created_at;
         } else if (currentSwapSort.col === 'client' || currentSwapSort.col === 'client_name') {
-          valA = (a.client_name || '').toLowerCase();
-          valB = (b.client_name || '').toLowerCase();
+          valA = a.client_name;
+          valB = b.client_name;
         } else if (currentSwapSort.col === 'old_sn') {
-          valA = (a.old_sn || '').toLowerCase();
-          valB = (b.old_sn || '').toLowerCase();
+          valA = a.old_sn;
+          valB = b.old_sn;
         } else if (currentSwapSort.col === 'new_sn') {
-          valA = (a.new_sn || '').toLowerCase();
-          valB = (b.new_sn || '').toLowerCase();
-        } else if (currentSwapSort.col === 'ip') {
-          valA = (a.ip_address || '').toLowerCase();
-          valB = (b.ip_address || '').toLowerCase();
+          valA = a.new_sn;
+          valB = b.new_sn;
+        } else if (currentSwapSort.col === 'ip' || currentSwapSort.col === 'ip_address') {
+          valA = a.ip_address;
+          valB = b.ip_address;
+        } else if (currentSwapSort.col === 'zone') {
+          valA = a.zone;
+          valB = b.zone;
+        } else if (currentSwapSort.col === 'tech' || currentSwapSort.col === 'technician_name') {
+          valA = a.technician_name;
+          valB = b.technician_name;
         } else if (currentSwapSort.col === 'status') {
-          valA = (a.status || '').toLowerCase();
-          valB = (b.status || '').toLowerCase();
+          valA = a.status;
+          valB = b.status;
         }
-        if (valA < valB) return currentSwapSort.dir === 'asc' ? -1 : 1;
-        if (valA > valB) return currentSwapSort.dir === 'asc' ? 1 : -1;
-        return 0;
+        return universalCompare(valA, valB, currentSwapSort.dir);
       });
 
       filterSwapHistoryTable();
