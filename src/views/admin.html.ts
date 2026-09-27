@@ -5561,6 +5561,7 @@ export function getAdminDashboardHtml(): string {
 
     function renderChatMessages(messages) {
       const wrap = document.getElementById('chat-messages-wrap');
+      if (!wrap) return;
       if (!messages || messages.length === 0) {
         wrap.innerHTML = '<div style="text-align: center; color: #8696a0; margin-top: 40px; font-size: 13px;">No hay mensajes registrados con este número.</div>';
         return;
@@ -5576,9 +5577,9 @@ export function getAdminDashboardHtml(): string {
         const bubbleClass = 'chat-bubble ' + (isOut ? 'out' : 'in');
 
         html += '<div class="' + bubbleClass + '">' +
-          '<span>' + msgText + '</span>' +
+          '<span class="bubble-text">' + msgText + '</span>' +
           '<div class="bubble-meta">' +
-            '<span>' + timeText + '</span>' +
+            '<span class="bubble-time">' + timeText + '</span>' +
             checkHtml +
           '</div>' +
         '</div>';
@@ -5590,17 +5591,48 @@ export function getAdminDashboardHtml(): string {
 
     function appendChatMessage(data) {
       const wrap = document.getElementById('chat-messages-wrap');
+      if (!wrap) return;
+
       const isOut = data.direction === 'OUT';
+      const cleanMsg = (data.message || '').trim();
+
+      // Si es un mensaje saliente recibido por SSE, verificar si ya fue renderizado optimistamente
+      if (isOut && !data._isOptimistic) {
+        const optimisticBubbles = wrap.querySelectorAll('.chat-bubble.out.optimistic');
+        for (let i = 0; i < optimisticBubbles.length; i++) {
+          const b = optimisticBubbles[i];
+          const textSpan = b.querySelector('.bubble-text') || b.querySelector('span');
+          if (textSpan && textSpan.innerText.trim() === cleanMsg) {
+            b.classList.remove('optimistic');
+            const metaTime = b.querySelector('.bubble-time');
+            if (metaTime && data.created_at) {
+              metaTime.innerText = formatShortTime(data.created_at);
+            }
+            return; // Ya está mostrado en pantalla, evitar duplicar
+          }
+        }
+
+        // Deduplicación general: revisar si el último mensaje renderizado es idéntico
+        const lastBubble = wrap.lastElementChild;
+        if (lastBubble && lastBubble.classList.contains('out')) {
+          const lastTextSpan = lastBubble.querySelector('.bubble-text') || lastBubble.querySelector('span');
+          if (lastTextSpan && lastTextSpan.innerText.trim() === cleanMsg) {
+            return; // Evitar duplicar
+          }
+        }
+      }
+
       const msgText = escapeHtml(data.message || '');
       const timeText = formatShortTime(data.created_at || new Date().toISOString());
       const checkHtml = isOut ? '<span class="bubble-check">✓✓</span>' : '';
-      const bubbleClass = 'chat-bubble ' + (isOut ? 'out' : 'in');
+      const optimisticClass = data._isOptimistic ? ' optimistic' : '';
+      const bubbleClass = 'chat-bubble ' + (isOut ? 'out' : 'in') + optimisticClass;
 
       const bubble = document.createElement('div');
       bubble.className = bubbleClass;
-      bubble.innerHTML = '<span>' + msgText + '</span>' +
+      bubble.innerHTML = '<span class="bubble-text">' + msgText + '</span>' +
         '<div class="bubble-meta">' +
-          '<span>' + timeText + '</span>' +
+          '<span class="bubble-time">' + timeText + '</span>' +
           checkHtml +
         '</div>';
 
@@ -5623,7 +5655,7 @@ export function getAdminDashboardHtml(): string {
       const instanceName = document.getElementById('chat-sender-instance')?.value || undefined;
 
       input.value = '';
-      appendChatMessage({ message: text, direction: 'OUT' });
+      appendChatMessage({ message: text, direction: 'OUT', _isOptimistic: true });
 
       try {
         const res = await apiFetch('/api/admin/chats/send', {
