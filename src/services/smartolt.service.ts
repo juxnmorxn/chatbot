@@ -1122,6 +1122,183 @@ export class SmartOLTService {
   }
 
   /**
+   * Genera una contraseña segura de 10 caracteres (solo mayúsculas, minúsculas y números)
+   */
+  static generateSecureWifiPassword(length: number = 10): string {
+    const uppers = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    const lowers = 'abcdefghijkmnpqrstuvwxyz';
+    const digits = '23456789';
+    const all = uppers + lowers + digits;
+
+    let result = '';
+    result += uppers.charAt(Math.floor(Math.random() * uppers.length));
+    result += lowers.charAt(Math.floor(Math.random() * lowers.length));
+    result += digits.charAt(Math.floor(Math.random() * digits.length));
+    for (let i = 3; i < length; i++) {
+      result += all.charAt(Math.floor(Math.random() * all.length));
+    }
+    return result.split('').sort(() => 0.5 - Math.random()).join('');
+  }
+
+  /**
+   * Obtiene los detalles de configuración Wi-Fi actuales de la ONU desde SmartOLT
+   */
+  static async getOnuWifiDetails(onuIdOrExternalId: string): Promise<any> {
+    try {
+      const api = this.getApi();
+      const res = await api.get(`/onu/get_onu_wifi_details/${onuIdOrExternalId}`);
+      return res.data;
+    } catch (e: any) {
+      logger.warn(`No se pudieron obtener detalles WiFi de ${onuIdOrExternalId}:`, e?.message);
+      return null;
+    }
+  }
+
+  /**
+   * Actualiza la contraseña y/o SSIDs Wi-Fi en SmartOLT para Wireless LAN 1 (2.4GHz) y Wireless LAN 5 (5GHz)
+   * Enviando siempre remember_wifi_settings: 1 para persistir en la base de datos de SmartOLT.
+   */
+  static async updateOnuWifiPassword(
+    onuIdOrExternalId: string,
+    options?: {
+      password?: string;
+      ssid24?: string;
+      ssid5g?: string;
+    }
+  ): Promise<{
+    success: boolean;
+    message: string;
+    password: string;
+    ssid24: string;
+    ssid5g: string;
+    has5g: boolean;
+    clientName?: string;
+  }> {
+    const cleanId = onuIdOrExternalId.trim();
+    let onuRecord = await TursoService.getOnuById(cleanId);
+    if (!onuRecord && cleanId.length < 12) {
+      const matches = await TursoService.searchOnusFuzzy(cleanId, 1);
+      if (matches.length > 0) onuRecord = matches[0];
+    }
+    const externalId = onuRecord?.unique_external_id || cleanId;
+    const clientName = onuRecord?.name || 'Cliente';
+    const newPassword = options?.password || this.generateSecureWifiPassword(10);
+
+    const apiKey = this.getApiKey();
+    if (!apiKey || apiKey.includes('tu_token')) {
+      return {
+        success: true,
+        message: 'Contraseña Wi-Fi simulada actualizada.',
+        password: newPassword,
+        ssid24: options?.ssid24 || 'CloudWare-WiFi',
+        ssid5g: options?.ssid5g || 'CloudWare-WiFi-5g',
+        has5g: true,
+        clientName,
+      };
+    }
+
+    try {
+      const api = this.getApi();
+
+      // 1. Obtener detalles Wi-Fi existentes para preservar SSIDs si no se especifican
+      const existingWifi = await this.getOnuWifiDetails(externalId);
+      logger.info(`[WiFi Update] Detalles WiFi actuales para ${externalId}:`, JSON.stringify(existingWifi));
+
+      let currentSsid24 = options?.ssid24 || '';
+      let currentSsid5g = options?.ssid5g || '';
+      let has5g = false;
+
+      if (existingWifi) {
+        const wlan1 = existingWifi?.wlan1 || existingWifi?.wlan_1 || existingWifi?.wireless_lan_1 || (Array.isArray(existingWifi?.wifi) ? existingWifi.wifi.find((w: any) => String(w.index || w.wlan_id) === '1') : null);
+        const wlan5 = existingWifi?.wlan5 || existingWifi?.wlan_5 || existingWifi?.wireless_lan_5 || (Array.isArray(existingWifi?.wifi) ? existingWifi.wifi.find((w: any) => String(w.index || w.wlan_id) === '5') : null);
+
+        if (!currentSsid24) {
+          currentSsid24 = wlan1?.ssid || existingWifi?.ssid || existingWifi?.wifi_ssid || '';
+        }
+        if (!currentSsid5g && wlan5?.ssid) {
+          currentSsid5g = wlan5.ssid;
+          has5g = true;
+        } else if (wlan5 || existingWifi?.wifi_ssid_5g || existingWifi?.ssid_5g) {
+          has5g = true;
+          if (!currentSsid5g) currentSsid5g = existingWifi?.wifi_ssid_5g || existingWifi?.ssid_5g || '';
+        }
+      }
+
+      if (!currentSsid24) {
+        const clientClean = (onuRecord?.name || 'Cliente').split('-').pop()?.trim().replace(/\s+/g, '_') || 'WiFi';
+        currentSsid24 = `CloudWare-${clientClean.slice(0, 10)}`;
+      }
+
+      if (!currentSsid5g && (has5g || (onuRecord?.raw_data && /8145|EG8145|HG8145|X6|F660/i.test(onuRecord.raw_data)))) {
+        has5g = true;
+        currentSsid5g = `${currentSsid24}-5g`;
+      }
+
+      // 2. Aplicar en Wireless LAN 1 (2.4 GHz) con remember_wifi_settings = 1
+      const form24 = new FormData();
+      form24.append('wlan_id', '1');
+      form24.append('index', '1');
+      form24.append('ssid', currentSsid24);
+      form24.append('password', newPassword);
+      form24.append('authentication_mode', 'WPA2');
+      form24.append('auth_mode', 'WPA2');
+      form24.append('wpa_encryption', 'TKIP + AES');
+      form24.append('enable', 'Yes');
+      form24.append('remember_wifi_settings', '1');
+      form24.append('remember_wifi', '1');
+
+      const headers24 = typeof (form24 as any).getHeaders === 'function' ? (form24 as any).getHeaders() : undefined;
+      const res24 = await api.post(`/onu/set_onu_wifi_details/${externalId}`, form24, { headers: headers24 });
+      logger.info(`[WiFi Update] Respuesta 2.4G para ${externalId}:`, JSON.stringify(res24.data));
+
+      // 3. Aplicar en Wireless LAN 5 (5 GHz) con remember_wifi_settings = 1
+      if (has5g || currentSsid5g) {
+        try {
+          const form5g = new FormData();
+          form5g.append('wlan_id', '5');
+          form5g.append('index', '5');
+          form5g.append('ssid', currentSsid5g || `${currentSsid24}-5g`);
+          form5g.append('password', newPassword);
+          form5g.append('authentication_mode', 'WPA2');
+          form5g.append('auth_mode', 'WPA2');
+          form5g.append('wpa_encryption', 'TKIP + AES');
+          form5g.append('enable', 'Yes');
+          form5g.append('remember_wifi_settings', '1');
+          form5g.append('remember_wifi', '1');
+
+          const headers5g = typeof (form5g as any).getHeaders === 'function' ? (form5g as any).getHeaders() : undefined;
+          const res5g = await api.post(`/onu/set_onu_wifi_details/${externalId}`, form5g, { headers: headers5g });
+          logger.info(`[WiFi Update] Respuesta 5G para ${externalId}:`, JSON.stringify(res5g.data));
+        } catch (err5g: any) {
+          logger.warn(`[WiFi Update] Advertencia al configurar 5G para ${externalId}:`, err5g?.response?.data || err5g?.message);
+        }
+      }
+
+      return {
+        success: true,
+        message: 'Contraseña Wi-Fi actualizada con éxito en SmartOLT.',
+        password: newPassword,
+        ssid24: currentSsid24,
+        ssid5g: currentSsid5g || `${currentSsid24}-5g`,
+        has5g,
+        clientName,
+      };
+    } catch (error: any) {
+      logger.error(`Error al actualizar contraseña WiFi para ${externalId}:`, error?.response?.data || error?.message || error);
+      const errMsg = error?.response?.data?.message || error?.response?.data?.error || error?.message || 'Error de comunicación con SmartOLT';
+      return {
+        success: false,
+        message: `Error al aplicar en SmartOLT: ${errMsg}`,
+        password: newPassword,
+        ssid24: options?.ssid24 || '',
+        ssid5g: options?.ssid5g || '',
+        has5g: false,
+        clientName,
+      };
+    }
+  }
+
+  /**
    * Actualiza el perfil de velocidad (Paquete) de una ONU en SmartOLT en tiempo real
    */
   static async updateSpeedProfile(

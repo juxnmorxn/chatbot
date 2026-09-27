@@ -484,6 +484,8 @@ export class BotOrchestrator {
     const esComandoCambioModem = /^(?:cambio\s+de\s+m[oó]dem|reemplazar\s+m[oó]dem|reemplazo\s+de\s+m[oó]dem|cambiar\s+m[oó]dem|swap\s+modem|swap\s+onu)\b/i.test(lowerMsg) ||
       /^(?:realizar|hacer|ejecutar|solicitar)?\s*(?:un\s+)?(?:cambio|reemplazo)\s+de\s+m[oó]dem\b/i.test(lowerMsg);
 
+    const esComandoCambioWifi = /^(?:cambiar\s+wifi|cambio\s+de\s+wifi|cambiar\s+contrase[ñn]a\s+wifi|cambiar\s+password|nueva\s+contrase[ñn]a\s+wifi|actualizar\s+wifi)\b/i.test(lowerMsg);
+
     const esComandoActivacion = buttonId === 'BTN_ACTIVAR_MODEM' ||
       /^(?:solicitar\s+)?(?:activar|activaci[oó]n|alta|aprovisionar|registrar)\b/i.test(lowerMsg) ||
       (event.imageAnalysis as any)?.tipo === 'CONTRATO_INSTALACION' ||
@@ -495,7 +497,7 @@ export class BotOrchestrator {
       session?.step === 'PENDIENTE_SELECCION_IP_CAMBIO_MODEM' ||
       session?.step === 'PENDIENTE_CONFIRMACION_CAMBIO_MODEM';
 
-    const esComandoTecnicoExplicito = esComandoActivacion || esComandoCambioPaquete || esComandoCambioModem;
+    const esComandoTecnicoExplicito = esComandoActivacion || esComandoCambioPaquete || esComandoCambioModem || esComandoCambioWifi;
     const esAccionTecnica = esComandoTecnicoExplicito || esPasoTecnicoEnCurso;
 
     // Si el usuario envía un comando técnico explícito pero la sesión estaba en un paso residual residencial (ej. ESPERANDO_UBICACION_TECNICO), resetear inmediatamente a CONVERSACIONAL
@@ -749,6 +751,12 @@ export class BotOrchestrator {
         await this.procesarSolicitudCambioModemTecnico(phone, rawText, session, targetJid);
         return;
       }
+
+      // Caso 5: El técnico envía comando de cambio de contraseña Wi-Fi
+      if (esComandoCambioWifi) {
+        await this.procesarCambioWifiTecnico(phone, rawText, session, targetJid);
+        return;
+      }
     } else {
       // Remitente NO es técnico registrado:
       // ¿Es un intento EXPLÍCITO de comando de instalación técnica de campo?
@@ -851,13 +859,7 @@ export class BotOrchestrator {
         return;
       }
       if (esConsultaWifi) {
-        await this.enviarYLoguear(
-          phone,
-          `📶 *Cambio de contraseña Wi-Fi:*\n\nPor seguridad de tu red, el cambio de clave o nombre de red se gestiona directamente con nuestro equipo técnico. Por favor responde con el nuevo nombre y contraseña que deseas configurar para tu módem.`,
-          'DATOS_WIFI',
-          'INSTRUCCIONES_WIFI',
-          targetJid
-        );
+        await this.flujoCambioWifiInteligente(phone, session, targetJid);
         return;
       }
     }
@@ -1393,13 +1395,7 @@ export class BotOrchestrator {
         break;
 
       case 'DATOS_WIFI':
-        await this.enviarYLoguear(
-          phone,
-          `📶 *Cambio de contraseña Wi-Fi:*\n\nPor seguridad de tu red, el cambio de clave o nombre de red se gestiona directamente con nuestro equipo técnico. Por favor responde con el nuevo nombre y contraseña que deseas configurar para tu módem.`,
-          'DATOS_WIFI',
-          'INSTRUCCIONES_WIFI',
-          targetJid
-        );
+        await this.flujoCambioWifiInteligente(phone, session, targetJid);
         break;
 
       case 'HABLAR_HUMANO':
@@ -5486,6 +5482,124 @@ ${techInfo}───────────────────────
         targetJid
       );
     }
+  }
+
+  /**
+   * Ejecuta el cambio automático de contraseña Wi-Fi para un cliente residencial
+   * Genera clave de 10 caracteres [A-Za-z0-9] y actualiza Wireless LAN 1 (2.4G) y Wireless LAN 5 (5G) en SmartOLT
+   */
+  private static async flujoCambioWifiInteligente(
+    phone: string,
+    session: Session | null,
+    targetJid?: string,
+    targetQuery?: string
+  ): Promise<void> {
+    const query = targetQuery?.trim() || session?.onu_id || session?.client_name || phone;
+
+    // Buscar la ONU en SmartOLT / Turso
+    let onuRecord = await TursoService.getOnuById(query);
+    if (!onuRecord) {
+      const matches = await TursoService.searchOnusFuzzy(query, 1);
+      if (matches.length > 0) onuRecord = matches[0];
+    }
+
+    if (!onuRecord && session?.client_name) {
+      const matches = await TursoService.searchOnusFuzzy(session.client_name, 1);
+      if (matches.length > 0) onuRecord = matches[0];
+    }
+
+    if (!onuRecord) {
+      await this.enviarYLoguear(
+        phone,
+        `No logramos localizar el módem de tu servicio para actualizar la contraseña Wi-Fi.\n\nPor favor indícanos tu *Nombre completo* o número de contrato para ubicar tu conexión en el sistema.`,
+        'DATOS_WIFI',
+        'CLIENTE_NO_ENCONTRADO_WIFI',
+        targetJid
+      );
+      await TursoService.updateStep(phone, 'ESPERANDO_IDENTIFICACION');
+      return;
+    }
+
+    await this.enviarYLoguear(
+      phone,
+      `Generando nueva clave segura (10 caracteres) y aplicando en tu módem en SmartOLT... Por favor espera unos segundos.`,
+      'DATOS_WIFI',
+      'APLICANDO_WIFI',
+      targetJid
+    );
+
+    const result = await SmartOLTService.updateOnuWifiPassword(onuRecord.unique_external_id || onuRecord.sn);
+
+    if (result.success) {
+      const nombreCliente = this.formatDisplayName(onuRecord.name || session?.client_name, true) || 'Cliente';
+      const cardWifi = `*CONTRASEÑA WI-FI ACTUALIZADA*
+──────────────────────────────
+• *Titular:* *${nombreCliente}*
+• *Red 2.4 GHz:* *${result.ssid24}*
+${result.has5g ? `• *Red 5 GHz:* *${result.ssid5g}*\n` : ''}• *Nueva Clave:* \`${result.password}\`
+──────────────────────────────
+La nueva contraseña (10 caracteres) ha sido guardada y configurada en tu módem.
+
+Por favor reconecta tus dispositivos ingresando esta nueva clave.`;
+
+      await this.enviarYLoguear(
+        phone,
+        cardWifi,
+        'DATOS_WIFI',
+        'WIFI_ACTUALIZADO_EXITOSO',
+        targetJid
+      );
+      await this.marcarConsultaFinalizada(phone, session);
+    } else {
+      await this.enviarYLoguear(
+        phone,
+        `No se pudo aplicar el cambio de contraseña automáticamente en este momento: ${result.message}.\n\nUn operador de soporte te asistirá en breve.`,
+        'DATOS_WIFI',
+        'ERROR_WIFI_SMARTOLT',
+        targetJid
+      );
+    }
+  }
+
+  /**
+   * Procesa el comando de cambio de contraseña Wi-Fi enviado por un técnico
+   * Comando: "cambiar wifi [Folio/Nombre/SN/IP]"
+   */
+  private static async procesarCambioWifiTecnico(
+    phone: string,
+    rawText: string,
+    session: Session | null,
+    targetJid?: string
+  ): Promise<void> {
+    const auth = await this.verificarAutorizacionTecnico(phone, rawText);
+    if (!auth.autorizado) {
+      await this.enviarYLoguear(
+        phone,
+        `*Acceso Restringido - Area Tecnica*\n\nTu numero (*${phone}*) no esta registrado como tecnico autorizado para modificar configuraciones Wi-Fi en SmartOLT.`,
+        'CAMBIO_WIFI_TECNICO',
+        'NO_AUTORIZADO',
+        targetJid
+      );
+      return;
+    }
+
+    const cleanTarget = rawText
+      .replace(/^(?:cambiar\s+wifi|cambio\s+de\s+wifi|cambiar\s+contrase[ñn]a\s+wifi|cambiar\s+password|nueva\s+contrase[ñn]a\s+wifi|actualizar\s+wifi)[:\s]*/i, '')
+      .replace(/\b(?:a|al|para|del|cliente|folio|sn|onu|modem|pin\s*\d{5})\b/gi, '')
+      .trim();
+
+    if (!cleanTarget) {
+      await this.enviarYLoguear(
+        phone,
+        `*CAMBIO DE CONTRASEÑA WI-FI EN SMARTOLT*\n──────────────────────────────\nPara cambiar la clave Wi-Fi de un cliente, envía:\n\n*cambiar wifi [Folio / Nombre / IP / SN]*\n\n_Ejemplo:_ \`cambiar wifi 9999\` o \`cambiar wifi 172.19.6.191\``,
+        'CAMBIO_WIFI_TECNICO',
+        'AYUDA_CAMBIO_WIFI',
+        targetJid
+      );
+      return;
+    }
+
+    await this.flujoCambioWifiInteligente(phone, session, targetJid, cleanTarget);
   }
 
   /**
