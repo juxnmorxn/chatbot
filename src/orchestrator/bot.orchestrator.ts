@@ -339,17 +339,14 @@ export class BotOrchestrator {
     const officeAddress = SettingsService.get('OFFICE_ADDRESS', 'OFFICE_ADDRESS', '').trim();
     const clientName = this.formatDisplayName(session?.client_name) || 'tu nombre completo';
 
-    let txt = `\n🏢 *Pago en Oficina Física:*\n` +
-      `• *Lunes a Viernes:* ${officeWeekday}\n` +
-      `• *Sábados:* ${officeSaturday}\n` +
-      (officeAddress ? `• *Dirección:* ${officeAddress}\n` : '') +
-      `\n🏦 *Pago por Transferencia Bancaria:*\n` +
+    let txt = `\n🏦 *Pago por Transferencia Bancaria (BBVA):*\n` +
       `• *Banco:* ${bank}\n` +
       `• *CLABE / Cuenta:* \`${account}\`\n` +
-      `• *Titular:* ${beneficiary}\n` +
+      `• *Titular / Beneficiario:* ${beneficiary}\n` +
       `• *Concepto / Motivo:* *${session?.client_name || clientName}*\n\n` +
+      (officeAddress ? `🏢 *Pago en Oficina Física:*\n• *Horario:* Lun-Vie ${officeWeekday}, Sáb ${officeSaturday}\n• *Dirección:* ${officeAddress}\n\n` : '') +
       `📸 *Envío de Comprobante:*\n` +
-      `Al realizar tu transferencia, por favor envíanos la captura o foto de tu comprobante por aquí para aplicarlo de inmediato a tu cuenta.`;
+      `Al realizar tu transferencia, por favor envíanos la foto o captura de tu comprobante por aquí para aplicarlo de inmediato a tu cuenta.`;
 
     return txt;
   }
@@ -433,6 +430,17 @@ export class BotOrchestrator {
       ok = await EvolutionService.enviarTexto(dest, textoFinal, { instant: esTecnico, instanceName: instance });
     }
     await TursoService.logMessage(phone, 'OUT', textoFinal, intencion, accion);
+    try {
+      const { AdminController } = require('../controllers/admin.controller');
+      AdminController.broadcastSSE('chat:message', {
+        phone,
+        direction: 'OUT',
+        message: textoFinal,
+        intention: intencion,
+        action: accion,
+        created_at: new Date().toISOString(),
+      });
+    } catch {}
     return ok;
   }
 
@@ -1156,39 +1164,24 @@ export class BotOrchestrator {
             detalleFacturas = '\n📋 *Detalle de tu(s) recibo(s) pendiente(s):*\n';
             facturas.forEach((f, idx) => {
               detalleFacturas += `• *Recibo #${idx + 1}:* Folio ${f.folio} | *$${f.monto.toFixed(2)} MXN* (Vence: ${f.fecha_vencimiento})\n`;
-              if (f.link_pago) {
-                detalleFacturas += `  👉 *Pagar con Mercado Pago:* ${f.link_pago}\n`;
-              }
             });
           }
 
-          const mpUrl = await this.obtenerLinkMercadoPago({
-            clientName: session.client_name,
-            clientId: session.client_id,
-            phone,
-            monto: estadoFinanciero.totalDeuda > 0 ? estadoFinanciero.totalDeuda : 250,
-            folioFactura: facturas[0]?.folio || null,
-          });
           const bank = SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK', 'BBVA Bancomer');
           const account = SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', '012 180 0152433212 90');
           const beneficiary = SettingsService.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', this.getIspName());
-
-          let onlinePaySection = '';
-          if (mpUrl) {
-            onlinePaySection = `\n🛒 *Pagar en línea con Mercado Pago / Tarjeta (Acreditación inmediata):*\n👉 ${mpUrl}\n`;
-          }
 
           const nombreCliente = formatDisplayName(session.client_name, true) || 'Cliente';
           const mensajeMoroso =
             `¡Hola, *${nombreCliente}*! 👋\n\n` +
             `Revisé tu cuenta en nuestro sistema y detectamos que registras un saldo/recibo pendiente por *$${estadoFinanciero.totalDeuda.toFixed(2)} MXN*.\n` +
-            `${detalleFacturas}` +
-            `${onlinePaySection}\n` +
-            `💳 *También puedes pagar por Transferencia Bancaria:*\n` +
-            `• Banco: *${bank}* | CLABE: *${account}*\n` +
+            `${detalleFacturas}\n` +
+            `🏦 *Pago por Transferencia Bancaria (BBVA):*\n` +
+            `• Banco: *${bank}*\n` +
+            `• CLABE / Cuenta: \`${account}\`\n` +
             `• Beneficiario: *${beneficiary}*\n` +
-            `• Concepto / Referencia: *${session.client_name || phone}*\n\n` +
-            `📸 En cuanto realices tu pago, envía la *foto o captura de tu comprobante* y escribe tu *Nombre completo* por este chat para reactivarte de inmediato.`;
+            `• Concepto / Motivo: *${session.client_name || phone}*\n\n` +
+            `📸 En cuanto realices tu transferencia, por favor envía la *foto o captura de tu comprobante* y escribe tu *Nombre completo* por este chat para reactivarte de inmediato.`;
 
           await this.enviarYLoguear(phone, mensajeMoroso, 'CONSULTAR_SALDO', 'AVISO_SUSPENSION_SALUDO', targetJid);
           await TursoService.updateStep(phone, 'ESPERANDO_COMPROBANTE');
@@ -1672,30 +1665,15 @@ export class BotOrchestrator {
         const facturas = estadoFinanciero.facturas || [];
         let detalleFacturas = '';
         if (facturas.length > 0) {
-          detalleFacturas = '\n📋 *Detalle de tu(s) recibo(s) pendiente(s):*\n';
+          detalleFacturas = '\n📋 *Detalle de recibo(s) pendiente(s):*\n';
           facturas.forEach((f, idx) => {
             detalleFacturas += `• *Recibo #${idx + 1}:* Folio ${f.folio} | *$${f.monto.toFixed(2)} MXN* (Vence: ${f.fecha_vencimiento})\n`;
-            if (f.link_pago) {
-              detalleFacturas += `  👉 *Pagar en línea con Mercado Pago:* ${f.link_pago}\n`;
-            }
           });
         }
 
-        const mpUrl = await this.obtenerLinkMercadoPago({
-          clientName: session.client_name,
-          clientId: session.client_id,
-          phone,
-          monto: estadoFinanciero.totalDeuda > 0 ? estadoFinanciero.totalDeuda : 250,
-          folioFactura: facturas[0]?.folio || null,
-        });
         const bank = SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK', 'BBVA Bancomer');
         const account = SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', '012 180 0152433212 90');
         const beneficiary = SettingsService.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', this.getIspName());
-
-        let onlinePaySection = '';
-        if (mpUrl) {
-          onlinePaySection = `\n🛒 *Pagar en línea con Mercado Pago / Tarjeta (Acreditación inmediata):*\n👉 ${mpUrl}\n`;
-        }
 
         let avisoFisicoAdicional = '';
         if (diag && diag.status === 'LOS') {
@@ -1704,14 +1682,14 @@ export class BotOrchestrator {
 
         const mensajeMoroso =
           `Hola${nombre}, revisé tu servicio y detectamos que registras un recibo pendiente por *$${estadoFinanciero.totalDeuda.toFixed(2)} MXN*.\n` +
-          `${detalleFacturas}` +
-          `${onlinePaySection}\n` +
-          `💳 *También puedes pagar por Transferencia Bancaria:*\n` +
-          `• Banco: *${bank}* | CLABE: *${account}*\n` +
+          `${detalleFacturas}\n` +
+          `🏦 *Pago por Transferencia Bancaria (BBVA):*\n` +
+          `• Banco: *${bank}*\n` +
+          `• CLABE / Cuenta: \`${account}\`\n` +
           `• Beneficiario: *${beneficiary}*\n` +
-          `• Concepto / Referencia: *${session.client_name || phone}*` +
+          `• Concepto / Motivo: *${session.client_name || phone}*` +
           `${avisoFisicoAdicional}\n\n` +
-          `📸 En cuanto realices tu pago, por favor envía la *foto o captura de tu comprobante* y escribe tu *Nombre completo* aquí en el chat para registrarlo y restablecer tu línea.`;
+          `📸 En cuanto realices tu transferencia, por favor envía la *foto o captura de tu comprobante* y escribe tu *Nombre completo* aquí en el chat para registrarlo y restablecer tu línea.`;
 
         await this.enviarYLoguear(phone, mensajeMoroso, 'CONSULTAR_SALDO', 'AVISO_MOROSIDAD_SILENCIOSA', targetJid);
         await TursoService.updateStep(phone, 'ESPERANDO_COMPROBANTE');
@@ -3717,29 +3695,17 @@ export class BotOrchestrator {
 
       if (tieneDeudaReal) {
         logger.info(`Intento de reinicio bloqueado: Cliente ${phone} (${session?.client_name}) con adeudo real en WispHub: $${estadoFinanciero.totalDeuda}.`);
-        const mpUrl = await this.obtenerLinkMercadoPago({
-          clientName: session?.client_name,
-          clientId: session?.client_id,
-          phone,
-          monto: estadoFinanciero.totalDeuda > 0 ? estadoFinanciero.totalDeuda : 250,
-          folioFactura: null,
-        });
         const bank = SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK', 'BBVA Bancomer');
         const account = SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', '012 180 0152433212 90');
         const beneficiary = SettingsService.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', this.getIspName());
 
-        let onlinePaySection = '';
-        if (mpUrl) {
-          onlinePaySection = `\n🛒 *Pagar en línea con Mercado Pago / Tarjeta (Acreditación inmediata):*\n👉 ${mpUrl}\n`;
-        }
-
-        const msj = `Hola${nombre}, revisé tu línea antes de proceder con el reinicio y detectamos que registras un saldo pendiente por *$${estadoFinanciero.totalDeuda.toFixed(2)} MXN*.\n` +
-          `${onlinePaySection}\n` +
-          `💳 *También puedes pagar por Transferencia Bancaria:*\n` +
-          `• Banco: *${bank}* | CLABE: *${account}*\n` +
+        const msj = `Hola${nombre}, revisé tu línea antes de proceder con el reinicio y detectamos que registras un saldo pendiente por *$${estadoFinanciero.totalDeuda.toFixed(2)} MXN*.\n\n` +
+          `🏦 *Pago por Transferencia Bancaria (BBVA):*\n` +
+          `• Banco: *${bank}*\n` +
+          `• CLABE / Cuenta: \`${account}\`\n` +
           `• Beneficiario: *${beneficiary}*\n` +
-          `• Concepto / Referencia: *${session?.client_name || phone}*\n\n` +
-          `📸 En cuanto realices tu pago, por favor envía la *foto o captura de tu comprobante* y escribe tu *Nombre completo* en este chat para reactivar tu servicio.`;
+          `• Concepto / Motivo: *${session?.client_name || phone}*\n\n` +
+          `📸 En cuanto realices tu transferencia, por favor envía la *foto o captura de tu comprobante* y escribe tu *Nombre completo* en este chat para reactivar tu servicio.`;
 
         await this.enviarYLoguear(phone, msj, 'CONSULTAR_SALDO', 'REINICIO_BLOQUEADO_POR_ADEUDO', targetJid);
         await TursoService.updateStep(phone, 'ESPERANDO_COMPROBANTE');

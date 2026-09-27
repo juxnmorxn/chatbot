@@ -1896,45 +1896,32 @@ export function getAdminDashboardHtml(): string {
           </div>
         </div>
 
-        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 24px;">
-          <div class="glass-card">
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
-              <h3 style="font-size: 15px; font-weight: 700;">Diagnóstico Rápido de Conectividad</h3>
-            </div>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px;">
-              <button class="btn btn-secondary" onclick="testServiceConnection('turso')">
-                <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
-                <span>Turso DB</span>
-              </button>
-              <button class="btn btn-secondary" onclick="testServiceConnection('smartolt')">
-                <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
-                <span>SmartOLT</span>
-              </button>
-              <button class="btn btn-secondary" onclick="testServiceConnection('wisphub')">
-                <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"></path></svg>
-                <span>WispHub</span>
-              </button>
-              <button class="btn btn-secondary" onclick="testServiceConnection('groq')">
-                <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line><line x1="9" y1="20" x2="9" y2="23"></line><line x1="15" y1="20" x2="15" y2="23"></line><line x1="20" y1="9" x2="23" y2="9"></line><line x1="20" y1="14" x2="23" y2="14"></line><line x1="1" y1="9" x2="4" y2="9"></line><line x1="1" y1="14" x2="4" y2="14"></line></svg>
-                <span>Groq AI</span>
-              </button>
-            </div>
+        <!-- Compact Unified Services & Sync Toolbar -->
+        <div class="glass-card" style="margin-bottom: 18px; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <span style="font-size: 11.5px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-right: 4px;">⚡ Diagnóstico Rápido:</span>
+            <button class="btn btn-secondary btn-xs" onclick="testServiceConnection('turso')" title="Probar conexión a Turso DB">
+              <span class="pulse-dot" style="width: 7px; height: 7px; margin-right: 2px;"></span> Turso DB
+            </button>
+            <button class="btn btn-secondary btn-xs" onclick="testServiceConnection('smartolt')" title="Probar API SmartOLT">
+              <span class="pulse-dot" style="width: 7px; height: 7px; margin-right: 2px;"></span> SmartOLT
+            </button>
+            <button class="btn btn-secondary btn-xs" onclick="testServiceConnection('wisphub')" title="Probar API WispHub">
+              <span class="pulse-dot" style="width: 7px; height: 7px; margin-right: 2px;"></span> WispHub
+            </button>
+            <button class="btn btn-secondary btn-xs" onclick="testServiceConnection('groq')" title="Probar IA Groq Llama 3.1">
+              <span class="pulse-dot" style="width: 7px; height: 7px; margin-right: 2px;"></span> Groq AI
+            </button>
           </div>
-
-          <div class="glass-card">
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
-              <h3 style="font-size: 15px; font-weight: 700;">Acciones de Sincronización</h3>
-            </div>
-            <div style="display: flex; flex-direction: column; gap: 10px;">
-              <button class="btn btn-primary" onclick="triggerSmartOltSync(false)">
-                <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"></path></svg>
-                <span>Sincronizar SmartOLT</span>
-              </button>
-              <button class="btn btn-secondary" onclick="triggerWisphubSync()">
-                <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"></path></svg>
-                <span>Sincronizar WispHub</span>
-              </button>
-            </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <button class="btn btn-primary btn-xs" onclick="triggerSmartOltSync(false)" title="Sincronizar ONUs de SmartOLT">
+              <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"></path></svg>
+              <span>Sincronizar SmartOLT</span>
+            </button>
+            <button class="btn btn-secondary btn-xs" onclick="triggerWisphubSync()" title="Sincronizar Clientes de WispHub">
+              <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"></path></svg>
+              <span>Sincronizar WispHub</span>
+            </button>
           </div>
         </div>
 
@@ -1973,8 +1960,12 @@ export function getAdminDashboardHtml(): string {
         <!-- Recent Logs Activity -->
         <div class="glass-card">
           <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <h3 style="font-size: 15px; font-weight: 700;">Últimas Interacciones del Bot</h3>
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+              <div class="live-status-pill" style="padding: 3px 10px; font-size: 11px;">
+                <span id="dashboard-live-dot" class="pulse-dot"></span>
+                <span>En Vivo (SSE)</span>
+              </div>
+              <h3 style="font-size: 15px; font-weight: 700;">Interacciones y Conversaciones del Bot</h3>
               <span id="badge-logs-count" class="badge badge-info" style="font-size: 10px;">0 registros</span>
             </div>
             <button class="btn btn-secondary btn-xs" onclick="loadDashboardData()" title="Refrescar interacciones">
@@ -3616,6 +3607,28 @@ export function getAdminDashboardHtml(): string {
 
         evtSource.addEventListener('chat:message', (e) => {
           const data = JSON.parse(e.data || '{}');
+          if (data && data.phone && data.message) {
+            if (!state.dashboardLogs) state.dashboardLogs = [];
+            const newLog = {
+              phone: data.phone,
+              client_name: data.client_name || '',
+              direction: data.direction || 'IN',
+              message: data.message,
+              intention: data.intention || '',
+              action: data.action || '',
+              created_at: data.created_at || new Date().toISOString(),
+            };
+            state.dashboardLogs.unshift(newLog);
+            if (state.dashboardLogs.length > 100) state.dashboardLogs.pop();
+            if (state.currentView === 'dashboard') {
+              filterDashboardLogs();
+              const liveDot = document.getElementById('dashboard-live-dot');
+              if (liveDot) {
+                liveDot.style.transform = 'scale(1.4)';
+                setTimeout(() => { if (liveDot) liveDot.style.transform = 'scale(1)'; }, 400);
+              }
+            }
+          }
           if (state.currentView === 'live-chat') {
             loadLiveChatData(false);
             if (state.activeChatPhone && state.activeChatPhone === data.phone) {
