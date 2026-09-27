@@ -129,9 +129,9 @@ Tu objetivo es examinar la imagen recibida y clasificarla estrictamente en una d
 
 1. "CONTRATO_INSTALACION":
    - Foto o documento de carátula de contrato / suscripción de servicio de internet, comodato de equipo o formato de instalación.
-   - Extrae con máxima fidelidad:
-     * folio: número de folio del contrato (ej: "2977" en FOLIO:2977).
-     * cliente: Nombre completo del suscriptor/titular (ej: "Enrique Mejía Evaristo").
+   - Extrae con máxima fidelidad (incluso si está escrito a mano o con letra cursiva/imprenta):
+     * folio: Número de folio del contrato (ej: "2977", "0696", "1430", etc.). Busca en la esquina superior derecha o campos "FOLIO", "NO. CONTRATO", "CONTRATO NO.".
+     * cliente: Nombre completo del suscriptor/titular (ej: "Enrique Mejía Evaristo", "Maria del Pilar Perez Mendoza"). Busca en "NOMBRE DEL SUSCRIPTOR", "CLIENTE", "TITULAR", "NOMBRE". Si hay texto manuscrito legible, léelo con atención.
      * modelo: Modelo del equipo si aparece (ej: "EG8041V5", "HG8145X6-10", "HG8145V5", "ZTE-F660", etc.).
      * paquete: Paquete marcado con X o seleccionado (ej: "40 MB", "60 MB", "200 MB", "400 MB", "600 MB").
      * direccion: Calle y número exterior/interior (ej: "carretera salida a la estancia s/n").
@@ -144,7 +144,7 @@ Tu objetivo es examinar la imagen recibida y clasificarla estrictamente en una d
 2. "POTENCIA_OPTICA":
    - Foto de un medidor de potencia óptica digital / Optical Multi-meter (pantalla LCD naranja/negra mostrando dBm de fibra óptica, ej: -21.13 dBm, -24.86 dBm).
    - Extrae:
-     * potencia_dbm: Número decimal negativo de la medición principal en dBm (ej: -21.13, -24.86, -18.5).
+     * potencia_dbm: Número decimal de la medición principal en dBm (ej: -21.13, -24.86, +4.0).
      * longitud_onda_nm: Longitud de onda mostrada en nm (ej: 1490, 1310, 1550, 850).
 
 3. "ETIQUETA_MODEM":
@@ -161,7 +161,6 @@ Tu objetivo es examinar la imagen recibida y clasificarla estrictamente en una d
      * bajada_mbps: Velocidad de descarga en Mbps (ej: 205.94).
      * subida_mbps: Velocidad de subida en Mbps SÓLO SI existe una medición explícita de "SUBIDA" / "UPLOAD". Si en la pantalla SOLO se realizó la prueba de descarga o no hay indicador de subida, asigna estrictamente null.
      * ping_ms: Latencia principal de Ping en ms (ej: 6).
-   - ¡CUIDADO CON SPEEDTEST MÓVIL!: Debajo de "Ping ms" suelen aparecer íconos como ⚡ 6, ⬇️ 14 y ⬆️ 20. ¡ESTOS NÚMEROS JUNTO A LAS FLECHAS ⬇️ Y ⬆️ SON VALORES DE LATENCIA / BUFFERBLOAT EN MILISEGUNDOS (ms), NO SON VELOCIDAD DE SUBIDA! Nunca los asignes a subida_mbps.
 
 5. "COMPROBANTE_PAGO":
    - Recibo o captura de pantalla de transferencia bancaria (BBVA / Dimo, BanCoppel, Santander, Banamex, Banco Azteca, Mercado Pago, Nu, SPEI), ticket de OXXO / 7-Eleven, o ficha de depósito.
@@ -169,9 +168,9 @@ Tu objetivo es examinar la imagen recibida y clasificarla estrictamente en una d
      * monto: Monto numérico transferido (ej: "300.00").
      * banco: Banco o app emisora (ej: "BBVA", "Mercado Pago", "BanCoppel", "SPEI").
      * referencia: Folio de operación, clave de rastreo o número de autorización (ej: "0087066090").
-     * concepto: Texto exacto colocado en el campo "Concepto" o "Motivo de pago" (ej: "ISRAEL PONCE ORTIZ", "Internet casa", "pago mensual").
-     * destinatario: Nombre o cuenta de la persona que recibe (ej: "Osbaldo T").
-     * fecha: Fecha y hora de la operación (ej: "20 sep 2026, 22:44 h.").
+     * concepto: Texto exacto colocado en el campo "Concepto" o "Motivo de pago".
+     * destinatario: Nombre o cuenta de la persona que recibe.
+     * fecha: Fecha y hora de la operación.
 
 6. "MODEM_LUCES":
    - Foto de un módem / router / ONT de fibra óptica encendido o apagado por el frente.
@@ -229,7 +228,7 @@ Devuelve EXCLUSIVAMENTE un JSON válido con esta estructura:
 
       const response = await groq.chat.completions.create({
         model: 'qwen/qwen3.8-27b',
-        max_tokens: 350,
+        max_tokens: 1024,
         response_format: { type: 'json_object' },
         messages: [
           {
