@@ -1065,6 +1065,7 @@ export class TursoService {
     offset?: number;
   }): Promise<{
     clients: any[];
+    routers: string[];
     total: number;
     totalActive: number;
     totalSuspended: number;
@@ -1078,21 +1079,32 @@ export class TursoService {
       const search = (options.search || '').trim().toLowerCase();
       const statusFilter = (options.status || 'ALL').toUpperCase();
 
-      // Métricas globales rápidas
-      const metricsRes = await client.execute(`
-        SELECT 
-          COUNT(*) as total,
-          SUM(CASE WHEN LOWER(estado) LIKE '%act%' THEN 1 ELSE 0 END) as total_active,
-          SUM(CASE WHEN LOWER(estado) LIKE '%susp%' OR LOWER(estado) LIKE '%cort%' THEN 1 ELSE 0 END) as total_suspended,
-          SUM(CASE WHEN (coordenadas_gps IS NOT NULL AND LENGTH(coordenadas_gps) > 3) OR (google_maps_url IS NOT NULL AND LENGTH(google_maps_url) > 5) THEN 1 ELSE 0 END) as total_with_gps
-        FROM wisphub_clients
-      `);
+      // Métricas globales rápidas y lista completa de Routers / Zonas
+      const [metricsRes, routersRes] = await Promise.all([
+        client.execute(`
+          SELECT 
+            COUNT(*) as total,
+            SUM(CASE WHEN LOWER(estado) LIKE '%act%' THEN 1 ELSE 0 END) as total_active,
+            SUM(CASE WHEN LOWER(estado) LIKE '%susp%' OR LOWER(estado) LIKE '%cort%' THEN 1 ELSE 0 END) as total_suspended,
+            SUM(CASE WHEN (coordenadas_gps IS NOT NULL AND LENGTH(coordenadas_gps) > 3) OR (google_maps_url IS NOT NULL AND LENGTH(google_maps_url) > 5) THEN 1 ELSE 0 END) as total_with_gps
+          FROM wisphub_clients
+        `),
+        client.execute(`
+          SELECT DISTINCT router 
+          FROM wisphub_clients 
+          WHERE router IS NOT NULL AND TRIM(router) != ''
+          ORDER BY router ASC
+        `).catch(() => ({ rows: [] as any[] }))
+      ]);
 
       const total = Number(metricsRes.rows[0]?.total || 0);
       const totalActive = Number(metricsRes.rows[0]?.total_active || 0);
       const totalSuspended = Number(metricsRes.rows[0]?.total_suspended || 0);
       const totalWithGps = Number(metricsRes.rows[0]?.total_with_gps || 0);
       const totalWithoutGps = Math.max(0, total - totalWithGps);
+      const routers = (routersRes.rows || [])
+        .map(r => String(r.router || '').trim())
+        .filter(Boolean);
 
       const whereClauses: string[] = [];
       const args: any[] = [];
@@ -1298,6 +1310,7 @@ export class TursoService {
 
       return {
         clients,
+        routers,
         total: filteredTotal,
         totalActive,
         totalSuspended,
@@ -1308,6 +1321,7 @@ export class TursoService {
       logger.error('Error al consultar directorio de clientes:', err?.message || err);
       return {
         clients: [],
+        routers: [],
         total: 0,
         totalActive: 0,
         totalSuspended: 0,

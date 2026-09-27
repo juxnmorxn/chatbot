@@ -390,11 +390,15 @@ export function getAdminDashboardHtml(): string {
       display: flex;
       flex-direction: column;
       min-height: 100vh;
+      min-width: 0;
+      max-width: calc(100vw - var(--sidebar-width));
+      overflow-x: hidden;
       transition: margin-left 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     aside#sidebar.collapsed + main#main-content {
       margin-left: var(--sidebar-collapsed-width);
+      max-width: calc(100vw - var(--sidebar-collapsed-width));
     }
 
     /* Topbar */
@@ -484,6 +488,8 @@ export function getAdminDashboardHtml(): string {
       max-width: 1400px;
       width: 100%;
       margin: 0 auto;
+      min-width: 0;
+      box-sizing: border-box;
       display: none;
       animation: fadeInView 0.22s cubic-bezier(0.4, 0, 0.2, 1);
     }
@@ -508,6 +514,8 @@ export function getAdminDashboardHtml(): string {
       box-shadow: var(--shadow-sm);
       transition: var(--transition);
       position: relative;
+      min-width: 0;
+      box-sizing: border-box;
     }
 
     .glass-card:hover {
@@ -887,10 +895,12 @@ export function getAdminDashboardHtml(): string {
       align-items: center;
       justify-content: space-between;
       flex-wrap: wrap;
-      gap: 12px;
+      gap: 10px;
       margin-bottom: 14px;
       padding-bottom: 14px;
       border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+      width: 100%;
+      box-sizing: border-box;
     }
 
     .datatable-search-box {
@@ -900,10 +910,11 @@ export function getAdminDashboardHtml(): string {
       border: 1px solid var(--card-border);
       border-radius: var(--radius-sm);
       padding: 7px 12px;
-      min-width: 250px;
-      flex: 1;
+      min-width: 200px;
+      flex: 1 1 240px;
       max-width: 380px;
       gap: 8px;
+      box-sizing: border-box;
       transition: var(--transition);
     }
 
@@ -931,6 +942,9 @@ export function getAdminDashboardHtml(): string {
       align-items: center;
       flex-wrap: wrap;
       gap: 8px;
+      flex: 2 1 auto;
+      justify-content: flex-end;
+      max-width: 100%;
     }
 
     .datatable-select {
@@ -943,6 +957,9 @@ export function getAdminDashboardHtml(): string {
       font-family: var(--font-main);
       outline: none;
       cursor: pointer;
+      max-width: 200px;
+      min-width: 110px;
+      box-sizing: border-box;
       transition: var(--transition);
     }
 
@@ -6929,8 +6946,11 @@ export function getAdminDashboardHtml(): string {
 
         state.clients.items = res.clients || [];
         state.clients.total = res.total || 0;
+        if (Array.isArray(res.routers) && res.routers.length > 0) {
+          state.clients.routers = res.routers;
+        }
 
-        populateClientsRouterFilter();
+        populateClientsRouterFilter(res.routers || state.clients.routers);
 
         // Actualizar métricas en tiempo real
         const elTotal = document.getElementById('metric-clients-total');
@@ -7119,17 +7139,27 @@ export function getAdminDashboardHtml(): string {
       }).join('');
     }
 
-    function populateClientsRouterFilter() {
+    function populateClientsRouterFilter(routersList) {
       const selRouter = document.getElementById('filter-client-router');
       if (!selRouter) return;
       const currentVal = selRouter.value;
       const routerSet = new Set();
+
+      const sourceList = Array.isArray(routersList) && routersList.length > 0 
+        ? routersList 
+        : (state.clients.routers || []);
+
+      sourceList.forEach(r => {
+        if (r && String(r).trim()) routerSet.add(String(r).trim());
+      });
+
       (state.clients.items || []).forEach(c => {
         if (c.router && c.router.trim()) routerSet.add(c.router.trim());
       });
+
       if (routerSet.size > 0) {
-        const routers = Array.from(routerSet).sort();
-        selRouter.innerHTML = '<option value="">📍 Todos los Routers/Zonas</option>' +
+        const routers = Array.from(routerSet).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+        selRouter.innerHTML = '<option value="">📍 Todos los Routers / Zonas</option>' +
           routers.map(r => '<option value="' + escapeHtml(r) + '">' + escapeHtml(r) + '</option>').join('');
         if (currentVal && routers.includes(currentVal)) {
           selRouter.value = currentVal;

@@ -1757,6 +1757,7 @@ export class AdminController {
       res.json({
         success: true,
         clients: data.clients,
+        routers: data.routers || [],
         total: data.total,
         totalActive: data.totalActive,
         totalSuspended: data.totalSuspended,
