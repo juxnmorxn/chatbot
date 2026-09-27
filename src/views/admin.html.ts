@@ -3585,9 +3585,13 @@ export function getAdminDashboardHtml(): string {
 
     // URL Hash Parser & Route Resolver
     function parseHashView() {
-      const rawHash = (window.location.hash || '').replace(/^#\/?/, '').trim();
+      let rawHash = (window.location.hash || '').trim();
+      if (rawHash.startsWith('#/')) rawHash = rawHash.substring(2);
+      else if (rawHash.startsWith('#')) rawHash = rawHash.substring(1);
       if (!rawHash) return null;
-      const [viewName, queryStr] = rawHash.split('?');
+      const parts = rawHash.split('?');
+      const viewName = parts[0];
+      const queryStr = parts[1];
       const validViews = ['dashboard', 'live-chat', 'clients', 'tickets', 'ipam', 'audit', 'technicians', 'modem-swap', 'settings', 'users'];
       if (validViews.includes(viewName)) {
         if (queryStr && viewName === 'live-chat') {
