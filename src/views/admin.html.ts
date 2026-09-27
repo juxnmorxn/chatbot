@@ -879,6 +879,35 @@ export function getAdminDashboardHtml(): string {
       box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
     }
 
+    select.form-control,
+    select {
+      background-color: #0f172a;
+      color: #f1f5f9;
+      cursor: pointer;
+      appearance: none;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 14px center;
+      background-size: 16px 16px;
+      padding-right: 40px;
+    }
+
+    select.form-control:focus,
+    select:focus {
+      background-color: #131d33;
+      border-color: var(--primary);
+    }
+
+    select.form-control option,
+    select option {
+      background-color: #0f172a;
+      color: #f1f5f9;
+      padding: 10px 12px;
+      font-size: 13.5px;
+    }
+
     .form-group {
       display: flex;
       flex-direction: column;
@@ -4580,20 +4609,21 @@ export function getAdminDashboardHtml(): string {
       const select = document.getElementById('chat-sender-instance');
       if (!select) return;
 
-      if (!state.whatsappAreas || state.whatsappAreas.length === 0) {
+      const activeInstances = (state.whatsappAreas || []).filter(a => a.is_connected || a.connection_status === 'open');
+
+      if (activeInstances.length === 0) {
         select.innerHTML = '<option value="">Línea activa por defecto</option>';
         return;
       }
 
       const currentVal = select.value;
       let html = '';
-      for (let i = 0; i < state.whatsappAreas.length; i++) {
-        const inst = state.whatsappAreas[i];
-        const phone = inst.phone_number ? ' (+52 ' + inst.phone_number.slice(-10) + ')' : '';
-        const area = inst.area_name ? '[' + escapeHtml(inst.area_name) + '] ' : '';
-        const status = (inst.is_connected || inst.connection_status === 'open') ? '🟢' : '⚪';
+      for (let i = 0; i < activeInstances.length; i++) {
+        const inst = activeInstances[i];
+        const phone = inst.phone_number ? ' (' + formatMexPhone(inst.phone_number) + ')' : '';
+        const area = inst.area_name ? escapeHtml(inst.area_name) + ' • ' : '';
         const instName = escapeHtml(inst.instance_name || '');
-        html += '<option value="' + instName + '">' + status + ' ' + area + instName + phone + '</option>';
+        html += '<option value="' + instName + '">🟢 ' + area + instName + phone + '</option>';
       }
       select.innerHTML = html;
 
@@ -4783,46 +4813,85 @@ export function getAdminDashboardHtml(): string {
       }
     });
 
+    function formatMexPhone(phone) {
+      if (!phone) return '';
+      const clean = String(phone).replace(/\D/g, '');
+      const last10 = clean.slice(-10);
+      if (last10.length === 10) {
+        return '+52 ' + last10.slice(0, 3) + ' ' + last10.slice(3, 6) + ' ' + last10.slice(6);
+      }
+      return '+' + clean;
+    }
+
     function openTransferChatModal() {
       if (!state.activeChatPhone) return;
       const chat = state.chats.find(c => c.phone === state.activeChatPhone);
       const currentDept = chat?.department || 'General';
 
+      // Filtrar instancias activas de WhatsApp
+      const liveInstances = (state.whatsappAreas || []).filter(a => a.is_connected || a.connection_status === 'open');
+      const defaultActiveInst = liveInstances.length > 0 ? liveInstances[0].instance_name : '';
+      const defaultPhone = liveInstances.length > 0 ? formatMexPhone(liveInstances[0].phone_number) : '';
+
+      // Lista de áreas estándar organizadas
+      const standardDepts = [
+        { name: 'Soporte Técnico', icon: '🔧' },
+        { name: 'Atención al Cliente', icon: '💬' },
+        { name: 'Cobranza', icon: '💳' },
+        { name: 'Ventas', icon: '💼' },
+        { name: 'Red e Infraestructura', icon: '🌐' },
+      ];
+
       let areaOptions = '';
-      if (state.whatsappAreas && state.whatsappAreas.length > 0) {
-        for (let i = 0; i < state.whatsappAreas.length; i++) {
-          const a = state.whatsappAreas[i];
-          const isSelected = a.area_name.toLowerCase() === currentDept.toLowerCase();
-          const phoneFormatted = a.phone_number ? '+52 ' + a.phone_number.slice(-10) : 'Sin número vinculado';
-          const isOnline = a.is_connected || a.connection_status === 'open';
-          const statusTxt = isOnline ? '🟢 ACTIVO' : '⚪ DESCONECTADO';
-          const label = escapeHtml(a.area_name + ' — 📱 ' + phoneFormatted + ' [Línea: ' + a.instance_name + '] (' + statusTxt + ')');
-          const safeArea = escapeHtml(a.area_name);
-          const safeInst = escapeHtml(a.instance_name);
-          areaOptions += '<option value="' + safeArea + '" data-instance="' + safeInst + '"' + (isSelected ? ' selected' : '') + '>' + label + '</option>';
-        }
+
+      if (liveInstances.length > 1) {
+        // Modo Multi-Número: Mostrar departamentos con su línea asignada
+        liveInstances.forEach(inst => {
+          const isSelected = inst.area_name.toLowerCase() === currentDept.toLowerCase();
+          const phoneTxt = inst.phone_number ? ' (' + formatMexPhone(inst.phone_number) + ')' : '';
+          const icon = inst.area_name.toLowerCase().includes('soporte') ? '🔧' : (inst.area_name.toLowerCase().includes('atencion') ? '💬' : (inst.area_name.toLowerCase().includes('cobranza') ? '💳' : (inst.area_name.toLowerCase().includes('ventas') ? '💼' : '🏢')));
+          const label = icon + ' ' + escapeHtml(inst.area_name) + ' — Línea: ' + escapeHtml(inst.instance_name) + phoneTxt;
+          areaOptions += '<option value="' + escapeHtml(inst.area_name) + '" data-instance="' + escapeHtml(inst.instance_name) + '"' + (isSelected ? ' selected' : '') + '>' + label + '</option>';
+        });
       } else {
-        areaOptions = '<option value="Atención al Cliente">Atención al Cliente</option><option value="Soporte Técnico">Soporte Técnico</option>';
+        // Modo Número Único / Principal: Selección limpia de departamentos
+        standardDepts.forEach(d => {
+          const isSelected = d.name.toLowerCase() === currentDept.toLowerCase();
+          const label = d.icon + ' ' + d.name;
+          areaOptions += '<option value="' + escapeHtml(d.name) + '" data-instance="' + escapeHtml(defaultActiveInst) + '"' + (isSelected ? ' selected' : '') + '>' + label + '</option>';
+        });
+      }
+
+      // Si el chat tiene un área personalizada que no está en la lista, incluirla
+      if (currentDept && currentDept !== 'General' && !standardDepts.some(d => d.name.toLowerCase() === currentDept.toLowerCase()) && !liveInstances.some(i => i.area_name.toLowerCase() === currentDept.toLowerCase())) {
+        areaOptions = '<option value="' + escapeHtml(currentDept) + '" selected>🏢 ' + escapeHtml(currentDept) + ' (Actual)</option>' + areaOptions;
       }
 
       const clientName = escapeHtml(chat?.client_name || state.activeChatPhone || '');
+      const lineNotice = defaultPhone
+        ? '<div style="font-size: 11.5px; color: var(--accent-cyan); display: flex; align-items: center; gap: 6px; margin-top: 4px;">' +
+            '<span>📱 Canal de salida: <strong>' + defaultPhone + '</strong> (' + escapeHtml(defaultActiveInst || 'WhatsApp') + ')</span>' +
+          '</div>'
+        : '';
+
       const content = '<div style="display: flex; flex-direction: column; gap: 14px;">' +
-        '<p style="font-size: 13px; color: var(--text-muted); line-height: 1.5;">' +
-          'Transfiere la conversación del cliente <strong>' + clientName + '</strong> al número de WhatsApp activo de otra área u oficina.' +
+        '<p style="font-size: 13px; color: var(--text-muted); line-height: 1.5; margin: 0;">' +
+          'Canaliza la conversación de <strong>' + clientName + '</strong> al área correspondiente para su atención y seguimiento.' +
         '</p>' +
-        '<div class="form-group">' +
-          '<label class="form-label" style="font-weight: 600;">Línea de WhatsApp & Área Destino</label>' +
+        '<div class="form-group" style="margin-bottom: 0;">' +
+          '<label class="form-label" style="font-weight: 600; margin-bottom: 6px;">Área o Departamento de Destino</label>' +
           '<select id="transfer-modal-area-select" class="form-control" onchange="handleTransferAreaChange(this)">' +
             areaOptions +
-            '<option value="__CUSTOM__">-- Otra área personalizada --</option>' +
+            '<option value="__CUSTOM__">➕ Otra área personalizada...</option>' +
           '</select>' +
-          '<input type="text" id="transfer-modal-area-custom" class="form-control" placeholder="Escribe el nombre del área..." style="display: none; margin-top: 6px;">' +
+          lineNotice +
+          '<input type="text" id="transfer-modal-area-custom" class="form-control" placeholder="Escribe el nombre de la nueva área..." style="display: none; margin-top: 8px;">' +
         '</div>' +
-        '<div class="form-group" style="background: rgba(0,0,0,0.25); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--card-border);">' +
-          '<label style="display: flex; align-items: center; justify-content: space-between; cursor: pointer;">' +
+        '<div class="form-group" style="background: rgba(0,0,0,0.25); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--card-border); margin-bottom: 0;">' +
+          '<label style="display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none;">' +
             '<div>' +
               '<strong style="font-size: 13px; color: var(--text-main);">💬 Notificar al cliente por WhatsApp</strong>' +
-              '<div style="font-size: 11px; color: var(--text-dim);">Envía un mensaje avisando que su caso fue canalizado al área</div>' +
+              '<div style="font-size: 11px; color: var(--text-dim);">Envía un mensaje automático avisando que su caso fue canalizado</div>' +
             '</div>' +
             '<input type="checkbox" id="transfer-modal-notify-toggle" style="transform: scale(1.3); cursor: pointer;" checked onchange="toggleTransferModalMsg(this.checked)">' +
           '</label>' +

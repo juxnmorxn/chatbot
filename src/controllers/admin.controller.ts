@@ -974,30 +974,48 @@ export class AdminController {
         liveMap.set(inst.name.toLowerCase(), inst);
       }
 
-      const areas = dbAreas.map(a => {
-        const live = liveMap.get(a.instance_name.toLowerCase());
-        return {
-          area_name: a.area_name,
-          instance_name: a.instance_name,
-          phone_number: live?.phone || a.phone_number || null,
-          connection_status: live?.connectionStatus || 'open',
-          is_connected: (live?.connectionStatus || 'open') === 'open',
-          profile_name: live?.profileName || null,
-        };
-      });
+      const areas: Array<{
+        area_name: string;
+        instance_name: string;
+        phone_number: string | null;
+        connection_status: string;
+        is_connected: boolean;
+        profile_name: string | null;
+      }> = [];
 
-      for (const live of liveInstances) {
-        if (!areas.some(a => a.instance_name.toLowerCase() === live.name.toLowerCase())) {
-          const autoArea = live.name.toLowerCase().includes('soporte')
-            ? 'Soporte Técnico'
-            : (live.name.toLowerCase().includes('atencion') ? 'Atención al Cliente' : (live.name.toLowerCase().includes('ventas') ? 'Ventas' : (live.name.toLowerCase().includes('cobranza') ? 'Cobranza' : live.name)));
+      // Si tenemos instancias reales en Evolution API, priorizarlas
+      if (liveInstances.length > 0) {
+        for (const live of liveInstances) {
+          const matchedDb = dbAreas.find(a => a.instance_name.toLowerCase() === live.name.toLowerCase());
+          let areaName = matchedDb?.area_name;
+          if (!areaName) {
+            const lower = live.name.toLowerCase();
+            if (lower.includes('soporte') || lower.includes('tecnic')) areaName = 'Soporte Técnico';
+            else if (lower.includes('atencion') || lower.includes('client')) areaName = 'Atención al Cliente';
+            else if (lower.includes('ventas') || lower.includes('contrat')) areaName = 'Ventas';
+            else if (lower.includes('cobranza') || lower.includes('pago')) areaName = 'Cobranza';
+            else areaName = live.name;
+          }
+
           areas.push({
-            area_name: autoArea,
+            area_name: areaName,
             instance_name: live.name,
-            phone_number: live.phone || null,
-            connection_status: live.connectionStatus,
+            phone_number: live.phone || matchedDb?.phone_number || null,
+            connection_status: live.connectionStatus || 'close',
             is_connected: live.connectionStatus === 'open',
             profile_name: live.profileName || null,
+          });
+        }
+      } else {
+        // Fallback a dbAreas si no hay conexión temporal con Evolution API
+        for (const a of dbAreas) {
+          areas.push({
+            area_name: a.area_name,
+            instance_name: a.instance_name,
+            phone_number: a.phone_number || null,
+            connection_status: 'close',
+            is_connected: false,
+            profile_name: null,
           });
         }
       }
