@@ -1969,18 +1969,19 @@ export function getAdminDashboardHtml(): string {
           <div class="datatable-toolbar">
             <div class="datatable-search-box">
               <svg class="svg-icon svg-icon-sm" style="color: var(--text-muted); flex-shrink: 0;" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-              <input type="text" id="dashboard-logs-search" placeholder="Buscar por cliente, teléfono, mensaje..." oninput="filterDashboardLogs()">
+              <input type="text" id="filter-logs-search" placeholder="Buscar por cliente, teléfono, mensaje..." oninput="filterDashboardLogs()">
             </div>
             <div class="datatable-filters-group">
-              <select id="dashboard-logs-flow" class="datatable-select" onchange="filterDashboardLogs()">
+              <select id="filter-logs-flow" class="datatable-select" onchange="filterDashboardLogs()">
                 <option value="">🌐 Todos los Flujos</option>
                 <option value="IN">📥 Entrante (IN)</option>
                 <option value="OUT">📤 Saliente (OUT)</option>
               </select>
-              <select id="dashboard-logs-sort" class="datatable-select" onchange="filterDashboardLogs()">
-                <option value="recent">⏱️ Más Recientes</option>
-                <option value="oldest">⏱️ Más Antiguos</option>
+              <select id="filter-logs-sort" class="datatable-select" onchange="sortDashboardLogs(this.value)">
+                <option value="time_desc">⏱️ Más Recientes</option>
+                <option value="time_asc">⏱️ Más Antiguos</option>
                 <option value="client_asc">🔤 Cliente (A-Z)</option>
+                <option value="direction_asc">↕️ Flujo</option>
               </select>
               <button class="btn btn-secondary btn-sm" onclick="clearDashboardLogsFilter()" title="Limpiar filtros">
                 🧹 Limpiar
@@ -1995,7 +1996,7 @@ export function getAdminDashboardHtml(): string {
                   <th class="sortable-th" onclick="sortDashboardLogs('time')" style="min-width: 120px;">Hora <span id="sort-log-time" class="sort-icon">↕</span></th>
                   <th class="sortable-th" onclick="sortDashboardLogs('phone')" style="min-width: 140px;">Teléfono <span id="sort-log-phone" class="sort-icon">↕</span></th>
                   <th class="sortable-th" onclick="sortDashboardLogs('client')" style="min-width: 180px;">Cliente <span id="sort-log-client" class="sort-icon">↕</span></th>
-                  <th class="sortable-th" onclick="sortDashboardLogs('flow')" style="min-width: 110px;">Flujo <span id="sort-log-flow" class="sort-icon">↕</span></th>
+                  <th class="sortable-th" onclick="sortDashboardLogs('direction')" style="min-width: 110px;">Flujo <span id="sort-log-flow" class="sort-icon">↕</span></th>
                   <th style="min-width: 280px;">Mensaje</th>
                   <th style="text-align: right; min-width: 80px;">Acción</th>
                 </tr>
@@ -2142,29 +2143,30 @@ export function getAdminDashboardHtml(): string {
           <div class="datatable-toolbar" style="margin-bottom: 0; padding-bottom: 0; border-bottom: none;">
             <div class="datatable-search-box">
               <svg class="svg-icon svg-icon-sm" style="color: var(--text-muted); flex-shrink: 0;" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-              <input type="text" id="clients-datatable-search" placeholder="Buscar cliente por nombre, ID, IP, SN, teléfono..." oninput="handleClientSearchInput(this.value)">
+              <input type="text" id="filter-clients-search" placeholder="Buscar cliente por nombre, ID, IP, SN, teléfono..." oninput="handleClientsSearchInput(this.value)">
             </div>
             <div class="datatable-filters-group">
-              <select id="clients-filter-estado" class="datatable-select" onchange="handleClientDropdownFilter()">
+              <select id="filter-client-estado" class="datatable-select" onchange="handleClientColFilter()">
                 <option value="">🟢 Todos los Estados</option>
                 <option value="Activo">🟢 Activos</option>
                 <option value="Suspendido">🔴 Suspendidos</option>
                 <option value="Corte">✂️ En Corte</option>
                 <option value="Gratis">🎁 Gratis / Demo</option>
               </select>
-              <select id="clients-filter-router" class="datatable-select" onchange="handleClientDropdownFilter()">
+              <select id="filter-client-router" class="datatable-select" onchange="handleClientColFilter()">
                 <option value="">📍 Todos los Routers / Zonas</option>
               </select>
-              <select id="clients-filter-gps" class="datatable-select" onchange="handleClientDropdownFilter()">
+              <select id="filter-client-gps" class="datatable-select" onchange="handleClientColFilter()">
                 <option value="">🗺️ GPS: Todos</option>
                 <option value="CON_GPS">📍 Con Coordenadas GPS</option>
                 <option value="SIN_GPS">⚠️ Sin Coordenadas GPS</option>
               </select>
-              <select id="clients-filter-sort" class="datatable-select" onchange="handleClientSortChange(this.value)">
-                <option value="id_asc">🔢 Orden: ID / Folio</option>
+              <select id="filter-clients-sort" class="datatable-select" onchange="sortClientsBy(this.value)">
+                <option value="id_servicio_asc">🔢 Orden: ID / Folio</option>
                 <option value="nombre_asc">🔤 Nombre (A-Z)</option>
                 <option value="nombre_desc">🔤 Nombre (Z-A)</option>
                 <option value="ip_asc">🌐 Dirección IP</option>
+                <option value="estado_asc">⚡ Estado</option>
               </select>
               <button class="btn btn-secondary btn-sm" onclick="clearClientColFilters()" title="Limpiar todos los filtros">
                 🧹 Limpiar
@@ -2252,23 +2254,25 @@ export function getAdminDashboardHtml(): string {
           <div class="datatable-toolbar">
             <div class="datatable-search-box">
               <svg class="svg-icon svg-icon-sm" style="color: var(--text-muted); flex-shrink: 0;" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-              <input type="text" id="tickets-datatable-search" placeholder="Buscar por folio, cliente, falla, teléfono..." oninput="filterTicketsTable()">
+              <input type="text" id="filter-tickets-search" placeholder="Buscar por folio, cliente, falla, teléfono..." oninput="filterTicketsTable()">
             </div>
             <div class="datatable-filters-group">
-              <select id="tickets-filter-status" class="datatable-select" onchange="filterTicketsTable()">
+              <select id="filter-ticket-status" class="datatable-select" onchange="filterTicketsTable()">
                 <option value="">🎫 Todos los Estados</option>
                 <option value="ABIERTO">🟡 Abierto</option>
                 <option value="EN_PROCESO">🔵 En Proceso</option>
                 <option value="VISITA_TECNICA">🚚 Visita Técnica</option>
                 <option value="RESUELTO">🟢 Resuelto</option>
               </select>
-              <select id="tickets-filter-tech" class="datatable-select" onchange="filterTicketsTable()">
+              <select id="filter-ticket-tech" class="datatable-select" onchange="filterTicketsTable()">
                 <option value="">👷 Todos los Técnicos</option>
               </select>
-              <select id="tickets-filter-sort" class="datatable-select" onchange="filterTicketsTable()">
-                <option value="recent">⏱️ Más Recientes</option>
-                <option value="oldest">⏱️ Más Antiguos</option>
+              <select id="filter-tickets-sort" class="datatable-select" onchange="sortTicketsBy(this.value)">
+                <option value="created_at_desc">⏱️ Más Recientes</option>
+                <option value="created_at_asc">⏱️ Más Antiguos</option>
                 <option value="folio_desc">🔢 Folio Mayor a Menor</option>
+                <option value="folio_asc">🔢 Folio Menor a Mayor</option>
+                <option value="client_asc">🔤 Cliente (A-Z)</option>
               </select>
               <button class="btn btn-secondary btn-sm" onclick="clearTicketsTableFilters()" title="Limpiar filtros">
                 🧹 Limpiar
@@ -2370,14 +2374,20 @@ export function getAdminDashboardHtml(): string {
           <div class="datatable-toolbar">
             <div class="datatable-search-box">
               <svg class="svg-icon svg-icon-sm" style="color: var(--text-muted); flex-shrink: 0;" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-              <input type="text" id="ipam-onus-search" placeholder="Buscar por Serial (SN), modelo ONT, OLT, puerto..." oninput="filterUnconfiguredOnus()">
+              <input type="text" id="filter-ipam-unconf-search" placeholder="Buscar por Serial (SN), modelo ONT, OLT, puerto..." oninput="filterUnconfiguredOnus()">
             </div>
             <div class="datatable-filters-group">
-              <select id="ipam-onus-olt" class="datatable-select" onchange="filterUnconfiguredOnus()">
-                <option value="">🌐 Todas las OLTs</option>
+              <select id="filter-pon-olt" class="datatable-select" onchange="filterUnconfiguredOnus()">
+                <option value="">📡 Todas las OLTs</option>
               </select>
-              <select id="ipam-onus-model" class="datatable-select" onchange="filterUnconfiguredOnus()">
+              <select id="filter-pon-model" class="datatable-select" onchange="filterUnconfiguredOnus()">
                 <option value="">📠 Todos los Modelos</option>
+              </select>
+              <select id="filter-ipam-unconf-sort" class="datatable-select" onchange="sortUnconfiguredOnusBy(this.value)">
+                <option value="sn_asc">🆔 Serial (A-Z)</option>
+                <option value="olt_asc">📡 OLT</option>
+                <option value="port_asc">🚪 Puerto PON</option>
+                <option value="model_asc">📠 Modelo ONT</option>
               </select>
               <button class="btn btn-secondary btn-sm" onclick="clearUnconfiguredOnusFilters()" title="Limpiar filtros">
                 🧹 Limpiar
@@ -2389,10 +2399,10 @@ export function getAdminDashboardHtml(): string {
             <table class="data-table">
               <thead>
                 <tr>
-                  <th class="sortable-th" onclick="sortUnconfiguredOnus('olt')" style="min-width: 140px;">OLT <span id="sort-pon-olt" class="sort-icon">↕</span></th>
-                  <th class="sortable-th" onclick="sortUnconfiguredOnus('port')" style="min-width: 110px;">PON <span id="sort-pon-port" class="sort-icon">↕</span></th>
-                  <th class="sortable-th" onclick="sortUnconfiguredOnus('sn')" style="min-width: 180px;">Serial (SN) <span id="sort-pon-sn" class="sort-icon">↕</span></th>
-                  <th class="sortable-th" onclick="sortUnconfiguredOnus('model')" style="min-width: 140px;">Modelo <span id="sort-pon-model" class="sort-icon">↕</span></th>
+                  <th class="sortable-th" onclick="sortUnconfiguredOnusBy('olt')" style="min-width: 140px;">OLT <span id="sort-pon-olt" class="sort-icon">↕</span></th>
+                  <th class="sortable-th" onclick="sortUnconfiguredOnusBy('port')" style="min-width: 110px;">PON <span id="sort-pon-port" class="sort-icon">↕</span></th>
+                  <th class="sortable-th" onclick="sortUnconfiguredOnusBy('sn')" style="min-width: 180px;">Serial (SN) <span id="sort-pon-sn" class="sort-icon">↕</span></th>
+                  <th class="sortable-th" onclick="sortUnconfiguredOnusBy('model')" style="min-width: 140px;">Modelo <span id="sort-pon-model" class="sort-icon">↕</span></th>
                   <th style="text-align: right; min-width: 120px;">Acción</th>
                 </tr>
               </thead>
@@ -2416,25 +2426,32 @@ export function getAdminDashboardHtml(): string {
           <div class="datatable-toolbar">
             <div class="datatable-search-box">
               <svg class="svg-icon svg-icon-sm" style="color: var(--text-muted); flex-shrink: 0;" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-              <input type="text" id="audit-datatable-search" placeholder="Buscar por cliente, folio, IP OLT, IP WispHub..." oninput="handleAuditSearch(this.value)">
+              <input type="text" id="filter-audit-search" placeholder="Buscar por cliente, folio, IP OLT, IP WispHub..." oninput="handleAuditColFilter()">
             </div>
             <div class="datatable-filters-group">
-              <select id="audit-filter-ip-status" class="datatable-select" onchange="handleAuditDropdownFilter()">
+              <select id="filter-audit-ip-status" class="datatable-select" onchange="handleAuditColFilter()">
                 <option value="">🌐 Estado IP: Todos</option>
                 <option value="MATCH">🟢 Correctos (Match)</option>
                 <option value="MISMATCH">🔴 Discrepancias IP</option>
                 <option value="ONLY_SMARTOLT">ℹ️ Solo SmartOLT</option>
                 <option value="ONLY_WISPHUB">🟣 Solo WispHub</option>
               </select>
-              <select id="audit-filter-tr069" class="datatable-select" onchange="handleAuditDropdownFilter()">
+              <select id="filter-audit-tr069" class="datatable-select" onchange="handleAuditColFilter()">
                 <option value="">⚙️ TR-069: Todos</option>
                 <option value="ACTIVE">🟢 Configurado / Activo</option>
                 <option value="INACTIVE">🔴 Falta TR-069</option>
               </select>
-              <select id="audit-filter-ipv6" class="datatable-select" onchange="handleAuditDropdownFilter()">
+              <select id="filter-audit-ipv6" class="datatable-select" onchange="handleAuditColFilter()">
                 <option value="">🌐 IPv6: Todos</option>
                 <option value="ACTIVE">🟢 Dual Stack</option>
                 <option value="INACTIVE">🟡 Solo IPv4</option>
+              </select>
+              <select id="filter-audit-sort" class="datatable-select" onchange="sortAuditBy(this.value)">
+                <option value="cliente_asc">🔤 Cliente (A-Z)</option>
+                <option value="cliente_desc">🔤 Cliente (Z-A)</option>
+                <option value="smartolt_ip_asc">🌐 IP SmartOLT</option>
+                <option value="wisphub_ip_asc">🌐 IP WispHub</option>
+                <option value="ip_status_asc">⚡ Estado IP</option>
               </select>
               <button class="btn btn-secondary btn-sm" onclick="clearAuditColFilters()" title="Limpiar filtros">
                 🧹 Limpiar
@@ -3784,16 +3801,24 @@ export function getAdminDashboardHtml(): string {
       const fFlow = (document.getElementById('filter-logs-flow')?.value || '').toUpperCase().trim();
 
       const filtered = (state.dashboardLogs || []).filter(l => {
-        if (fFlow && String(l.direction || '').toUpperCase() !== fFlow) return false;
+        if (fFlow) {
+          const dir = String(l.direction || '').toUpperCase();
+          if (fFlow === 'IN' && dir !== 'IN') return false;
+          if (fFlow === 'OUT' && dir !== 'OUT') return false;
+        }
         if (q) {
           const timeStr = new Date(l.created_at).toLocaleTimeString().toLowerCase();
           const phone = String(l.phone || '').toLowerCase();
           const client = String(l.client_name || '').toLowerCase();
           const msg = String(l.message || '').toLowerCase();
-          if (!timeStr.includes(q) && !phone.includes(q) && !client.includes(q) && !msg.includes(q)) return false;
+          const dirStr = String(l.direction || '').toLowerCase() === 'in' ? 'entrante in' : 'saliente out';
+          if (!timeStr.includes(q) && !phone.includes(q) && !client.includes(q) && !msg.includes(q) && !dirStr.includes(q)) return false;
         }
         return true;
       });
+
+      const badge = document.getElementById('badge-logs-count');
+      if (badge) badge.innerText = \`\${filtered.length} registro\${filtered.length !== 1 ? 's' : ''}\`;
 
       renderDashboardLogs(filtered);
     }
@@ -5093,14 +5118,28 @@ export function getAdminDashboardHtml(): string {
       const fModel = (document.getElementById('filter-pon-model')?.value || '').toLowerCase().trim();
 
       const filtered = (state.unconfiguredOnus || []).filter(o => {
-        if (fOlt && !String(o.olt_name || o.olt_id || '').toLowerCase().includes(fOlt)) return false;
-        if (fModel && !String(o.model || o.onu_type_name || o.onu_type || '').toLowerCase().includes(fModel)) return false;
+        const oltStr = String(o.olt_name || ('OLT ' + (o.olt_id || '3'))).toLowerCase();
+        const modelStr = String(o.model || o.onu_type_name || o.onu_type || 'ONT').toLowerCase();
+        const snStr = String(o.sn || '').toLowerCase();
+        const boardPortStr = \`board \${o.board ?? ''} port \${o.port ?? o.pon_port ?? ''} \${o.board ?? ''}/\${o.port ?? o.pon_port ?? ''}\`.toLowerCase();
+
+        if (fOlt && !oltStr.includes(fOlt) && String(o.olt_id || '') !== fOlt) return false;
+        if (fModel && !modelStr.includes(fModel)) return false;
+
         if (q) {
-          const sn = String(o.sn || '').toLowerCase();
-          const olt = String(o.olt_name || o.olt_id || '').toLowerCase();
-          const port = String(o.pon_port || o.port || o.board || '').toLowerCase();
-          const model = String(o.model || o.onu_type_name || o.onu_type || '').toLowerCase();
-          if (!sn.includes(q) && !olt.includes(q) && !port.includes(q) && !model.includes(q)) return false;
+          const isHuawei = snStr.startsWith('hwtc') || modelStr.includes('hg') || modelStr.includes('eg');
+          const isZte = snStr.startsWith('zte');
+          const matchesHuawei = q.includes('huawei') && isHuawei;
+          const matchesZte = q.includes('zte') && isZte;
+
+          if (
+            !snStr.includes(q) &&
+            !oltStr.includes(q) &&
+            !boardPortStr.includes(q) &&
+            !modelStr.includes(q) &&
+            !matchesHuawei &&
+            !matchesZte
+          ) return false;
         }
         return true;
       });
