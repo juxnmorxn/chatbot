@@ -2215,11 +2215,11 @@ export class AdminController {
       if (mode === 'local') {
         const localUrl = 'file:./data/chatbot.db';
         resetDatabaseConnection(localUrl, '');
+        await initTursoDatabase();
         // Guardar en settings para persistencia
         await SettingsService.set('DATABASE_MODE', 'local');
         await SettingsService.set('TURSO_DATABASE_URL', localUrl);
         await SettingsService.set('TURSO_AUTH_TOKEN', '');
-        await initTursoDatabase();
         res.json({ 
           success: true, 
           message: 'Base de datos cambiada a SQLite Local en Servidor (VPS KVM 1). Sin límites de consultas.',
