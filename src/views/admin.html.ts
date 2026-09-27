@@ -1014,137 +1014,274 @@ export function getAdminDashboardHtml(): string {
     .badge-info { background: rgba(6, 182, 212, 0.15); color: #67e8f9; border: 1px solid rgba(6, 182, 212, 0.3); }
     .badge-purple { background: rgba(168, 85, 247, 0.15); color: #d8b4fe; border: 1px solid rgba(168, 85, 247, 0.3); }
 
-    /* Live Chat View */
+    /* ========================================================
+       LIVE WHATSAPP CHAT - WHATSAPP WEB AUTHENTIC THEME
+       ======================================================== */
     .chat-layout {
       display: grid;
-      grid-template-columns: 340px 1fr;
-      height: calc(100vh - var(--topbar-height) - 48px);
-      max-height: calc(100vh - var(--topbar-height) - 48px);
-      background: var(--bg-surface);
-      border: 1px solid var(--card-border);
-      border-radius: var(--radius-md);
+      grid-template-columns: 380px 1fr;
+      height: calc(100vh - var(--topbar-height) - 40px);
+      max-height: calc(100vh - var(--topbar-height) - 40px);
+      background: #111b21;
+      border: 1px solid rgba(134, 150, 160, 0.15);
+      border-radius: 12px;
       overflow: hidden;
       position: relative;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6);
     }
 
     .chat-sidebar {
-      border-right: 1px solid var(--card-border);
+      border-right: 1px solid rgba(134, 150, 160, 0.15);
       display: flex;
       flex-direction: column;
-      background: rgba(0, 0, 0, 0.2);
+      background: #111b21;
       height: 100%;
       min-height: 0;
       min-width: 0;
       overflow: hidden;
+      width: 100%;
     }
 
     .chat-search-header {
-      padding: 14px;
-      border-bottom: 1px solid var(--card-border);
+      padding: 10px 12px;
+      background: #111b21;
+      border-bottom: 1px solid rgba(134, 150, 160, 0.12);
       flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    .chat-search-bar-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+      background: #202c33;
+      border-radius: 8px;
+      padding: 0 12px;
+      height: 36px;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    .chat-search-bar-wrap svg {
+      width: 16px;
+      height: 16px;
+      color: #8696a0;
+      margin-right: 8px;
+      flex-shrink: 0;
+    }
+
+    .chat-search-input {
+      background: transparent;
+      border: none;
+      outline: none;
+      color: #e9edef;
+      font-size: 13.5px;
+      width: 100%;
+      font-family: inherit;
+    }
+
+    .chat-search-input::placeholder {
+      color: #8696a0;
+    }
+
+    .chat-dept-pills-bar {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding: 2px 0;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    .chat-dept-pills-bar::-webkit-scrollbar {
+      display: none;
+    }
+
+    .chat-filter-pill {
+      background: #202c33;
+      color: #8696a0;
+      border: 1px solid transparent;
+      border-radius: 9999px;
+      padding: 4px 12px;
+      font-size: 11.5px;
+      font-weight: 500;
+      white-space: nowrap;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      flex-shrink: 0;
+      user-select: none;
+    }
+
+    .chat-filter-pill:hover {
+      background: #2a3942;
+      color: #d1d7db;
+    }
+
+    .chat-filter-pill.active {
+      background: #005c4b;
+      color: #00a884;
+      border-color: rgba(0, 168, 132, 0.4);
+      font-weight: 600;
     }
 
     .chat-threads-list {
       flex: 1 1 auto;
       overflow-y: auto;
+      overflow-x: hidden;
       display: flex;
       flex-direction: column;
       min-height: 0;
+      background: #111b21;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    .chat-threads-list::-webkit-scrollbar {
+      width: 5px;
+    }
+
+    .chat-threads-list::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.12);
+      border-radius: 4px;
     }
 
     .chat-thread-item {
       display: flex;
       align-items: center;
       gap: 12px;
-      padding: 12px 14px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+      padding: 10px 14px;
       cursor: pointer;
-      transition: var(--transition);
+      transition: background 0.15s ease;
+      position: relative;
+      user-select: none;
+      width: 100%;
+      box-sizing: border-box;
+      border-bottom: 1px solid rgba(134, 150, 160, 0.08);
+      overflow: hidden;
     }
 
     .chat-thread-item:hover {
-      background: rgba(255, 255, 255, 0.04);
-    }
-
-    .btn-thread-delete {
-      background: rgba(239, 68, 68, 0.12);
-      border: 1px solid rgba(239, 68, 68, 0.25);
-      color: #f87171;
-      border-radius: 6px;
-      padding: 4px 6px;
-      font-size: 11px;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      opacity: 0.6;
-      margin-left: auto;
-      flex-shrink: 0;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .btn-thread-delete:hover {
-      background: rgba(239, 68, 68, 0.35);
-      border-color: rgba(239, 68, 68, 0.6);
-      color: #fff;
-      opacity: 1;
-      transform: scale(1.1);
+      background: #202c33;
     }
 
     .chat-thread-item.active {
-      background: rgba(99, 102, 241, 0.15);
-      border-left: 3px solid var(--primary);
+      background: #2a3942;
     }
 
     .thread-avatar {
-      width: 40px;
-      height: 40px;
+      width: 44px;
+      height: 44px;
       border-radius: 50%;
-      background: linear-gradient(135deg, #334155, #1e293b);
+      background: #6b7c85;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 14px;
-      font-weight: 700;
-      color: var(--accent-cyan);
+      font-size: 15px;
+      font-weight: 600;
+      color: #fff;
       flex-shrink: 0;
-      border: 1px solid var(--card-border);
+      overflow: hidden;
     }
 
     .thread-content {
       flex: 1;
+      min-width: 0;
       overflow: hidden;
       display: flex;
       flex-direction: column;
-      gap: 2px;
+      gap: 3px;
     }
 
     .thread-top {
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 6px;
+      width: 100%;
     }
 
     .thread-name {
       font-weight: 600;
-      font-size: 13.5px;
-      color: var(--text-main);
+      font-size: 14px;
+      color: #e9edef;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      flex: 1;
+      min-width: 0;
     }
 
     .thread-time {
       font-size: 11px;
-      color: var(--text-dim);
-      font-family: var(--font-mono);
+      color: #8696a0;
+      flex-shrink: 0;
+      font-family: inherit;
+    }
+
+    .thread-bottom {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      width: 100%;
     }
 
     .thread-preview {
-      font-size: 12px;
-      color: var(--text-muted);
+      font-size: 12.5px;
+      color: #8696a0;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      flex: 1;
+      min-width: 0;
+      line-height: 1.3;
+    }
+
+    .thread-tags-row {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-top: 2px;
+      flex-wrap: nowrap;
+      overflow: hidden;
+    }
+
+    .btn-thread-delete {
+      background: transparent;
+      border: none;
+      color: #8696a0;
+      padding: 4px;
+      border-radius: 4px;
+      cursor: pointer;
+      opacity: 0;
+      transition: all 0.15s ease;
+      margin-left: 4px;
+      flex-shrink: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .chat-thread-item:hover .btn-thread-delete {
+      opacity: 0.7;
+    }
+
+    .btn-thread-delete:hover {
+      color: #f87171 !important;
+      background: rgba(239, 68, 68, 0.15);
+      opacity: 1 !important;
     }
 
     .chat-main-area {
@@ -1155,13 +1292,14 @@ export function getAdminDashboardHtml(): string {
       min-width: 0;
       overflow: hidden;
       position: relative;
-      background: radial-gradient(circle at 50% 50%, rgba(17, 24, 39, 0.6) 0%, rgba(9, 13, 22, 0.95) 100%);
+      background: #0b141a;
+      background-image: radial-gradient(circle at 50% 50%, rgba(17, 27, 33, 0.4) 0%, rgba(11, 20, 26, 0.95) 100%);
     }
 
     .chat-header-bar {
-      padding: 10px 18px;
-      border-bottom: 1px solid var(--card-border);
-      background: rgba(11, 15, 25, 0.85);
+      padding: 10px 16px;
+      background: #202c33;
+      border-bottom: 1px solid rgba(134, 150, 160, 0.15);
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -1174,7 +1312,7 @@ export function getAdminDashboardHtml(): string {
     .chat-header-left {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 12px;
       min-width: 0;
       flex-shrink: 1;
     }
@@ -1182,105 +1320,169 @@ export function getAdminDashboardHtml(): string {
     .chat-header-actions {
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 8px;
       flex-shrink: 0;
       flex-wrap: nowrap;
     }
 
     .btn-xs {
-      padding: 4px 8px;
-      font-size: 11px;
+      padding: 5px 10px;
+      font-size: 11.5px;
       font-weight: 500;
       border-radius: 6px;
       display: inline-flex;
       align-items: center;
-      gap: 4px;
+      gap: 5px;
       white-space: nowrap;
-      height: 28px;
+      height: 30px;
     }
 
     .chat-messages-container {
       flex: 1 1 auto;
       min-height: 0;
-      padding: 18px 20px;
+      padding: 16px 24px;
       overflow-y: auto;
+      overflow-x: hidden;
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 8px;
+      background: #0b141a;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+    }
+
+    .chat-messages-container::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .chat-messages-container::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 4px;
     }
 
     .chat-bubble {
-      max-width: 75%;
-      padding: 10px 14px;
-      border-radius: 14px;
-      font-size: 13.5px;
+      max-width: 68%;
+      min-width: 90px;
+      padding: 7px 10px 6px 10px;
+      border-radius: 8px;
+      font-size: 14px;
       line-height: 1.45;
       position: relative;
       word-wrap: break-word;
-      animation: fadeInMsg 0.2s ease-out;
+      white-space: pre-wrap;
+      box-shadow: 0 1px 0.5px rgba(11, 20, 26, 0.13);
+      animation: fadeInMsg 0.15s ease-out;
     }
 
     @keyframes fadeInMsg {
-      from { opacity: 0; transform: translateY(4px); }
+      from { opacity: 0; transform: translateY(3px); }
       to { opacity: 1; transform: translateY(0); }
     }
 
     .chat-bubble.in {
       align-self: flex-start;
-      background: #1e293b;
-      color: #f1f5f9;
-      border-bottom-left-radius: 4px;
-      border: 1px solid var(--card-border);
+      background: #202c33;
+      color: #e9edef;
+      border-top-left-radius: 0;
+      border: 1px solid rgba(255, 255, 255, 0.03);
     }
 
     .chat-bubble.out {
       align-self: flex-end;
-      background: linear-gradient(135deg, #4f46e5, #4338ca);
-      color: #fff;
-      border-bottom-right-radius: 4px;
-      box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);
+      background: #005c4b;
+      color: #e9edef;
+      border-top-right-radius: 0;
     }
 
     .bubble-meta {
       display: flex;
       align-items: center;
       justify-content: flex-end;
-      gap: 6px;
-      font-size: 10px;
-      color: rgba(255, 255, 255, 0.6);
-      margin-top: 4px;
-      font-family: var(--font-mono);
+      gap: 4px;
+      font-size: 11px;
+      color: #8696a0;
+      margin-top: 3px;
+      float: right;
+      margin-left: 12px;
+      user-select: none;
+    }
+
+    .bubble-check {
+      color: #53bdeb;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1;
     }
 
     .chat-input-bar {
-      padding: 12px 18px;
-      border-top: 1px solid var(--card-border);
-      background: rgba(11, 15, 25, 0.95);
+      padding: 10px 16px;
+      background: #202c33;
+      border-top: 1px solid rgba(134, 150, 160, 0.15);
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 8px;
       flex-shrink: 0;
       position: relative;
       z-index: 5;
     }
 
-    .chat-input-box {
-      flex: 1;
-      background: rgba(0, 0, 0, 0.4);
-      border: 1px solid var(--card-border);
-      border-radius: var(--radius-sm);
-      padding: 10px 14px;
-      color: #fff;
-      font-family: var(--font-main);
-      font-size: 13.5px;
-      resize: none;
-      min-height: 42px;
-      max-height: 120px;
-      outline: none;
+    .chat-input-line-info {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11.5px;
+      color: #8696a0;
     }
 
-    .chat-input-box:focus {
-      border-color: var(--primary);
+    .chat-input-row {
+      display: flex;
+      align-items: flex-end;
+      gap: 10px;
+      width: 100%;
+    }
+
+    .chat-input-box {
+      flex: 1;
+      background: #2a3942;
+      border: none;
+      border-radius: 8px;
+      padding: 9px 14px;
+      color: #e9edef;
+      font-family: inherit;
+      font-size: 14px;
+      resize: none;
+      min-height: 40px;
+      max-height: 120px;
+      outline: none;
+      line-height: 1.4;
+    }
+
+    .chat-input-box::placeholder {
+      color: #8696a0;
+    }
+
+    .chat-send-btn {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      background: #00a884;
+      color: #fff;
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: background 0.15s ease, transform 0.1s ease;
+    }
+
+    .chat-send-btn:hover {
+      background: #008f72;
+      transform: scale(1.04);
+    }
+
+    .chat-send-btn:active {
+      transform: scale(0.96);
     }
 
     /* Kanban Tickets Board */
@@ -2013,9 +2215,12 @@ export function getAdminDashboardHtml(): string {
         <div class="chat-layout">
           <div class="chat-sidebar" id="chat-threads-sidebar">
             <div class="chat-search-header">
-              <input type="text" id="chat-filter-input" class="form-control" placeholder="Buscar cliente o número..." oninput="filterChatThreads(this.value)" style="margin-bottom: 8px;">
-              <div id="chat-dept-filter-bar" style="display: flex; gap: 4px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin;">
-                <button class="btn btn-primary btn-sm active" id="btn-filter-dept-all" style="padding:4px 8px; font-size:11px; white-space: nowrap;" onclick="setChatDeptFilter('all', this)">Todos</button>
+              <div class="chat-search-bar-wrap">
+                <svg class="svg-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                <input type="text" id="chat-filter-input" class="chat-search-input" placeholder="Buscar un chat o número..." oninput="filterChatThreads(this.value)">
+              </div>
+              <div id="chat-dept-filter-bar" class="chat-dept-pills-bar">
+                <button class="chat-filter-pill active" id="btn-filter-dept-all" onclick="setChatDeptFilter('all', this)">Todos</button>
               </div>
             </div>
             <div id="chat-threads-container" class="chat-threads-list"></div>
@@ -2025,28 +2230,32 @@ export function getAdminDashboardHtml(): string {
             <div id="chat-active-header" class="chat-header-bar" style="display: none;">
               <div class="chat-header-left">
                 <button class="btn btn-secondary btn-xs btn-back-to-threads" style="display: none;" id="btn-back-to-threads" onclick="toggleMobileChatThreads()" title="Volver a lista de chats">◀ Volver</button>
-                <div class="thread-avatar" id="active-chat-avatar">📱</div>
+                <div class="thread-avatar" id="active-chat-avatar">
+                  <svg class="svg-icon" viewBox="0 0 24 24" style="width:24px;height:24px;color:#cfd6db;"><path fill="currentColor" d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                </div>
                 <div style="min-width: 0;">
-                  <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                    <h4 id="active-chat-name" style="font-size: 13.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px;">Seleccione un chat</h4>
-                    <span id="active-chat-dept-badge" class="badge badge-info" style="font-size: 9.5px; padding: 2px 6px;">General</span>
-                    <span id="active-chat-instance-badge" class="badge badge-purple" style="font-size: 9.5px; padding: 2px 6px; display: none;" title="Línea de WhatsApp remitente">Línea: --</span>
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <h4 id="active-chat-name" style="font-size: 15px; font-weight: 600; color: #e9edef; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px;">Seleccione un chat</h4>
+                    <span id="active-chat-dept-badge" class="badge badge-info" style="font-size: 10px; padding: 2px 7px;">General</span>
                   </div>
-                  <span id="active-chat-phone" style="font-size: 11px; color: var(--text-muted); font-family: var(--font-mono);">--</span>
+                  <div style="display: flex; align-items: center; gap: 6px; margin-top: 1px;">
+                    <span id="active-chat-phone" style="font-size: 11.5px; color: #8696a0; font-family: inherit;">--</span>
+                    <span id="active-chat-instance-badge" class="badge badge-purple" style="font-size: 10px; padding: 2px 7px; display: none;" title="Línea y número de WhatsApp asignado">Línea: --</span>
+                  </div>
                 </div>
               </div>
               <div class="chat-header-actions">
-                <button id="btn-transfer-dept" class="btn btn-secondary btn-xs" onclick="openTransferChatModal()" title="Traspasar conversación a otra oficina o área">
-                  🔄 <span>Traspasar Área</span>
+                <button id="btn-transfer-dept" class="btn btn-secondary btn-xs" style="background: #2a3942; border-color: rgba(255,255,255,0.1); color: #00a884; font-weight: 600;" onclick="openTransferChatModal()" title="Traspasar conversación a otro número o área activa">
+                  🔄 <span>Traspasar Línea / Área</span>
                 </button>
-                <div id="takeover-status-indicator" class="badge badge-success" style="font-size: 10px; padding: 3px 8px;">🤖 Bot Activo</div>
+                <div id="takeover-status-indicator" class="badge badge-success" style="font-size: 10px; padding: 4px 8px;">🤖 Bot Activo</div>
                 <button id="btn-toggle-takeover" class="btn btn-secondary btn-xs" onclick="toggleCurrentChatTakeover()" title="Pausar bot para atención humana">
                   ⏸️ <span>Pausar 4h</span>
                 </button>
                 <button class="btn btn-secondary btn-xs" title="Pausar hasta mañana a las 10:00 AM" onclick="pauseCurrentChatUntilMorning()">
                   🌙 <span>Mañana</span>
                 </button>
-                <div style="width: 1px; height: 18px; background: var(--card-border); margin: 0 2px;"></div>
+                <div style="width: 1px; height: 20px; background: rgba(134, 150, 160, 0.2); margin: 0 2px;"></div>
                 <button class="btn btn-warning btn-xs" title="Finalizar caso y reactivar bot" onclick="closeCurrentChatCase()">
                   <svg class="svg-icon" style="width: 12px; height: 12px;" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"></path></svg>
                   <span>Cerrar</span>
@@ -2058,29 +2267,29 @@ export function getAdminDashboardHtml(): string {
               </div>
             </div>
 
-            <div id="chat-empty-state" style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-dim); gap: 12px;">
-              <svg class="svg-icon" style="width: 48px; height: 48px; opacity: 0.5;" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
-              <p>Selecciona una conversación para chatear en tiempo real.</p>
+            <div id="chat-empty-state" style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #8696a0; gap: 14px; background: #111b21;">
+              <div style="width: 80px; height: 80px; border-radius: 50%; background: #202c33; display: flex; align-items: center; justify-content: center;">
+                <svg class="svg-icon" style="width: 44px; height: 44px; color: #00a884; opacity: 0.8;" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+              </div>
+              <h3 style="font-size: 17px; font-weight: 600; color: #e9edef;">WhatsApp en Vivo para CloudWareMx</h3>
+              <p style="font-size: 13px; max-width: 360px; text-align: center; line-height: 1.5;">Selecciona una conversación del listado izquierdo para chatear en tiempo real con el cliente o traspasarlo de área.</p>
             </div>
 
             <div id="chat-messages-wrap" class="chat-messages-container" style="display: none;"></div>
 
-            <div id="chat-input-container" class="chat-input-bar" style="display: none; flex-direction: column; gap: 6px;">
-              <div style="display: flex; align-items: center; justify-content: space-between; padding: 0 4px; font-size: 11.5px; color: var(--text-muted);">
+            <div id="chat-input-container" class="chat-input-bar" style="display: none;">
+              <div class="chat-input-line-info">
                 <div style="display: flex; align-items: center; gap: 8px;">
-                  <span>Remitente de WhatsApp:</span>
-                  <select id="chat-sender-instance" class="form-control" style="font-size: 11px; padding: 3px 8px; height: auto; width: auto; background: rgba(0,0,0,0.4);">
-                    <option value="atencion">💳 Atención (WhatsApp 1)</option>
-                    <option value="soporte">🔧 Soporte (WhatsApp 2)</option>
+                  <span style="color: #8696a0;">Línea de WhatsApp Remitente:</span>
+                  <select id="chat-sender-instance" class="form-control" style="font-size: 11px; padding: 2px 8px; height: 26px; width: auto; background: #111b21; border-color: rgba(134,150,160,0.25); color: #e9edef; border-radius: 6px;">
                   </select>
                 </div>
-                <span style="font-size: 10.5px; color: var(--text-dim);">Enter para enviar</span>
+                <span style="font-size: 11px; color: #8696a0;">Enter para enviar • Shift+Enter para salto de línea</span>
               </div>
-              <div style="display: flex; gap: 10px; width: 100%;">
-                <textarea id="chat-text-input" class="chat-input-box" placeholder="Escribe un mensaje... (Enter para enviar, Shift+Enter para nueva línea)" rows="1" onkeydown="handleChatInputKeyDown(event)" style="flex: 1;"></textarea>
-                <button class="btn btn-primary" onclick="sendActiveChatMessage()" style="height: 42px; padding: 0 18px;">
-                  <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-                  <span>Enviar</span>
+              <div class="chat-input-row">
+                <textarea id="chat-text-input" class="chat-input-box" placeholder="Escribe un mensaje" rows="1" onkeydown="handleChatInputKeyDown(event)"></textarea>
+                <button class="chat-send-btn" onclick="sendActiveChatMessage()" title="Enviar mensaje">
+                  <svg class="svg-icon" style="width: 18px; height: 18px;" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
                 </button>
               </div>
             </div>
@@ -3985,7 +4194,7 @@ export function getAdminDashboardHtml(): string {
       const sortedAreas = Array.from(areaSet);
 
       let html = \`
-        <button class="btn \${state.chatDeptFilter === 'all' ? 'btn-primary active' : 'btn-secondary'} btn-sm" style="padding:4px 8px; font-size:11px; white-space: nowrap;" onclick="setChatDeptFilter('all', this)">
+        <button class="chat-filter-pill \${state.chatDeptFilter === 'all' ? 'active' : ''}" onclick="setChatDeptFilter('all', this)">
           Todos (\${counts.all})
         </button>
       \`;
@@ -4000,7 +4209,7 @@ export function getAdminDashboardHtml(): string {
         else if (lower.includes('ventas') || lower.includes('contrat')) icon = '💼';
 
         html += \`
-          <button class="btn \${isCurrent ? 'btn-primary active' : 'btn-secondary'} btn-sm" style="padding:4px 8px; font-size:11px; white-space: nowrap;" onclick="setChatDeptFilter('\${escapeHtml(areaName)}', this)">
+          <button class="chat-filter-pill \${isCurrent ? 'active' : ''}" onclick="setChatDeptFilter('\\\${escapeHtml(areaName)}', this)">
             \${icon} \${escapeHtml(areaName)} (\${c})
           </button>
         \`;
@@ -4013,16 +4222,17 @@ export function getAdminDashboardHtml(): string {
       const select = document.getElementById('chat-sender-instance');
       if (!select) return;
 
-      if (!state.whatsappInstances || state.whatsappInstances.length === 0) {
+      if (!state.whatsappAreas || state.whatsappAreas.length === 0) {
         select.innerHTML = '<option value="">Línea activa por defecto</option>';
         return;
       }
 
       const currentVal = select.value;
-      select.innerHTML = state.whatsappInstances.map(inst => {
-        const phone = inst.phone ? \`(+52 \${inst.phone.slice(-10)})\` : '';
+      select.innerHTML = state.whatsappAreas.map(inst => {
+        const phone = inst.phone_number ? \`(+52 \${inst.phone_number.slice(-10)})\` : '';
         const area = inst.area_name ? \`[\${inst.area_name}] \` : '';
-        return \`<option value="\${escapeHtml(inst.name)}">\${area}\${escapeHtml(inst.name)} \${phone}</option>\`;
+        const status = (inst.is_connected || inst.connection_status === 'open') ? '🟢' : '⚪';
+        return \`<option value="\\\${escapeHtml(inst.instance_name)}">\${status} \${area}\\\${escapeHtml(inst.instance_name)} \${phone}</option>\`;
       }).join('');
 
       if (currentVal && Array.from(select.options).some(o => o.value === currentVal)) {
@@ -4032,13 +4242,11 @@ export function getAdminDashboardHtml(): string {
 
     function setChatDeptFilter(dept, btn) {
       state.chatDeptFilter = dept;
-      document.querySelectorAll('#chat-dept-filter-bar .btn').forEach(b => {
-        b.classList.remove('btn-primary', 'active');
-        b.classList.add('btn-secondary');
+      document.querySelectorAll('#chat-dept-filter-bar .chat-filter-pill').forEach(b => {
+        b.classList.remove('active');
       });
       if (btn) {
-        btn.classList.remove('btn-secondary');
-        btn.classList.add('btn-primary', 'active');
+        btn.classList.add('active');
       }
       filterChatThreads(document.getElementById('chat-filter-input')?.value || '');
     }
@@ -4053,7 +4261,7 @@ export function getAdminDashboardHtml(): string {
     function renderChatThreads(list) {
       const container = document.getElementById('chat-threads-container');
       if (!list || list.length === 0) {
-        container.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-dim); font-size: 13px;">Sin conversaciones en esta área.</div>';
+        container.innerHTML = '<div style="padding: 24px 16px; text-align: center; color: #8696a0; font-size: 13px;">Sin conversaciones en esta área.</div>';
         return;
       }
 
@@ -4062,34 +4270,36 @@ export function getAdminDashboardHtml(): string {
       container.innerHTML = list.map(c => {
         const isActive = c.phone === state.activeChatPhone ? 'active' : '';
         const name = c.client_name || c.phone;
-        const initials = name.substring(0, 2).toUpperCase();
         const dept = c.department || 'General';
-        const instanceLabel = c.last_instance ? \`<span style="font-size: 9px; color: var(--text-dim); margin-left: 2px;">[\${c.last_instance}]</span>\` : '';
         const deleteBtnHtml = isSuperAdmin ? \`
-            <button class="btn-thread-delete" title="Eliminar conversación" onclick="deleteChatThread(event, '\${c.phone}')">
-              <svg class="svg-icon" style="width: 13px; height: 13px;" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+            <button class="btn-thread-delete" title="Eliminar conversación" onclick="deleteChatThread(event, '\\\${c.phone}')">
+              <svg class="svg-icon" style="width: 14px; height: 14px;" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
             </button>\` : '';
 
         return \`
-          <div class="chat-thread-item \${isActive}" onclick="selectChat('\${c.phone}')">
-            <div class="thread-avatar">\${initials}</div>
-            <div class="thread-content" style="flex:1; min-width: 0;">
+          <div class="chat-thread-item \${isActive}" onclick="selectChat('\\\${c.phone}')">
+            <div class="thread-avatar">
+              <svg class="svg-icon" viewBox="0 0 24 24" style="width:24px;height:24px;color:#cfd6db;"><path fill="currentColor" d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+            </div>
+            <div class="thread-content">
               <div class="thread-top">
-                <span class="thread-name">\${escapeHtml(name)}</span>
-                <span class="thread-time">\${formatShortTime(c.last_interaction)}</span>
+                <span class="thread-name">\\\${escapeHtml(name)}</span>
+                <span class="thread-time">\\\${formatShortTime(c.last_interaction)}</span>
               </div>
-              <div class="thread-preview">\${escapeHtml(c.last_message || '')}</div>
-              <div style="display: flex; gap: 4px; align-items: center; margin-top: 4px; flex-wrap: wrap;">
-                <span class="badge badge-info" style="font-size: 9px; padding: 2px 5px;">
-                  \${escapeHtml(dept)}
-                </span>
-                <span class="badge \${c.is_human_paused ? 'badge-warning' : 'badge-success'}" style="font-size: 9px; padding: 2px 5px;">
+              <div class="thread-bottom">
+                <span class="thread-preview">\\\${escapeHtml(c.last_message || 'Sin mensajes')}</span>
+                \${deleteBtnHtml}
+              </div>
+              <div class="thread-tags-row">
+                <span class="badge \${c.is_human_paused ? 'badge-warning' : 'badge-success'}" style="font-size: 9.5px; padding: 1px 5px;">
                   \${c.is_human_paused ? '⏸️ Humano' : '🤖 Bot'}
                 </span>
-                \${instanceLabel}
+                <span class="badge badge-info" style="font-size: 9.5px; padding: 1px 5px;">
+                  \\\${escapeHtml(dept)}
+                </span>
+                \${c.last_instance ? \`<span class="badge badge-purple" style="font-size: 9.5px; padding: 1px 5px;">\\\${escapeHtml(c.last_instance)}</span>\` : ''}
               </div>
             </div>
-            \${deleteBtnHtml}
           </div>
         \`;
       }).join('');
@@ -4126,7 +4336,9 @@ export function getAdminDashboardHtml(): string {
       const activeInst = instanceName || (senderSelect?.value || '');
       if (instBadge) {
         if (activeInst) {
-          instBadge.innerText = \`Línea: \${activeInst}\`;
+          const instObj = (state.whatsappAreas || []).find(a => a.instance_name.toLowerCase() === activeInst.toLowerCase());
+          const phoneTxt = instObj?.phone_number ? \` (+52 \${instObj.phone_number.slice(-10)})\` : '';
+          instBadge.innerText = \`Línea: \${activeInst}\${phoneTxt}\`;
           instBadge.style.display = 'inline-block';
         } else {
           instBadge.style.display = 'none';
@@ -4178,18 +4390,21 @@ export function getAdminDashboardHtml(): string {
 
       const areaOptions = state.whatsappAreas.map(a => {
         const isSelected = a.area_name.toLowerCase() === currentDept.toLowerCase();
-        const phoneTxt = a.phone_number ? \` (+52 \${a.phone_number.slice(-10)})\` : '';
-        return \`<option value="\${escapeHtml(a.area_name)}" data-instance="\${escapeHtml(a.instance_name)}" \${isSelected ? 'selected' : ''}>\${escapeHtml(a.area_name)}\${phoneTxt} [Línea: \${escapeHtml(a.instance_name)}]</option>\`;
+        const phoneFormatted = a.phone_number ? \`+52 \${a.phone_number.slice(-10)}\` : 'Sin número vinculado';
+        const isOnline = a.is_connected || a.connection_status === 'open';
+        const statusTxt = isOnline ? '🟢 ACTIVO' : '⚪ DESCONECTADO';
+        const label = \`\${a.area_name} — 📱 \${phoneFormatted} [Línea: \${a.instance_name}] (\${statusTxt})\`;
+        return \`<option value="\\\${escapeHtml(a.area_name)}" data-instance="\\\${escapeHtml(a.instance_name)}" \${isSelected ? 'selected' : ''}>\\\${escapeHtml(label)}</option>\`;
       }).join('');
 
       const content = \`
         <div style="display: flex; flex-direction: column; gap: 14px;">
-          <p style="font-size: 13px; color: var(--text-muted);">
-            Transfiere la conversación del cliente <strong>\${escapeHtml(chat?.client_name || state.activeChatPhone)}</strong> a otra área u oficina. El historial de mensajes se conservará intacto.
+          <p style="font-size: 13px; color: var(--text-muted); line-height: 1.5;">
+            Transfiere la conversación del cliente <strong>\\\${escapeHtml(chat?.client_name || state.activeChatPhone)}</strong> al número de WhatsApp activo de otra área u oficina.
           </p>
 
           <div class="form-group">
-            <label class="form-label">Área / Oficina Destino</label>
+            <label class="form-label" style="font-weight: 600;">Línea de WhatsApp & Área Destino</label>
             <select id="transfer-modal-area-select" class="form-control" onchange="handleTransferAreaChange(this)">
               \${areaOptions || '<option value="Atención al Cliente">Atención al Cliente</option><option value="Soporte Técnico">Soporte Técnico</option>'}
               <option value="__CUSTOM__">-- Otra área personalizada --</option>
@@ -4201,7 +4416,7 @@ export function getAdminDashboardHtml(): string {
             <label style="display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
               <div>
                 <strong style="font-size: 13px; color: var(--text-main);">💬 Notificar al cliente por WhatsApp</strong>
-                <div style="font-size: 11px; color: var(--text-dim);">Envía un mensaje automático avisando que su caso fue transferido</div>
+                <div style="font-size: 11px; color: var(--text-dim);">Envía un mensaje avisando que su caso fue canalizado al área</div>
               </div>
               <input type="checkbox" id="transfer-modal-notify-toggle" style="transform: scale(1.3); cursor: pointer;" checked onchange="document.getElementById('transfer-modal-msg-wrap').style.display = this.checked ? 'block' : 'none';">
             </label>
@@ -4212,7 +4427,7 @@ export function getAdminDashboardHtml(): string {
         </div>
       \`;
 
-      openModal('🔄 Traspasar Conversación a Otra Área / Oficina', content, async () => {
+      openModal('🔄 Traspasar Conversación a Línea / Área', content, async () => {
         const select = document.getElementById('transfer-modal-area-select');
         let selectedArea = select.value;
         if (selectedArea === '__CUSTOM__') {
@@ -4283,7 +4498,7 @@ export function getAdminDashboardHtml(): string {
     function renderChatMessages(messages) {
       const wrap = document.getElementById('chat-messages-wrap');
       if (!messages || messages.length === 0) {
-        wrap.innerHTML = '<div style="text-align: center; color: var(--text-dim); margin-top: 40px;">No hay mensajes registrados.</div>';
+        wrap.innerHTML = '<div style="text-align: center; color: #8696a0; margin-top: 40px; font-size: 13px;">No hay mensajes registrados con este número.</div>';
         return;
       }
 
@@ -4291,10 +4506,10 @@ export function getAdminDashboardHtml(): string {
         const isOut = m.direction === 'OUT';
         return \`
           <div class="chat-bubble \${isOut ? 'out' : 'in'}">
-            <div>\${escapeHtml(m.message)}</div>
+            <span>\\\${escapeHtml(m.message)}</span>
             <div class="bubble-meta">
-              <span>\${formatShortTime(m.created_at)}</span>
-              \${isOut ? '<span>✓✓</span>' : ''}
+              <span>\\\${formatShortTime(m.created_at)}</span>
+              \${isOut ? '<span class="bubble-check">✓✓</span>' : ''}
             </div>
           </div>
         \`;
@@ -4309,10 +4524,10 @@ export function getAdminDashboardHtml(): string {
       const bubble = document.createElement('div');
       bubble.className = 'chat-bubble ' + (isOut ? 'out' : 'in');
       bubble.innerHTML = \`
-        <div>\${escapeHtml(data.message)}</div>
+        <span>\\\${escapeHtml(data.message)}</span>
         <div class="bubble-meta">
-          <span>\${formatShortTime(data.created_at || new Date().toISOString())}</span>
-          \${isOut ? '<span>✓✓</span>' : ''}
+          <span>\\\${formatShortTime(data.created_at || new Date().toISOString())}</span>
+          \${isOut ? '<span class="bubble-check">✓✓</span>' : ''}
         </div>
       \`;
       wrap.appendChild(bubble);

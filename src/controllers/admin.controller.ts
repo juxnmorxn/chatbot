@@ -964,7 +964,44 @@ export class AdminController {
    */
   static async getWhatsAppAreas(_req: Request, res: Response): Promise<void> {
     try {
-      const areas = await TursoService.getAllDistinctAreas();
+      const [dbAreas, liveInstances] = await Promise.all([
+        TursoService.getAllDistinctAreas(),
+        EvolutionService.fetchAllInstances().catch(() => []),
+      ]);
+
+      const liveMap = new Map<string, any>();
+      for (const inst of liveInstances) {
+        liveMap.set(inst.name.toLowerCase(), inst);
+      }
+
+      const areas = dbAreas.map(a => {
+        const live = liveMap.get(a.instance_name.toLowerCase());
+        return {
+          area_name: a.area_name,
+          instance_name: a.instance_name,
+          phone_number: live?.phone || a.phone_number || null,
+          connection_status: live?.connectionStatus || 'open',
+          is_connected: (live?.connectionStatus || 'open') === 'open',
+          profile_name: live?.profileName || null,
+        };
+      });
+
+      for (const live of liveInstances) {
+        if (!areas.some(a => a.instance_name.toLowerCase() === live.name.toLowerCase())) {
+          const autoArea = live.name.toLowerCase().includes('soporte')
+            ? 'Soporte Técnico'
+            : (live.name.toLowerCase().includes('atencion') ? 'Atención al Cliente' : (live.name.toLowerCase().includes('ventas') ? 'Ventas' : (live.name.toLowerCase().includes('cobranza') ? 'Cobranza' : live.name)));
+          areas.push({
+            area_name: autoArea,
+            instance_name: live.name,
+            phone_number: live.phone || null,
+            connection_status: live.connectionStatus,
+            is_connected: live.connectionStatus === 'open',
+            profile_name: live.profileName || null,
+          });
+        }
+      }
+
       res.json({ success: true, count: areas.length, areas });
     } catch (error: any) {
       logger.error('Error al listar áreas de WhatsApp:', error?.message || error);
