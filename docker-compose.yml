@@ -45,6 +45,8 @@ services:
     environment:
       - EVOLUTION_URL=http://evolution_api:8080
       - EVOLUTION_API_KEY=429644-cloudware-key-auth
+    volumes:
+      - ./data:/app/data
     ports:
       - "3000:3000"
     networks:
