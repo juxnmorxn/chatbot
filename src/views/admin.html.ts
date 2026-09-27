@@ -165,10 +165,10 @@ export function getAdminDashboardHtml(): string {
     }
 
     #sidebar.collapsed .brand-text {
-      display: none;
+      display: none !important;
     }
 
-    /* Persistent Toggle Button (NEVER vanishes) */
+    /* Persistent Toggle Button */
     .sidebar-toggle-btn {
       background: rgba(255, 255, 255, 0.04);
       border: 1px solid var(--card-border);
@@ -190,28 +190,47 @@ export function getAdminDashboardHtml(): string {
       border-color: var(--primary);
     }
 
+    /* Collapsed Sidebar Header */
     #sidebar.collapsed .sidebar-header {
+      padding: 0 8px;
       justify-content: center;
-      padding: 0;
+      position: relative;
     }
 
     #sidebar.collapsed .sidebar-brand {
-      display: none;
+      display: flex;
+      justify-content: center;
+      margin: 0;
+    }
+
+    #sidebar.collapsed .brand-logo {
+      width: 32px;
+      height: 32px;
     }
 
     #sidebar.collapsed .sidebar-toggle-btn {
-      margin: 0 auto;
-      width: 36px;
-      height: 36px;
+      width: 26px;
+      height: 26px;
+      margin: 0;
+      position: absolute;
+      right: -12px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: #1e293b;
+      border: 1px solid var(--card-border-hover);
+      border-radius: 50%;
+      z-index: 105;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.6);
     }
 
     .sidebar-nav {
       flex: 1;
-      padding: 16px 10px;
+      padding: 14px 8px;
       display: flex;
       flex-direction: column;
-      gap: 5px;
+      gap: 4px;
       overflow-y: auto;
+      overflow-x: hidden;
     }
 
     .nav-category {
@@ -225,7 +244,7 @@ export function getAdminDashboardHtml(): string {
     }
 
     #sidebar.collapsed .nav-category {
-      display: none;
+      display: none !important;
     }
 
     .nav-item {
@@ -272,6 +291,7 @@ export function getAdminDashboardHtml(): string {
 
     .nav-icon {
       width: 20px;
+      height: 20px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -296,14 +316,26 @@ export function getAdminDashboardHtml(): string {
       border-color: rgba(244, 63, 94, 0.4);
     }
 
+    /* CRITICAL FIX: Hide badges, spans and text in collapsed mode even when inline styles exist */
     #sidebar.collapsed .nav-badge,
-    #sidebar.collapsed .nav-text {
-      display: none;
+    #sidebar.collapsed .nav-text,
+    #sidebar.collapsed span[id^="badge-"] {
+      display: none !important;
     }
 
     #sidebar.collapsed .nav-item {
       justify-content: center;
-      padding: 12px 0;
+      padding: 10px 0;
+      width: 44px;
+      height: 44px;
+      margin: 2px auto;
+      border-radius: 10px;
+    }
+
+    #sidebar.collapsed .nav-item.active::before {
+      left: 0;
+      top: 10px;
+      bottom: 10px;
     }
 
     .sidebar-footer {
@@ -353,14 +385,23 @@ export function getAdminDashboardHtml(): string {
     }
 
     #sidebar.collapsed .user-info {
-      display: none;
+      display: none !important;
     }
 
     #sidebar.collapsed .sidebar-footer {
       flex-direction: column;
-      padding: 12px 0;
-      gap: 10px;
+      padding: 10px 0;
+      gap: 8px;
       justify-content: center;
+      align-items: center;
+    }
+
+    #sidebar.collapsed .user-avatar {
+      margin: 0 auto;
+    }
+
+    #sidebar.collapsed .btn-logout {
+      margin: 0 auto;
     }
 
     .btn-logout {
