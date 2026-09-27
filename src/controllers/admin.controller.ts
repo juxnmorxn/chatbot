@@ -1901,27 +1901,15 @@ export class AdminController {
 
       const coords = clientDetail.coordenadas_gps || '';
       const mapsUrl = clientDetail.google_maps_url || (coords ? `https://www.google.com/maps?q=${coords}` : '');
-      const ispName = SettingsService.get('ISP_NAME', 'ISP_NAME', 'CloudWareMx');
 
       let dispatchMsg =
-        `*ORDEN DE TRABAJO / VISITA TECNICA*\n` +
-        `*${ispName}*\n\n` +
-        `• *Cliente:* ${clientDetail.nombre} (#${clientDetail.id_servicio})\n` +
-        (clientDetail.telefono_principal ? `• *Telefono:* ${clientDetail.telefono_principal}\n` : '') +
-        (clientDetail.direccion ? `• *Direccion:* ${clientDetail.direccion}\n` : '') +
-        (clientDetail.ip ? `• *IP:* ${clientDetail.ip}\n` : '') +
-        (clientDetail.sn_onu ? `• *SN ONU:* ${clientDetail.sn_onu}\n` : '') +
-        (clientDetail.plan_internet ? `• *Plan:* ${clientDetail.plan_internet}\n` : '') +
-        (clientDetail.router ? `• *Router / Zona:* ${clientDetail.router}\n` : '') +
-        (clientDetail.ubicacion_notas ? `• *Notas Acceso:* ${clientDetail.ubicacion_notas}\n` : '') +
-        (custom_notes ? `\n*Instrucciones Especiales:*\n${custom_notes}\n` : '');
+        `*ASIGNACION DE TRABAJO*\n\n` +
+        `*Nombre:* ${clientDetail.nombre}\n` +
+        `*IP:* ${clientDetail.ip || 'No asignada'}\n` +
+        `*Ubicacion:* ${mapsUrl || (clientDetail.direccion || 'Sin ubicacion registrada')}\n`;
 
-      if (mapsUrl || coords) {
-        dispatchMsg +=
-          `\n*Ubicacion en Google Maps:*\n${mapsUrl || `https://www.google.com/maps?q=${coords}`}\n` +
-          `*Coordenadas:* \`${coords}\`\n`;
-      } else {
-        dispatchMsg += `\n*Nota:* Este cliente no cuenta con coordenadas GPS registradas aun.\n`;
+      if (custom_notes && String(custom_notes).trim()) {
+        dispatchMsg += `*Descripcion:* ${String(custom_notes).trim()}\n`;
       }
 
       const { EvolutionService } = await import('../services/evolution.service');

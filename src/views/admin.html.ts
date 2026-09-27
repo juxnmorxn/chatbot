@@ -7325,10 +7325,10 @@ export function getAdminDashboardHtml(): string {
             <input type="text" id="dispatch-custom-phone" class="form-control" placeholder="10 dígitos (ej. 7711234567)">
           </div>
 
-          <!-- Notas e Instrucciones -->
+          <!-- Descripción del trabajo -->
           <div>
-            <label class="form-label">Instrucciones o Notas de Trabajo (opcional)</label>
-            <textarea id="dispatch-custom-notes" class="form-control" rows="2" placeholder="Ej: Revisar potencia óptica en caja NAP / Cambio de drop de fibra / Cable cortado..."></textarea>
+            <label class="form-label">Descripción del trabajo a realizar</label>
+            <textarea id="dispatch-custom-notes" class="form-control" rows="2" placeholder="Ej: Revisar potencia óptica en caja NAP / Cable cortado / Cambio de drop..."></textarea>
           </div>
         </div>
       \`;
