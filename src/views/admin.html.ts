@@ -424,6 +424,70 @@ export function getAdminDashboardHtml(): string {
       border-color: rgba(244, 63, 94, 0.25);
     }
 
+    /* Sidebar Unified Sync Action */
+    .sidebar-sync-wrap {
+      padding: 10px 14px;
+      border-top: 1px solid var(--card-border);
+      background: rgba(0, 0, 0, 0.12);
+    }
+
+    .btn-sidebar-sync {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-size: 12.5px;
+      font-weight: 600;
+      padding: 9px 12px;
+      border-radius: var(--radius);
+      background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(99, 102, 241, 0.15));
+      border: 1px solid rgba(59, 130, 246, 0.35);
+      color: #93c5fd;
+      cursor: pointer;
+      transition: var(--transition);
+      box-sizing: border-box;
+    }
+
+    .btn-sidebar-sync:hover {
+      background: linear-gradient(135deg, rgba(59, 130, 246, 0.28), rgba(99, 102, 241, 0.28));
+      border-color: rgba(99, 102, 241, 0.6);
+      color: #ffffff;
+      box-shadow: 0 0 14px rgba(59, 130, 246, 0.25);
+    }
+
+    .btn-sidebar-sync:disabled {
+      opacity: 0.65;
+      cursor: not-allowed;
+    }
+
+    #sidebar.collapsed .sidebar-sync-wrap {
+      padding: 8px 6px;
+      display: flex;
+      justify-content: center;
+    }
+
+    #sidebar.collapsed .btn-sidebar-sync {
+      width: 44px;
+      height: 44px;
+      padding: 0;
+      justify-content: center;
+      margin: 0 auto;
+    }
+
+    #sidebar.collapsed .btn-sidebar-sync .sync-btn-text {
+      display: none !important;
+    }
+
+    @keyframes spin-anim {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    .spin {
+      animation: spin-anim 1s linear infinite !important;
+    }
+
     /* Main Content Area */
     main#main-content {
       flex: 1;
@@ -2160,6 +2224,14 @@ export function getAdminDashboardHtml(): string {
         </div>
       </nav>
 
+      <!-- Unified Database Synchronization Action -->
+      <div class="sidebar-sync-wrap">
+        <button id="btn-sidebar-sync-all" class="btn-sidebar-sync" onclick="triggerFullUnifiedSync()" title="Sincronizar SmartOLT y WispHub (Manual)">
+          <svg id="sync-unified-icon" class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path></svg>
+          <span class="sync-btn-text">Sincronizar Todo</span>
+        </button>
+      </div>
+
       <div class="sidebar-footer">
         <div id="user-avatar-badge" class="user-avatar">AD</div>
         <div class="user-info">
@@ -2256,7 +2328,7 @@ export function getAdminDashboardHtml(): string {
           </div>
         </div>
 
-        <!-- Compact Unified Services & Sync Toolbar -->
+        <!-- Compact Unified Services & Diagnostic Toolbar -->
         <div class="glass-card" style="margin-bottom: 18px; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
           <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
             <span style="font-size: 11.5px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-right: 4px;">⚡ Diagnóstico Rápido:</span>
@@ -2273,15 +2345,8 @@ export function getAdminDashboardHtml(): string {
               <span class="pulse-dot" style="width: 7px; height: 7px; margin-right: 2px;"></span> Groq AI
             </button>
           </div>
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <button class="btn btn-primary btn-xs" onclick="triggerSmartOltSync(false)" title="Sincronizar ONUs de SmartOLT">
-              <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"></path></svg>
-              <span>Sincronizar SmartOLT</span>
-            </button>
-            <button class="btn btn-secondary btn-xs" onclick="triggerWisphubSync()" title="Sincronizar Clientes de WispHub">
-              <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"></path></svg>
-              <span>Sincronizar WispHub</span>
-            </button>
+          <div style="font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 6px;">
+            <span>Sincronización automatizada activa</span>
           </div>
         </div>
 
@@ -2537,9 +2602,6 @@ export function getAdminDashboardHtml(): string {
               </select>
               <button class="btn btn-secondary btn-sm" onclick="clearClientColFilters()" title="Limpiar todos los filtros">
                 Limpiar
-              </button>
-              <button class="btn btn-secondary btn-sm" onclick="triggerWisphubSync()" title="Sincronizar base de datos con WispHub en vivo">
-                Sincronizar
               </button>
             </div>
           </div>
@@ -4320,6 +4382,58 @@ export function getAdminDashboardHtml(): string {
         }
       } catch (err) {
         showToast('Error de Red', err.message || 'Error al conectar', 'error');
+      }
+    }
+
+    async function triggerFullUnifiedSync() {
+      const btn = document.getElementById('btn-sidebar-sync-all');
+      const icon = document.getElementById('sync-unified-icon');
+      const btnText = btn ? btn.querySelector('.sync-btn-text') : null;
+
+      if (btn) btn.disabled = true;
+      if (icon) icon.classList.add('spin');
+      if (btnText) btnText.innerText = 'Sincronizando...';
+
+      showToast('Sincronización Global', 'Consultando SmartOLT y WispHub para actualizar Turso DB...', 'info', 4000);
+
+      try {
+        const [oltRes, whRes] = await Promise.allSettled([
+          apiFetch('/api/smartolt/sync', { method: 'POST', body: JSON.stringify({ force: false }) }),
+          apiFetch('/api/wisphub/sync', { method: 'POST' }),
+        ]);
+
+        let oltMsg = 'SmartOLT sincronizado';
+        let whMsg = 'WispHub sincronizado';
+
+        if (oltRes.status === 'fulfilled' && oltRes.value) {
+          if (oltRes.value.success) {
+            oltMsg = \`SmartOLT: \${oltRes.value.count || 0} ONUs\`;
+          } else {
+            oltMsg = \`SmartOLT: \${oltRes.value.message || 'Sin cambios'}\`;
+          }
+        } else {
+          oltMsg = 'SmartOLT: Error de conexión';
+        }
+
+        if (whRes.status === 'fulfilled' && whRes.value) {
+          if (whRes.value.success) {
+            whMsg = \`WispHub: \${whRes.value.count || 0} clientes\`;
+          } else {
+            whMsg = \`WispHub: \${whRes.value.message || whRes.value.error || 'Sin cambios'}\`;
+          }
+        } else {
+          whMsg = 'WispHub: Error de conexión';
+        }
+
+        showToast('Sincronización Completada', \`\${oltMsg} | \${whMsg}\`, 'success', 5000);
+        refreshCurrentView();
+      } catch (err) {
+        showToast('Aviso', 'Sincronización finalizada.', 'info');
+        refreshCurrentView();
+      } finally {
+        if (btn) btn.disabled = false;
+        if (icon) icon.classList.remove('spin');
+        if (btnText) btnText.innerText = 'Sincronizar Todo';
       }
     }
 

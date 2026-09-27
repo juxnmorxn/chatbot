@@ -490,6 +490,7 @@ export class TursoService {
 
   /**
    * Guarda o actualiza un lote de registros de ONUs provenientes de SmartOLT en Turso DB
+   * OPTIMIZACIÓN QUOTA TURSO: Compara los registros existentes y solo escribe los que hayan cambiado o sean nuevos.
    */
   static async saveSmartOltOnus(onus: SmartOltOnuRecord[]): Promise<number> {
     if (!onus || onus.length === 0) return 0;
@@ -497,12 +498,59 @@ export class TursoService {
       const client = getTursoClient();
       const now = new Date().toISOString();
 
+      // 1. Obtener mapa de registros existentes para calcular diferencias (0 escrituras si no hay cambios)
+      const existingRes = await client.execute(`
+        SELECT unique_external_id, sn, name, ip_address, speed_profile, zone_name, olt_name
+        FROM smartolt_onus
+      `).catch(() => ({ rows: [] }));
+
+      const existingMap = new Map<string, any>();
+      for (const r of existingRes.rows) {
+        existingMap.set(String(r.unique_external_id), {
+          sn: String(r.sn || '').trim().toUpperCase(),
+          name: String(r.name || '').trim(),
+          ip_address: String(r.ip_address || '').trim(),
+          speed_profile: String(r.speed_profile || '').trim(),
+          zone_name: String(r.zone_name || '').trim(),
+          olt_name: String(r.olt_name || '').trim(),
+        });
+      }
+
+      // 2. Filtrar solo los registros que realmente cambiaron o son nuevos
+      const toUpsert = onus.filter(item => {
+        const ext = existingMap.get(item.unique_external_id);
+        if (!ext) return true; // Es nuevo
+
+        const cleanSn = String(item.sn || '').trim().toUpperCase();
+        const cleanName = String(item.name || '').trim();
+        const cleanIp = String(item.ip_address || '').trim();
+        const cleanSpeed = String(item.speed_profile || '').trim();
+        const cleanZone = String(item.zone_name || '').trim();
+        const cleanOlt = String(item.olt_name || '').trim();
+
+        if (cleanSn !== ext.sn) return true;
+        if (cleanName !== ext.name) return true;
+        if (cleanIp && cleanIp !== ext.ip_address) return true;
+        if (cleanSpeed !== ext.speed_profile) return true;
+        if (cleanZone !== ext.zone_name) return true;
+        if (cleanOlt !== ext.olt_name) return true;
+
+        return false; // Sin cambios, no quemar cuota de escritura
+      });
+
+      if (toUpsert.length === 0) {
+        logger.info(`Sincronización SmartOLT completada: 0 cambios detectados de ${onus.length} ONUs (0 escrituras en Turso).`);
+        return 0;
+      }
+
+      logger.info(`Sincronización SmartOLT: Escribiendo ${toUpsert.length} ONUs modificadas/nuevas (Ahorradas ${onus.length - toUpsert.length} escrituras en Turso)...`);
+
       // Procesar en batches para no exceder límites de argumentos de libSQL
       const batchSize = 40;
       let totalInserted = 0;
 
-      for (let i = 0; i < onus.length; i += batchSize) {
-        const batch = onus.slice(i, i + batchSize);
+      for (let i = 0; i < toUpsert.length; i += batchSize) {
+        const batch = toUpsert.slice(i, i + batchSize);
         const statements = batch.map(item => {
           const normName = normalizeText(item.name || '');
           return {
@@ -625,6 +673,7 @@ export class TursoService {
 
   /**
    * Guarda o actualiza un lote de clientes provenientes de WispHub en Turso DB
+   * OPTIMIZACIÓN QUOTA TURSO: Compara contra la base de datos y únicamente escribe los clientes que hayan cambiado o sean nuevos.
    */
   static async saveWisphubClients(clients: WisphubClientRecord[]): Promise<number> {
     if (!clients || clients.length === 0) return 0;
@@ -632,11 +681,81 @@ export class TursoService {
       const client = getTursoClient();
       const now = new Date().toISOString();
 
+      // 1. Obtener registros existentes para este lote específico
+      const ids = clients.map(c => Number(c.id_servicio)).filter(id => !isNaN(id) && id > 0);
+      const existingMap = new Map<number, any>();
+
+      if (ids.length > 0) {
+        const placeholders = ids.map(() => '?').join(',');
+        const existingRes = await client.execute({
+          sql: `SELECT id_servicio, nombre, ip, estado, estado_facturas, saldo, precio_plan, plan_internet, router, sn_onu, telefono, direccion, dia_corte, fecha_corte FROM wisphub_clients WHERE id_servicio IN (${placeholders})`,
+          args: ids,
+        }).catch(() => ({ rows: [] }));
+
+        for (const r of existingRes.rows) {
+          existingMap.set(Number(r.id_servicio), {
+            nombre: String(r.nombre || '').trim(),
+            ip: String(r.ip || '').trim(),
+            estado: String(r.estado || '').trim(),
+            estado_facturas: String(r.estado_facturas || '').trim(),
+            saldo: String(r.saldo || '0').trim(),
+            precio_plan: String(r.precio_plan || '0').trim(),
+            plan_internet: String(r.plan_internet || '').trim(),
+            router: String(r.router || '').trim(),
+            sn_onu: String(r.sn_onu || '').trim().toUpperCase(),
+            telefono: String(r.telefono || '').trim(),
+            direccion: String(r.direccion || '').trim(),
+            dia_corte: r.dia_corte !== null && r.dia_corte !== undefined ? String(r.dia_corte).trim() : '',
+            fecha_corte: r.fecha_corte ? String(r.fecha_corte).trim() : '',
+          });
+        }
+      }
+
+      // 2. Filtrar solo los registros que realmente cambiaron o no existen
+      const toUpsert = clients.filter(c => {
+        const ext = existingMap.get(Number(c.id_servicio));
+        if (!ext) return true; // Registro nuevo
+
+        const cNombre = String(c.nombre || '').trim();
+        const cIp = String(c.ip || '').trim();
+        const cEstado = String(c.estado || 'Activo').trim();
+        const cEstadoFacturas = String(c.estado_facturas || 'Pagadas').trim();
+        const cSaldo = String(c.saldo || '0').trim();
+        const cPrecio = String(c.precio_plan || '0').trim();
+        const cPlan = String(c.plan_internet || '').trim();
+        const cRouter = String(c.router || '').trim();
+        const cSn = String(c.sn_onu || '').trim().toUpperCase();
+        const cTel = String(c.telefono || '').trim();
+        const cDir = String(c.direccion || '').trim();
+        const cDia = c.dia_corte !== null && c.dia_corte !== undefined ? String(c.dia_corte).trim() : '';
+        const cFecha = c.fecha_corte ? String(c.fecha_corte).trim() : '';
+
+        if (cNombre !== ext.nombre) return true;
+        if (cIp && cIp !== ext.ip) return true;
+        if (cEstado !== ext.estado) return true;
+        if (cEstadoFacturas !== ext.estado_facturas) return true;
+        if (cSaldo !== ext.saldo) return true;
+        if (cPrecio !== ext.precio_plan) return true;
+        if (cPlan !== ext.plan_internet) return true;
+        if (cRouter !== ext.router) return true;
+        if (cSn && cSn !== ext.sn_onu) return true;
+        if (cTel && cTel !== ext.telefono) return true;
+        if (cDir && cDir !== ext.direccion) return true;
+        if (cDia && cDia !== ext.dia_corte) return true;
+        if (cFecha && cFecha !== ext.fecha_corte) return true;
+
+        return false; // Sin cambios, 0 escrituras
+      });
+
+      if (toUpsert.length === 0) {
+        return 0;
+      }
+
       const batchSize = 40;
       let totalInserted = 0;
 
-      for (let i = 0; i < clients.length; i += batchSize) {
-        const batch = clients.slice(i, i + batchSize);
+      for (let i = 0; i < toUpsert.length; i += batchSize) {
+        const batch = toUpsert.slice(i, i + batchSize);
         const statements = batch.map(c => {
           const normName = normalizeText(c.nombre || '');
           let diaCorte = c.dia_corte || '';
@@ -651,8 +770,6 @@ export class TursoService {
               if (fechaCorte) {
                 const parts = fechaCorte.split(/[-/]/);
                 if (parts.length === 3) {
-                  // DD/MM/YYYY -> parts[0] es el día (1 a 31)
-                  // YYYY-MM-DD -> parts[2] es el día
                   if (parts[0].length <= 2) {
                     diaCorte = String(parseInt(parts[0], 10) || parts[0]);
                   } else {
@@ -725,7 +842,7 @@ export class TursoService {
         totalInserted += batch.length;
       }
 
-      logger.info(`Sincronización exitosa: ${totalInserted} clientes de WispHub guardados en Turso DB`);
+      logger.info(`Sincronización WispHub: Escribiendo ${totalInserted} clientes nuevos/modificados de ${clients.length} analizados en lote.`);
       return totalInserted;
     } catch (error: any) {
       logger.error('Error al guardar clientes de WispHub en Turso DB:', error?.message || error);
