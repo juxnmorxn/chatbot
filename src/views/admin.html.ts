@@ -4250,7 +4250,7 @@ export function getAdminDashboardHtml(): string {
       const parts = rawHash.split('?');
       const viewName = parts[0];
       const queryStr = parts[1];
-      const validViews = ['dashboard', 'live-chat', 'clients', 'tickets', 'ipam', 'audit', 'personal', 'technicians', 'modem-swap', 'settings', 'users'];
+      const validViews = ['dashboard', 'live-chat', 'clients', 'tickets', 'ipam', 'audit', 'personal', 'technicians', 'modem-swap', 'database', 'settings', 'users'];
       if (validViews.includes(viewName)) {
         if (queryStr && viewName === 'live-chat') {
           const params = new URLSearchParams(queryStr);
@@ -4281,14 +4281,19 @@ export function getAdminDashboardHtml(): string {
         setTimeout(() => switchPersonalTab('users'), 50);
       }
       state.currentView = viewId;
+      localStorage.setItem('cloudware_last_view', viewId);
 
+      let hashTarget = viewId;
+      if (viewId === 'live-chat' && state.activeChatPhone) {
+        hashTarget += '?phone=' + encodeURIComponent(state.activeChatPhone);
+      }
       if (updateHistory) {
-        let hashTarget = viewId;
-        if (viewId === 'live-chat' && state.activeChatPhone) {
-          hashTarget += '?phone=' + encodeURIComponent(state.activeChatPhone);
-        }
         if (window.location.hash !== '#' + hashTarget) {
           history.pushState({ viewId, phone: state.activeChatPhone }, '', '#' + hashTarget);
+        }
+      } else {
+        if (window.location.hash !== '#' + hashTarget) {
+          history.replaceState({ viewId, phone: state.activeChatPhone }, '', '#' + hashTarget);
         }
       }
 
@@ -5097,7 +5102,7 @@ export function getAdminDashboardHtml(): string {
         const res = await apiFetch('/api/smartolt/sync', { method: 'POST', body: JSON.stringify({ force }) });
         if (res.success) {
           showToast('Sincronización Completada', \`\${res.count} ONUs procesadas en Turso DB.\`, 'success');
-          loadDashboardData();
+          refreshCurrentView();
         } else {
           showToast('Error', res.message || 'Error al sincronizar', 'error');
         }
@@ -5112,7 +5117,7 @@ export function getAdminDashboardHtml(): string {
         const res = await apiFetch('/api/wisphub/sync', { method: 'POST' });
         if (res.success) {
           showToast('Sincronización Completada', res.message || 'Clientes sincronizados.', 'success');
-          loadDashboardData();
+          refreshCurrentView();
         } else {
           showToast('Error', res.error || 'Error al sincronizar WispHub', 'error');
         }
@@ -9804,7 +9809,9 @@ export function getAdminDashboardHtml(): string {
     // Bootstrap
     function initApp() {
       initSSEStream();
-      const initialView = parseHashView() || 'dashboard';
+      const hashView = parseHashView();
+      const savedView = localStorage.getItem('cloudware_last_view');
+      const initialView = hashView || savedView || 'dashboard';
       navigateTo(initialView, false);
       loadDashboardBadgeCounters();
       setInterval(loadDashboardBadgeCounters, 15000);
@@ -9812,7 +9819,7 @@ export function getAdminDashboardHtml(): string {
 
     // Global History & Hash Change Listeners for Back/Forward Browser Navigation
     window.addEventListener('popstate', (e) => {
-      const hashView = parseHashView() || 'dashboard';
+      const hashView = parseHashView() || localStorage.getItem('cloudware_last_view') || 'dashboard';
       if (hashView) {
         navigateTo(hashView, false);
         if (hashView === 'live-chat' && state.activeChatPhone) {
@@ -9824,7 +9831,7 @@ export function getAdminDashboardHtml(): string {
     });
 
     window.addEventListener('hashchange', () => {
-      const hashView = parseHashView() || 'dashboard';
+      const hashView = parseHashView() || localStorage.getItem('cloudware_last_view') || 'dashboard';
       if (hashView && hashView !== state.currentView) {
         navigateTo(hashView, false);
       }
