@@ -1805,16 +1805,85 @@ export function getAdminDashboardHtml(): string {
       background: linear-gradient(90deg, transparent, var(--primary), var(--accent-cyan), transparent);
     }
 
-    /* Responsive adjustments */
-    @media (max-width: 1024px) {
-      .kanban-board { grid-template-columns: repeat(2, 1fr); }
+    /* Mobile Backdrop Overlay */
+    .sidebar-backdrop {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(4px);
+      -webkit-backdrop-filter: blur(4px);
+      z-index: 990;
+      opacity: 0;
+      transition: opacity 0.25s ease;
+      pointer-events: none;
     }
 
-    @media (max-width: 900px) {
+    .sidebar-backdrop.active {
+      display: block;
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    /* ========================================================
+       FULL RESPONSIVE SYSTEM (MOBILE, TABLETS, DESKTOP)
+       ======================================================== */
+    @media (max-width: 1200px) {
+      .grid-metrics {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 992px) {
+      aside#sidebar {
+        transform: translateX(-100%);
+        width: 280px !important;
+        position: fixed;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        z-index: 1000;
+        box-shadow: 0 0 50px rgba(0, 0, 0, 0.85);
+      }
+      aside#sidebar.mobile-open {
+        transform: translateX(0);
+      }
+      main#main-content {
+        margin-left: 0 !important;
+        width: 100% !important;
+        max-width: 100vw !important;
+      }
+      .mobile-menu-btn {
+        display: flex !important;
+      }
+      .sidebar-toggle-btn {
+        display: none !important;
+      }
+      .topbar {
+        padding: 0 14px;
+        gap: 10px;
+      }
+      .topbar-center-search {
+        display: none;
+      }
+      .view-title {
+        font-size: 15px;
+        max-width: 160px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .kanban-board {
+        grid-template-columns: repeat(2, 1fr);
+      }
       .chat-layout {
         grid-template-columns: 1fr;
-        height: calc(100vh - var(--topbar-height) - 20px);
-        max-height: calc(100vh - var(--topbar-height) - 20px);
+        height: calc(100vh - var(--topbar-height) - 16px);
+        max-height: calc(100vh - var(--topbar-height) - 16px);
+        border-radius: 8px;
       }
       .chat-sidebar {
         display: flex;
@@ -1833,26 +1902,77 @@ export function getAdminDashboardHtml(): string {
       .btn-back-to-threads {
         display: inline-flex !important;
       }
-      .chat-header-actions {
-        gap: 4px;
-      }
       .chat-header-actions .btn-xs span:not(.badge) {
         display: none;
+      }
+      .chat-header-actions .btn-xs {
+        padding: 5px 7px;
+        min-width: 32px;
       }
     }
 
     @media (max-width: 768px) {
-      aside#sidebar { transform: translateX(-100%); }
-      aside#sidebar.mobile-open { transform: translateX(0); width: 260px; }
-      main#main-content { margin-left: 0 !important; }
-      .mobile-menu-btn { display: flex; }
-      .kanban-board { grid-template-columns: 1fr; }
-      .grid-metrics { grid-template-columns: 1fr 1fr; }
-      .view-container { padding: 12px; }
+      .view-container {
+        padding: 10px 8px;
+      }
+      .grid-metrics {
+        grid-template-columns: 1fr;
+        gap: 10px;
+      }
+      .glass-card {
+        padding: 12px;
+        margin-bottom: 12px;
+        border-radius: 10px;
+      }
+      .kanban-board {
+        grid-template-columns: 1fr;
+      }
+      .topbar-right .btn-sm span {
+        display: none;
+      }
+      .topbar-right .btn-sm {
+        padding: 6px;
+        min-width: 34px;
+        height: 34px;
+      }
+      .live-status-pill {
+        padding: 3px 8px;
+        font-size: 11px;
+      }
+      .modal-box {
+        width: 95vw !important;
+        max-width: 95vw !important;
+        margin: 10px auto;
+        max-height: 90vh;
+        padding: 14px;
+      }
+      .chat-input-line-info {
+        font-size: 10.5px;
+      }
+      .chat-input-line-info span:last-child {
+        display: none;
+      }
+      .chat-bubble {
+        max-width: 85%;
+        font-size: 13.5px;
+      }
     }
 
     @media (max-width: 480px) {
-      .grid-metrics { grid-template-columns: 1fr; }
+      .view-title {
+        font-size: 13.5px;
+        max-width: 110px;
+      }
+      .topbar {
+        padding: 0 8px;
+        gap: 6px;
+      }
+      .chat-messages-container {
+        padding: 10px 12px;
+      }
+      .chat-input-bar {
+        padding: 8px 10px;
+      }
     }
   </style>
 </head>
@@ -1904,6 +2024,8 @@ export function getAdminDashboardHtml(): string {
 
   <!-- Main App Layout Container -->
   <div id="app-container">
+    <!-- Mobile Sidebar Backdrop Overlay -->
+    <div id="sidebar-backdrop" class="sidebar-backdrop" onclick="closeMobileMenu()"></div>
     
     <!-- Sidebar Navigation -->
     <aside id="sidebar">
@@ -3461,9 +3583,37 @@ export function getAdminDashboardHtml(): string {
     }
 
 
-    // Navigation
-    function navigateTo(viewId) {
+    // URL Hash Parser & Route Resolver
+    function parseHashView() {
+      const rawHash = (window.location.hash || '').replace(/^#\/?/, '').trim();
+      if (!rawHash) return null;
+      const [viewName, queryStr] = rawHash.split('?');
+      const validViews = ['dashboard', 'live-chat', 'clients', 'tickets', 'ipam', 'audit', 'technicians', 'modem-swap', 'settings', 'users'];
+      if (validViews.includes(viewName)) {
+        if (queryStr && viewName === 'live-chat') {
+          const params = new URLSearchParams(queryStr);
+          const phone = params.get('phone');
+          if (phone) state.activeChatPhone = phone;
+        }
+        return viewName;
+      }
+      return null;
+    }
+
+    // Navigation with Full Browser History & Reload Persistence
+    function navigateTo(viewId, updateHistory = true) {
+      if (!viewId) viewId = 'dashboard';
       state.currentView = viewId;
+
+      if (updateHistory) {
+        let hashTarget = viewId;
+        if (viewId === 'live-chat' && state.activeChatPhone) {
+          hashTarget += '?phone=' + encodeURIComponent(state.activeChatPhone);
+        }
+        if (window.location.hash !== '#' + hashTarget) {
+          history.pushState({ viewId, phone: state.activeChatPhone }, '', '#' + hashTarget);
+        }
+      }
 
       document.querySelectorAll('.nav-item').forEach(item => {
         if (item.getAttribute('data-view') === viewId) {
@@ -3493,14 +3643,14 @@ export function getAdminDashboardHtml(): string {
         'users': 'Usuarios & Roles de Acceso',
       };
       document.getElementById('current-view-title').innerText = titles[viewId] || 'Panel';
-      document.getElementById('sidebar').classList.remove('mobile-open');
+      
+      closeMobileMenu();
       
       // Actualizar Barra de Búsqueda Contextual del Topbar
       updateGlobalSearchContext(viewId);
 
       loadViewData(viewId);
     }
-
     // Topbar Context-Aware Search Engine
     const searchContextMap = {
       'dashboard': { label: 'Dashboard', placeholder: 'Buscar en bitácora de eventos y logs...' },
@@ -3650,8 +3800,18 @@ export function getAdminDashboardHtml(): string {
       document.getElementById('toggle-icon-right').style.display = state.isSidebarCollapsed ? 'block' : 'none';
     }
 
+    function closeMobileMenu() {
+      document.getElementById('sidebar')?.classList.remove('mobile-open');
+      document.getElementById('sidebar-backdrop')?.classList.remove('active');
+    }
+
     function toggleMobileMenu() {
-      document.getElementById('sidebar').classList.toggle('mobile-open');
+      const sidebar = document.getElementById('sidebar');
+      const backdrop = document.getElementById('sidebar-backdrop');
+      if (sidebar) {
+        sidebar.classList.toggle('mobile-open');
+        if (backdrop) backdrop.classList.toggle('active', sidebar.classList.contains('mobile-open'));
+      }
     }
 
     function refreshCurrentView() {
@@ -4252,6 +4412,10 @@ export function getAdminDashboardHtml(): string {
     }
 
     function toggleMobileChatThreads() {
+      state.activeChatPhone = null;
+      if (state.currentView === 'live-chat') {
+        history.replaceState({ viewId: 'live-chat' }, '', '#live-chat');
+      }
       const layout = document.querySelector('.chat-layout');
       if (layout) {
         layout.classList.remove('mobile-chat-active');
@@ -4351,6 +4515,10 @@ export function getAdminDashboardHtml(): string {
     }
 
     async function selectChat(phone) {
+      state.activeChatPhone = phone;
+      if (state.currentView === 'live-chat') {
+        history.replaceState({ viewId: 'live-chat', phone }, '', '#live-chat?phone=' + encodeURIComponent(phone));
+      }
       state.activeChatPhone = phone;
       document.querySelector('.chat-layout')?.classList.add('mobile-chat-active');
       filterChatThreads(document.getElementById('chat-filter-input')?.value || '');
@@ -8125,10 +8293,31 @@ export function getAdminDashboardHtml(): string {
     // Bootstrap
     function initApp() {
       initSSEStream();
-      loadViewData(state.currentView);
+      const initialView = parseHashView() || 'dashboard';
+      navigateTo(initialView, false);
       loadDashboardBadgeCounters();
       setInterval(loadDashboardBadgeCounters, 15000);
     }
+
+    // Global History & Hash Change Listeners for Back/Forward Browser Navigation
+    window.addEventListener('popstate', (e) => {
+      const hashView = parseHashView() || 'dashboard';
+      if (hashView) {
+        navigateTo(hashView, false);
+        if (hashView === 'live-chat' && state.activeChatPhone) {
+          selectChat(state.activeChatPhone);
+        } else if (hashView === 'live-chat') {
+          toggleMobileChatThreads();
+        }
+      }
+    });
+
+    window.addEventListener('hashchange', () => {
+      const hashView = parseHashView() || 'dashboard';
+      if (hashView && hashView !== state.currentView) {
+        navigateTo(hashView, false);
+      }
+    });
 
     window.addEventListener('DOMContentLoaded', () => {
       checkAuthSession();
