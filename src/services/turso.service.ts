@@ -945,14 +945,17 @@ export class TursoService {
       }
 
       // Sincronizar con WispHub en vivo si tenemos el id_servicio
-      if (targetIdServicio && (loc.lat || loc.lng || loc.direccion)) {
+      if (targetIdServicio && (loc.lat || loc.lng || coordsStr || loc.direccion)) {
         try {
           const { WispHubService } = require('./wisphub.service');
           WispHubService.actualizarCliente(targetIdServicio, {
             latitud: loc.lat,
             longitud: loc.lng,
+            coordenadas: coordsStr,
             direccion: loc.direccion,
-          }).catch(() => {});
+          }).catch((err: any) => {
+            logger.warn(`[WispHub Sync GPS] Error al sincronizar con WispHub cliente ${targetIdServicio}:`, err?.message || err);
+          });
         } catch {}
       }
 

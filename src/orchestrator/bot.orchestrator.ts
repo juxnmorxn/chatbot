@@ -694,6 +694,18 @@ export class BotOrchestrator {
       }
     }
 
+    // D.3 Asignación de ubicación GPS enviada por técnico
+    if (session?.step === 'TECNICO_ESPERANDO_CLIENTE_GPS') {
+      await this.procesarAsignacionGpsTecnico(phone, rawText, session, targetJid);
+      return;
+    }
+
+    // D.4 Identificación de cliente tras envío de ubicación GPS
+    if (session?.step === 'CLIENTE_ESPERANDO_IDENTIFICACION_GPS') {
+      await this.procesarIdentificacionGpsCliente(phone, rawText, session, targetJid);
+      return;
+    }
+
     // 2.0 CONTROL INTELIGENTE DE COMANDOS TÉCNICOS VS CLIENTES
     const authTecnico = await this.verificarAutorizacionTecnico(phone, rawText);
 
@@ -3347,55 +3359,129 @@ export class BotOrchestrator {
       try { meta = JSON.parse(session?.metadata || '{}'); } catch {}
       const targetClientId = meta.pendingActivation?.client_id || meta.pendingActivation?.name || meta.pendingModemSwap?.name || meta.lastActivatedClientId || meta.lastActivatedName;
 
-      const pendingEvidence = meta.pendingActivationEvidence || {};
-      pendingEvidence.gps = { lat, lng, coordsStr, url, direccion };
-      meta.pendingActivationEvidence = pendingEvidence;
-      await TursoService.upsertSession({ phone, metadata: JSON.stringify(meta) });
-
+      // Si el técnico está en un flujo activo con cliente definido (ej: activación u orden)
       if (targetClientId) {
+        const pendingEvidence = meta.pendingActivationEvidence || {};
+        pendingEvidence.gps = { lat, lng, coordsStr, url, direccion };
+        meta.pendingActivationEvidence = pendingEvidence;
+        await TursoService.upsertSession({ phone, metadata: JSON.stringify(meta) });
+
         await TursoService.updateClientLocation(targetClientId, { lat, lng, url, direccion, notas: loc.name });
+
+        // Notificar vía SSE al panel de administración en tiempo real
+        try {
+          const { AdminController } = require('../controllers/admin.controller');
+          AdminController.broadcastSSE('chat:location_received', {
+            phone,
+            techName: authTecnico.tech?.name,
+            coords: coordsStr,
+            url,
+            direccion,
+            targetClient: targetClientId,
+            timestamp: new Date().toISOString(),
+          });
+        } catch {}
+
+        const mensajeTecnico =
+          `📍 *Ubicación GPS Recibida y Asignada*\n\n` +
+          `• *Cliente Asignado:* *${targetClientId}*\n` +
+          `• *Coordenadas:* \`${coordsStr || 'GPS'}\`\n` +
+          `• *Maps:* ${url || 'https://maps.google.com'}\n` +
+          (direccion ? `• *Referencia:* ${direccion}\n` : '') +
+          `\n✅ Coordenadas guardadas en base de datos y sincronizadas con el mapa de WispHub.`;
+
+        await this.enviarYLoguear(phone, mensajeTecnico, 'ACTIVACION_TECNICO', 'GPS_TECNICO_GUARDADO', targetJid);
+        return;
       }
 
-      // Notificar vía SSE al panel de administración en tiempo real
-      try {
-        const { AdminController } = require('../controllers/admin.controller');
-        AdminController.broadcastSSE('chat:location_received', {
-          phone,
-          techName: authTecnico.tech?.name,
-          coords: coordsStr,
-          url,
-          direccion,
-          targetClient: targetClientId,
-          timestamp: new Date().toISOString(),
-        });
-      } catch {}
+      // Si el técnico envió la ubicación de forma independiente (sin cliente previo asignado)
+      meta.pendingGpsAssignment = {
+        lat,
+        lng,
+        coordsStr,
+        url,
+        direccion,
+        notas: loc.name,
+        timestamp: Date.now(),
+      };
 
-      const mensajeTecnico =
-        `📍 *Ubicación GPS Recibida y Guardada*\n\n` +
+      await TursoService.upsertSession({
+        phone,
+        step: 'TECNICO_ESPERANDO_CLIENTE_GPS',
+        metadata: JSON.stringify(meta),
+      });
+
+      const mensajePregunta =
+        `📍 *Ubicación GPS Recibida:*\n` +
         `• *Coordenadas:* \`${coordsStr || 'GPS'}\`\n` +
         `• *Maps:* ${url || 'https://maps.google.com'}\n` +
-        (targetClientId ? `• *Cliente Asignado:* *${targetClientId}*\n` : '') +
         (direccion ? `• *Referencia:* ${direccion}\n` : '') +
-        `\n✅ Coordenadas guardadas en base de datos y sincronizadas con el mapa de WispHub.`;
+        `\n¿A qué cliente o número de contrato deseas asignarla?\n` +
+        `✍️ Por favor escribe el *Nombre del cliente* o *ID de servicio / contrato* (ej: *715* o *0696*):`;
 
-      await this.enviarYLoguear(phone, mensajeTecnico, 'ACTIVACION_TECNICO', 'GPS_TECNICO_GUARDADO', targetJid);
+      await this.enviarYLoguear(phone, mensajePregunta, 'ACTIVACION_TECNICO', 'GPS_TECNICO_ESPERANDO_CLIENTE', targetJid);
       return;
     }
 
+    // FLUJO RESIDENCIAL / CLIENTE:
     let meta: any = {};
     try { meta = JSON.parse(session?.metadata || '{}'); } catch {}
     const ticketFolio = meta.ticketFolio;
     const esVisitaTecnica = session?.step === 'ESPERANDO_UBICACION_TECNICO' || Boolean(ticketFolio);
 
+    // Buscar si el teléfono ya pertenece a un cliente registrado
+    let clientIdentified: any = null;
+    if (session?.client_id || session?.client_name) {
+      clientIdentified = {
+        id_servicio: session.client_id,
+        nombre: session.client_name,
+      };
+    } else {
+      try {
+        const clientDir = await TursoService.getClientsDirectory({ search: phone, limit: 1 });
+        if (clientDir && clientDir.clients && clientDir.clients.length > 0) {
+          clientIdentified = clientDir.clients[0];
+        }
+      } catch {}
+    }
+
+    // Si NO se conoce al cliente (número no registrado ni en sesión)
+    if (!clientIdentified) {
+      meta.pendingGpsAssignment = {
+        lat,
+        lng,
+        coordsStr,
+        url,
+        direccion,
+        notas: loc.name,
+        timestamp: Date.now(),
+      };
+
+      await TursoService.upsertSession({
+        phone,
+        step: 'CLIENTE_ESPERANDO_IDENTIFICACION_GPS',
+        metadata: JSON.stringify(meta),
+      });
+
+      const msjDesconocido =
+        `📍 *Recibimos tu ubicación GPS:*\n` +
+        `• *Coordenadas:* \`${coordsStr || 'GPS'}\`\n` +
+        `• *Maps:* ${url || 'https://maps.google.com'}\n\n` +
+        `Para poder vincularla a tu expediente y optimizar las visitas técnicas de soporte, por favor escribe tu *Nombre completo* o tu *Número de contrato / ID de cliente*:`;
+
+      await this.enviarYLoguear(phone, msjDesconocido, 'UBICACION_REGISTRADA', 'GPS_CLIENTE_DESCONOCIDO', targetJid);
+      return;
+    }
+
     // 1. Guardar en base de datos Turso DB (wisphub_clients, smartolt_onus, tickets) y sincronizar a WispHub
-    await TursoService.updateClientLocation(phone, {
+    await TursoService.updateClientLocation(clientIdentified.id_servicio || phone, {
       lat,
       lng,
       url,
       direccion,
       notas: loc.name,
-      clientId: session?.client_id || undefined,
-      clientName: session?.client_name || undefined,
+      clientId: clientIdentified.id_servicio || session?.client_id || undefined,
+      clientName: clientIdentified.nombre || session?.client_name || undefined,
       ticketFolio,
     });
 
@@ -3408,26 +3494,19 @@ export class BotOrchestrator {
         url,
         direccion,
         ticketFolio,
+        clientName: clientIdentified.nombre,
         timestamp: new Date().toISOString(),
       });
     } catch {}
 
-    // 3. Buscar nombre del cliente si está registrado y formatear limpiamente
-    let clientName = session?.client_name || '';
-    if (!clientName) {
-      try {
-        const clientDir = await TursoService.getClientsDirectory({ search: phone, limit: 1 });
-        if (clientDir && clientDir.clients && clientDir.clients.length > 0) {
-          clientName = clientDir.clients[0].nombre;
-        }
-      } catch {}
-    }
-    const primerNombre = formatDisplayName(clientName, true);
+    const primerNombre = formatDisplayName(clientIdentified.nombre, true);
     const saludo = primerNombre ? `¡Muchas gracias, *${primerNombre}*!` : `¡Muchas gracias!`;
 
-    // 4. Resetear el step a CONVERSACIONAL para evitar que la sesión quede atrapada
+    // 3. Resetear el step a CONVERSACIONAL
     await TursoService.upsertSession({
       phone,
+      client_id: clientIdentified.id_servicio ? String(clientIdentified.id_servicio) : undefined,
+      client_name: clientIdentified.nombre,
       step: 'CONVERSACIONAL',
       metadata: JSON.stringify({
         ...meta,
@@ -3436,7 +3515,7 @@ export class BotOrchestrator {
       }),
     });
 
-    // 5. Armar respuesta según si había un ticket de visita en curso o si fue un envío general
+    // 4. Armar respuesta según si había un ticket de visita en curso o si fue un envío general
     let mensaje = '';
     if (esVisitaTecnica) {
       mensaje =
@@ -3462,6 +3541,230 @@ export class BotOrchestrator {
       `UBICACION_GPS_GUARDADA_${ticketFolio || 'OK'}`,
       targetJid
     );
+  }
+
+  /**
+   * Procesa la asignación manual de GPS por parte de un técnico cuando envía una ubicación sin flujo previo
+   */
+  private static async procesarAsignacionGpsTecnico(
+    phone: string,
+    rawText: string,
+    session: Session | null,
+    targetJid?: string
+  ): Promise<void> {
+    let meta: any = {};
+    try { meta = JSON.parse(session?.metadata || '{}'); } catch {}
+    const pendingGps = meta.pendingGpsAssignment;
+
+    if (!pendingGps || !pendingGps.coordsStr) {
+      await TursoService.updateStep(phone, 'CONVERSACIONAL');
+      await this.enviarYLoguear(
+        phone,
+        `⚠️ No hay ninguna ubicación GPS pendiente de asignación. Por favor envía primero el pin de ubicación de WhatsApp.`,
+        'ACTIVACION_TECNICO',
+        'GPS_SIN_PENDIENTE',
+        targetJid
+      );
+      return;
+    }
+
+    const cleanInput = rawText.trim();
+    if (cleanInput.length < 1) {
+      await this.enviarYLoguear(
+        phone,
+        `Por favor escribe el *Nombre del abonado* o el *ID de servicio* (ej: *715* o *0696*):`,
+        'ACTIVACION_TECNICO',
+        'GPS_PIDIENDO_ID',
+        targetJid
+      );
+      return;
+    }
+
+    const { getTursoClient } = await import('../database/turso');
+    const client = getTursoClient();
+
+    let targetClient: any = null;
+
+    // 1. Si es numérico (ID de servicio)
+    const numId = cleanInput.replace(/\D/g, '');
+    if (numId && /^\d+$/.test(cleanInput)) {
+      try {
+        const res = await client.execute({
+          sql: `SELECT id_servicio, nombre, ip, router, direccion, coordenadas_gps FROM wisphub_clients WHERE id_servicio = ? LIMIT 1`,
+          args: [Number(numId)],
+        });
+        if (res.rows.length > 0) {
+          targetClient = res.rows[0];
+        }
+      } catch {}
+    }
+
+    // 2. Si no encontró por ID exacto, buscar por coincidencia en ID, nombre o IP
+    if (!targetClient) {
+      try {
+        const res = await client.execute({
+          sql: `
+            SELECT id_servicio, nombre, ip, router, direccion, coordenadas_gps 
+            FROM wisphub_clients 
+            WHERE id_servicio LIKE ? OR nombre LIKE ? OR nombre_normalized LIKE ? OR ip LIKE ?
+            LIMIT 5
+          `,
+          args: [`%${cleanInput}%`, `%${cleanInput}%`, `%${cleanInput}%`, `%${cleanInput}%`],
+        });
+        if (res.rows.length === 1) {
+          targetClient = res.rows[0];
+        } else if (res.rows.length > 1) {
+          let listMsg = `🔍 Encontré varias coincidencias para "*${cleanInput}*":\n\n`;
+          res.rows.slice(0, 5).forEach((r: any) => {
+            listMsg += `• *#${r.id_servicio}* - ${r.nombre} (IP: ${r.ip || 'N/A'})\n`;
+          });
+          listMsg += `\n✍️ Por favor responde escribiendo únicamente el *Número de ID* del cliente a asignar (ej: *${res.rows[0].id_servicio}*):`;
+
+          await this.enviarYLoguear(phone, listMsg, 'ACTIVACION_TECNICO', 'GPS_MULTIPLES_COINCIDENCIAS', targetJid);
+          return;
+        }
+      } catch {}
+    }
+
+    if (!targetClient) {
+      await this.enviarYLoguear(
+        phone,
+        `⚠️ No se encontró ningún abonado con el dato "*${cleanInput}*".\n\nPor favor verifica el *ID de servicio* (ej: *715*) o escribe el *Nombre completo* del cliente:`,
+        'ACTIVACION_TECNICO',
+        'GPS_CLIENTE_NO_ENCONTRADO',
+        targetJid
+      );
+      return;
+    }
+
+    // Guardar en Turso DB y sincronizar con WispHub
+    await TursoService.updateClientLocation(targetClient.id_servicio, {
+      lat: pendingGps.lat,
+      lng: pendingGps.lng,
+      url: pendingGps.url,
+      direccion: pendingGps.direccion || targetClient.direccion,
+      notas: pendingGps.notas,
+      clientId: targetClient.id_servicio,
+      clientName: targetClient.nombre,
+    });
+
+    // Limpiar pendiente y regresar step a CONVERSACIONAL
+    delete meta.pendingGpsAssignment;
+    await TursoService.upsertSession({
+      phone,
+      step: 'CONVERSACIONAL',
+      metadata: JSON.stringify(meta),
+    });
+
+    // Notificar por SSE al panel
+    try {
+      const { AdminController } = require('../controllers/admin.controller');
+      AdminController.broadcastSSE('chat:location_received', {
+        phone,
+        coords: pendingGps.coordsStr,
+        url: pendingGps.url,
+        direccion: pendingGps.direccion,
+        targetClient: `${targetClient.nombre} (#${targetClient.id_servicio})`,
+        timestamp: new Date().toISOString(),
+      });
+    } catch {}
+
+    const mensajeExito =
+      `📍 *Ubicación GPS Asignada Exitosamente* ✅\n\n` +
+      `• *Cliente:* *${targetClient.nombre}* (#${targetClient.id_servicio})\n` +
+      `• *IP:* \`${targetClient.ip || 'N/A'}\`\n` +
+      `• *Coordenadas:* \`${pendingGps.coordsStr}\`\n` +
+      `• *Maps:* ${pendingGps.url}\n` +
+      (targetClient.direccion ? `• *Dirección:* ${targetClient.direccion}\n` : '') +
+      `\n✅ Coordenadas guardadas en base de datos local y sincronizadas con el expediente en WispHub.`;
+
+    await this.enviarYLoguear(phone, mensajeExito, 'ACTIVACION_TECNICO', 'GPS_TECNICO_ASIGNADO_OK', targetJid);
+  }
+
+  /**
+   * Procesa la identificación de un cliente que envió ubicación desde un número no registrado
+   */
+  private static async procesarIdentificacionGpsCliente(
+    phone: string,
+    rawText: string,
+    session: Session | null,
+    targetJid?: string
+  ): Promise<void> {
+    let meta: any = {};
+    try { meta = JSON.parse(session?.metadata || '{}'); } catch {}
+    const pendingGps = meta.pendingGpsAssignment;
+
+    const cleanInput = rawText.trim();
+    const { getTursoClient } = await import('../database/turso');
+    const client = getTursoClient();
+
+    let targetClient: any = null;
+    const numId = cleanInput.replace(/\D/g, '');
+
+    if (numId && /^\d+$/.test(cleanInput)) {
+      try {
+        const res = await client.execute({
+          sql: `SELECT id_servicio, nombre, direccion FROM wisphub_clients WHERE id_servicio = ? LIMIT 1`,
+          args: [Number(numId)],
+        });
+        if (res.rows.length > 0) targetClient = res.rows[0];
+      } catch {}
+    }
+
+    if (!targetClient && cleanInput.length >= 3) {
+      try {
+        const res = await client.execute({
+          sql: `SELECT id_servicio, nombre, direccion FROM wisphub_clients WHERE nombre LIKE ? OR nombre_normalized LIKE ? LIMIT 1`,
+          args: [`%${cleanInput}%`, `%${cleanInput}%`],
+        });
+        if (res.rows.length > 0) targetClient = res.rows[0];
+      } catch {}
+    }
+
+    if (!targetClient) {
+      await this.enviarYLoguear(
+        phone,
+        `No pudimos localizar tu registro con "*${cleanInput}*". Por favor escribe tu *Nombre completo* (tal como aparece en tu contrato) o tu *Número de contrato*:`,
+        'UBICACION_REGISTRADA',
+        'GPS_CLIENTE_NO_LOCALIZADO',
+        targetJid
+      );
+      return;
+    }
+
+    // Vincular cliente y ubicación
+    if (pendingGps) {
+      await TursoService.updateClientLocation(targetClient.id_servicio, {
+        lat: pendingGps.lat,
+        lng: pendingGps.lng,
+        url: pendingGps.url,
+        direccion: pendingGps.direccion || targetClient.direccion,
+        notas: pendingGps.notas,
+        clientId: targetClient.id_servicio,
+        clientName: targetClient.nombre,
+      });
+    }
+
+    delete meta.pendingGpsAssignment;
+    await TursoService.upsertSession({
+      phone,
+      client_id: String(targetClient.id_servicio),
+      client_name: targetClient.nombre,
+      step: 'CONVERSACIONAL',
+      metadata: JSON.stringify({
+        ...meta,
+        ubicacionRegistrada: pendingGps?.coordsStr || 'OK',
+        consultaFinalizada: true,
+      }),
+    });
+
+    const primerNombre = formatDisplayName(targetClient.nombre, true) || 'Cliente';
+    const msj =
+      `¡Muchas gracias, *${primerNombre}*! 👋\n\n` +
+      `✅ Tu ubicación GPS ha quedado registrada y vinculada a tu contrato *#${targetClient.id_servicio}*.\n\n` +
+      `Esto nos ayuda a agilizar cualquier visita de soporte técnico a tu domicilio. ¿Hay algo más en lo que te podamos ayudar?`;
+
+    await this.enviarYLoguear(phone, msj, 'UBICACION_REGISTRADA', 'GPS_CLIENTE_VINCULADO_OK', targetJid);
   }
 
   /**

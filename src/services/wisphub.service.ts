@@ -306,6 +306,7 @@ export class WispHubService {
     fields: {
       latitud?: number | string;
       longitud?: number | string;
+      coordenadas?: string;
       direccion?: string;
       mac_cpe?: string;
       sn_onu?: string;
@@ -316,6 +317,16 @@ export class WispHubService {
     try {
       const api = this.getApi();
       const payload: any = {};
+      
+      let coords = fields.coordenadas || '';
+      if (!coords && fields.latitud !== undefined && fields.longitud !== undefined && fields.latitud !== '' && fields.longitud !== '') {
+        coords = `${fields.latitud},${fields.longitud}`.trim();
+      }
+
+      if (coords) {
+        payload.coordenadas = coords;
+        payload.coordenadas_gps = coords;
+      }
       if (fields.latitud !== undefined && fields.latitud !== '') payload.latitud = String(fields.latitud);
       if (fields.longitud !== undefined && fields.longitud !== '') payload.longitud = String(fields.longitud);
       if (fields.direccion !== undefined) payload.direccion = fields.direccion;
@@ -329,8 +340,17 @@ export class WispHubService {
       }
 
       logger.info(`[WispHub API] Actualizando cliente ${idServicio} con:`, payload);
-      const res = await api.patch(`/clientes/${idServicio}/`, payload);
-      return { success: true, data: res.data };
+      let res;
+      try {
+        res = await api.patch(`/clientes/${idServicio}/`, payload);
+      } catch (patchErr: any) {
+        try {
+          res = await api.patch(`/servicios/${idServicio}/`, payload);
+        } catch (_) {
+          throw patchErr;
+        }
+      }
+      return { success: true, data: res?.data };
     } catch (err: any) {
       logger.error(`[WispHub API] Error al actualizar cliente ${idServicio}:`, err?.response?.data || err?.message || err);
       return { success: false, error: err?.response?.data?.detail || err?.message || 'Error al actualizar en WispHub' };
