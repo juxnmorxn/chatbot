@@ -8701,7 +8701,7 @@ export function getAdminDashboardHtml(): string {
                 </div>
               </div>
               <div style="display: flex; gap: 6px;">
-                <span class="badge ${String(c.estado).toLowerCase().includes('grat') || String(c.estado).toLowerCase().includes('free') ? 'badge-cyan' : (String(c.estado).toLowerCase().includes('act') ? 'badge-success' : 'badge-danger')}">
+                <span class="badge \${String(c.estado).toLowerCase().includes('grat') || String(c.estado).toLowerCase().includes('free') ? 'badge-cyan' : (String(c.estado).toLowerCase().includes('act') ? 'badge-success' : 'badge-danger')}">
                   \${escapeHtml(c.estado || 'Activo')}
                 </span>
                 <span class="badge badge-purple">
