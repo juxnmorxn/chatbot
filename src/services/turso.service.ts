@@ -1443,14 +1443,14 @@ export class TursoService {
     try {
       const client = getTursoClient();
 
-      // 1. Búsqueda directa por número de serie o teléfono en SmartOLT
+      // 1. Búsqueda directa por nombre, folio, número de serie, IP o teléfono en SmartOLT
       const directMatch = await client.execute({
         sql: `
           SELECT * FROM smartolt_onus 
-          WHERE sn LIKE ? OR phone LIKE ? OR unique_external_id = ?
-          LIMIT 3
+          WHERE sn LIKE ? OR phone LIKE ? OR unique_external_id = ? OR name LIKE ? OR name_normalized LIKE ? OR ip_address LIKE ?
+          LIMIT 8
         `,
-        args: [`%${normQuery}%`, `%${normQuery}%`, rawQuery],
+        args: [`%${normQuery}%`, `%${normQuery}%`, rawQuery, `%${rawQuery}%`, `%${normQuery}%`, `%${rawQuery}%`],
       });
 
       if (directMatch.rows.length > 0) {
@@ -1466,6 +1466,32 @@ export class TursoService {
           olt_name: String(row.olt_name || ''),
           ip_address: String(row.ip_address || row.ip || ''),
           matchScore: 100,
+        }));
+      }
+
+      // 1.1 Búsqueda directa en WispHub por nombre, folio (id_servicio), serie o IP
+      const whDirectMatch = await client.execute({
+        sql: `
+          SELECT * FROM wisphub_clients 
+          WHERE nombre LIKE ? OR nombre_normalized LIKE ? OR sn_onu LIKE ? OR ip LIKE ? OR CAST(id_servicio AS TEXT) LIKE ? OR telefono LIKE ?
+          LIMIT 8
+        `,
+        args: [`%${rawQuery}%`, `%${normQuery}%`, `%${rawQuery}%`, `%${rawQuery}%`, `%${rawQuery}%`, `%${rawQuery}%`],
+      });
+
+      if (whDirectMatch.rows.length > 0) {
+        return whDirectMatch.rows.map((r: any) => ({
+          unique_external_id: String(r.id_servicio),
+          sn: String(r.sn_onu || ''),
+          name: String(r.nombre || ''),
+          name_normalized: String(r.nombre_normalized || ''),
+          phone: String(r.telefono || ''),
+          address: String(r.direccion || ''),
+          zone_name: String(r.servicio || ''),
+          speed_profile: String(r.plan_internet || ''),
+          olt_name: 'WispHub',
+          ip_address: String(r.ip || ''),
+          matchScore: 95,
         }));
       }
 

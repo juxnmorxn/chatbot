@@ -485,13 +485,7 @@ export class BotOrchestrator {
       /^(?:realizar|hacer|ejecutar|solicitar)?\s*(?:un\s+)?(?:cambio|reemplazo)\s+de\s+m[oó]dem\b/i.test(lowerMsg);
 
     const esComandoActivacion = buttonId === 'BTN_ACTIVAR_MODEM' ||
-      /^(?:activar|activaci[oó]n|alta|aprovisionar|registrar)\b/i.test(lowerMsg) ||
-      /(?:activar|activaci[oó]n|alta|aprovisionar|registrar)\s*(?:de\s+)?(?:cliente|modem|onu|equipo|serie)?[:\s]*/i.test(rawText) ||
-      lowerMsg.startsWith('activar') ||
-      lowerMsg.startsWith('activaci') ||
-      lowerMsg.startsWith('alta') ||
-      lowerMsg.startsWith('aprovisionar') ||
-      lowerMsg.startsWith('registrar') ||
+      /^(?:solicitar\s+)?(?:activar|activaci[oó]n|alta|aprovisionar|registrar)\b/i.test(lowerMsg) ||
       (event.imageAnalysis as any)?.tipo === 'CONTRATO_INSTALACION' ||
       (event.imageAnalysis as any)?.tipo_documento === 'CONTRATO_INSTALACION';
 
@@ -6016,7 +6010,23 @@ Módem aprovisionado en la OLT con su VLAN y Perfil de Velocidad.`;
         await this.enviarYLoguear(phone, msg, 'ACTIVACION_TECNICO', 'SELECCION_IP_MULTISERVICIO_SWAP', targetJid);
         return;
       } else if (distinctMatches.length === 1) {
-        oldOnu = await SmartOLTService.getOnuDetails(distinctMatches[0].unique_external_id || distinctMatches[0].sn);
+        const cand = distinctMatches[0];
+        oldOnu = await SmartOLTService.getOnuDetails(cand.unique_external_id || cand.sn);
+        if (!oldOnu) {
+          oldOnu = {
+            unique_external_id: cand.unique_external_id,
+            sn: cand.sn,
+            name: cand.name,
+            ip_address: cand.ip_address,
+            vlan: (cand as any).vlan || (cand.zone_name?.toLowerCase().includes('san agustin') ? '800' : '510'),
+            zone: cand.zone_name || 'Actopan',
+            download_speed_profile_name: cand.speed_profile || '40MB',
+            olt_id: cand.zone_name?.toLowerCase().includes('san agustin') ? '2' : '3',
+            board: '0',
+            port: '0',
+            onu_type: 'EG8041V5',
+          };
+        }
       } else {
         oldOnu = await SmartOLTService.getOnuDetails(query);
       }
