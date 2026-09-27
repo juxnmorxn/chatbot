@@ -2185,19 +2185,16 @@ export function getAdminDashboardHtml(): string {
             <table class="data-table">
               <thead>
                 <tr>
-                  <th class="sortable-th" onclick="sortClientsBy('nombre')" style="min-width: 200px;">Cliente / Nombre <span id="sort-client-nombre" class="sort-icon">↕</span></th>
-                  <th class="sortable-th" onclick="sortClientsBy('id_servicio')" style="min-width: 140px;">Servicio / ID <span id="sort-client-id" class="sort-icon">↕</span></th>
-                  <th class="sortable-th" onclick="sortClientsBy('ip')" style="min-width: 140px;">IP & SN <span id="sort-client-ip" class="sort-icon">↕</span></th>
-                  <th class="sortable-th" onclick="sortClientsBy('estado')" style="min-width: 120px;">Estado <span id="sort-client-estado" class="sort-icon">↕</span></th>
-                  <th style="min-width: 140px;">Plan Internet</th>
-                  <th class="sortable-th" onclick="sortClientsBy('router')" style="min-width: 140px;">Router / Zona <span id="sort-client-router" class="sort-icon">↕</span></th>
-                  <th style="min-width: 150px;">Teléfono(s)</th>
-                  <th style="min-width: 160px;">Ubicación GPS</th>
-                  <th style="text-align: right; min-width: 100px;">Acciones</th>
+                  <th class="sortable-th" onclick="sortClientsBy('nombre')" style="min-width: 190px;">Abonado & Servicio <span id="sort-client-nombre" class="sort-icon">↕</span></th>
+                  <th class="sortable-th" onclick="sortClientsBy('ip')" style="min-width: 150px;">Red & SmartOLT <span id="sort-client-ip" class="sort-icon">↕</span></th>
+                  <th class="sortable-th" onclick="sortClientsBy('estado')" style="min-width: 130px;">Estado & Plan <span id="sort-client-estado" class="sort-icon">↕</span></th>
+                  <th style="min-width: 140px;">Contacto</th>
+                  <th style="min-width: 190px;">Geolocalización GPS & Domicilio</th>
+                  <th style="text-align: right; min-width: 170px;">Acciones & Despacho</th>
                 </tr>
               </thead>
               <tbody id="table-clients-body">
-                <tr><td colspan="9" style="text-align: center; color: var(--text-dim); padding: 24px;">Cargando listado de clientes...</td></tr>
+                <tr><td colspan="6" style="text-align: center; color: var(--text-dim); padding: 24px;">Cargando listado de clientes...</td></tr>
               </tbody>
             </table>
           </div>
@@ -6812,36 +6809,34 @@ export function getAdminDashboardHtml(): string {
         let phonesHtml = '';
         if (primaryPhone) {
           phonesHtml += \`
-            <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 4px;">
-              <span class="badge badge-success" style="font-family: var(--font-mono); font-size: 11px; padding: 3px 8px; cursor: pointer;" title="Teléfono Principal de WhatsApp" onclick="selectChat('\${primaryPhone}'); navigateTo('live-chat');">
-                📱 \${primaryPhone}
+            <div style="display: flex; flex-direction: column; gap: 3px;">
+              <span class="badge badge-success" style="font-family: var(--font-mono); font-size: 11px; padding: 2px 6px; cursor: pointer;" title="Clic para copiar" onclick="copyToClipboard('\${primaryPhone}')">
+                \${primaryPhone}
               </span>
-              <a href="https://wa.me/52\${primaryPhone}" target="_blank" class="btn btn-secondary btn-sm" style="padding: 2px 6px; font-size: 10px;" title="Abrir en WhatsApp">
-                💬
-              </a>
-            </div>
-          \`;
-        }
-
-        if (extraPhones.length > 0) {
-          phonesHtml += \`
-            <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px;">
               \${extraPhones.map(ep => \`
-                <span class="badge badge-purple" style="font-family: var(--font-mono); font-size: 10px; padding: 2px 6px; cursor: pointer;" title="Número adicional / Familiar" onclick="copyToClipboard('\${ep}')">
-                  📞 \${ep}
+                <span class="badge badge-purple" style="font-family: var(--font-mono); font-size: 10px; padding: 2px 6px; cursor: pointer;" title="Familiar - Clic para copiar" onclick="copyToClipboard('\${ep}')">
+                  \${ep}
                 </span>
               \`).join('')}
             </div>
           \`;
-        }
-
-        if (!primaryPhone && extraPhones.length === 0) {
+        } else if (extraPhones.length > 0) {
+          phonesHtml += \`
+            <div style="display: flex; flex-direction: column; gap: 3px;">
+              \${extraPhones.map(ep => \`
+                <span class="badge badge-purple" style="font-family: var(--font-mono); font-size: 10px; padding: 2px 6px; cursor: pointer;" title="Familiar - Clic para copiar" onclick="copyToClipboard('\${ep}')">
+                  \${ep}
+                </span>
+              \`).join('')}
+            </div>
+          \`;
+        } else {
           phonesHtml = '<span style="color: var(--text-dim); font-size: 11px;">Sin teléfono</span>';
         }
 
         phonesHtml += \`
-          <button class="btn btn-secondary btn-sm" style="padding: 2px 6px; font-size: 10px; margin-top: 2px;" onclick='openClientPhonesModal(\${JSON.stringify(c).replace(/'/g, "&apos;")})'>
-            ✏️ Teléfonos
+          <button class="btn btn-secondary btn-sm" style="padding: 2px 6px; font-size: 10px; margin-top: 3px;" onclick='openClientPhonesModal(\${JSON.stringify(c).replace(/'/g, "&apos;")})'>
+            Teléfonos
           </button>
         \`;
 
@@ -6853,30 +6848,32 @@ export function getAdminDashboardHtml(): string {
         if (coords || mapsUrl) {
           gpsHtml = \`
             <div style="display: flex; flex-direction: column; gap: 4px;">
-              <div style="display: flex; align-items: center; gap: 6px;">
-                <span class="badge badge-success" style="font-family: var(--font-mono); font-size: 11px; padding: 2px 6px;">
-                  📍 \${coords || 'GPS'}
+              <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                <span class="badge badge-success" style="font-family: var(--font-mono); font-size: 11px; padding: 2px 6px; cursor: pointer;" title="Clic para copiar coordenadas" onclick="copyToClipboard('\${coords || ''}')">
+                  \${coords || 'GPS Registrado'}
                 </span>
-                <a href="\${mapsUrl || '#'}" target="_blank" class="btn btn-primary btn-sm" style="padding: 3px 8px; font-size: 10.5px; text-decoration: none;" title="Abrir en Google Maps">
-                  🗺️ Maps
+                <a href="\${mapsUrl || '#'}" target="_blank" class="btn btn-primary btn-sm" style="padding: 2px 7px; font-size: 10.5px; text-decoration: none;" title="Abrir en Google Maps">
+                  Maps
                 </a>
+                <button class="btn btn-secondary btn-sm" style="padding: 2px 6px; font-size: 10px;" onclick='openClientLocationModal(\${JSON.stringify(c).replace(/'/g, "&apos;")})'>
+                  Editar GPS
+                </button>
               </div>
-              \${c.direccion ? \`<span style="font-size: 11px; color: var(--text-dim); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="\${escapeHtml(c.direccion)}">🏠 \${escapeHtml(c.direccion)}</span>\` : ''}
-              <button class="btn btn-secondary btn-sm" style="padding: 2px 6px; font-size: 10px; align-self: flex-start;" onclick='openClientLocationModal(\${JSON.stringify(c).replace(/'/g, "&apos;")})'>
-                ✏️ Editar GPS
-              </button>
+              \${c.direccion ? \`<div style="font-size: 11px; color: var(--text-dim); max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="\${escapeHtml(c.direccion)}">\${escapeHtml(c.direccion)}</div>\` : ''}
             </div>
           \`;
         } else {
           gpsHtml = \`
             <div style="display: flex; flex-direction: column; gap: 4px;">
-              <span class="badge badge-warning" style="font-size: 10px; padding: 2px 6px;">
-                ⚠️ Sin ubicación GPS
-              </span>
-              \${c.direccion ? \`<span style="font-size: 11px; color: var(--text-dim); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="\${escapeHtml(c.direccion)}">\${escapeHtml(c.direccion)}</span>\` : ''}
-              <button class="btn btn-secondary btn-sm" style="padding: 2px 6px; font-size: 10.5px; align-self: flex-start;" onclick='openClientLocationModal(\${JSON.stringify(c).replace(/'/g, "&apos;")})'>
-                📍 Asignar GPS
-              </button>
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span class="badge badge-warning" style="font-size: 10px; padding: 2px 6px;">
+                  Sin GPS
+                </span>
+                <button class="btn btn-secondary btn-sm" style="padding: 2px 6px; font-size: 10.5px;" onclick='openClientLocationModal(\${JSON.stringify(c).replace(/'/g, "&apos;")})'>
+                  Asignar GPS
+                </button>
+              </div>
+              \${c.direccion ? \`<div style="font-size: 11px; color: var(--text-dim); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="\${escapeHtml(c.direccion)}">\${escapeHtml(c.direccion)}</div>\` : ''}
             </div>
           \`;
         }
@@ -6885,43 +6882,42 @@ export function getAdminDashboardHtml(): string {
           <tr>
             <td>
               <div style="font-weight: 700; font-size: 13px; color: #fff;">\${escapeHtml(c.nombre)}</div>
-              \${c.comentarios ? \`<div style="font-size: 10.5px; color: var(--text-dim); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">\${escapeHtml(c.comentarios)}</div>\` : ''}
-            </td>
-            <td>
-              <div style="font-family: var(--font-mono); color: var(--primary); font-weight: 700; font-size: 12px;">#\${c.id_servicio || '--'}</div>
-              <div style="font-size: 11px; color: var(--text-muted); max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">\${escapeHtml(c.servicio || '')}</div>
+              <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+                <span style="font-family: var(--font-mono); color: var(--primary); font-weight: 700;">#\${c.id_servicio || '--'}</span>
+                \${c.servicio ? \` &bull; \${escapeHtml(c.servicio)}\` : ''}
+              </div>
             </td>
             <td>
               <div style="display: flex; flex-direction: column; gap: 2px; font-size: 11.5px;">
                 <div><span style="color: var(--text-dim);">IP:</span> <span style="font-family: var(--font-mono); font-weight: 600; color: #38bdf8;">\${c.ip || '--'}</span></div>
                 <div><span style="color: var(--text-dim);">SN:</span> <span style="font-family: var(--font-mono); color: var(--accent-cyan); font-weight: 600;">\${c.sn_onu || '--'}</span></div>
+                <div style="font-size: 10.5px; color: var(--text-dim);">\${escapeHtml(c.router || '--')}</div>
               </div>
             </td>
             <td>
               <div style="display: flex; flex-direction: column; gap: 4px;">
-                \${estadoBadge}
-                \${facturasBadge}
+                <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+                  \${estadoBadge}
+                  \${facturasBadge}
+                </div>
+                <span class="badge badge-purple" style="font-size: 10.5px; font-weight: 600; align-self: flex-start;">
+                  \${escapeHtml(c.plan_internet || '--')}
+                </span>
               </div>
-            </td>
-            <td>
-              <span class="badge badge-purple" style="font-size: 11px; font-weight: 600; white-space: nowrap;">
-                \${escapeHtml(c.plan_internet || '--')}
-              </span>
-            </td>
-            <td>
-              <div style="font-size: 11.5px; font-weight: 600; color: var(--text-main);">\${escapeHtml(c.router || '--')}</div>
-              \${c.zona ? \`<div style="font-size: 10.5px; color: var(--text-dim);">\${escapeHtml(c.zona)}</div>\` : ''}
             </td>
             <td>\${phonesHtml}</td>
             <td>\${gpsHtml}</td>
             <td style="text-align: right;">
-              <div style="display: flex; gap: 6px; justify-content: flex-end;">
+              <div style="display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap;">
+                <button class="btn btn-primary btn-sm" onclick='openDispatchModal(\${JSON.stringify(c).replace(/'/g, "&apos;")})' title="Despachar orden de visita a técnicos vía WhatsApp">
+                  Despachar
+                </button>
                 <button class="btn btn-secondary btn-sm" onclick="openClientDetailModal(\${c.id_servicio})" title="Ver Expediente Completo">
-                  👁️ Ficha
+                  Ficha
                 </button>
                 \${primaryPhone ? \`
-                  <button class="btn btn-primary btn-sm" onclick="selectChat('\${primaryPhone}'); navigateTo('live-chat');" title="Abrir Chat WhatsApp">
-                    💬 Chat
+                  <button class="btn btn-secondary btn-sm" onclick="selectChat('\${primaryPhone}'); navigateTo('live-chat');" title="Abrir Chat WhatsApp">
+                    Chat
                   </button>
                 \` : ''}
               </div>
@@ -7260,6 +7256,124 @@ export function getAdminDashboardHtml(): string {
         <button type="button" class="btn btn-danger btn-sm" onclick="this.parentElement.remove()" style="padding: 6px 10px;">✕</button>
       \`;
       container.appendChild(row);
+    }
+
+    // Modal para Despachar Orden de Trabajo / GPS a Técnicos vía WhatsApp
+    async function openDispatchModal(client) {
+      if (!state.technicians || state.technicians.length === 0) {
+        try {
+          const res = await apiFetch('/api/technicians');
+          state.technicians = res.technicians || [];
+        } catch {}
+      }
+
+      const activeTechs = (state.technicians || []).filter(t => t.is_active === 1 || t.is_active === true || t.is_active === undefined);
+      const coords = client.coordenadas_gps || '';
+      const mapsUrl = client.google_maps_url || (coords ? \`https://www.google.com/maps?q=\${coords}\` : '');
+
+      const content = \`
+        <div style="display: flex; flex-direction: column; gap: 14px;">
+          <!-- Card Resumen Cliente -->
+          <div style="padding: 12px; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--card-border); border-radius: var(--radius-md);">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px;">
+              <div>
+                <strong style="font-size: 14px; color: #fff;">\${escapeHtml(client.nombre)}</strong>
+                <span style="font-size: 12px; color: var(--text-muted); margin-left: 6px;">(#\${client.id_servicio})</span>
+              </div>
+              <span class="badge badge-purple">\${escapeHtml(client.plan_internet || 'Plan Internet')}</span>
+            </div>
+            <div style="font-size: 12px; color: var(--text-dim); display: flex; flex-direction: column; gap: 3px;">
+              <div><strong>Dirección:</strong> \${escapeHtml(client.direccion || 'Sin dirección registrada')}</div>
+              <div><strong>IP:</strong> <span class="font-mono">\${client.ip || 'N/A'}</span> &bull; <strong>SN:</strong> <span class="font-mono">\${client.sn_onu || 'N/A'}</span></div>
+              \${coords ? \`<div><strong>Coordenadas:</strong> <span class="font-mono" style="color: #34d399;">\${coords}</span></div>\` : '<div style="color: var(--accent-amber);">Nota: Este cliente no tiene coordenadas GPS registradas aún.</div>'}
+            </div>
+          </div>
+
+          <!-- Selección de Técnicos -->
+          <div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <label class="form-label" style="margin-bottom: 0;">Seleccionar Técnicos Destinatarios (WhatsApp)</label>
+              \${activeTechs.length > 0 ? \`
+                <button type="button" class="btn btn-secondary btn-xs" onclick="toggleAllDispatchTechs(this)">
+                  Seleccionar Todos
+                </button>
+              \` : ''}
+            </div>
+
+            \${activeTechs.length === 0 ? \`
+              <div style="padding: 10px; background: rgba(245, 158, 11, 0.1); border: 1px solid var(--accent-amber); border-radius: var(--radius-sm); font-size: 12px; color: #fcd34d;">
+                No hay técnicos registrados activos en el sistema. Puedes ingresar un número de WhatsApp abajo.
+              </div>
+            \` : \`
+              <div id="dispatch-tech-list" style="display: flex; flex-direction: column; gap: 6px; max-height: 180px; overflow-y: auto; padding: 4px; border: 1px solid var(--card-border); border-radius: var(--radius-sm); background: rgba(0,0,0,0.2);">
+                \${activeTechs.map(t => \`
+                  <label style="display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: var(--radius-xs); background: rgba(255,255,255,0.02); cursor: pointer; transition: background 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='rgba(255,255,255,0.02)'">
+                    <input type="checkbox" class="dispatch-tech-checkbox" value="\${t.phone}" style="width: 16px; height: 16px; accent-color: var(--primary);">
+                    <div style="flex: 1; display: flex; justify-content: space-between; align-items: center;">
+                      <div>
+                        <strong style="font-size: 12.5px; color: #fff;">\${escapeHtml(t.name)}</strong>
+                        <span class="font-mono" style="font-size: 11px; color: var(--text-dim); margin-left: 6px;">\${t.phone}</span>
+                      </div>
+                      <span class="badge \${t.role === 'ADMIN' ? 'badge-primary' : 'badge-cyan'}" style="font-size: 10px;">\${t.role || 'TECNICO'}</span>
+                    </div>
+                  </label>
+                \`).join('')}
+              </div>
+            \`}
+          </div>
+
+          <!-- Número adicional manual -->
+          <div>
+            <label class="form-label">Número WhatsApp adicional (opcional)</label>
+            <input type="text" id="dispatch-custom-phone" class="form-control" placeholder="10 dígitos (ej. 7711234567)">
+          </div>
+
+          <!-- Notas e Instrucciones -->
+          <div>
+            <label class="form-label">Instrucciones o Notas de Trabajo (opcional)</label>
+            <textarea id="dispatch-custom-notes" class="form-control" rows="2" placeholder="Ej: Revisar potencia óptica en caja NAP / Cambio de drop de fibra / Cable cortado..."></textarea>
+          </div>
+        </div>
+      \`;
+
+      openModal('Despachar Orden de Trabajo a Cuadrilla Técnica', content, async () => {
+        const checkboxes = document.querySelectorAll('.dispatch-tech-checkbox:checked');
+        const selectedPhones = Array.from(checkboxes).map(cb => cb.value);
+        const customPhone = (document.getElementById('dispatch-custom-phone')?.value || '').trim().replace(/\\D/g, '');
+        if (customPhone && customPhone.length >= 10 && !selectedPhones.includes(customPhone)) {
+          selectedPhones.push(customPhone);
+        }
+
+        if (selectedPhones.length === 0) {
+          showToast('Error', 'Debes seleccionar al menos un técnico o ingresar un número de WhatsApp.', 'error');
+          return;
+        }
+
+        const customNotes = (document.getElementById('dispatch-custom-notes')?.value || '').trim();
+
+        showToast('Enviando Orden', \`Despachando a \${selectedPhones.length} técnico(s)...\`, 'info', 2000);
+
+        const res = await apiFetch(\`/api/admin/clients/\${client.id_servicio}/dispatch\`, {
+          method: 'POST',
+          body: JSON.stringify({
+            tech_phones: selectedPhones,
+            custom_notes: customNotes,
+          }),
+        });
+
+        if (res.success) {
+          showToast('Despacho Exitoso', res.message || \`Orden enviada a \${res.sent_count} técnico(s) por WhatsApp.\`, 'success');
+        } else {
+          showToast('Error en Despacho', res.error || 'No se pudo enviar la orden.', 'error');
+        }
+      }, 'Enviar Orden por WhatsApp');
+    }
+
+    function toggleAllDispatchTechs(btn) {
+      const checkboxes = document.querySelectorAll('.dispatch-tech-checkbox');
+      const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+      checkboxes.forEach(cb => cb.checked = !allChecked);
+      btn.innerText = allChecked ? 'Seleccionar Todos' : 'Deseleccionar Todos';
     }
 
     // Modal para Ver Ficha Completa del Cliente

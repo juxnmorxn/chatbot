@@ -107,6 +107,7 @@ router.get('/api/admin/clients', AdminController.getClients);
 router.get('/api/admin/clients/:id', AdminController.getClientDetail);
 router.post('/api/admin/clients/:id/location', AdminController.updateClientLocation);
 router.post('/api/admin/clients/:id/phones', AdminController.updateClientPhones);
+router.post('/api/admin/clients/:id/dispatch', AdminController.dispatchLocationToTechnicians);
 
 // ==========================================
 // IPAM & GESTIÓN DE POOLS / VLANS / ONUS

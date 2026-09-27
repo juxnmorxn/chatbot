@@ -1876,6 +1876,94 @@ export class AdminController {
     }
   }
 
+  /**
+   * Despacha la orden de trabajo con geolocalización y datos técnicos a uno o múltiples técnicos vía WhatsApp
+   */
+  static async dispatchLocationToTechnicians(req: Request, res: Response): Promise<void> {
+    try {
+      const clientId = String(req.params.id || req.body?.client_id || '');
+      const { tech_phones, custom_notes } = req.body || {};
+
+      if (!clientId) {
+        res.status(400).json({ success: false, error: 'ID de cliente requerido' });
+        return;
+      }
+      if (!Array.isArray(tech_phones) || tech_phones.length === 0) {
+        res.status(400).json({ success: false, error: 'Debes seleccionar al menos un técnico destinatario' });
+        return;
+      }
+
+      const clientDetail = await TursoService.getClientDetail(clientId);
+      if (!clientDetail) {
+        res.status(404).json({ success: false, error: 'Cliente no encontrado en la base de datos' });
+        return;
+      }
+
+      const coords = clientDetail.coordenadas_gps || '';
+      const mapsUrl = clientDetail.google_maps_url || (coords ? `https://www.google.com/maps?q=${coords}` : '');
+      const ispName = SettingsService.get('ISP_NAME', 'ISP_NAME', 'CloudWareMx');
+
+      let dispatchMsg =
+        `*ORDEN DE TRABAJO / VISITA TECNICA*\n` +
+        `*${ispName}*\n\n` +
+        `• *Cliente:* ${clientDetail.nombre} (#${clientDetail.id_servicio})\n` +
+        (clientDetail.telefono_principal ? `• *Telefono:* ${clientDetail.telefono_principal}\n` : '') +
+        (clientDetail.direccion ? `• *Direccion:* ${clientDetail.direccion}\n` : '') +
+        (clientDetail.ip ? `• *IP:* ${clientDetail.ip}\n` : '') +
+        (clientDetail.sn_onu ? `• *SN ONU:* ${clientDetail.sn_onu}\n` : '') +
+        (clientDetail.plan_internet ? `• *Plan:* ${clientDetail.plan_internet}\n` : '') +
+        (clientDetail.router ? `• *Router / Zona:* ${clientDetail.router}\n` : '') +
+        (clientDetail.ubicacion_notas ? `• *Notas Acceso:* ${clientDetail.ubicacion_notas}\n` : '') +
+        (custom_notes ? `\n*Instrucciones Especiales:*\n${custom_notes}\n` : '');
+
+      if (mapsUrl || coords) {
+        dispatchMsg +=
+          `\n*Ubicacion en Google Maps:*\n${mapsUrl || `https://www.google.com/maps?q=${coords}`}\n` +
+          `*Coordenadas:* \`${coords}\`\n`;
+      } else {
+        dispatchMsg += `\n*Nota:* Este cliente no cuenta con coordenadas GPS registradas aun.\n`;
+      }
+
+      const { EvolutionService } = await import('../services/evolution.service');
+      let sentCount = 0;
+      const errors: string[] = [];
+
+      for (const rawPhone of tech_phones) {
+        const cleanPhone = String(rawPhone).replace(/\D/g, '');
+        if (cleanPhone.length >= 10) {
+          try {
+            const ok = await EvolutionService.enviarTexto(cleanPhone, dispatchMsg);
+            if (ok) {
+              sentCount++;
+              await TursoService.logMessage(cleanPhone, 'OUT', dispatchMsg, 'DESPACHO_TECNICO', 'ADMIN_PANEL');
+            } else {
+              errors.push(`No se pudo entregar a ${cleanPhone}`);
+            }
+          } catch (e: any) {
+            errors.push(`${cleanPhone}: ${e?.message || e}`);
+          }
+        }
+      }
+
+      AdminController.broadcastSSE('tech:location_dispatched', {
+        clientId,
+        clientName: clientDetail.nombre,
+        techniciansSent: sentCount,
+        timestamp: new Date().toISOString(),
+      });
+
+      res.json({
+        success: true,
+        sent_count: sentCount,
+        message: `Orden despachada exitosamente a ${sentCount} técnico(s).`,
+        errors: errors.length > 0 ? errors : undefined,
+      });
+    } catch (error: any) {
+      logger.error(`Error al despachar orden de cliente ${req.params.id}:`, error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
   // ==========================================
   // CONTINGENCIAS Y CAÍDAS DE RED (OUTAGES)
   // ==========================================
