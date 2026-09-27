@@ -1983,11 +1983,7 @@ export function getAdminDashboardHtml(): string {
           </div>
 
           <!-- Datatable Toolbar -->
-          <div class="datatable-toolbar">
-            <div class="datatable-search-box">
-              <svg class="svg-icon svg-icon-sm" style="color: var(--text-muted); flex-shrink: 0;" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-              <input type="text" id="filter-logs-search" placeholder="Buscar por cliente, teléfono, mensaje..." oninput="filterDashboardLogs()">
-            </div>
+          <div class="datatable-toolbar" style="justify-content: flex-end;">
             <div class="datatable-filters-group">
               <select id="filter-logs-flow" class="datatable-select" onchange="filterDashboardLogs()">
                 <option value="">🌐 Todos los Flujos</option>
@@ -2157,11 +2153,7 @@ export function getAdminDashboardHtml(): string {
 
         <!-- Datatable Toolbar Card -->
         <div class="glass-card" style="margin-bottom: 20px;">
-          <div class="datatable-toolbar" style="margin-bottom: 0; padding-bottom: 0; border-bottom: none;">
-            <div class="datatable-search-box">
-              <svg class="svg-icon svg-icon-sm" style="color: var(--text-muted); flex-shrink: 0;" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-              <input type="text" id="filter-clients-search" placeholder="Buscar cliente por nombre, ID, IP, SN, teléfono..." oninput="handleClientsSearchInput(this.value)">
-            </div>
+          <div class="datatable-toolbar" style="margin-bottom: 0; padding-bottom: 0; border-bottom: none; justify-content: flex-end;">
             <div class="datatable-filters-group">
               <select id="filter-client-estado" class="datatable-select" onchange="handleClientColFilter()">
                 <option value="">🟢 Todos los Estados</option>
@@ -2268,11 +2260,7 @@ export function getAdminDashboardHtml(): string {
           </div>
 
           <!-- Datatable Toolbar -->
-          <div class="datatable-toolbar">
-            <div class="datatable-search-box">
-              <svg class="svg-icon svg-icon-sm" style="color: var(--text-muted); flex-shrink: 0;" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-              <input type="text" id="filter-tickets-search" placeholder="Buscar por folio, cliente, falla, teléfono..." oninput="filterTicketsTable()">
-            </div>
+          <div class="datatable-toolbar" style="justify-content: flex-end;">
             <div class="datatable-filters-group">
               <select id="filter-ticket-status" class="datatable-select" onchange="filterTicketsTable()">
                 <option value="">🎫 Todos los Estados</option>
@@ -2388,11 +2376,7 @@ export function getAdminDashboardHtml(): string {
           </div>
 
           <!-- Datatable Toolbar -->
-          <div class="datatable-toolbar">
-            <div class="datatable-search-box">
-              <svg class="svg-icon svg-icon-sm" style="color: var(--text-muted); flex-shrink: 0;" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-              <input type="text" id="filter-ipam-unconf-search" placeholder="Buscar por Serial (SN), modelo ONT, OLT, puerto..." oninput="filterUnconfiguredOnus()">
-            </div>
+          <div class="datatable-toolbar" style="justify-content: flex-end;">
             <div class="datatable-filters-group">
               <select id="filter-pon-olt" class="datatable-select" onchange="filterUnconfiguredOnus()">
                 <option value="">📡 Todas las OLTs</option>
@@ -2440,11 +2424,7 @@ export function getAdminDashboardHtml(): string {
           </div>
 
           <!-- Datatable Toolbar -->
-          <div class="datatable-toolbar">
-            <div class="datatable-search-box">
-              <svg class="svg-icon svg-icon-sm" style="color: var(--text-muted); flex-shrink: 0;" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-              <input type="text" id="filter-audit-search" placeholder="Buscar por cliente, folio, IP OLT, IP WispHub..." oninput="handleAuditColFilter()">
-            </div>
+          <div class="datatable-toolbar" style="justify-content: flex-end;">
             <div class="datatable-filters-group">
               <select id="filter-audit-ip-status" class="datatable-select" onchange="handleAuditColFilter()">
                 <option value="">🌐 Estado IP: Todos</option>
@@ -2571,11 +2551,7 @@ export function getAdminDashboardHtml(): string {
 
         <div class="glass-card">
           <!-- Datatable Toolbar -->
-          <div class="datatable-toolbar">
-            <div class="datatable-search-box">
-              <span class="search-icon">🔍</span>
-              <input type="text" id="filter-prov-search" placeholder="Buscar por cliente, SN, IP WAN o zona..." oninput="handleProvColFilter()">
-            </div>
+          <div class="datatable-toolbar" style="justify-content: flex-end;">
             <div class="datatable-filters-group">
               <select id="filter-prov-tr069" class="datatable-select" onchange="handleProvColFilter()" title="Filtrar por TR-069">
                 <option value="">⚙️ Todos TR-069</option>
@@ -2643,11 +2619,7 @@ export function getAdminDashboardHtml(): string {
 
         <div class="glass-card">
           <!-- Datatable Toolbar -->
-          <div class="datatable-toolbar">
-            <div class="datatable-search-box">
-              <span class="search-icon">🔍</span>
-              <input type="text" id="filter-tech-search" placeholder="Buscar por nombre, teléfono o PIN..." oninput="filterTechniciansTable()">
-            </div>
+          <div class="datatable-toolbar" style="justify-content: flex-end;">
             <div class="datatable-filters-group">
               <select id="filter-tech-role" class="datatable-select" onchange="filterTechniciansTable()" title="Filtrar por rol">
                 <option value="">💼 Todos los roles</option>
@@ -2822,11 +2794,7 @@ export function getAdminDashboardHtml(): string {
           </div>
 
           <!-- Datatable Toolbar -->
-          <div class="datatable-toolbar">
-            <div class="datatable-search-box">
-              <span class="search-icon">🔍</span>
-              <input type="text" id="filter-swap-search" placeholder="Buscar por cliente, SN anterior/nuevo, IP o técnico..." oninput="filterSwapHistoryTable()">
-            </div>
+          <div class="datatable-toolbar" style="justify-content: flex-end;">
             <div class="datatable-filters-group">
               <select id="filter-swap-status" class="datatable-select" onchange="filterSwapHistoryTable()" title="Filtrar por estado">
                 <option value="">⚡ Todos los estados</option>
@@ -3152,11 +3120,7 @@ export function getAdminDashboardHtml(): string {
 
         <div class="glass-card">
           <!-- Datatable Toolbar -->
-          <div class="datatable-toolbar">
-            <div class="datatable-search-box">
-              <span class="search-icon">🔍</span>
-              <input type="text" id="filter-user-search" placeholder="Buscar por usuario o nombre completo..." oninput="filterAdminUsersTable()">
-            </div>
+          <div class="datatable-toolbar" style="justify-content: flex-end;">
             <div class="datatable-filters-group">
               <select id="filter-user-role" class="datatable-select" onchange="filterAdminUsersTable()" title="Filtrar por rol">
                 <option value="">👤 Todos los roles</option>
@@ -3511,49 +3475,40 @@ export function getAdminDashboardHtml(): string {
       routeSearchToCurrentView('');
     }
 
+    function matchesFuzzyTokens(query, ...fields) {
+      if (!query) return true;
+      const cleanQ = String(query).toLowerCase().trim();
+      if (!cleanQ) return true;
+      const tokens = cleanQ.split(/\s+/).filter(Boolean);
+      const combined = fields.map(f => (f !== null && f !== undefined ? String(f).toLowerCase() : '')).join(' ');
+      return tokens.every(token => combined.includes(token));
+    }
+
     function routeSearchToCurrentView(q) {
       const v = state.currentView;
       const query = (q || '').trim();
 
       if (v === 'dashboard') {
-        const inp = document.getElementById('filter-logs-search');
-        if (inp) inp.value = query;
         filterDashboardLogs();
       } else if (v === 'live-chat') {
         const inp = document.getElementById('chat-filter-input');
         if (inp) inp.value = query;
         filterChatThreads(query);
       } else if (v === 'clients') {
-        const inp = document.getElementById('filter-clients-search');
-        if (inp) inp.value = query;
         handleClientsSearchInput(query);
       } else if (v === 'tickets') {
-        const inp = document.getElementById('filter-tickets-search');
-        if (inp) inp.value = query;
         filterTicketsTable();
       } else if (v === 'ipam') {
-        const inp = document.getElementById('filter-ipam-unconf-search');
-        if (inp) inp.value = query;
         filterUnconfiguredOnus();
       } else if (v === 'audit') {
-        const inp = document.getElementById('filter-audit-search');
-        if (inp) inp.value = query;
         handleAuditColFilter();
       } else if (v === 'provisioning') {
-        const inp = document.getElementById('filter-prov-search');
-        if (inp) inp.value = query;
         handleProvColFilter();
       } else if (v === 'technicians') {
-        const inp = document.getElementById('filter-tech-search');
-        if (inp) inp.value = query;
         filterTechniciansTable();
       } else if (v === 'modem-swap') {
-        const inp = document.getElementById('filter-swap-search');
-        if (inp) inp.value = query;
         filterSwapHistoryTable();
       } else if (v === 'users') {
-        const inp = document.getElementById('filter-user-search');
-        if (inp) inp.value = query;
         filterAdminUsersTable();
       }
     }
@@ -3814,7 +3769,7 @@ export function getAdminDashboardHtml(): string {
     }
 
     function filterDashboardLogs() {
-      const q = (document.getElementById('filter-logs-search')?.value || '').toLowerCase().trim();
+      const q = (document.getElementById('global-context-search')?.value || '').toLowerCase().trim();
       const fFlow = (document.getElementById('filter-logs-flow')?.value || '').toUpperCase().trim();
 
       const filtered = (state.dashboardLogs || []).filter(l => {
@@ -3825,11 +3780,8 @@ export function getAdminDashboardHtml(): string {
         }
         if (q) {
           const timeStr = new Date(l.created_at).toLocaleTimeString().toLowerCase();
-          const phone = String(l.phone || '').toLowerCase();
-          const client = String(l.client_name || '').toLowerCase();
-          const msg = String(l.message || '').toLowerCase();
           const dirStr = String(l.direction || '').toLowerCase() === 'in' ? 'entrante in' : 'saliente out';
-          if (!timeStr.includes(q) && !phone.includes(q) && !client.includes(q) && !msg.includes(q) && !dirStr.includes(q)) return false;
+          if (!matchesFuzzyTokens(q, timeStr, l.phone, l.client_name, l.message, dirStr)) return false;
         }
         return true;
       });
@@ -3870,13 +3822,12 @@ export function getAdminDashboardHtml(): string {
     }
 
     function clearDashboardLogsFilter() {
-      const inp = document.getElementById('filter-logs-search');
-      if (inp) inp.value = '';
+      clearGlobalContextSearch();
       const selFlow = document.getElementById('filter-logs-flow');
       if (selFlow) selFlow.value = '';
       const selSort = document.getElementById('filter-logs-sort');
       if (selSort) selSort.value = 'time_desc';
-      renderDashboardLogs(state.dashboardLogs);
+      filterDashboardLogs();
     }
 
     // Outages (Caídas Masivas y Contingencia por Zona)
@@ -4806,7 +4757,7 @@ export function getAdminDashboardHtml(): string {
     }
 
     function filterTicketsTable() {
-      const q = (document.getElementById('filter-tickets-search')?.value || '').toLowerCase().trim();
+      const q = (document.getElementById('global-context-search')?.value || '').toLowerCase().trim();
       const fStatus = (document.getElementById('filter-ticket-status')?.value || '').toUpperCase().trim();
       const fTech = (document.getElementById('filter-ticket-tech')?.value || '').toLowerCase().trim();
 
@@ -4814,12 +4765,7 @@ export function getAdminDashboardHtml(): string {
         if (fStatus && String(t.status || '').toUpperCase() !== fStatus) return false;
         if (fTech && !String(t.assigned_technician_name || '').toLowerCase().includes(fTech)) return false;
         if (q) {
-          const folio = String(t.folio || t.id || '').toLowerCase();
-          const client = String(t.client_name || '').toLowerCase();
-          const phone = String(t.phone || '').toLowerCase();
-          const issue = String(t.issue_summary || '').toLowerCase();
-          const tech = String(t.assigned_technician_name || '').toLowerCase();
-          if (!folio.includes(q) && !client.includes(q) && !phone.includes(q) && !issue.includes(q) && !tech.includes(q)) return false;
+          if (!matchesFuzzyTokens(q, t.folio, t.id, t.client_name, t.phone, t.issue_summary, t.assigned_technician_name, t.status)) return false;
         }
         return true;
       });
@@ -4860,15 +4806,14 @@ export function getAdminDashboardHtml(): string {
     }
 
     function clearTicketsTableFilters() {
-      const inp = document.getElementById('filter-tickets-search');
-      if (inp) inp.value = '';
+      clearGlobalContextSearch();
       const selStatus = document.getElementById('filter-ticket-status');
       if (selStatus) selStatus.value = '';
       const selTech = document.getElementById('filter-ticket-tech');
       if (selTech) selTech.value = '';
       const selSort = document.getElementById('filter-tickets-sort');
-      if (selSort) selSort.value = 'date_desc';
-      renderTicketsTable(state.tickets);
+      if (selSort) selSort.value = 'created_at_desc';
+      filterTicketsTable();
     }
 
     function renderKanbanBoard(tickets) {
@@ -5130,7 +5075,7 @@ export function getAdminDashboardHtml(): string {
     }
 
     function filterUnconfiguredOnus() {
-      const q = (document.getElementById('filter-ipam-unconf-search')?.value || '').toLowerCase().trim();
+      const q = (document.getElementById('global-context-search')?.value || '').toLowerCase().trim();
       const fOlt = (document.getElementById('filter-pon-olt')?.value || '').toLowerCase().trim();
       const fModel = (document.getElementById('filter-pon-model')?.value || '').toLowerCase().trim();
 
@@ -5138,7 +5083,7 @@ export function getAdminDashboardHtml(): string {
         const oltStr = String(o.olt_name || ('OLT ' + (o.olt_id || '3'))).toLowerCase();
         const modelStr = String(o.model || o.onu_type_name || o.onu_type || 'ONT').toLowerCase();
         const snStr = String(o.sn || '').toLowerCase();
-        const boardPortStr = \`board \${o.board ?? ''} port \${o.port ?? o.pon_port ?? ''} \${o.board ?? ''}/\${o.port ?? o.pon_port ?? ''}\`.toLowerCase();
+        const boardPortStr = ('board ' + (o.board || '') + ' port ' + (o.port || o.pon_port || '') + ' ' + (o.board || '') + '/' + (o.port || o.pon_port || '') + ' pon ' + (o.port || '')).toLowerCase();
 
         if (fOlt && !oltStr.includes(fOlt) && String(o.olt_id || '') !== fOlt) return false;
         if (fModel && !modelStr.includes(fModel)) return false;
@@ -5146,17 +5091,8 @@ export function getAdminDashboardHtml(): string {
         if (q) {
           const isHuawei = snStr.startsWith('hwtc') || modelStr.includes('hg') || modelStr.includes('eg');
           const isZte = snStr.startsWith('zte');
-          const matchesHuawei = q.includes('huawei') && isHuawei;
-          const matchesZte = q.includes('zte') && isZte;
-
-          if (
-            !snStr.includes(q) &&
-            !oltStr.includes(q) &&
-            !boardPortStr.includes(q) &&
-            !modelStr.includes(q) &&
-            !matchesHuawei &&
-            !matchesZte
-          ) return false;
+          const brandTokens = (isHuawei ? 'huawei ' : '') + (isZte ? 'zte ' : '');
+          if (!matchesFuzzyTokens(q, snStr, oltStr, boardPortStr, modelStr, brandTokens)) return false;
         }
         return true;
       });
@@ -5191,15 +5127,14 @@ export function getAdminDashboardHtml(): string {
     }
 
     function clearUnconfiguredOnusFilters() {
-      const inp = document.getElementById('filter-ipam-unconf-search');
-      if (inp) inp.value = '';
+      clearGlobalContextSearch();
       const selOlt = document.getElementById('filter-pon-olt');
       if (selOlt) selOlt.value = '';
       const selModel = document.getElementById('filter-pon-model');
       if (selModel) selModel.value = '';
       const selSort = document.getElementById('filter-ipam-unconf-sort');
       if (selSort) selSort.value = 'sn_asc';
-      renderUnconfiguredOnusTable(state.unconfiguredOnus);
+      filterUnconfiguredOnus();
     }
 
     async function togglePoolBotActive(vlan, isActive) {
@@ -5529,7 +5464,7 @@ export function getAdminDashboardHtml(): string {
     }
 
     function handleAuditColFilter() {
-      const q = (document.getElementById('filter-audit-search')?.value || '').toLowerCase().trim();
+      const q = (document.getElementById('global-context-search')?.value || '').toLowerCase().trim();
       const fIpStatus = (document.getElementById('filter-audit-ip-status')?.value || '').toUpperCase().trim();
       const fTr = (document.getElementById('filter-audit-tr069')?.value || '').toUpperCase().trim();
       const fV6 = (document.getElementById('filter-audit-ipv6')?.value || '').toUpperCase().trim();
@@ -5548,14 +5483,7 @@ export function getAdminDashboardHtml(): string {
           if (fV6 === 'ACTIVE' && it.ipv6_status !== 'DUAL_STACK') return false;
           if (fV6 === 'INACTIVE' && it.ipv6_status === 'DUAL_STACK') return false;
         }
-        if (q) {
-          const client = String(it.cliente || '').toLowerCase();
-          const srv = String(it.servicio || it.folio || '').toLowerCase();
-          const ipOlt = String(it.smartolt_ip || '').toLowerCase();
-          const ipWisp = String(it.wisphub_ip || '').toLowerCase();
-          const plan = String(it.wisphub_plan || '').toLowerCase();
-          if (!client.includes(q) && !srv.includes(q) && !ipOlt.includes(q) && !ipWisp.includes(q) && !plan.includes(q)) return false;
-        }
+        if (!matchesFuzzyTokens(q, it.cliente, it.servicio, it.folio, it.smartolt_ip, it.wisphub_ip, it.wisphub_plan, it.ip_status)) return false;
         return true;
       });
 
@@ -5598,8 +5526,7 @@ export function getAdminDashboardHtml(): string {
     }
 
     function clearAuditColFilters() {
-      const inp = document.getElementById('filter-audit-search');
-      if (inp) inp.value = '';
+      clearGlobalContextSearch();
       const selIp = document.getElementById('filter-audit-ip-status');
       if (selIp) selIp.value = '';
       const selTr = document.getElementById('filter-audit-tr069');
@@ -5769,7 +5696,7 @@ export function getAdminDashboardHtml(): string {
     }
 
     function handleProvColFilter() {
-      const q = (document.getElementById('filter-prov-search')?.value || '').toLowerCase().trim();
+      const q = (document.getElementById('global-context-search')?.value || '').toLowerCase().trim();
       const fTr = (document.getElementById('filter-prov-tr069')?.value || '').toUpperCase().trim();
       const fV6 = (document.getElementById('filter-prov-ipv6')?.value || '').toUpperCase().trim();
 
@@ -5783,13 +5710,7 @@ export function getAdminDashboardHtml(): string {
           if (fV6 === 'ACTIVE' && it.ipv6_status !== 'DUAL_STACK') return false;
           if (fV6 === 'INACTIVE' && it.ipv6_status === 'DUAL_STACK') return false;
         }
-        if (q) {
-          const client = String(it.cliente || '').toLowerCase();
-          const sn = String(it.sn_smartolt || it.sn_wisphub || '').toLowerCase();
-          const ip = String(it.smartolt_ip || it.wisphub_ip || '').toLowerCase();
-          const zone = String(it.zona_o_router || '').toLowerCase();
-          if (!client.includes(q) && !sn.includes(q) && !ip.includes(q) && !zone.includes(q)) return false;
-        }
+        if (!matchesFuzzyTokens(q, it.cliente, it.sn_smartolt, it.sn_wisphub, it.smartolt_ip, it.wisphub_ip, it.zona_o_router)) return false;
         return true;
       });
 
@@ -5829,8 +5750,7 @@ export function getAdminDashboardHtml(): string {
     }
 
     function clearProvColFilters() {
-      const inp = document.getElementById('filter-prov-search');
-      if (inp) inp.value = '';
+      clearGlobalContextSearch();
       const selTr = document.getElementById('filter-prov-tr069');
       if (selTr) selTr.value = '';
       const selV6 = document.getElementById('filter-prov-ipv6');
@@ -5914,7 +5834,7 @@ export function getAdminDashboardHtml(): string {
     }
 
     function filterTechniciansTable() {
-      const q = (document.getElementById('filter-tech-search')?.value || '').toLowerCase().trim();
+      const q = (document.getElementById('global-context-search')?.value || '').toLowerCase().trim();
       const fRole = (document.getElementById('filter-tech-role')?.value || '').toLowerCase().trim();
       const fStatus = (document.getElementById('filter-tech-status')?.value || '').toUpperCase().trim();
 
@@ -5925,13 +5845,7 @@ export function getAdminDashboardHtml(): string {
           if (fStatus === 'ACTIVO' && t.is_active !== 1) return false;
           if (fStatus === 'INACTIVO' && t.is_active === 1) return false;
         }
-        if (q) {
-          const name = String(t.name || '').toLowerCase();
-          const phone = String(t.phone || '').toLowerCase();
-          const pin = String(t.pin || '').toLowerCase();
-          const role = String(t.role || '').toLowerCase();
-          if (!name.includes(q) && !phone.includes(q) && !pin.includes(q) && !role.includes(q)) return false;
-        }
+        if (!matchesFuzzyTokens(q, t.name, t.phone, t.pin, t.role)) return false;
         return true;
       });
 
@@ -5968,8 +5882,7 @@ export function getAdminDashboardHtml(): string {
     }
 
     function clearTechniciansFilters() {
-      const inp = document.getElementById('filter-tech-search');
-      if (inp) inp.value = '';
+      clearGlobalContextSearch();
       const selRole = document.getElementById('filter-tech-role');
       if (selRole) selRole.value = '';
       const selStatus = document.getElementById('filter-tech-status');
@@ -6796,18 +6709,13 @@ export function getAdminDashboardHtml(): string {
     }
 
     function filterAdminUsersTable() {
-      const q = (document.getElementById('filter-user-search')?.value || '').toLowerCase().trim();
+      const q = (document.getElementById('global-context-search')?.value || '').toLowerCase().trim();
       const fRole = (document.getElementById('filter-user-role')?.value || '').toLowerCase().trim();
 
       const users = state.adminUsers || [];
       const filtered = users.filter(u => {
         if (fRole && !String(u.role || '').toLowerCase().includes(fRole)) return false;
-        if (q) {
-          const username = String(u.username || '').toLowerCase();
-          const name = String(u.name || '').toLowerCase();
-          const role = String(u.role || '').toLowerCase();
-          if (!username.includes(q) && !name.includes(q) && !role.includes(q)) return false;
-        }
+        if (!matchesFuzzyTokens(q, u.username, u.name, u.role)) return false;
         return true;
       });
 
@@ -6841,8 +6749,7 @@ export function getAdminDashboardHtml(): string {
     }
 
     function clearAdminUsersFilters() {
-      const inp = document.getElementById('filter-user-search');
-      if (inp) inp.value = '';
+      clearGlobalContextSearch();
       const selRole = document.getElementById('filter-user-role');
       if (selRole) selRole.value = '';
       const selSort = document.getElementById('filter-user-sort');
@@ -7213,6 +7120,7 @@ export function getAdminDashboardHtml(): string {
     }
 
     function clearClientColFilters() {
+      clearGlobalContextSearch();
       const inpSearch = document.getElementById('filter-clients-search');
       if (inpSearch) inpSearch.value = '';
       const selEstado = document.getElementById('filter-client-estado');
@@ -7912,22 +7820,13 @@ export function getAdminDashboardHtml(): string {
     }
 
     function filterSwapHistoryTable() {
-      const q = (document.getElementById('filter-swap-search')?.value || '').toLowerCase().trim();
+      const q = (document.getElementById('global-context-search')?.value || '').toLowerCase().trim();
       const fStatus = (document.getElementById('filter-swap-status')?.value || '').toUpperCase().trim();
 
       const items = state.swapHistory || [];
       const filtered = items.filter(it => {
         if (fStatus && String(it.status || '').toUpperCase() !== fStatus) return false;
-        if (q) {
-          const dtStr = formatShortDate(it.created_at).toLowerCase();
-          const client = String(it.client_name || '').toLowerCase();
-          const oldSn = String(it.old_sn || '').toLowerCase();
-          const newSn = String(it.new_sn || '').toLowerCase();
-          const ip = String(it.ip_address || '').toLowerCase();
-          const zone = String(it.zone || '').toLowerCase();
-          const tech = String(it.technician_name || '').toLowerCase();
-          if (!dtStr.includes(q) && !client.includes(q) && !oldSn.includes(q) && !newSn.includes(q) && !ip.includes(q) && !zone.includes(q) && !tech.includes(q)) return false;
-        }
+        if (!matchesFuzzyTokens(q, it.client_name, it.old_sn, it.new_sn, it.ip_address, it.zone, it.technician_name, it.status, formatShortDate(it.created_at))) return false;
         return true;
       });
 
@@ -7973,8 +7872,7 @@ export function getAdminDashboardHtml(): string {
     }
 
     function clearSwapHistoryFilters() {
-      const inp = document.getElementById('filter-swap-search');
-      if (inp) inp.value = '';
+      clearGlobalContextSearch();
       const selStatus = document.getElementById('filter-swap-status');
       if (selStatus) selStatus.value = '';
       const selSort = document.getElementById('filter-swap-sort');
