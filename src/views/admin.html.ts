@@ -2256,6 +2256,12 @@ export function getAdminDashboardHtml(): string {
           <span class="nav-text">Clientes & GPS</span>
           <span id="badge-clients-total" class="nav-badge" style="display: none;">0</span>
         </div>
+        <div class="nav-item" id="nav-item-personal" data-view="personal" onclick="navigateTo('personal')" title="Personal & Accesos (Usuarios del Panel y Técnicos con PIN)">
+          <span class="nav-icon">
+            <svg class="svg-icon" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+          </span>
+          <span class="nav-text">Personal & Accesos</span>
+        </div>
 
         <div class="nav-category">Red & Operación Bot</div>
         <div class="nav-item" data-view="ipam" onclick="navigateTo('ipam')" title="Control de Pools IP">
@@ -2271,12 +2277,6 @@ export function getAdminDashboardHtml(): string {
           </span>
           <span class="nav-text">Auditoría SmartOLT</span>
         </div>
-        <div class="nav-item" data-view="technicians" onclick="navigateTo('technicians')" title="Técnicos & PINs">
-          <span class="nav-icon">
-            <svg class="svg-icon" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><polyline points="16 11 18 13 22 9"></polyline></svg>
-          </span>
-          <span class="nav-text">Técnicos & PINs</span>
-        </div>
         <div class="nav-item" data-view="modem-swap" onclick="navigateTo('modem-swap')" title="Cambio de Módem">
           <span class="nav-icon">
             <svg class="svg-icon" viewBox="0 0 24 24"><path d="M21 2v6h-6"></path><path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path><path d="M3 22v-6h6"></path><path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path></svg>
@@ -2290,12 +2290,6 @@ export function getAdminDashboardHtml(): string {
             <svg class="svg-icon" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>
           </span>
           <span class="nav-text">Configuración</span>
-        </div>
-        <div class="nav-item" id="nav-item-users" data-view="users" onclick="navigateTo('users')" title="Usuarios & Roles">
-          <span class="nav-icon">
-            <svg class="svg-icon" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
-          </span>
-          <span class="nav-text">Usuarios & Roles</span>
         </div>
       </nav>
 
@@ -2981,63 +2975,140 @@ export function getAdminDashboardHtml(): string {
         </div>
       </section>
 
-      <!-- VIEW 6: TÉCNICOS & PINS -->
-      <section id="view-technicians" class="view-container">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
+      <!-- VIEW 6: PERSONAL & ACCESOS (USUARIOS PANEL + TÉCNICOS & PINS) -->
+      <section id="view-personal" class="view-container">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
           <div>
-            <h3 style="font-size: 16px; font-weight: 700;">Técnicos de Campo Autorizados</h3>
-            <p style="font-size: 12px; color: var(--text-muted);">Gestiona los PINs de 5 dígitos para consultas y diagnósticos en WhatsApp.</p>
+            <h3 style="font-size: 17px; font-weight: 800; letter-spacing: -0.3px; display: flex; align-items: center; gap: 8px;">
+              <span>👥</span> Personal, Roles & Técnicos de Campo
+            </h3>
+            <p style="font-size: 12.5px; color: var(--text-muted); margin-top: 2px;">
+              Administra los accesos de operadores al panel y los PINs de técnicos para diagnóstico por WhatsApp.
+            </p>
           </div>
-          <button class="btn btn-primary" onclick="openNewTechnicianModal()">
-            <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-            <span>Nuevo Técnico</span>
-          </button>
+          <div style="display: flex; gap: 8px; background: rgba(0,0,0,0.3); padding: 4px; border-radius: var(--radius-sm); border: 1px solid var(--card-border);">
+            <button id="btn-personal-tab-users" class="btn btn-primary btn-sm" onclick="switchPersonalTab('users')">
+              👥 Usuarios del Panel
+            </button>
+            <button id="btn-personal-tab-techs" class="btn btn-secondary btn-sm" onclick="switchPersonalTab('techs')">
+              🔧 Técnicos & PINs
+            </button>
+          </div>
         </div>
 
-        <div class="glass-card">
-          <!-- Datatable Toolbar -->
-          <div class="datatable-toolbar" style="justify-content: flex-end;">
-            <div class="datatable-filters-group">
-              <select id="filter-tech-role" class="datatable-select" onchange="filterTechniciansTable()" title="Filtrar por rol">
-                <option value="">💼 Todos los roles</option>
-                <option value="instalador">Instalador</option>
-                <option value="soporte">Soporte</option>
-                <option value="supervisor">Supervisor</option>
-                <option value="tecnico">Técnico</option>
-              </select>
-              <select id="filter-tech-status" class="datatable-select" onchange="filterTechniciansTable()" title="Filtrar por estado">
-                <option value="">⚡ Todos los estados</option>
-                <option value="ACTIVO">Activo</option>
-                <option value="INACTIVO">Inactivo</option>
-              </select>
-              <select id="filter-tech-sort" class="datatable-select" onchange="sortTechniciansBy(this.value)" title="Ordenar técnicos">
-                <option value="name_asc">Ordenar: Nombre (A-Z)</option>
-                <option value="name_desc">Ordenar: Nombre (Z-A)</option>
-                <option value="phone_asc">Ordenar: Teléfono</option>
-                <option value="status_asc">Ordenar: Estado</option>
-              </select>
-              <button class="btn btn-secondary btn-sm" onclick="clearTechniciansFilters()" title="Limpiar filtros">
-                🧹 Limpiar
+        <!-- Tab 1: Usuarios del Panel (RBAC) -->
+        <div id="personal-tab-users-content">
+          <div class="glass-card">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
+              <div>
+                <h4 style="font-size: 15px; font-weight: 700;">Administradores y Operadores del Panel</h4>
+                <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Cuentas de usuario con roles de superadmin, soporte o facturación.</p>
+              </div>
+              <button class="btn btn-primary btn-sm" onclick="openNewAdminUserModal()">
+                <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                <span>Nuevo Administrador</span>
               </button>
             </div>
-          </div>
 
-          <div class="table-responsive">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th class="sortable-th" onclick="sortTechniciansBy('name')" style="min-width: 180px;">Nombre <span class="sort-icon">↕</span></th>
-                  <th class="sortable-th" onclick="sortTechniciansBy('phone')" style="min-width: 150px;">Teléfono WhatsApp <span class="sort-icon">↕</span></th>
-                  <th class="sortable-th" onclick="sortTechniciansBy('pin')" style="min-width: 110px;">PIN (5 Dígitos) <span class="sort-icon">↕</span></th>
-                  <th class="sortable-th" onclick="sortTechniciansBy('role')" style="min-width: 120px;">Rol <span class="sort-icon">↕</span></th>
-                  <th class="sortable-th" onclick="sortTechniciansBy('status')" style="min-width: 110px;">Estado <span class="sort-icon">↕</span></th>
-                  <th style="text-align: right; min-width: 100px;">Acciones</th>
-                </tr>
-              </thead>
-              <tbody id="table-technicians-body">
-                <tr><td colspan="6" style="text-align: center; color: var(--text-dim);">Cargando técnicos...</td></tr>
-              </tbody>
-            </table>
+            <!-- Datatable Toolbar -->
+            <div class="datatable-toolbar" style="justify-content: flex-end;">
+              <div class="datatable-filters-group">
+                <select id="filter-user-role" class="datatable-select" onchange="filterAdminUsersTable()" title="Filtrar por rol">
+                  <option value="">👤 Todos los roles</option>
+                  <option value="superadmin">Superadmin</option>
+                  <option value="soporte">Soporte</option>
+                  <option value="tecnico">Técnico</option>
+                  <option value="facturacion">Facturación</option>
+                </select>
+                <select id="filter-user-sort" class="datatable-select" onchange="sortAdminUsersBy(this.value)" title="Ordenar usuarios">
+                  <option value="username_asc">Ordenar: Usuario (A-Z)</option>
+                  <option value="name_asc">Ordenar: Nombre (A-Z)</option>
+                  <option value="role_asc">Ordenar: Rol</option>
+                  <option value="login_desc">Ordenar: Último Ingreso</option>
+                </select>
+                <button class="btn btn-secondary btn-sm" onclick="clearAdminUsersFilters()" title="Limpiar filtros">
+                  🧹 Limpiar
+                </button>
+              </div>
+            </div>
+
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th class="sortable-th" onclick="sortAdminUsersBy('username')" style="min-width: 140px;">Usuario <span class="sort-icon">↕</span></th>
+                    <th class="sortable-th" onclick="sortAdminUsersBy('name')" style="min-width: 180px;">Nombre Completo <span class="sort-icon">↕</span></th>
+                    <th class="sortable-th" onclick="sortAdminUsersBy('role')" style="min-width: 120px;">Rol <span class="sort-icon">↕</span></th>
+                    <th class="sortable-th" onclick="sortAdminUsersBy('last_login')" style="min-width: 140px;">Último Ingreso <span class="sort-icon">↕</span></th>
+                    <th style="text-align: right; min-width: 90px;">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="table-admin-users-body">
+                  <tr><td colspan="5" style="text-align: center; color: var(--text-dim);">Cargando usuarios...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 2: Técnicos de Campo & PINs -->
+        <div id="personal-tab-techs-content" style="display: none;">
+          <div class="glass-card">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
+              <div>
+                <h4 style="font-size: 15px; font-weight: 700;">Técnicos de Campo Autorizados</h4>
+                <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">PINs de 5 dígitos para consultas y diagnósticos directamente en WhatsApp.</p>
+              </div>
+              <button class="btn btn-primary btn-sm" onclick="openNewTechnicianModal()">
+                <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                <span>Nuevo Técnico</span>
+              </button>
+            </div>
+
+            <!-- Datatable Toolbar -->
+            <div class="datatable-toolbar" style="justify-content: flex-end;">
+              <div class="datatable-filters-group">
+                <select id="filter-tech-role" class="datatable-select" onchange="filterTechniciansTable()" title="Filtrar por rol">
+                  <option value="">💼 Todos los roles</option>
+                  <option value="instalador">Instalador</option>
+                  <option value="soporte">Soporte</option>
+                  <option value="supervisor">Supervisor</option>
+                  <option value="tecnico">Técnico</option>
+                </select>
+                <select id="filter-tech-status" class="datatable-select" onchange="filterTechniciansTable()" title="Filtrar por estado">
+                  <option value="">⚡ Todos los estados</option>
+                  <option value="ACTIVO">Activo</option>
+                  <option value="INACTIVO">Inactivo</option>
+                </select>
+                <select id="filter-tech-sort" class="datatable-select" onchange="sortTechniciansBy(this.value)" title="Ordenar técnicos">
+                  <option value="name_asc">Ordenar: Nombre (A-Z)</option>
+                  <option value="name_desc">Ordenar: Nombre (Z-A)</option>
+                  <option value="phone_asc">Ordenar: Teléfono</option>
+                  <option value="status_asc">Ordenar: Estado</option>
+                </select>
+                <button class="btn btn-secondary btn-sm" onclick="clearTechniciansFilters()" title="Limpiar filtros">
+                  🧹 Limpiar
+                </button>
+              </div>
+            </div>
+
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th class="sortable-th" onclick="sortTechniciansBy('name')" style="min-width: 180px;">Nombre <span class="sort-icon">↕</span></th>
+                    <th class="sortable-th" onclick="sortTechniciansBy('phone')" style="min-width: 150px;">Teléfono WhatsApp <span class="sort-icon">↕</span></th>
+                    <th class="sortable-th" onclick="sortTechniciansBy('pin')" style="min-width: 110px;">PIN (5 Dígitos) <span class="sort-icon">↕</span></th>
+                    <th class="sortable-th" onclick="sortTechniciansBy('role')" style="min-width: 120px;">Rol <span class="sort-icon">↕</span></th>
+                    <th class="sortable-th" onclick="sortTechniciansBy('status')" style="min-width: 110px;">Estado <span class="sort-icon">↕</span></th>
+                    <th style="text-align: right; min-width: 100px;">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="table-technicians-body">
+                  <tr><td colspan="6" style="text-align: center; color: var(--text-dim);">Cargando técnicos...</td></tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </section>
@@ -3235,57 +3306,69 @@ export function getAdminDashboardHtml(): string {
             </div>
           </div>
 
-          <!-- Card 2: APIs y Credenciales -->
-          <div class="glass-card">
-            <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 14px;">⚡ Credenciales de Servicios & Servidor</h3>
+          <!-- Card 2: APIs y Credenciales Protegidas -->
+          <div class="glass-card" style="position: relative;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+              <h3 style="font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+                <span>⚡</span> Credenciales de Servicios & Servidor
+              </h3>
+              <button type="button" id="btn-unlock-api-credentials" class="btn btn-secondary btn-xs" onclick="toggleApiCredentialsLock()" style="border-color: var(--accent-amber); color: var(--accent-amber);">
+                🔒 Desbloquear Edición
+              </button>
+            </div>
+
+            <div id="credentials-lock-notice" style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: var(--radius-sm); padding: 8px 12px; margin-bottom: 14px; font-size: 11.5px; color: var(--text-muted); display: flex; align-items: center; gap: 8px;">
+              <span>🛡️</span>
+              <span>Campos protegidos contra modificaciones accidentales para evitar desconexiones en vivo.</span>
+            </div>
             
             <div class="form-group">
               <label class="form-label">🌐 URL Pública del Servidor / VPS (APP_URL)</label>
-              <input type="text" id="setting-APP_URL" class="form-control" placeholder="http://2.25.241.239:3000 o https://tudominio.com" autocomplete="off" spellcheck="false">
+              <input type="text" id="setting-APP_URL" class="form-control credential-field" placeholder="http://2.25.241.239:3000 o https://tudominio.com" autocomplete="off" spellcheck="false" disabled>
               <small style="font-size: 11px; color: var(--text-dim);">Dirección donde Evolution API sincroniza los webhooks de WhatsApp.</small>
             </div>
 
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
               <div class="form-group">
                 <label class="form-label">Evolution API URL</label>
-                <input type="text" id="setting-EVOLUTION_URL" class="form-control" placeholder="http://localhost:8080" autocomplete="off" spellcheck="false">
+                <input type="text" id="setting-EVOLUTION_URL" class="form-control credential-field" placeholder="http://localhost:8080" autocomplete="off" spellcheck="false" disabled>
               </div>
               <div class="form-group">
                 <label class="form-label">Evolution API Key (Master)</label>
-                <input type="password" id="setting-EVOLUTION_API_KEY" class="form-control" placeholder="••••••••" autocomplete="new-password">
+                <input type="password" id="setting-EVOLUTION_API_KEY" class="form-control credential-field" placeholder="••••••••" autocomplete="new-password" disabled>
               </div>
             </div>
 
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
               <div class="form-group">
                 <label class="form-label">Groq API Key (IA)</label>
-                <input type="password" id="setting-GROQ_API_KEY" class="form-control" placeholder="gsk_••••••••" autocomplete="new-password">
+                <input type="password" id="setting-GROQ_API_KEY" class="form-control credential-field" placeholder="gsk_••••••••" autocomplete="new-password" disabled>
               </div>
               <div class="form-group">
                 <label class="form-label">Modelo Groq</label>
-                <input type="text" id="setting-GROQ_MODEL" class="form-control" placeholder="llama-3.1-8b-instant" value="llama-3.1-8b-instant">
+                <input type="text" id="setting-GROQ_MODEL" class="form-control credential-field" placeholder="llama-3.1-8b-instant" value="llama-3.1-8b-instant" disabled>
               </div>
             </div>
 
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
               <div class="form-group">
                 <label class="form-label">WispHub API URL</label>
-                <input type="text" id="setting-WISPHUB_API_URL" class="form-control" placeholder="https://api.wisphub.net/api">
+                <input type="text" id="setting-WISPHUB_API_URL" class="form-control credential-field" placeholder="https://api.wisphub.net/api" disabled>
               </div>
               <div class="form-group">
                 <label class="form-label">WispHub API Key</label>
-                <input type="password" id="setting-WISPHUB_API_KEY" class="form-control" placeholder="••••••••" autocomplete="new-password">
+                <input type="password" id="setting-WISPHUB_API_KEY" class="form-control credential-field" placeholder="••••••••" autocomplete="new-password" disabled>
               </div>
             </div>
 
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
               <div class="form-group">
                 <label class="form-label">SmartOLT API URL</label>
-                <input type="text" id="setting-SMARTOLT_API_URL" class="form-control" placeholder="https://tudominio.smartolt.com/api">
+                <input type="text" id="setting-SMARTOLT_API_URL" class="form-control credential-field" placeholder="https://tudominio.smartolt.com/api" disabled>
               </div>
               <div class="form-group">
                 <label class="form-label">SmartOLT API Key (X-Token)</label>
-                <input type="password" id="setting-SMARTOLT_API_KEY" class="form-control" placeholder="••••••••" autocomplete="new-password">
+                <input type="password" id="setting-SMARTOLT_API_KEY" class="form-control credential-field" placeholder="••••••••" autocomplete="new-password" disabled>
               </div>
             </div>
 
@@ -3482,60 +3565,8 @@ export function getAdminDashboardHtml(): string {
         </div>
       </section>
 
-      <!-- VIEW 8: USUARIOS & ROLES (RBAC) -->
-      <section id="view-users" class="view-container">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
-          <div>
-            <h3 style="font-size: 16px; font-weight: 700;">Administradores del Panel (RBAC)</h3>
-            <p style="font-size: 12px; color: var(--text-muted);">Asigna permisos de superadmin, soporte, técnico o facturación.</p>
-          </div>
-          <button class="btn btn-primary" onclick="openNewAdminUserModal()">
-            <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-            <span>Crear Administrador</span>
-          </button>
-        </div>
-
-        <div class="glass-card">
-          <!-- Datatable Toolbar -->
-          <div class="datatable-toolbar" style="justify-content: flex-end;">
-            <div class="datatable-filters-group">
-              <select id="filter-user-role" class="datatable-select" onchange="filterAdminUsersTable()" title="Filtrar por rol">
-                <option value="">👤 Todos los roles</option>
-                <option value="superadmin">Superadmin</option>
-                <option value="soporte">Soporte</option>
-                <option value="tecnico">Técnico</option>
-                <option value="facturacion">Facturación</option>
-              </select>
-              <select id="filter-user-sort" class="datatable-select" onchange="sortAdminUsersBy(this.value)" title="Ordenar usuarios">
-                <option value="username_asc">Ordenar: Usuario (A-Z)</option>
-                <option value="name_asc">Ordenar: Nombre (A-Z)</option>
-                <option value="role_asc">Ordenar: Rol</option>
-                <option value="login_desc">Ordenar: Último Ingreso</option>
-              </select>
-              <button class="btn btn-secondary btn-sm" onclick="clearAdminUsersFilters()" title="Limpiar filtros">
-                🧹 Limpiar
-              </button>
-            </div>
-          </div>
-
-          <div class="table-responsive">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th class="sortable-th" onclick="sortAdminUsersBy('username')" style="min-width: 140px;">Usuario <span class="sort-icon">↕</span></th>
-                  <th class="sortable-th" onclick="sortAdminUsersBy('name')" style="min-width: 180px;">Nombre Completo <span class="sort-icon">↕</span></th>
-                  <th class="sortable-th" onclick="sortAdminUsersBy('role')" style="min-width: 120px;">Rol <span class="sort-icon">↕</span></th>
-                  <th class="sortable-th" onclick="sortAdminUsersBy('last_login')" style="min-width: 140px;">Último Ingreso <span class="sort-icon">↕</span></th>
-                  <th style="text-align: right; min-width: 90px;">Acciones</th>
-                </tr>
-              </thead>
-              <tbody id="table-admin-users-body">
-                <tr><td colspan="5" style="text-align: center; color: var(--text-dim);">Cargando usuarios...</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
+      <!-- VIEW 8: USUARIOS & ROLES (Consolidado en Personal & Accesos) -->
+      <section id="view-users" class="view-container" style="display: none;"></section>
 
     </main>
   </div>
@@ -3773,12 +3804,20 @@ export function getAdminDashboardHtml(): string {
       const parts = rawHash.split('?');
       const viewName = parts[0];
       const queryStr = parts[1];
-      const validViews = ['dashboard', 'live-chat', 'clients', 'tickets', 'ipam', 'audit', 'technicians', 'modem-swap', 'settings', 'users'];
+      const validViews = ['dashboard', 'live-chat', 'clients', 'tickets', 'ipam', 'audit', 'personal', 'technicians', 'modem-swap', 'settings', 'users'];
       if (validViews.includes(viewName)) {
         if (queryStr && viewName === 'live-chat') {
           const params = new URLSearchParams(queryStr);
           const phone = params.get('phone');
           if (phone) state.activeChatPhone = phone;
+        }
+        if (viewName === 'technicians') {
+          setTimeout(() => switchPersonalTab('techs'), 50);
+          return 'personal';
+        }
+        if (viewName === 'users') {
+          setTimeout(() => switchPersonalTab('users'), 50);
+          return 'personal';
         }
         return viewName;
       }
@@ -3788,6 +3827,13 @@ export function getAdminDashboardHtml(): string {
     // Navigation with Full Browser History & Reload Persistence
     function navigateTo(viewId, updateHistory = true) {
       if (!viewId) viewId = 'dashboard';
+      if (viewId === 'technicians') {
+        viewId = 'personal';
+        setTimeout(() => switchPersonalTab('techs'), 50);
+      } else if (viewId === 'users') {
+        viewId = 'personal';
+        setTimeout(() => switchPersonalTab('users'), 50);
+      }
       state.currentView = viewId;
 
       if (updateHistory) {
@@ -3822,10 +3868,11 @@ export function getAdminDashboardHtml(): string {
         'tickets': 'Mesa de Tickets & Órdenes de Servicio',
         'ipam': 'Control de Subredes & Pools de IP',
         'audit': 'Auditoría SmartOLT vs WispHub',
-        'technicians': 'Técnicos Autorizados & PINs',
+        'personal': 'Personal, Roles & Técnicos de Campo',
+        'technicians': 'Personal, Roles & Técnicos de Campo',
         'modem-swap': 'Cambio de Módem (Historial & Reemplazo)',
         'settings': 'Configuración del Sistema',
-        'users': 'Usuarios & Roles de Acceso',
+        'users': 'Personal, Roles & Técnicos de Campo',
       };
       document.getElementById('current-view-title').innerText = titles[viewId] || 'Panel';
       
@@ -3844,6 +3891,7 @@ export function getAdminDashboardHtml(): string {
       'tickets': { label: 'Tickets', placeholder: 'Buscar por folio, cliente o falla...' },
       'ipam': { label: 'Pools IP', placeholder: 'Buscar ONUs o subredes...' },
       'audit': { label: 'Auditoría', placeholder: 'Buscar por cliente, IP, servicio o plan...' },
+      'personal': { label: 'Personal', placeholder: 'Buscar usuarios o técnicos con PIN...' },
       'technicians': { label: 'Técnicos', placeholder: 'Buscar técnico por nombre, teléfono o PIN...' },
       'modem-swap': { label: 'Cambio Módem', placeholder: 'Buscar en bitácora de cambios de módem...' },
       'settings': { label: 'Ajustes', placeholder: 'Buscar configuraciones...' },
@@ -4012,10 +4060,87 @@ export function getAdminDashboardHtml(): string {
         case 'tickets': loadTicketsData(); break;
         case 'ipam': loadIpamData(); break;
         case 'audit': loadAuditData(); break;
-        case 'technicians': loadTechniciansData(); break;
+        case 'personal':
+          loadAdminUsersData();
+          loadTechniciansData();
+          break;
+        case 'technicians':
+          switchPersonalTab('techs');
+          loadTechniciansData();
+          break;
         case 'modem-swap': loadModemSwapData(); break;
         case 'settings': loadSettingsData(); break;
-        case 'users': loadAdminUsersData(); break;
+        case 'users':
+          switchPersonalTab('users');
+          loadAdminUsersData();
+          break;
+      }
+    }
+
+    function switchPersonalTab(tab) {
+      const usersContent = document.getElementById('personal-tab-users-content');
+      const techsContent = document.getElementById('personal-tab-techs-content');
+      const btnUsers = document.getElementById('btn-personal-tab-users');
+      const btnTechs = document.getElementById('btn-personal-tab-techs');
+
+      if (tab === 'techs') {
+        if (usersContent) usersContent.style.display = 'none';
+        if (techsContent) techsContent.style.display = 'block';
+        if (btnUsers) { btnUsers.className = 'btn btn-secondary btn-sm'; }
+        if (btnTechs) { btnTechs.className = 'btn btn-primary btn-sm'; }
+        loadTechniciansData();
+      } else {
+        if (usersContent) usersContent.style.display = 'block';
+        if (techsContent) techsContent.style.display = 'none';
+        if (btnUsers) { btnUsers.className = 'btn btn-primary btn-sm'; }
+        if (btnTechs) { btnTechs.className = 'btn btn-secondary btn-sm'; }
+        loadAdminUsersData();
+      }
+    }
+
+    let isApiCredentialsUnlocked = false;
+    function toggleApiCredentialsLock() {
+      const btn = document.getElementById('btn-unlock-api-credentials');
+      const notice = document.getElementById('credentials-lock-notice');
+      const fields = document.querySelectorAll('.credential-field');
+
+      if (!isApiCredentialsUnlocked) {
+        showConfirmDialog(
+          '🔓 Desbloquear Credenciales Maestras',
+          '¿Deseas habilitar la edición de credenciales y URLs de servidor? Modificar estos parámetros alterará en vivo la comunicación con Evolution API, SmartOLT y WispHub.',
+          () => {
+            isApiCredentialsUnlocked = true;
+            fields.forEach(f => {
+              f.disabled = false;
+              f.style.borderColor = 'var(--accent-amber)';
+            });
+            if (btn) {
+              btn.innerHTML = '🔒 Bloquear Edición';
+              btn.className = 'btn btn-warning btn-xs';
+            }
+            if (notice) {
+              notice.innerHTML = '<span>⚠️</span> <strong style="color: var(--accent-amber);">Modo Edición Habilitado:</strong> Recuerda pulsar "Guardar Todas las Configuraciones" al finalizar tus cambios.';
+              notice.style.background = 'rgba(245, 158, 11, 0.15)';
+            }
+            showToast('Modo Edición', 'Campos de credenciales desbloqueados.', 'info');
+          },
+          false
+        );
+      } else {
+        isApiCredentialsUnlocked = false;
+        fields.forEach(f => {
+          f.disabled = true;
+          f.style.borderColor = '';
+        });
+        if (btn) {
+          btn.innerHTML = '🔒 Desbloquear Edición';
+          btn.className = 'btn btn-secondary btn-xs';
+        }
+        if (notice) {
+          notice.innerHTML = '<span>🛡️</span> <span>Campos protegidos contra modificaciones accidentales para evitar desconexiones en vivo.</span>';
+          notice.style.background = 'rgba(245, 158, 11, 0.08)';
+        }
+        showToast('Protegido', 'Campos de credenciales bloqueados nuevamente.', 'info');
       }
     }
 
@@ -4570,23 +4695,35 @@ export function getAdminDashboardHtml(): string {
       }
     }
 
+    function normalizeDepartmentName(dept) {
+      if (!dept) return 'General';
+      const raw = String(dept).trim();
+      const lower = raw.toLowerCase();
+      if (lower === 'soporte' || lower === 'soporte tecnico' || lower === 'soporte técnico' || lower === 'isp-soporte') return 'Soporte Técnico';
+      if (lower === 'atencion' || lower === 'atención' || lower === 'atencion al cliente' || lower === 'atención al cliente' || lower === 'isp-atencion') return 'Atención al Cliente';
+      if (lower === 'ventas' || lower === 'contrataciones' || lower === 'isp-ventas') return 'Ventas';
+      if (lower === 'cobranza' || lower === 'pagos' || lower === 'caja' || lower === 'isp-cobranza') return 'Cobranza';
+      if (lower === 'red' || lower === 'noc' || lower === 'infraestructura') return 'Red e Infraestructura';
+      return raw.charAt(0).toUpperCase() + raw.slice(1);
+    }
+
     function renderDynamicDeptFilters() {
       const bar = document.getElementById('chat-dept-filter-bar');
       if (!bar) return;
 
       const counts = { all: state.chats.length };
       state.chats.forEach(c => {
-        const d = (c.department || 'General').trim();
-        counts[d] = (counts[d] || 0) + 1;
+        const norm = normalizeDepartmentName(c.department);
+        counts[norm] = (counts[norm] || 0) + 1;
       });
 
       const areaSet = new Set();
-      state.whatsappAreas.forEach(a => areaSet.add(a.area_name));
+      state.whatsappAreas.forEach(a => areaSet.add(normalizeDepartmentName(a.area_name)));
       state.chats.forEach(c => {
-        if (c.department) areaSet.add(c.department);
+        if (c.department) areaSet.add(normalizeDepartmentName(c.department));
       });
 
-      const sortedAreas = Array.from(areaSet);
+      const sortedAreas = Array.from(areaSet).filter(a => a !== 'General' && a !== 'all');
       let html = '<button class="chat-filter-pill' + (state.chatDeptFilter === 'all' ? ' active' : '') + '" data-area="all" onclick="setChatDeptFilter(this.dataset.area, this)">Todos (' + counts.all + ')</button>';
 
       sortedAreas.forEach(areaName => {
@@ -4597,6 +4734,7 @@ export function getAdminDashboardHtml(): string {
         if (lower.includes('soporte') || lower.includes('tecnic')) icon = '🔧';
         else if (lower.includes('cobranza') || lower.includes('pago') || lower.includes('caja')) icon = '💳';
         else if (lower.includes('ventas') || lower.includes('contrat')) icon = '💼';
+        else if (lower.includes('atencion') || lower.includes('client')) icon = '💬';
 
         const safeArea = escapeHtml(areaName);
         html += '<button class="chat-filter-pill' + (isCurrent ? ' active' : '') + '" data-area="' + safeArea + '" onclick="setChatDeptFilter(this.dataset.area, this)">' + icon + ' ' + safeArea + ' (' + c + ')</button>';
@@ -4621,7 +4759,7 @@ export function getAdminDashboardHtml(): string {
       for (let i = 0; i < activeInstances.length; i++) {
         const inst = activeInstances[i];
         const phone = inst.phone_number ? ' (' + formatMexPhone(inst.phone_number) + ')' : '';
-        const area = inst.area_name ? escapeHtml(inst.area_name) + ' • ' : '';
+        const area = inst.area_name ? escapeHtml(normalizeDepartmentName(inst.area_name)) + ' • ' : '';
         const instName = escapeHtml(inst.instance_name || '');
         html += '<option value="' + instName + '">🟢 ' + area + instName + phone + '</option>';
       }
@@ -4662,20 +4800,21 @@ export function getAdminDashboardHtml(): string {
       }
 
       const isSuperAdmin = state.user && state.user.role === 'superadmin';
+      const isMultiNumber = (state.whatsappAreas || []).filter(a => a.is_connected || a.connection_status === 'open').length > 1;
       let html = '';
 
       for (let i = 0; i < list.length; i++) {
         const c = list[i];
         const isActive = c.phone === state.activeChatPhone ? ' active' : '';
-        const name = escapeHtml(c.client_name || c.phone || '');
+        const name = escapeHtml(c.client_name || formatMexPhone(c.phone) || '');
         const phone = escapeHtml(c.phone || '');
-        const dept = escapeHtml(c.department || 'General');
+        const dept = escapeHtml(normalizeDepartmentName(c.department));
         const lastMsg = escapeHtml(c.last_message || 'Sin mensajes');
         const time = formatShortTime(c.last_interaction);
         const statusBadge = c.is_human_paused
           ? '<span class="badge badge-warning" style="font-size: 9.5px; padding: 1px 5px;">⏸️ Humano</span>'
           : '<span class="badge badge-success" style="font-size: 9.5px; padding: 1px 5px;">🤖 Bot</span>';
-        const instanceBadge = c.last_instance
+        const instanceBadge = (isMultiNumber && c.last_instance)
           ? '<span class="badge badge-purple" style="font-size: 9.5px; padding: 1px 5px;">' + escapeHtml(c.last_instance) + '</span>'
           : '';
         const deleteBtn = isSuperAdmin
@@ -4712,7 +4851,7 @@ export function getAdminDashboardHtml(): string {
       let filtered = state.chats;
       
       if (state.chatDeptFilter && state.chatDeptFilter !== 'all') {
-        filtered = filtered.filter(c => (c.department || 'General').toLowerCase() === state.chatDeptFilter.toLowerCase());
+        filtered = filtered.filter(c => normalizeDepartmentName(c.department).toLowerCase() === state.chatDeptFilter.toLowerCase());
       }
 
       if (term) {
@@ -4726,7 +4865,7 @@ export function getAdminDashboardHtml(): string {
     }
 
     function updateChatDeptUI(dept, instanceName) {
-      const currentDept = dept || 'General';
+      const currentDept = normalizeDepartmentName(dept || 'General');
       const badge = document.getElementById('active-chat-dept-badge');
       const instBadge = document.getElementById('active-chat-instance-badge');
       const senderSelect = document.getElementById('chat-sender-instance');
@@ -4736,10 +4875,12 @@ export function getAdminDashboardHtml(): string {
       }
 
       const activeInst = instanceName || (senderSelect?.value || '');
+      const isMultiNumber = (state.whatsappAreas || []).filter(a => a.is_connected || a.connection_status === 'open').length > 1;
+
       if (instBadge) {
-        if (activeInst) {
+        if (activeInst && isMultiNumber) {
           const instObj = (state.whatsappAreas || []).find(a => a.instance_name.toLowerCase() === activeInst.toLowerCase());
-          const phoneTxt = instObj?.phone_number ? (' (+52 ' + instObj.phone_number.slice(-10) + ')') : '';
+          const phoneTxt = instObj?.phone_number ? (' (' + formatMexPhone(instObj.phone_number) + ')') : '';
           instBadge.innerText = 'Línea: ' + activeInst + phoneTxt;
           instBadge.style.display = 'inline-block';
         } else {
@@ -4771,8 +4912,10 @@ export function getAdminDashboardHtml(): string {
       if (delBtn) delBtn.style.display = isSuperAdmin ? 'flex' : 'none';
 
       const chat = state.chats.find(c => c.phone === phone);
-      document.getElementById('active-chat-name').innerText = chat?.client_name || phone;
-      document.getElementById('active-chat-phone').innerText = phone;
+      const displayName = chat?.client_name ? escapeHtml(chat.client_name) : formatMexPhone(phone);
+      const subPhone = chat?.client_name ? formatMexPhone(phone) : 'Cliente de WhatsApp';
+      document.getElementById('active-chat-name').innerText = displayName;
+      document.getElementById('active-chat-phone').innerText = subPhone;
       
       updateChatDeptUI(chat?.department || 'General', chat?.last_instance);
       if (chat?.last_instance) {
@@ -5160,21 +5303,27 @@ export function getAdminDashboardHtml(): string {
       }
     }
 
-    async function deleteCurrentChat() {
+    function deleteCurrentChat() {
       if (!state.activeChatPhone) return;
       const phone = state.activeChatPhone;
-      if (!confirm('¿Estás seguro de que deseas eliminar permanentemente esta conversación y todos sus mensajes registrados?')) {
-        return;
-      }
-      await executeDeleteChat(phone);
+      showConfirmDialog(
+        'Eliminar Conversación',
+        '¿Estás seguro de que deseas eliminar permanentemente esta conversación y todos sus mensajes registrados?',
+        async () => {
+          await executeDeleteChat(phone);
+        }
+      );
     }
 
-    async function deleteChatThread(e, phone) {
+    function deleteChatThread(e, phone) {
       if (e) e.stopPropagation();
-      if (!confirm('¿Eliminar la conversación y registros de ' + phone + '?')) {
-        return;
-      }
-      await executeDeleteChat(phone);
+      showConfirmDialog(
+        'Eliminar Conversación',
+        '¿Eliminar permanentemente la conversación y registros de ' + phone + '?',
+        async () => {
+          await executeDeleteChat(phone);
+        }
+      );
     }
 
     async function executeDeleteChat(phone) {
