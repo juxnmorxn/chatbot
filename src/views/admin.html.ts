@@ -4558,7 +4558,7 @@ export function getAdminDashboardHtml(): string {
       });
 
       const sortedAreas = Array.from(areaSet);
-      let html = '<button class="chat-filter-pill' + (state.chatDeptFilter === 'all' ? ' active' : '') + '" onclick="setChatDeptFilter(\'all\', this)">Todos (' + counts.all + ')</button>';
+      let html = '<button class="chat-filter-pill' + (state.chatDeptFilter === 'all' ? ' active' : '') + '" data-area="all" onclick="setChatDeptFilter(this.dataset.area, this)">Todos (' + counts.all + ')</button>';
 
       sortedAreas.forEach(areaName => {
         const c = counts[areaName] || 0;
@@ -4570,7 +4570,7 @@ export function getAdminDashboardHtml(): string {
         else if (lower.includes('ventas') || lower.includes('contrat')) icon = '💼';
 
         const safeArea = escapeHtml(areaName);
-        html += '<button class="chat-filter-pill' + (isCurrent ? ' active' : '') + '" onclick="setChatDeptFilter(\'' + safeArea + '\', this)">' + icon + ' ' + safeArea + ' (' + c + ')</button>';
+        html += '<button class="chat-filter-pill' + (isCurrent ? ' active' : '') + '" data-area="' + safeArea + '" onclick="setChatDeptFilter(this.dataset.area, this)">' + icon + ' ' + safeArea + ' (' + c + ')</button>';
       });
 
       bar.innerHTML = html;
@@ -4649,10 +4649,10 @@ export function getAdminDashboardHtml(): string {
           ? '<span class="badge badge-purple" style="font-size: 9.5px; padding: 1px 5px;">' + escapeHtml(c.last_instance) + '</span>'
           : '';
         const deleteBtn = isSuperAdmin
-          ? '<button class="btn-thread-delete" title="Eliminar conversación" onclick="deleteChatThread(event, \'' + phone + '\')"><svg class="svg-icon" style="width: 14px; height: 14px;" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>'
+          ? '<button class="btn-thread-delete" title="Eliminar conversación" data-phone="' + phone + '" onclick="deleteChatThread(event, this.dataset.phone)"><svg class="svg-icon" style="width: 14px; height: 14px;" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>'
           : '';
 
-        html += '<div class="chat-thread-item' + isActive + '" onclick="selectChat(\'' + phone + '\')">' +
+        html += '<div class="chat-thread-item' + isActive + '" data-phone="' + phone + '" onclick="selectChat(this.dataset.phone)">' +
           '<div class="thread-avatar">' +
             '<svg class="svg-icon" viewBox="0 0 24 24" style="width:24px;height:24px;color:#cfd6db;"><path fill="currentColor" d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>' +
           '</div>' +
@@ -4824,7 +4824,7 @@ export function getAdminDashboardHtml(): string {
               '<strong style="font-size: 13px; color: var(--text-main);">💬 Notificar al cliente por WhatsApp</strong>' +
               '<div style="font-size: 11px; color: var(--text-dim);">Envía un mensaje avisando que su caso fue canalizado al área</div>' +
             '</div>' +
-            '<input type="checkbox" id="transfer-modal-notify-toggle" style="transform: scale(1.3); cursor: pointer;" checked onchange="document.getElementById(\'transfer-modal-msg-wrap\').style.display = this.checked ? \'block\' : \'none\';">' +
+            '<input type="checkbox" id="transfer-modal-notify-toggle" style="transform: scale(1.3); cursor: pointer;" checked onchange="toggleTransferModalMsg(this.checked)">' +
           '</label>' +
           '<div id="transfer-modal-msg-wrap" style="margin-top: 10px;">' +
             '<textarea id="transfer-modal-custom-msg" class="form-control" rows="2" placeholder="Tu conversación ha sido transferida al área de..."></textarea>' +
@@ -4898,6 +4898,11 @@ export function getAdminDashboardHtml(): string {
           msgInput.value = 'Tu conversación ha sido transferida al área de *' + select.value + '*. En un momento un asesor continuará con tu atención por este medio.';
         }
       }
+    }
+
+    function toggleTransferModalMsg(checked) {
+      const wrap = document.getElementById('transfer-modal-msg-wrap');
+      if (wrap) wrap.style.display = checked ? 'block' : 'none';
     }
 
     function renderChatMessages(messages) {
