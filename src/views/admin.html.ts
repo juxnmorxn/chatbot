@@ -1430,6 +1430,52 @@ export function getAdminDashboardHtml(): string {
       flex-wrap: nowrap;
     }
 
+    .chat-dropdown-menu {
+      position: absolute;
+      top: calc(100% + 6px);
+      right: 0;
+      background: #233138;
+      border: 1px solid rgba(134, 150, 160, 0.2);
+      border-radius: 8px;
+      padding: 6px 0;
+      min-width: 220px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .chat-dropdown-item {
+      background: transparent;
+      border: none;
+      color: #d1d7db;
+      padding: 8px 14px;
+      font-size: 13px;
+      text-align: left;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      box-sizing: border-box;
+      transition: background 0.15s ease;
+      font-family: inherit;
+    }
+
+    .chat-dropdown-item:hover {
+      background: #182229;
+      color: #fff;
+    }
+
+    .chat-dropdown-item.item-danger {
+      color: #f87171;
+    }
+
+    .chat-dropdown-item.item-danger:hover {
+      background: rgba(239, 68, 68, 0.15);
+      color: #fca5a5;
+    }
+
     .btn-xs {
       padding: 5px 10px;
       font-size: 11.5px;
@@ -2463,35 +2509,38 @@ export function getAdminDashboardHtml(): string {
                 </div>
                 <div style="min-width: 0;">
                   <div style="display: flex; align-items: center; gap: 8px;">
-                    <h4 id="active-chat-name" style="font-size: 15px; font-weight: 600; color: #e9edef; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px;">Seleccione un chat</h4>
-                    <span id="active-chat-dept-badge" class="badge badge-info" style="font-size: 10px; padding: 2px 7px;">General</span>
+                    <h4 id="active-chat-name" style="font-size: 14.5px; font-weight: 600; color: #e9edef; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px;">Seleccione un chat</h4>
+                    <span id="active-chat-dept-badge" class="badge badge-info" style="font-size: 9.5px; padding: 2px 6px;">General</span>
                   </div>
                   <div style="display: flex; align-items: center; gap: 6px; margin-top: 1px;">
-                    <span id="active-chat-phone" style="font-size: 11.5px; color: #8696a0; font-family: inherit;">--</span>
-                    <span id="active-chat-instance-badge" class="badge badge-purple" style="font-size: 10px; padding: 2px 7px; display: none;" title="Línea y número de WhatsApp asignado">Línea: --</span>
+                    <span id="active-chat-phone" style="font-size: 11.5px; color: #8696a0;">--</span>
+                    <span id="active-chat-instance-badge" class="badge badge-purple" style="font-size: 9.5px; padding: 2px 6px; display: none;" title="Línea y número de WhatsApp asignado">Línea: --</span>
                   </div>
                 </div>
               </div>
               <div class="chat-header-actions">
-                <button id="btn-transfer-dept" class="btn btn-secondary btn-xs" style="background: #2a3942; border-color: rgba(255,255,255,0.1); color: #00a884; font-weight: 600;" onclick="openTransferChatModal()" title="Traspasar conversación a otro número o área activa">
-                  🔄 <span>Traspasar Línea / Área</span>
+                <button id="btn-transfer-dept" class="btn btn-secondary btn-xs" onclick="openTransferChatModal()" title="Traspasar conversación a otra línea / área de WhatsApp">
+                  🔄 <span>Traspasar</span>
                 </button>
-                <div id="takeover-status-indicator" class="badge badge-success" style="font-size: 10px; padding: 4px 8px;">🤖 Bot Activo</div>
-                <button id="btn-toggle-takeover" class="btn btn-secondary btn-xs" onclick="toggleCurrentChatTakeover()" title="Pausar bot para atención humana">
-                  ⏸️ <span>Pausar 4h</span>
+                <button id="btn-toggle-takeover" class="btn btn-secondary btn-xs" onclick="toggleCurrentChatTakeover()" title="Alternar modo de atención Bot / Humano">
+                  🤖 <span>Bot Activo • Pausar 4h</span>
                 </button>
-                <button class="btn btn-secondary btn-xs" title="Pausar hasta mañana a las 10:00 AM" onclick="pauseCurrentChatUntilMorning()">
-                  🌙 <span>Mañana</span>
-                </button>
-                <div style="width: 1px; height: 20px; background: rgba(134, 150, 160, 0.2); margin: 0 2px;"></div>
-                <button class="btn btn-warning btn-xs" title="Finalizar caso y reactivar bot" onclick="closeCurrentChatCase()">
-                  <svg class="svg-icon" style="width: 12px; height: 12px;" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"></path></svg>
-                  <span>Cerrar</span>
-                </button>
-                <button id="btn-delete-active-chat" class="btn btn-danger btn-xs" style="display: none;" title="Borrar conversación y mensajes definitivamente (Superadmin)" onclick="deleteCurrentChat()">
-                  <svg class="svg-icon" style="width: 12px; height: 12px;" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                  <span>Eliminar</span>
-                </button>
+                <div class="chat-menu-dropdown-wrap" style="position: relative;">
+                  <button class="btn btn-secondary btn-xs" style="padding: 5px 8px;" onclick="toggleChatActionsMenu(event)" title="Más opciones de conversación">
+                    <svg class="svg-icon" style="width: 15px; height: 15px;" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1.5"></circle><circle cx="12" cy="5" r="1.5"></circle><circle cx="12" cy="19" r="1.5"></circle></svg>
+                  </button>
+                  <div id="chat-actions-menu" class="chat-dropdown-menu" style="display: none;">
+                    <button class="chat-dropdown-item" onclick="pauseCurrentChatUntilMorning(); closeChatActionsMenu();">
+                      <span>🌙</span> <span>Pausar hasta mañana (10:00 AM)</span>
+                    </button>
+                    <button class="chat-dropdown-item" onclick="closeCurrentChatCase(); closeChatActionsMenu();">
+                      <span>✕</span> <span>Cerrar caso y reactivar bot</span>
+                    </button>
+                    <button id="btn-delete-active-chat" class="chat-dropdown-item item-danger" style="display: none;" onclick="deleteCurrentChat(); closeChatActionsMenu();">
+                      <span>🗑️</span> <span>Eliminar conversación</span>
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -4496,14 +4545,12 @@ export function getAdminDashboardHtml(): string {
       const bar = document.getElementById('chat-dept-filter-bar');
       if (!bar) return;
 
-      // Calcular conteos por área
       const counts = { all: state.chats.length };
       state.chats.forEach(c => {
         const d = (c.department || 'General').trim();
         counts[d] = (counts[d] || 0) + 1;
       });
 
-      // Conjunto único de áreas detectadas
       const areaSet = new Set();
       state.whatsappAreas.forEach(a => areaSet.add(a.area_name));
       state.chats.forEach(c => {
@@ -4511,12 +4558,7 @@ export function getAdminDashboardHtml(): string {
       });
 
       const sortedAreas = Array.from(areaSet);
-
-      let html = \`
-        <button class="chat-filter-pill \${state.chatDeptFilter === 'all' ? 'active' : ''}" onclick="setChatDeptFilter('all', this)">
-          Todos (\${counts.all})
-        </button>
-      \`;
+      let html = '<button class="chat-filter-pill' + (state.chatDeptFilter === 'all' ? ' active' : '') + '" onclick="setChatDeptFilter(\'all\', this)">Todos (' + counts.all + ')</button>';
 
       sortedAreas.forEach(areaName => {
         const c = counts[areaName] || 0;
@@ -4527,11 +4569,8 @@ export function getAdminDashboardHtml(): string {
         else if (lower.includes('cobranza') || lower.includes('pago') || lower.includes('caja')) icon = '💳';
         else if (lower.includes('ventas') || lower.includes('contrat')) icon = '💼';
 
-        html += \`
-          <button class="chat-filter-pill \${isCurrent ? 'active' : ''}" onclick="setChatDeptFilter('\\\${escapeHtml(areaName)}', this)">
-            \${icon} \${escapeHtml(areaName)} (\${c})
-          </button>
-        \`;
+        const safeArea = escapeHtml(areaName);
+        html += '<button class="chat-filter-pill' + (isCurrent ? ' active' : '') + '" onclick="setChatDeptFilter(\'' + safeArea + '\', this)">' + icon + ' ' + safeArea + ' (' + c + ')</button>';
       });
 
       bar.innerHTML = html;
@@ -4547,12 +4586,16 @@ export function getAdminDashboardHtml(): string {
       }
 
       const currentVal = select.value;
-      select.innerHTML = state.whatsappAreas.map(inst => {
-        const phone = inst.phone_number ? \`(+52 \${inst.phone_number.slice(-10)})\` : '';
-        const area = inst.area_name ? \`[\${inst.area_name}] \` : '';
+      let html = '';
+      for (let i = 0; i < state.whatsappAreas.length; i++) {
+        const inst = state.whatsappAreas[i];
+        const phone = inst.phone_number ? ' (+52 ' + inst.phone_number.slice(-10) + ')' : '';
+        const area = inst.area_name ? '[' + escapeHtml(inst.area_name) + '] ' : '';
         const status = (inst.is_connected || inst.connection_status === 'open') ? '🟢' : '⚪';
-        return \`<option value="\\\${escapeHtml(inst.instance_name)}">\${status} \${area}\\\${escapeHtml(inst.instance_name)} \${phone}</option>\`;
-      }).join('');
+        const instName = escapeHtml(inst.instance_name || '');
+        html += '<option value="' + instName + '">' + status + ' ' + area + instName + phone + '</option>';
+      }
+      select.innerHTML = html;
 
       if (currentVal && Array.from(select.options).some(o => o.value === currentVal)) {
         select.value = currentVal;
@@ -4588,44 +4631,50 @@ export function getAdminDashboardHtml(): string {
         return;
       }
 
-      const isSuperAdmin = state.user?.role === 'superadmin';
+      const isSuperAdmin = state.user && state.user.role === 'superadmin';
+      let html = '';
 
-      container.innerHTML = list.map(c => {
-        const isActive = c.phone === state.activeChatPhone ? 'active' : '';
-        const name = c.client_name || c.phone;
-        const dept = c.department || 'General';
-        const deleteBtnHtml = isSuperAdmin ? \`
-            <button class="btn-thread-delete" title="Eliminar conversación" onclick="deleteChatThread(event, '\\\${c.phone}')">
-              <svg class="svg-icon" style="width: 14px; height: 14px;" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-            </button>\` : '';
+      for (let i = 0; i < list.length; i++) {
+        const c = list[i];
+        const isActive = c.phone === state.activeChatPhone ? ' active' : '';
+        const name = escapeHtml(c.client_name || c.phone || '');
+        const phone = escapeHtml(c.phone || '');
+        const dept = escapeHtml(c.department || 'General');
+        const lastMsg = escapeHtml(c.last_message || 'Sin mensajes');
+        const time = formatShortTime(c.last_interaction);
+        const statusBadge = c.is_human_paused
+          ? '<span class="badge badge-warning" style="font-size: 9.5px; padding: 1px 5px;">⏸️ Humano</span>'
+          : '<span class="badge badge-success" style="font-size: 9.5px; padding: 1px 5px;">🤖 Bot</span>';
+        const instanceBadge = c.last_instance
+          ? '<span class="badge badge-purple" style="font-size: 9.5px; padding: 1px 5px;">' + escapeHtml(c.last_instance) + '</span>'
+          : '';
+        const deleteBtn = isSuperAdmin
+          ? '<button class="btn-thread-delete" title="Eliminar conversación" onclick="deleteChatThread(event, \'' + phone + '\')"><svg class="svg-icon" style="width: 14px; height: 14px;" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>'
+          : '';
 
-        return \`
-          <div class="chat-thread-item \${isActive}" onclick="selectChat('\\\${c.phone}')">
-            <div class="thread-avatar">
-              <svg class="svg-icon" viewBox="0 0 24 24" style="width:24px;height:24px;color:#cfd6db;"><path fill="currentColor" d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
-            </div>
-            <div class="thread-content">
-              <div class="thread-top">
-                <span class="thread-name">\\\${escapeHtml(name)}</span>
-                <span class="thread-time">\\\${formatShortTime(c.last_interaction)}</span>
-              </div>
-              <div class="thread-bottom">
-                <span class="thread-preview">\\\${escapeHtml(c.last_message || 'Sin mensajes')}</span>
-                \${deleteBtnHtml}
-              </div>
-              <div class="thread-tags-row">
-                <span class="badge \${c.is_human_paused ? 'badge-warning' : 'badge-success'}" style="font-size: 9.5px; padding: 1px 5px;">
-                  \${c.is_human_paused ? '⏸️ Humano' : '🤖 Bot'}
-                </span>
-                <span class="badge badge-info" style="font-size: 9.5px; padding: 1px 5px;">
-                  \\\${escapeHtml(dept)}
-                </span>
-                \${c.last_instance ? \`<span class="badge badge-purple" style="font-size: 9.5px; padding: 1px 5px;">\\\${escapeHtml(c.last_instance)}</span>\` : ''}
-              </div>
-            </div>
-          </div>
-        \`;
-      }).join('');
+        html += '<div class="chat-thread-item' + isActive + '" onclick="selectChat(\'' + phone + '\')">' +
+          '<div class="thread-avatar">' +
+            '<svg class="svg-icon" viewBox="0 0 24 24" style="width:24px;height:24px;color:#cfd6db;"><path fill="currentColor" d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>' +
+          '</div>' +
+          '<div class="thread-content">' +
+            '<div class="thread-top">' +
+              '<span class="thread-name">' + name + '</span>' +
+              '<span class="thread-time">' + time + '</span>' +
+            '</div>' +
+            '<div class="thread-bottom">' +
+              '<span class="thread-preview">' + lastMsg + '</span>' +
+              deleteBtn +
+            '</div>' +
+            '<div class="thread-tags-row">' +
+              statusBadge +
+              '<span class="badge badge-info" style="font-size: 9.5px; padding: 1px 5px;">' + dept + '</span>' +
+              instanceBadge +
+            '</div>' +
+          '</div>' +
+        '</div>';
+      }
+
+      container.innerHTML = html;
     }
 
     function filterChatThreads(q) {
@@ -4660,8 +4709,8 @@ export function getAdminDashboardHtml(): string {
       if (instBadge) {
         if (activeInst) {
           const instObj = (state.whatsappAreas || []).find(a => a.instance_name.toLowerCase() === activeInst.toLowerCase());
-          const phoneTxt = instObj?.phone_number ? \` (+52 \${instObj.phone_number.slice(-10)})\` : '';
-          instBadge.innerText = \`Línea: \${activeInst}\${phoneTxt}\`;
+          const phoneTxt = instObj?.phone_number ? (' (+52 ' + instObj.phone_number.slice(-10) + ')') : '';
+          instBadge.innerText = 'Línea: ' + activeInst + phoneTxt;
           instBadge.style.display = 'inline-block';
         } else {
           instBadge.style.display = 'none';
@@ -4687,6 +4736,10 @@ export function getAdminDashboardHtml(): string {
       document.getElementById('chat-messages-wrap').style.display = 'flex';
       document.getElementById('chat-input-container').style.display = 'flex';
 
+      const isSuperAdmin = state.user && state.user.role === 'superadmin';
+      const delBtn = document.getElementById('btn-delete-active-chat');
+      if (delBtn) delBtn.style.display = isSuperAdmin ? 'flex' : 'none';
+
       const chat = state.chats.find(c => c.phone === phone);
       document.getElementById('active-chat-name').innerText = chat?.client_name || phone;
       document.getElementById('active-chat-phone').innerText = phone;
@@ -4710,49 +4763,74 @@ export function getAdminDashboardHtml(): string {
       }
     }
 
+    function toggleChatActionsMenu(e) {
+      if (e) e.stopPropagation();
+      const menu = document.getElementById('chat-actions-menu');
+      if (menu) {
+        menu.style.display = menu.style.display === 'none' ? 'flex' : 'none';
+      }
+    }
+
+    function closeChatActionsMenu() {
+      const menu = document.getElementById('chat-actions-menu');
+      if (menu) menu.style.display = 'none';
+    }
+
+    document.addEventListener('click', (e) => {
+      const menu = document.getElementById('chat-actions-menu');
+      if (menu && !menu.contains(e.target) && !e.target.closest('.chat-menu-dropdown-wrap')) {
+        menu.style.display = 'none';
+      }
+    });
+
     function openTransferChatModal() {
       if (!state.activeChatPhone) return;
       const chat = state.chats.find(c => c.phone === state.activeChatPhone);
       const currentDept = chat?.department || 'General';
 
-      const areaOptions = state.whatsappAreas.map(a => {
-        const isSelected = a.area_name.toLowerCase() === currentDept.toLowerCase();
-        const phoneFormatted = a.phone_number ? \`+52 \${a.phone_number.slice(-10)}\` : 'Sin número vinculado';
-        const isOnline = a.is_connected || a.connection_status === 'open';
-        const statusTxt = isOnline ? '🟢 ACTIVO' : '⚪ DESCONECTADO';
-        const label = \`\${a.area_name} — 📱 \${phoneFormatted} [Línea: \${a.instance_name}] (\${statusTxt})\`;
-        return \`<option value="\\\${escapeHtml(a.area_name)}" data-instance="\\\${escapeHtml(a.instance_name)}" \${isSelected ? 'selected' : ''}>\\\${escapeHtml(label)}</option>\`;
-      }).join('');
+      let areaOptions = '';
+      if (state.whatsappAreas && state.whatsappAreas.length > 0) {
+        for (let i = 0; i < state.whatsappAreas.length; i++) {
+          const a = state.whatsappAreas[i];
+          const isSelected = a.area_name.toLowerCase() === currentDept.toLowerCase();
+          const phoneFormatted = a.phone_number ? '+52 ' + a.phone_number.slice(-10) : 'Sin número vinculado';
+          const isOnline = a.is_connected || a.connection_status === 'open';
+          const statusTxt = isOnline ? '🟢 ACTIVO' : '⚪ DESCONECTADO';
+          const label = escapeHtml(a.area_name + ' — 📱 ' + phoneFormatted + ' [Línea: ' + a.instance_name + '] (' + statusTxt + ')');
+          const safeArea = escapeHtml(a.area_name);
+          const safeInst = escapeHtml(a.instance_name);
+          areaOptions += '<option value="' + safeArea + '" data-instance="' + safeInst + '"' + (isSelected ? ' selected' : '') + '>' + label + '</option>';
+        }
+      } else {
+        areaOptions = '<option value="Atención al Cliente">Atención al Cliente</option><option value="Soporte Técnico">Soporte Técnico</option>';
+      }
 
-      const content = \`
-        <div style="display: flex; flex-direction: column; gap: 14px;">
-          <p style="font-size: 13px; color: var(--text-muted); line-height: 1.5;">
-            Transfiere la conversación del cliente <strong>\\\${escapeHtml(chat?.client_name || state.activeChatPhone)}</strong> al número de WhatsApp activo de otra área u oficina.
-          </p>
-
-          <div class="form-group">
-            <label class="form-label" style="font-weight: 600;">Línea de WhatsApp & Área Destino</label>
-            <select id="transfer-modal-area-select" class="form-control" onchange="handleTransferAreaChange(this)">
-              \${areaOptions || '<option value="Atención al Cliente">Atención al Cliente</option><option value="Soporte Técnico">Soporte Técnico</option>'}
-              <option value="__CUSTOM__">-- Otra área personalizada --</option>
-            </select>
-            <input type="text" id="transfer-modal-area-custom" class="form-control" placeholder="Escribe el nombre del área..." style="display: none; margin-top: 6px;">
-          </div>
-
-          <div class="form-group" style="background: rgba(0,0,0,0.25); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--card-border);">
-            <label style="display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
-              <div>
-                <strong style="font-size: 13px; color: var(--text-main);">💬 Notificar al cliente por WhatsApp</strong>
-                <div style="font-size: 11px; color: var(--text-dim);">Envía un mensaje avisando que su caso fue canalizado al área</div>
-              </div>
-              <input type="checkbox" id="transfer-modal-notify-toggle" style="transform: scale(1.3); cursor: pointer;" checked onchange="document.getElementById('transfer-modal-msg-wrap').style.display = this.checked ? 'block' : 'none';">
-            </label>
-            <div id="transfer-modal-msg-wrap" style="margin-top: 10px;">
-              <textarea id="transfer-modal-custom-msg" class="form-control" rows="2" placeholder="Tu conversación ha sido transferida al área de..."></textarea>
-            </div>
-          </div>
-        </div>
-      \`;
+      const clientName = escapeHtml(chat?.client_name || state.activeChatPhone || '');
+      const content = '<div style="display: flex; flex-direction: column; gap: 14px;">' +
+        '<p style="font-size: 13px; color: var(--text-muted); line-height: 1.5;">' +
+          'Transfiere la conversación del cliente <strong>' + clientName + '</strong> al número de WhatsApp activo de otra área u oficina.' +
+        '</p>' +
+        '<div class="form-group">' +
+          '<label class="form-label" style="font-weight: 600;">Línea de WhatsApp & Área Destino</label>' +
+          '<select id="transfer-modal-area-select" class="form-control" onchange="handleTransferAreaChange(this)">' +
+            areaOptions +
+            '<option value="__CUSTOM__">-- Otra área personalizada --</option>' +
+          '</select>' +
+          '<input type="text" id="transfer-modal-area-custom" class="form-control" placeholder="Escribe el nombre del área..." style="display: none; margin-top: 6px;">' +
+        '</div>' +
+        '<div class="form-group" style="background: rgba(0,0,0,0.25); padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--card-border);">' +
+          '<label style="display: flex; align-items: center; justify-content: space-between; cursor: pointer;">' +
+            '<div>' +
+              '<strong style="font-size: 13px; color: var(--text-main);">💬 Notificar al cliente por WhatsApp</strong>' +
+              '<div style="font-size: 11px; color: var(--text-dim);">Envía un mensaje avisando que su caso fue canalizado al área</div>' +
+            '</div>' +
+            '<input type="checkbox" id="transfer-modal-notify-toggle" style="transform: scale(1.3); cursor: pointer;" checked onchange="document.getElementById(\'transfer-modal-msg-wrap\').style.display = this.checked ? \'block\' : \'none\';">' +
+          '</label>' +
+          '<div id="transfer-modal-msg-wrap" style="margin-top: 10px;">' +
+            '<textarea id="transfer-modal-custom-msg" class="form-control" rows="2" placeholder="Tu conversación ha sido transferida al área de..."></textarea>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
 
       openModal('🔄 Traspasar Conversación a Línea / Área', content, async () => {
         const select = document.getElementById('transfer-modal-area-select');
@@ -4794,7 +4872,7 @@ export function getAdminDashboardHtml(): string {
             }
             renderDynamicDeptFilters();
             filterChatThreads(document.getElementById('chat-filter-input')?.value || '');
-            showToast('Traspaso Exitoso', res.message || \`Chat transferido a \${selectedArea}.\`, 'success');
+            showToast('Traspaso Exitoso', res.message || ('Chat transferido a ' + selectedArea + '.'), 'success');
           } else {
             showToast('Error', res.error || 'No se pudo transferir el chat', 'error');
             return false;
@@ -4817,7 +4895,7 @@ export function getAdminDashboardHtml(): string {
       } else {
         if (customInput) customInput.style.display = 'none';
         if (msgInput && (!msgInput.value || msgInput.value.includes('transferida'))) {
-          msgInput.value = \`Tu conversación ha sido transferida al área de *\${select.value}*. En un momento un asesor continuará con tu atención por este medio.\`;
+          msgInput.value = 'Tu conversación ha sido transferida al área de *' + select.value + '*. En un momento un asesor continuará con tu atención por este medio.';
         }
       }
     }
@@ -4829,34 +4907,44 @@ export function getAdminDashboardHtml(): string {
         return;
       }
 
-      wrap.innerHTML = messages.map(m => {
+      let html = '';
+      for (let i = 0; i < messages.length; i++) {
+        const m = messages[i];
         const isOut = m.direction === 'OUT';
-        return \`
-          <div class="chat-bubble \${isOut ? 'out' : 'in'}">
-            <span>\\\${escapeHtml(m.message)}</span>
-            <div class="bubble-meta">
-              <span>\\\${formatShortTime(m.created_at)}</span>
-              \${isOut ? '<span class="bubble-check">✓✓</span>' : ''}
-            </div>
-          </div>
-        \`;
-      }).join('');
+        const msgText = escapeHtml(m.message || '');
+        const timeText = formatShortTime(m.created_at);
+        const checkHtml = isOut ? '<span class="bubble-check">✓✓</span>' : '';
+        const bubbleClass = 'chat-bubble ' + (isOut ? 'out' : 'in');
 
+        html += '<div class="' + bubbleClass + '">' +
+          '<span>' + msgText + '</span>' +
+          '<div class="bubble-meta">' +
+            '<span>' + timeText + '</span>' +
+            checkHtml +
+          '</div>' +
+        '</div>';
+      }
+
+      wrap.innerHTML = html;
       wrap.scrollTop = wrap.scrollHeight;
     }
 
     function appendChatMessage(data) {
       const wrap = document.getElementById('chat-messages-wrap');
       const isOut = data.direction === 'OUT';
+      const msgText = escapeHtml(data.message || '');
+      const timeText = formatShortTime(data.created_at || new Date().toISOString());
+      const checkHtml = isOut ? '<span class="bubble-check">✓✓</span>' : '';
+      const bubbleClass = 'chat-bubble ' + (isOut ? 'out' : 'in');
+
       const bubble = document.createElement('div');
-      bubble.className = 'chat-bubble ' + (isOut ? 'out' : 'in');
-      bubble.innerHTML = \`
-        <span>\\\${escapeHtml(data.message)}</span>
-        <div class="bubble-meta">
-          <span>\\\${formatShortTime(data.created_at || new Date().toISOString())}</span>
-          \${isOut ? '<span class="bubble-check">✓✓</span>' : ''}
-        </div>
-      \`;
+      bubble.className = bubbleClass;
+      bubble.innerHTML = '<span>' + msgText + '</span>' +
+        '<div class="bubble-meta">' +
+          '<span>' + timeText + '</span>' +
+          checkHtml +
+        '</div>';
+
       wrap.appendChild(bubble);
       wrap.scrollTop = wrap.scrollHeight;
     }
@@ -4906,21 +4994,18 @@ export function getAdminDashboardHtml(): string {
     }
 
     function updateTakeoverButton(isPaused, takeover) {
-      const ind = document.getElementById('takeover-status-indicator');
       const btn = document.getElementById('btn-toggle-takeover');
-      if (!ind || !btn) return;
+      if (!btn) return;
 
       if (isPaused) {
-        ind.className = 'badge badge-warning';
         const desc = takeover?.descripcion || (takeover?.minutosRestantes ? (takeover.minutosRestantes + 'm restantes') : 'Pausado');
-        ind.innerText = '⏸️ ' + desc;
-        btn.innerHTML = '▶️ Reactivar';
-        btn.className = 'btn btn-success btn-xs';
+        btn.className = 'btn btn-warning btn-xs';
+        btn.innerHTML = '⏸️ <span>' + desc + ' • Reactivar</span>';
+        btn.title = 'Bot pausado para atención humana. Clic para reactivar el bot.';
       } else {
-        ind.className = 'badge badge-success';
-        ind.innerText = '🤖 Bot Activo';
-        btn.innerHTML = '⏸️ Pausar 4h';
         btn.className = 'btn btn-secondary btn-xs';
+        btn.innerHTML = '🤖 <span>Bot Activo • Pausar 4h</span>';
+        btn.title = 'Bot respondiendo automáticamente. Clic para pausar 4 horas.';
       }
     }
 
