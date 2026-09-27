@@ -1,22 +1,248 @@
 import { createClient, Client } from '@libsql/client';
 import { config } from '../config/env';
 import { Logger } from '../utils/logger';
+import fs from 'fs';
+import path from 'path';
 
-const logger = new Logger('TursoDB');
+const logger = new Logger('DatabaseManager');
 
 let clientInstance: Client | null = null;
+let activeDbUrl: string = '';
 
+/**
+ * Obtiene la ruta del archivo SQLite local en caso de usar motor en VPS
+ */
+export function getLocalDbFilePath(): string {
+  const rawUrl = config.turso.url || 'file:./data/chatbot.db';
+  if (rawUrl.startsWith('file:')) {
+    const rel = rawUrl.replace('file:', '');
+    return path.resolve(process.cwd(), rel);
+  }
+  return path.resolve(process.cwd(), './data/chatbot.db');
+}
+
+/**
+ * Obtiene la instancia activa de conexión a la base de datos
+ */
 export function getTursoClient(): Client {
-  if (!clientInstance) {
-    if (!config.turso.url) {
-      throw new Error('TURSO_DATABASE_URL is not configured');
+  const targetUrl = config.turso.url && config.turso.url.trim() !== '' ? config.turso.url.trim() : 'file:./data/chatbot.db';
+  
+  if (!clientInstance || activeDbUrl !== targetUrl) {
+    if (targetUrl.startsWith('file:')) {
+      const localPath = getLocalDbFilePath();
+      const dir = path.dirname(localPath);
+      if (!fs.existsSync(dir)) {
+        try {
+          fs.mkdirSync(dir, { recursive: true });
+        } catch (_) {}
+      }
+      clientInstance = createClient({
+        url: `file:${localPath.replace(/\\/g, '/')}`,
+      });
+      activeDbUrl = targetUrl;
+      logger.info(`Conectado a Base de Datos Local SQLite: ${localPath}`);
+    } else {
+      clientInstance = createClient({
+        url: targetUrl,
+        authToken: config.turso.authToken,
+      });
+      activeDbUrl = targetUrl;
+      logger.info(`Conectado a Base de Datos Turso Cloud: ${targetUrl}`);
     }
-    clientInstance = createClient({
-      url: config.turso.url,
-      authToken: config.turso.authToken,
-    });
   }
   return clientInstance;
+}
+
+/**
+ * Reinicia la conexión a la base de datos (por ejemplo, al cambiar de Turso a Local)
+ */
+export function resetDatabaseConnection(newUrl?: string, newAuthToken?: string): Client {
+  if (newUrl !== undefined) config.turso.url = newUrl;
+  if (newAuthToken !== undefined) config.turso.authToken = newAuthToken;
+  clientInstance = null;
+  activeDbUrl = '';
+  return getTursoClient();
+}
+
+/**
+ * Obtiene métricas e información técnica de la base de datos
+ */
+export async function getDatabaseStatsInfo(): Promise<any> {
+  const client = getTursoClient();
+  const rawUrl = config.turso.url || 'file:./data/chatbot.db';
+  const isLocal = rawUrl.startsWith('file:') || !config.turso.url;
+  
+  const startPing = Date.now();
+  await client.execute('SELECT 1 as ping');
+  const latencyMs = Date.now() - startPing;
+
+  let fileSizeBytes = 0;
+  let filePath = '';
+  if (isLocal) {
+    filePath = getLocalDbFilePath();
+    if (fs.existsSync(filePath)) {
+      try {
+        fileSizeBytes = fs.statSync(filePath).size;
+      } catch (_) {}
+    }
+  }
+
+  // Obtener lista de tablas
+  const tablesRes = await client.execute(`
+    SELECT name FROM sqlite_master 
+    WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_litestream_%' 
+    ORDER BY name ASC;
+  `);
+
+  const tables: Array<{ name: string; rowCount: number }> = [];
+  let totalRows = 0;
+
+  for (const row of tablesRes.rows) {
+    const tableName = String(row.name);
+    try {
+      const countRes = await client.execute(`SELECT COUNT(*) as count FROM "${tableName}";`);
+      const rowCount = Number(countRes.rows[0]?.count || 0);
+      tables.push({ name: tableName, rowCount });
+      totalRows += rowCount;
+    } catch (_) {
+      tables.push({ name: tableName, rowCount: 0 });
+    }
+  }
+
+  return {
+    mode: isLocal ? 'local' : 'turso',
+    isLocal,
+    url: isLocal ? `file:${filePath}` : rawUrl.replace(/(:\/\/[^@]+@).*/, '$1***'),
+    filePath: isLocal ? filePath : null,
+    fileSizeBytes,
+    fileSizeFormatted: (fileSizeBytes / (1024 * 1024)).toFixed(2) + ' MB',
+    latencyMs,
+    tablesCount: tables.length,
+    totalRows,
+    tables,
+    status: 'healthy',
+  };
+}
+
+/**
+ * Consulta los datos y esquema de una tabla específica
+ */
+export async function getTableDataAndSchema(
+  tableName: string,
+  options: { page?: number; limit?: number; search?: string; sortBy?: string; sortDir?: string } = {}
+): Promise<any> {
+  const client = getTursoClient();
+
+  // Validar contra sqlite_master para prevenir SQL Injection en nombres de tabla
+  const checkTable = await client.execute({
+    sql: `SELECT name FROM sqlite_master WHERE type='table' AND name = ?`,
+    args: [tableName],
+  });
+
+  if (checkTable.rows.length === 0) {
+    throw new Error(`La tabla "${tableName}" no existe en la base de datos`);
+  }
+
+  // Obtener columnas y tipos
+  const pragma = await client.execute(`PRAGMA table_info("${tableName}");`);
+  const columns = pragma.rows.map((col: any) => ({
+    cid: col.cid,
+    name: String(col.name),
+    type: String(col.type || 'TEXT'),
+    notnull: Boolean(col.notnull),
+    dflt_value: col.dflt_value,
+    pk: Boolean(col.pk),
+  }));
+
+  const page = Math.max(1, Number(options.page || 1));
+  const limit = Math.min(200, Math.max(10, Number(options.limit || 50)));
+  const offset = (page - 1) * limit;
+
+  let whereClause = '';
+  const args: any[] = [];
+
+  if (options.search && options.search.trim() !== '') {
+    const term = `%${options.search.trim()}%`;
+    const searchConditions = columns
+      .filter((c: any) => ['TEXT', 'VARCHAR', 'CHAR', ''].includes(c.type.toUpperCase()) || c.type.includes('CHAR') || c.type.includes('TEXT'))
+      .map((c: any) => `"${c.name}" LIKE ?`);
+
+    if (searchConditions.length > 0) {
+      whereClause = `WHERE ${searchConditions.join(' OR ')}`;
+      for (let i = 0; i < searchConditions.length; i++) {
+        args.push(term);
+      }
+    }
+  }
+
+  // Count total matching rows
+  const countSql = `SELECT COUNT(*) as total FROM "${tableName}" ${whereClause}`;
+  const countRes = await client.execute({ sql: countSql, args: [...args] });
+  const totalRows = Number(countRes.rows[0]?.total || 0);
+
+  // Sorting
+  let orderClause = '';
+  if (options.sortBy) {
+    const validCol = columns.find((c: any) => c.name === options.sortBy);
+    if (validCol) {
+      const dir = options.sortDir?.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
+      orderClause = `ORDER BY "${validCol.name}" ${dir}`;
+    }
+  }
+
+  const querySql = `SELECT * FROM "${tableName}" ${whereClause} ${orderClause} LIMIT ? OFFSET ?`;
+  const queryArgs = [...args, limit, offset];
+  const dataRes = await client.execute({ sql: querySql, args: queryArgs });
+
+  return {
+    tableName,
+    columns,
+    rows: dataRes.rows,
+    totalRows,
+    page,
+    limit,
+    totalPages: Math.ceil(totalRows / limit) || 1,
+  };
+}
+
+/**
+ * Ejecuta una consulta SQL personalizada de forma controlada
+ */
+export async function executeCustomQuery(sqlQuery: string): Promise<any> {
+  const client = getTursoClient();
+  const trimmed = sqlQuery.trim();
+
+  if (!trimmed) {
+    throw new Error('La consulta SQL no puede estar vacía');
+  }
+
+  const startTime = Date.now();
+  const result = await client.execute(trimmed);
+  const durationMs = Date.now() - startTime;
+
+  return {
+    columns: result.columns || [],
+    rows: result.rows || [],
+    rowsAffected: result.rowsAffected || 0,
+    lastInsertRowid: result.lastInsertRowid ? String(result.lastInsertRowid) : null,
+    durationMs,
+  };
+}
+
+/**
+ * Optimiza y desfragmenta la base de datos (VACUUM y PRAGMA optimize)
+ */
+export async function optimizeDatabase(): Promise<any> {
+  const client = getTursoClient();
+  const start = Date.now();
+  try {
+    await client.execute('PRAGMA optimize;');
+  } catch (_) {}
+  try {
+    await client.execute('VACUUM;');
+  } catch (_) {}
+  const durationMs = Date.now() - start;
+  return { success: true, durationMs, message: 'Base de datos optimizada y desfragmentada correctamente' };
 }
 
 export async function initTursoDatabase(): Promise<void> {

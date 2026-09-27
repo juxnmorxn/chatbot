@@ -155,6 +155,16 @@ router.delete('/api/tickets/:folio', requireAdminAuth(['superadmin']), AdminCont
 router.post('/api/tickets/:folio/delete', requireAdminAuth(['superadmin']), AdminController.deleteTicket);
 
 // ==========================================
+// GESTIÓN Y EXPLORADOR DE BASE DE DATOS
+// ==========================================
+router.get('/api/admin/database/stats', requireAdminAuth(['superadmin', 'soporte']), AdminController.getDatabaseStats);
+router.get('/api/admin/database/tables/:table', requireAdminAuth(['superadmin', 'soporte']), AdminController.getDatabaseTableData);
+router.post('/api/admin/database/query', requireAdminAuth(['superadmin']), AdminController.executeDatabaseQuery);
+router.post('/api/admin/database/optimize', requireAdminAuth(['superadmin']), AdminController.optimizeDatabase);
+router.get('/api/admin/database/backup', requireAdminAuth(['superadmin']), AdminController.downloadDatabaseBackup);
+router.post('/api/admin/database/switch-mode', requireAdminAuth(['superadmin']), AdminController.switchDatabaseMode);
+
+// ==========================================
 // RUTAS DE LIMPIEZA Y REINICIO DE PRUEBAS (SOLO SUPERADMIN)
 // ==========================================
 router.delete('/api/sessions/clear-all', requireAdminAuth(['superadmin']), AdminController.clearAllSessions);

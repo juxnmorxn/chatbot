@@ -1,8 +1,19 @@
 import { Request, Response } from 'express';
 import { SettingsService } from '../services/settings.service';
 import { TursoService } from '../services/turso.service';
-import { getTursoClient } from '../database/turso';
+import { 
+  getTursoClient, 
+  getDatabaseStatsInfo, 
+  getTableDataAndSchema, 
+  executeCustomQuery, 
+  optimizeDatabase as dbOptimize,
+  getLocalDbFilePath,
+  resetDatabaseConnection,
+  initTursoDatabase
+} from '../database/turso';
 import { GroqService } from '../services/groq.service';
+import fs from 'fs';
+import path from 'path';
 import { WispHubService } from '../services/wisphub.service';
 import { SmartOLTService } from '../services/smartolt.service';
 import { IpamService } from '../services/ipam.service';
@@ -2098,6 +2109,143 @@ export class AdminController {
       }
     } catch (error: any) {
       logger.error(`Error al normalizar contingencia ${req.params.id}:`, error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  // ==========================================
+  // GESTIÓN Y EXPLORADOR DE BASE DE DATOS
+  // ==========================================
+
+  /**
+   * Obtiene estadísticas generales, latencia y lista de tablas de la base de datos
+   */
+  static async getDatabaseStats(req: Request, res: Response): Promise<void> {
+    try {
+      const stats = await getDatabaseStatsInfo();
+      res.json({ success: true, ...stats });
+    } catch (error: any) {
+      logger.error('Error al obtener estadísticas de la BD:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Obtiene los registros y esquema de una tabla específica
+   */
+  static async getDatabaseTableData(req: Request, res: Response): Promise<void> {
+    try {
+      const { table } = req.params;
+      const { page, limit, search, sortBy, sortDir } = req.query;
+
+      const data = await getTableDataAndSchema(String(table), {
+        page: page ? parseInt(String(page), 10) : 1,
+        limit: limit ? parseInt(String(limit), 10) : 50,
+        search: search ? String(search) : undefined,
+        sortBy: sortBy ? String(sortBy) : undefined,
+        sortDir: sortDir ? String(sortDir) : undefined,
+      });
+
+      res.json({ success: true, ...data });
+    } catch (error: any) {
+      logger.error(`Error al consultar tabla ${req.params.table}:`, error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Ejecuta una consulta SQL en vivo en la base de datos
+   */
+  static async executeDatabaseQuery(req: Request, res: Response): Promise<void> {
+    try {
+      const { sql } = req.body;
+      if (!sql || typeof sql !== 'string' || !sql.trim()) {
+        res.status(400).json({ success: false, error: 'La consulta SQL es requerida' });
+        return;
+      }
+
+      const result = await executeCustomQuery(sql);
+      res.json({ success: true, ...result });
+    } catch (error: any) {
+      logger.error('Error al ejecutar consulta SQL en BD:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Optimiza y compacta la base de datos (VACUUM)
+   */
+  static async optimizeDatabase(req: Request, res: Response): Promise<void> {
+    try {
+      const result = await dbOptimize();
+      res.json(result);
+    } catch (error: any) {
+      logger.error('Error al optimizar BD:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Descarga un respaldo (backup) directo del archivo SQLite local
+   */
+  static async downloadDatabaseBackup(req: Request, res: Response): Promise<void> {
+    try {
+      const localPath = getLocalDbFilePath();
+      if (!fs.existsSync(localPath)) {
+        res.status(404).json({ success: false, error: 'El archivo de base de datos local aún no existe o está usando Turso en la nube.' });
+        return;
+      }
+
+      const dateStr = new Date().toISOString().slice(0, 10);
+      res.download(localPath, `chatbot_backup_${dateStr}.db`);
+    } catch (error: any) {
+      logger.error('Error al descargar respaldo de BD:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Cambia el modo / motor de base de datos (Local SQLite vs Turso Cloud)
+   */
+  static async switchDatabaseMode(req: Request, res: Response): Promise<void> {
+    try {
+      const { mode, tursoUrl, tursoToken } = req.body;
+
+      if (mode === 'local') {
+        const localUrl = 'file:./data/chatbot.db';
+        resetDatabaseConnection(localUrl, '');
+        // Guardar en settings para persistencia
+        await SettingsService.set('DATABASE_MODE', 'local');
+        await SettingsService.set('TURSO_DATABASE_URL', localUrl);
+        await SettingsService.set('TURSO_AUTH_TOKEN', '');
+        await initTursoDatabase();
+        res.json({ 
+          success: true, 
+          message: 'Base de datos cambiada a SQLite Local en Servidor (VPS KVM 1). Sin límites de consultas.',
+          mode: 'local',
+          url: localUrl
+        });
+      } else if (mode === 'turso') {
+        if (!tursoUrl) {
+          res.status(400).json({ success: false, error: 'La URL de Turso es obligatoria para el modo nube' });
+          return;
+        }
+        resetDatabaseConnection(tursoUrl, tursoToken || '');
+        await SettingsService.set('DATABASE_MODE', 'turso');
+        await SettingsService.set('TURSO_DATABASE_URL', tursoUrl);
+        await SettingsService.set('TURSO_AUTH_TOKEN', tursoToken || '');
+        await initTursoDatabase();
+        res.json({ 
+          success: true, 
+          message: 'Base de datos conectada exitosamente a Turso Cloud.',
+          mode: 'turso',
+          url: tursoUrl
+        });
+      } else {
+        res.status(400).json({ success: false, error: 'Modo de base de datos desconocido' });
+      }
+    } catch (error: any) {
+      logger.error('Error al cambiar modo de BD:', error?.message || error);
       res.status(500).json({ success: false, error: error?.message || error });
     }
   }

@@ -2008,6 +2008,160 @@ export function getAdminDashboardHtml(): string {
       pointer-events: auto;
     }
 
+    /* Database Explorer UI */
+    .db-layout {
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      gap: 20px;
+      min-height: 560px;
+    }
+    @media (max-width: 900px) {
+      .db-layout { grid-template-columns: 1fr; }
+    }
+    .db-sidebar {
+      background: var(--bg-surface);
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-md);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .db-table-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 520px;
+      overflow-y: auto;
+    }
+    .db-table-btn {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      border-radius: var(--radius-sm);
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid transparent;
+      color: var(--text-main);
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      transition: var(--transition);
+      text-align: left;
+      width: 100%;
+    }
+    .db-table-btn:hover {
+      background: rgba(99, 102, 241, 0.1);
+      border-color: rgba(99, 102, 241, 0.3);
+      color: #fff;
+    }
+    .db-table-btn.active {
+      background: rgba(99, 102, 241, 0.18);
+      border-color: var(--primary);
+      color: #fff;
+      font-weight: 700;
+    }
+    .db-table-badge {
+      font-size: 11px;
+      font-family: var(--font-mono);
+      background: rgba(255, 255, 255, 0.08);
+      padding: 2px 7px;
+      border-radius: 999px;
+      color: var(--text-muted);
+    }
+    .db-table-btn.active .db-table-badge {
+      background: var(--primary);
+      color: #fff;
+    }
+    .db-sql-textarea {
+      width: 100%;
+      height: 140px;
+      background: #060911;
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-sm);
+      color: #38bdf8;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      padding: 14px;
+      resize: vertical;
+      box-sizing: border-box;
+      outline: none;
+      line-height: 1.5;
+    }
+    .db-sql-textarea:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px var(--primary-glow);
+    }
+    .db-sql-chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 10px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--card-border);
+      border-radius: 999px;
+      font-size: 11.5px;
+      font-family: var(--font-mono);
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: var(--transition);
+      user-select: none;
+    }
+    .db-sql-chip:hover {
+      background: rgba(99, 102, 241, 0.15);
+      border-color: var(--primary);
+      color: #fff;
+    }
+    .db-data-table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--card-border);
+      border-radius: var(--radius-sm);
+      background: #080c16;
+      max-height: 480px;
+    }
+    .db-data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12.5px;
+      white-space: nowrap;
+    }
+    .db-data-table th {
+      background: rgba(15, 23, 42, 0.95);
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      padding: 10px 14px;
+      text-align: left;
+      font-weight: 600;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--card-border);
+    }
+    .db-data-table td {
+      padding: 8px 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      color: var(--text-main);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      max-width: 280px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .db-data-table tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .db-json-btn {
+      padding: 2px 8px;
+      border-radius: 4px;
+      background: rgba(6, 182, 212, 0.12);
+      border: 1px solid rgba(6, 182, 212, 0.3);
+      color: #38bdf8;
+      font-size: 11px;
+      cursor: pointer;
+      font-family: var(--font-mono);
+    }
+    .db-json-btn:hover {
+      background: rgba(6, 182, 212, 0.25);
+    }
+
     /* ========================================================
        FULL RESPONSIVE SYSTEM (MOBILE, TABLETS, DESKTOP)
        ======================================================== */
@@ -2285,6 +2439,12 @@ export function getAdminDashboardHtml(): string {
         </div>
 
         <div class="nav-category">Sistema</div>
+        <div class="nav-item" data-view="database" onclick="navigateTo('database')" title="Base de Datos & Explorador SQL">
+          <span class="nav-icon">
+            <svg class="svg-icon" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
+          </span>
+          <span class="nav-text">Base de Datos</span>
+        </div>
         <div class="nav-item" data-view="settings" onclick="navigateTo('settings')" title="Configuración">
           <span class="nav-icon">
             <svg class="svg-icon" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>
@@ -3283,6 +3443,268 @@ export function getAdminDashboardHtml(): string {
         </div>
       </section>
 
+      <!-- VIEW: BASE DE DATOS & EXPLORADOR SQL -->
+      <section id="view-database" class="view-container">
+        <!-- Top Metrics / Health Bar -->
+        <div class="grid-metrics" style="margin-bottom: 20px;">
+          <div class="glass-card metric-card">
+            <div class="metric-header">
+              <span>Motor / Estado</span>
+              <div class="metric-icon-box" style="color: var(--accent-green);"><svg class="svg-icon" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg></div>
+            </div>
+            <div class="metric-value" id="db-metric-status" style="font-size: 20px; color: #34d399;">🟢 En Línea</div>
+            <div class="metric-footer" id="db-metric-engine" style="font-size: 11px;">SQLite Local (VPS KVM 1)</div>
+          </div>
+
+          <div class="glass-card metric-card">
+            <div class="metric-header">
+              <span>Latencia de Consulta</span>
+              <div class="metric-icon-box" style="color: var(--accent-cyan);"><svg class="svg-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg></div>
+            </div>
+            <div class="metric-value" id="db-metric-latency" style="font-size: 24px; color: #38bdf8;">-- ms</div>
+            <div class="metric-footer" style="font-size: 11px; color: var(--text-dim);">Velocidad de respuesta</div>
+          </div>
+
+          <div class="glass-card metric-card">
+            <div class="metric-header">
+              <span>Tamaño en Disco</span>
+              <div class="metric-icon-box" style="color: var(--accent-purple);"><svg class="svg-icon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg></div>
+            </div>
+            <div class="metric-value" id="db-metric-size" style="font-size: 24px; color: #c084fc;">-- MB</div>
+            <div class="metric-footer" style="font-size: 11px; color: var(--text-dim);">Sin límites de lectura/escritura</div>
+          </div>
+
+          <div class="glass-card metric-card">
+            <div class="metric-header">
+              <span>Tablas / Registros</span>
+              <div class="metric-icon-box" style="color: var(--accent-amber);"><svg class="svg-icon" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h7"></path></svg></div>
+            </div>
+            <div class="metric-value" id="db-metric-rows" style="font-size: 22px; color: #fbbf24;">-- / --</div>
+            <div class="metric-footer" id="db-metric-tables-count" style="font-size: 11px; color: var(--text-dim);">Estructura SQLite</div>
+          </div>
+        </div>
+
+        <!-- Database Action Bar & Tabs -->
+        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 20px;">
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button class="btn btn-primary btn-sm" id="btn-db-tab-tables" onclick="switchDbTab('tables')">
+              <span>📋 Explorador de Tablas</span>
+            </button>
+            <button class="btn btn-secondary btn-sm" id="btn-db-tab-sql" onclick="switchDbTab('sql')">
+              <span>⚡ Consola SQL en Vivo</span>
+            </button>
+            <button class="btn btn-secondary btn-sm" id="btn-db-tab-engine" onclick="switchDbTab('engine')">
+              <span>⚙️ Motor & Migración</span>
+            </button>
+          </div>
+
+          <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <button class="btn btn-secondary btn-sm" onclick="optimizeDatabaseAction()" title="Ejecuta VACUUM y optimiza índices">
+              <span>🧹 Optimizar (VACUUM)</span>
+            </button>
+            <button class="btn btn-secondary btn-sm" onclick="downloadDatabaseBackup()" title="Descargar archivo .db de respaldo">
+              <span>📥 Descargar Backup (.db)</span>
+            </button>
+            <button class="btn btn-secondary btn-sm" onclick="loadDatabaseViewData()" title="Refrescar métricas y tablas">
+              <span>🔄 Refrescar</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- TAB 1: EXPLORADOR DE TABLAS (DATA BROWSER) -->
+        <div id="db-tab-tables-content" class="db-layout">
+          <!-- Left Table List -->
+          <div class="db-sidebar">
+            <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--card-border); padding-bottom: 10px;">
+              <span style="font-size: 13px; font-weight: 700; color: var(--text-main);">Tablas del Sistema</span>
+              <span id="db-tables-badge-total" class="badge" style="background: rgba(99,102,241,0.2); color: #818cf8;">0</span>
+            </div>
+            <div id="db-tables-list-container" class="db-table-list">
+              <div style="padding: 12px; text-align: center; color: var(--text-dim); font-size: 12px;">Cargando tablas...</div>
+            </div>
+          </div>
+
+          <!-- Right Table Data View -->
+          <div class="glass-card" style="padding: 16px; display: flex; flex-direction: column; gap: 14px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <h3 id="db-selected-table-title" style="font-size: 16px; font-weight: 700; font-family: var(--font-mono); color: #fff;">Selecciona una tabla</h3>
+                <span id="db-selected-table-badge" class="badge badge-info" style="font-size: 11px; display: none;">0 registros</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                <input type="text" id="db-table-search-input" class="form-input" style="width: 220px; padding: 6px 12px; font-size: 12px;" placeholder="🔍 Buscar en tabla..." oninput="handleDbTableSearch(this.value)">
+                <select id="db-table-limit-select" class="form-select" style="width: 110px; padding: 6px 10px; font-size: 12px;" onchange="changeDbTableLimit(this.value)">
+                  <option value="25">25 filas</option>
+                  <option value="50" selected>50 filas</option>
+                  <option value="100">100 filas</option>
+                </select>
+                <button class="btn btn-secondary btn-xs" onclick="reloadCurrentDbTable()">🔄</button>
+              </div>
+            </div>
+
+            <!-- Scrollable Data Grid -->
+            <div class="db-data-table-wrap">
+              <table class="db-data-table" id="db-data-table-element">
+                <thead id="db-data-table-head">
+                  <tr><th style="padding: 14px; text-align: center; color: var(--text-dim);">Selecciona una tabla a la izquierda para inspeccionar sus datos</th></tr>
+                </thead>
+                <tbody id="db-data-table-body">
+                  <tr><td style="padding: 24px; text-align: center; color: var(--text-dim);">Sin tabla seleccionada</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Table Pagination Controls -->
+            <div id="db-table-pagination" style="display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--text-muted); border-top: 1px solid var(--card-border); padding-top: 12px;">
+              <span id="db-table-pagination-info">Mostrando 0 de 0 registros</span>
+              <div style="display: flex; gap: 8px;">
+                <button class="btn btn-secondary btn-xs" id="btn-db-page-prev" onclick="changeDbTablePage(-1)" disabled>« Anterior</button>
+                <span id="db-table-page-label" style="display: inline-flex; align-items: center; padding: 0 8px; font-weight: 600;">Pág. 1</span>
+                <button class="btn btn-secondary btn-xs" id="btn-db-page-next" onclick="changeDbTablePage(1)" disabled>Siguiente »</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 2: CONSOLA SQL EN VIVO (LIVE QUERY RUNNER) -->
+        <div id="db-tab-sql-content" style="display: none; flex-direction: column; gap: 16px;">
+          <div class="glass-card">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+              <div>
+                <h3 style="font-size: 15px; font-weight: 700;">⚡ Editor SQL en Vivo</h3>
+                <p style="font-size: 12px; color: var(--text-muted);">Ejecuta consultas SQL directas contra SQLite / Turso con total libertad.</p>
+              </div>
+              <div style="display: flex; gap: 8px;">
+                <button class="btn btn-primary btn-sm" onclick="runDatabaseSqlQuery()">
+                  <span>▶ Ejecutar Consulta (Ctrl + Enter)</span>
+                </button>
+                <button class="btn btn-secondary btn-sm" onclick="clearDatabaseSqlEditor()">
+                  <span>Limpiar</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Predefined Quick Queries -->
+            <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; align-items: center;">
+              <span style="font-size: 11px; color: var(--text-dim); font-weight: 600;">Consultas Rápidas:</span>
+              <span class="db-sql-chip" onclick="insertPredefinedSql('SELECT * FROM wisphub_clients LIMIT 20;')">Clientes WispHub (20)</span>
+              <span class="db-sql-chip" onclick="insertPredefinedSql('SELECT * FROM sessions ORDER BY last_interaction DESC LIMIT 20;')">Sesiones Recientes</span>
+              <span class="db-sql-chip" onclick="insertPredefinedSql('SELECT status, COUNT(*) as total FROM tickets GROUP BY status;')">Resumen Tickets</span>
+              <span class="db-sql-chip" onclick="insertPredefinedSql('SELECT id, name, phone, role, is_active FROM technicians;')">Técnicos Activos</span>
+              <span class="db-sql-chip" onclick="insertPredefinedSql('SELECT name FROM sqlite_master WHERE type=\'table\';')">Listar Tablas</span>
+              <span class="db-sql-chip" onclick="insertPredefinedSql('PRAGMA table_info(smartolt_onus);')">Esquema SmartOLT</span>
+            </div>
+
+            <textarea id="db-sql-query-input" class="db-sql-textarea" placeholder="Escribe tu consulta SQL aquí... (Ej: SELECT * FROM wisphub_clients WHERE estado = 'activo' LIMIT 50;)" onkeydown="handleSqlEditorKeyDown(event)"></textarea>
+
+            <div id="db-sql-result-status" style="margin-top: 12px; font-size: 12px; color: var(--text-muted); display: none;"></div>
+          </div>
+
+          <!-- Query Results Grid -->
+          <div class="glass-card" id="db-sql-result-container" style="display: none; padding: 16px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+              <h4 style="font-size: 14px; font-weight: 700;">Resultados de la Consulta</h4>
+              <button class="btn btn-secondary btn-xs" onclick="exportSqlResultsToCsv()">📥 Exportar a CSV</button>
+            </div>
+            <div class="db-data-table-wrap" style="max-height: 420px;">
+              <table class="db-data-table" id="db-sql-result-table">
+                <thead id="db-sql-result-head"></thead>
+                <tbody id="db-sql-result-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 3: CONFIGURACIÓN DE MOTOR & MIGRACIÓN -->
+        <div id="db-tab-engine-content" style="display: none;">
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 20px;">
+            <!-- Engine Selection Card -->
+            <div class="glass-card">
+              <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 10px;">⚙️ Selección de Motor de Base de Datos</h3>
+              <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">
+                Configura si el sistema trabaja con la base de datos local del VPS o con el servicio en la nube de Turso.
+              </p>
+
+              <div style="display: flex; flex-direction: column; gap: 14px; margin-bottom: 20px;">
+                <label style="display: flex; align-items: flex-start; gap: 12px; padding: 12px; border-radius: var(--radius-sm); background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.3); cursor: pointer;">
+                  <input type="radio" name="db_engine_mode" value="local" id="radio-db-mode-local" style="margin-top: 3px;" checked onchange="handleDbEngineRadioChange()">
+                  <div>
+                    <div style="font-size: 13.5px; font-weight: 700; color: #34d399;">🟢 Servidor Local SQLite (VPS KVM 1 - Recomendado)</div>
+                    <div style="font-size: 12px; color: var(--text-muted); margin-top: 3px;">
+                      Almacenamiento directo en tu servidor Hostinger. <strong>Sin límites de consultas, 0ms de latencia</strong> y sin costos mensuales.
+                    </div>
+                  </div>
+                </label>
+
+                <label style="display: flex; align-items: flex-start; gap: 12px; padding: 12px; border-radius: var(--radius-sm); background: rgba(255,255,255,0.02); border: 1px solid var(--card-border); cursor: pointer;">
+                  <input type="radio" name="db_engine_mode" value="turso" id="radio-db-mode-turso" style="margin-top: 3px;" onchange="handleDbEngineRadioChange()">
+                  <div>
+                    <div style="font-size: 13.5px; font-weight: 700; color: #818cf8;">☁️ Turso Cloud (Nube Externa)</div>
+                    <div style="font-size: 12px; color: var(--text-muted); margin-top: 3px;">
+                      Base de datos remota en infraestructura Turso / AWS. Sujeto a cuotas mensuales de lectura/escritura (10M de filas en plan gratuito).
+                    </div>
+                  </div>
+                </label>
+              </div>
+
+              <!-- Turso Fields (Hidden if local) -->
+              <div id="db-turso-credentials-fields" style="display: none; flex-direction: column; gap: 12px; margin-bottom: 20px; padding: 14px; background: rgba(0,0,0,0.25); border-radius: var(--radius-sm); border: 1px solid var(--card-border);">
+                <div>
+                  <label class="form-label">Database URL (Turso / libSQL)</label>
+                  <input type="text" id="db-config-turso-url" class="form-input" placeholder="libsql://chatbot-jednet.aws-us-east-1.turso.io">
+                </div>
+                <div>
+                  <label class="form-label">Auth Token (Turso)</label>
+                  <input type="password" id="db-config-turso-token" class="form-input" placeholder="eyJhbGciOiJ...">
+                </div>
+              </div>
+
+              <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <button class="btn btn-primary btn-sm" onclick="saveDatabaseEngineSettings()">
+                  <span>💾 Aplicar y Cambiar Motor</span>
+                </button>
+                <button class="btn btn-secondary btn-sm" onclick="testDatabaseConnectionHealth()">
+                  <span>🧪 Probar Conexión</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Maintenance & Details Card -->
+            <div class="glass-card">
+              <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 10px;">💾 Información & Respaldos</h3>
+              <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">
+                Detalles del archivo en disco y herramientas de respaldo rápido.
+              </p>
+
+              <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; font-size: 12.5px;">
+                <div style="display: flex; justify-content: space-between; padding: 8px 12px; background: rgba(255,255,255,0.02); border-radius: var(--radius-sm);">
+                  <span style="color: var(--text-dim);">Ruta en VPS:</span>
+                  <span id="db-info-path" style="font-family: var(--font-mono); color: #38bdf8;">/app/data/chatbot.db</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; padding: 8px 12px; background: rgba(255,255,255,0.02); border-radius: var(--radius-sm);">
+                  <span style="color: var(--text-dim);">Espacio Libre en VPS:</span>
+                  <span style="font-weight: 600; color: #34d399;">~45 GB (89% Libre)</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; padding: 8px 12px; background: rgba(255,255,255,0.02); border-radius: var(--radius-sm);">
+                  <span style="color: var(--text-dim);">Formato de Datos:</span>
+                  <span style="font-family: var(--font-mono);">SQLite 3 / libSQL Compatible</span>
+                </div>
+              </div>
+
+              <div style="border-top: 1px solid var(--card-border); padding-top: 16px;">
+                <div style="font-size: 13px; font-weight: 700; margin-bottom: 8px;">📥 Descargar Respaldo Completo</div>
+                <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
+                  Descarga una copia exacta del archivo de la base de datos en formato SQLite para abrirla en SQLiteStudio, DBeaver o guardarla en tu computadora.
+                </p>
+                <button class="btn btn-secondary btn-sm" onclick="downloadDatabaseBackup()">
+                  <span>📥 Descargar Copia (.db)</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- VIEW 7: CONFIGURACIÓN & INTEGRACIONES -->
       <section id="view-settings" class="view-container">
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 20px;">
@@ -3594,6 +4016,17 @@ export function getAdminDashboardHtml(): string {
       swapHistory: [],
       outages: [],
       isSidebarCollapsed: false,
+      db: {
+        stats: null,
+        activeTable: null,
+        tableData: null,
+        tables: [],
+        page: 1,
+        limit: 50,
+        search: '',
+        activeTab: 'tables',
+        lastSqlResult: null,
+      },
     };
 
     // Toast Engine
@@ -3871,6 +4304,7 @@ export function getAdminDashboardHtml(): string {
         'personal': 'Personal, Roles & Técnicos de Campo',
         'technicians': 'Personal, Roles & Técnicos de Campo',
         'modem-swap': 'Cambio de Módem (Historial & Reemplazo)',
+        'database': 'Base de Datos & Explorador SQL',
         'settings': 'Configuración del Sistema',
         'users': 'Personal, Roles & Técnicos de Campo',
       };
@@ -3894,6 +4328,7 @@ export function getAdminDashboardHtml(): string {
       'personal': { label: 'Personal', placeholder: 'Buscar usuarios o técnicos con PIN...' },
       'technicians': { label: 'Técnicos', placeholder: 'Buscar técnico por nombre, teléfono o PIN...' },
       'modem-swap': { label: 'Cambio Módem', placeholder: 'Buscar en bitácora de cambios de módem...' },
+      'database': { label: 'Base de Datos', placeholder: 'Buscar en la tabla seleccionada...' },
       'settings': { label: 'Ajustes', placeholder: 'Buscar configuraciones...' },
       'users': { label: 'Usuarios RBAC', placeholder: 'Buscar administrador por usuario o nombre...' },
     };
@@ -3961,6 +4396,8 @@ export function getAdminDashboardHtml(): string {
         filterTechniciansTable();
       } else if (v === 'modem-swap') {
         filterSwapHistoryTable();
+      } else if (v === 'database') {
+        handleDbTableSearch(query);
       } else if (v === 'users') {
         filterAdminUsersTable();
       }
@@ -4069,6 +4506,7 @@ export function getAdminDashboardHtml(): string {
           loadTechniciansData();
           break;
         case 'modem-swap': loadModemSwapData(); break;
+        case 'database': loadDatabaseViewData(); break;
         case 'settings': loadSettingsData(); break;
         case 'users':
           switchPersonalTab('users');
@@ -8725,6 +9163,501 @@ export function getAdminDashboardHtml(): string {
       } catch {
         return iso;
       }
+    }
+
+    // ==========================================
+    // BASE DE DATOS & EXPLORADOR SQL
+    // ==========================================
+    function switchDbTab(tab) {
+      state.db.activeTab = tab;
+      const tablesContent = document.getElementById('db-tab-tables-content');
+      const sqlContent = document.getElementById('db-tab-sql-content');
+      const engineContent = document.getElementById('db-tab-engine-content');
+      const btnTables = document.getElementById('btn-db-tab-tables');
+      const btnSql = document.getElementById('btn-db-tab-sql');
+      const btnEngine = document.getElementById('btn-db-tab-engine');
+
+      if (tablesContent) tablesContent.style.display = tab === 'tables' ? 'grid' : 'none';
+      if (sqlContent) sqlContent.style.display = tab === 'sql' ? 'flex' : 'none';
+      if (engineContent) engineContent.style.display = tab === 'engine' ? 'block' : 'none';
+
+      if (btnTables) btnTables.className = tab === 'tables' ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm';
+      if (btnSql) btnSql.className = tab === 'sql' ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm';
+      if (btnEngine) btnEngine.className = tab === 'engine' ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm';
+    }
+
+    async function loadDatabaseViewData() {
+      await loadDatabaseStats();
+      if (state.db.activeTable) {
+        await selectDatabaseTable(state.db.activeTable, state.db.page);
+      } else if (state.db.tables && state.db.tables.length > 0) {
+        await selectDatabaseTable(state.db.tables[0].name, 1);
+      }
+    }
+
+    async function loadDatabaseStats() {
+      try {
+        const res = await apiRequest('/api/admin/database/stats');
+        if (!res || !res.success) return;
+
+        state.db.stats = res;
+        state.db.tables = res.tables || [];
+
+        // Update Top Metrics
+        const elStatus = document.getElementById('db-metric-status');
+        const elEngine = document.getElementById('db-metric-engine');
+        const elLatency = document.getElementById('db-metric-latency');
+        const elSize = document.getElementById('db-metric-size');
+        const elRows = document.getElementById('db-metric-rows');
+        const elTablesCount = document.getElementById('db-metric-tables-count');
+        const elInfoPath = document.getElementById('db-info-path');
+
+        if (elStatus) elStatus.innerHTML = res.status === 'healthy' ? '🟢 En Línea' : '🔴 Error';
+        if (elEngine) elEngine.innerText = res.isLocal ? 'SQLite Local (VPS KVM 1)' : 'Turso Cloud (Nube)';
+        if (elLatency) elLatency.innerText = res.latencyMs + ' ms';
+        if (elSize) elSize.innerText = res.fileSizeFormatted || (res.isLocal ? '0.00 MB' : 'Nube');
+        if (elRows) elRows.innerText = (res.totalRows || 0).toLocaleString();
+        if (elTablesCount) elTablesCount.innerText = (res.tablesCount || 0) + ' tablas en estructura';
+        if (elInfoPath) elInfoPath.innerText = res.filePath || res.url;
+
+        // Render Tables Sidebar List
+        renderDbTablesList(res.tables || []);
+
+        // Radio engine state
+        const radioLocal = document.getElementById('radio-db-mode-local');
+        const radioTurso = document.getElementById('radio-db-mode-turso');
+        if (radioLocal && radioTurso) {
+          if (res.isLocal) {
+            radioLocal.checked = true;
+          } else {
+            radioTurso.checked = true;
+          }
+          handleDbEngineRadioChange();
+        }
+      } catch (err) {
+        showToast('Error', 'No se pudieron cargar estadísticas de base de datos.', 'error');
+      }
+    }
+
+    function renderDbTablesList(tables) {
+      const container = document.getElementById('db-tables-list-container');
+      const badge = document.getElementById('db-tables-badge-total');
+      if (badge) badge.innerText = tables.length;
+      if (!container) return;
+
+      if (!tables || tables.length === 0) {
+        container.innerHTML = '<div style="padding: 12px; text-align: center; color: var(--text-dim); font-size: 12px;">Sin tablas</div>';
+        return;
+      }
+
+      container.innerHTML = tables.map(t => {
+        const isActive = state.db.activeTable === t.name;
+        return \`
+          <button class="db-table-btn \${isActive ? 'active' : ''}" onclick="selectDatabaseTable('\${t.name}', 1)">
+            <span style="display: flex; align-items: center; gap: 8px;">
+              <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h7"></path></svg>
+              <span>\${escapeHtml(t.name)}</span>
+            </span>
+            <span class="db-table-badge">\${(t.rowCount || 0).toLocaleString()}</span>
+          </button>
+        \`;
+      }).join('');
+    }
+
+    let dbTableSearchDebounce = null;
+    function handleDbTableSearch(val) {
+      state.db.search = val || '';
+      clearTimeout(dbTableSearchDebounce);
+      dbTableSearchDebounce = setTimeout(() => {
+        if (state.db.activeTable) {
+          selectDatabaseTable(state.db.activeTable, 1);
+        }
+      }, 300);
+    }
+
+    function changeDbTableLimit(val) {
+      state.db.limit = parseInt(val, 10) || 50;
+      if (state.db.activeTable) {
+        selectDatabaseTable(state.db.activeTable, 1);
+      }
+    }
+
+    function reloadCurrentDbTable() {
+      if (state.db.activeTable) {
+        selectDatabaseTable(state.db.activeTable, state.db.page);
+        showToast('Tabla Actualizada', 'Registros sincronizados.', 'info', 1500);
+      }
+    }
+
+    async function selectDatabaseTable(tableName, page = 1) {
+      state.db.activeTable = tableName;
+      state.db.page = page;
+
+      // Update active state in sidebar
+      document.querySelectorAll('.db-table-btn').forEach(btn => {
+        const text = btn.querySelector('span span')?.innerText;
+        if (text === tableName) {
+          btn.classList.add('active');
+        } else {
+          btn.classList.remove('active');
+        }
+      });
+
+      const titleEl = document.getElementById('db-selected-table-title');
+      const badgeEl = document.getElementById('db-selected-table-badge');
+      if (titleEl) titleEl.innerText = tableName;
+
+      const tbody = document.getElementById('db-data-table-body');
+      const thead = document.getElementById('db-data-table-head');
+      if (tbody) tbody.innerHTML = '<tr><td colspan="10" style="padding: 24px; text-align: center; color: var(--text-muted);">Cargando registros...</td></tr>';
+
+      try {
+        const queryParams = new URLSearchParams({
+          page: String(page),
+          limit: String(state.db.limit),
+        });
+        if (state.db.search) queryParams.set('search', state.db.search);
+
+        const res = await apiRequest(\`/api/admin/database/tables/\${encodeURIComponent(tableName)}?\${queryParams.toString()}\`);
+        if (!res || !res.success) {
+          if (tbody) tbody.innerHTML = \`<tr><td colspan="10" style="padding: 24px; text-align: center; color: var(--accent-rose);">Error: \${escapeHtml(res?.error || 'No se pudo leer la tabla')}</td></tr>\`;
+          return;
+        }
+
+        state.db.tableData = res;
+
+        if (badgeEl) {
+          badgeEl.style.display = 'inline-block';
+          badgeEl.innerText = \`\${(res.totalRows || 0).toLocaleString()} registros\`;
+        }
+
+        renderDbTableData(res);
+      } catch (err) {
+        if (tbody) tbody.innerHTML = '<tr><td colspan="10" style="padding: 24px; text-align: center; color: var(--accent-rose);">Error de conexión</td></tr>';
+      }
+    }
+
+    function renderDbTableData(data) {
+      const thead = document.getElementById('db-data-table-head');
+      const tbody = document.getElementById('db-data-table-body');
+      const paginationInfo = document.getElementById('db-table-pagination-info');
+      const pageLabel = document.getElementById('db-table-page-label');
+      const btnPrev = document.getElementById('btn-db-page-prev');
+      const btnNext = document.getElementById('btn-db-page-next');
+
+      if (!data || !data.columns) return;
+
+      // Render Table Columns
+      thead.innerHTML = '<tr>' + data.columns.map(c => \`
+        <th>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span>\${escapeHtml(c.name)}</span>
+            \${c.pk ? '<span style="font-size: 9px; padding: 1px 4px; background: rgba(245,158,11,0.2); color: #fbbf24; border-radius: 3px;">PK</span>' : ''}
+            <span style="font-size: 10px; color: var(--text-dim); font-weight: normal;">\${escapeHtml(c.type)}</span>
+          </div>
+        </th>
+      \`).join('') + '</tr>';
+
+      // Render Rows
+      if (!data.rows || data.rows.length === 0) {
+        tbody.innerHTML = \`<tr><td colspan="\${data.columns.length}" style="padding: 28px; text-align: center; color: var(--text-dim);">No hay registros que coincidan con la búsqueda.</td></tr>\`;
+      } else {
+        tbody.innerHTML = data.rows.map(row => {
+          return '<tr>' + data.columns.map(c => {
+            const rawVal = row[c.name];
+            let displayVal = rawVal;
+
+            if (rawVal === null || rawVal === undefined) {
+              displayVal = '<span style="color: var(--text-dim); font-style: italic;">NULL</span>';
+            } else if (typeof rawVal === 'string' && (rawVal.startsWith('{') || rawVal.startsWith('[')) && rawVal.length > 30) {
+              // JSON detector
+              const safeJson = escapeHtml(rawVal);
+              displayVal = \`<button class="db-json-btn" onclick="openJsonViewerModal('\${escapeHtml(c.name)}', this.getAttribute('data-json'))" data-json="\${safeJson}">📦 Ver JSON (\${rawVal.length} bytes)</button>\`;
+            } else if (typeof rawVal === 'boolean') {
+              displayVal = rawVal ? '<span style="color:#34d399;">true</span>' : '<span style="color:#f87171;">false</span>';
+            } else {
+              displayVal = escapeHtml(String(rawVal));
+            }
+
+            return \`<td title="\${escapeHtml(String(rawVal ?? ''))}">\${displayVal}</td>\`;
+          }).join('') + '</tr>';
+        }).join('');
+      }
+
+      // Pagination Controls
+      const startCount = (data.page - 1) * data.limit + (data.rows.length > 0 ? 1 : 0);
+      const endCount = (data.page - 1) * data.limit + data.rows.length;
+      if (paginationInfo) paginationInfo.innerText = \`Mostrando \${startCount} - \${endCount} de \${(data.totalRows || 0).toLocaleString()} registros\`;
+      if (pageLabel) pageLabel.innerText = \`Pág. \${data.page} de \${data.totalPages || 1}\`;
+      if (btnPrev) btnPrev.disabled = data.page <= 1;
+      if (btnNext) btnNext.disabled = data.page >= data.totalPages;
+    }
+
+    function changeDbTablePage(delta) {
+      if (!state.db.tableData) return;
+      const targetPage = state.db.page + delta;
+      if (targetPage >= 1 && targetPage <= (state.db.tableData.totalPages || 1)) {
+        selectDatabaseTable(state.db.activeTable, targetPage);
+      }
+    }
+
+    // ==========================================
+    // LIVE SQL CONSOLE RUNNER
+    // ==========================================
+    function handleSqlEditorKeyDown(e) {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        runDatabaseSqlQuery();
+      }
+    }
+
+    function insertPredefinedSql(sql) {
+      const textarea = document.getElementById('db-sql-query-input');
+      if (textarea) {
+        textarea.value = sql;
+        textarea.focus();
+      }
+    }
+
+    function clearDatabaseSqlEditor() {
+      const textarea = document.getElementById('db-sql-query-input');
+      if (textarea) textarea.value = '';
+      const statusEl = document.getElementById('db-sql-result-status');
+      if (statusEl) statusEl.style.display = 'none';
+      const container = document.getElementById('db-sql-result-container');
+      if (container) container.style.display = 'none';
+    }
+
+    async function runDatabaseSqlQuery() {
+      const textarea = document.getElementById('db-sql-query-input');
+      const statusEl = document.getElementById('db-sql-result-status');
+      const sql = textarea?.value?.trim();
+
+      if (!sql) {
+        showToast('Consulta Vacía', 'Por favor escribe una consulta SQL.', 'warning');
+        return;
+      }
+
+      if (statusEl) {
+        statusEl.style.display = 'block';
+        statusEl.innerHTML = '⏳ Ejecutando consulta SQL en el servidor...';
+      }
+
+      try {
+        const res = await apiRequest('/api/admin/database/query', {
+          method: 'POST',
+          body: JSON.stringify({ sql }),
+        });
+
+        if (!res || !res.success) {
+          if (statusEl) {
+            statusEl.innerHTML = \`<span style="color: var(--accent-rose);">❌ Error SQL: \${escapeHtml(res?.error || 'Fallo en la ejecución')}</span>\`;
+          }
+          showToast('Error SQL', res?.error || 'Consulta fallida', 'error');
+          return;
+        }
+
+        state.db.lastSqlResult = res;
+
+        if (statusEl) {
+          statusEl.innerHTML = \`<span style="color: #34d399;">✔️ Consulta completada con éxito</span> · ⏱️ \${res.durationMs} ms · \${(res.rows || []).length} filas devueltas · \${res.rowsAffected} filas afectadas\`;
+        }
+
+        renderSqlQueryResults(res);
+        showToast('Consulta Exitosa', \`Completada en \${res.durationMs} ms\`, 'success', 2000);
+      } catch (err) {
+        if (statusEl) {
+          statusEl.innerHTML = \`<span style="color: var(--accent-rose);">❌ Error de conexión con el servidor</span>\`;
+        }
+      }
+    }
+
+    function renderSqlQueryResults(data) {
+      const container = document.getElementById('db-sql-result-container');
+      const thead = document.getElementById('db-sql-result-head');
+      const tbody = document.getElementById('db-sql-result-body');
+
+      if (!container || !thead || !tbody) return;
+      container.style.display = 'block';
+
+      const columns = data.columns || [];
+      const rows = data.rows || [];
+
+      if (columns.length === 0) {
+        thead.innerHTML = '<tr><th>Resultado</th></tr>';
+        tbody.innerHTML = \`<tr><td style="padding: 16px; color: #34d399;">Comando ejecutado correctamente. \${data.rowsAffected} fila(s) afectada(s).</td></tr>\`;
+        return;
+      }
+
+      thead.innerHTML = '<tr>' + columns.map(c => \`<th>\${escapeHtml(c)}</th>\`).join('') + '</tr>';
+
+      if (rows.length === 0) {
+        tbody.innerHTML = \`<tr><td colspan="\${columns.length}" style="padding: 20px; text-align: center; color: var(--text-dim);">Consulta sin filas devueltas.</td></tr>\`;
+      } else {
+        tbody.innerHTML = rows.map(r => {
+          return '<tr>' + columns.map(c => {
+            const val = r[c];
+            if (val === null || val === undefined) return '<td style="color: var(--text-dim); font-style: italic;">NULL</td>';
+            if (typeof val === 'string' && (val.startsWith('{') || val.startsWith('[')) && val.length > 30) {
+              return \`<td><button class="db-json-btn" onclick="openJsonViewerModal('\${escapeHtml(c)}', this.getAttribute('data-json'))" data-json="\${escapeHtml(val)}">📦 JSON (\${val.length}B)</button></td>\`;
+            }
+            return \`<td title="\${escapeHtml(String(val))}">\${escapeHtml(String(val))}</td>\`;
+          }).join('') + '</tr>';
+        }).join('');
+      }
+    }
+
+    function exportSqlResultsToCsv() {
+      if (!state.db.lastSqlResult || !state.db.lastSqlResult.rows) {
+        showToast('Sin Datos', 'Ejecuta una consulta primero para exportar resultados.', 'warning');
+        return;
+      }
+      const cols = state.db.lastSqlResult.columns || [];
+      const rows = state.db.lastSqlResult.rows || [];
+
+      let csv = cols.join(',') + '\\n';
+      rows.forEach(r => {
+        const line = cols.map(c => {
+          let v = r[c];
+          if (v === null || v === undefined) return '""';
+          let str = String(v).replace(/"/g, '""');
+          return '"' + str + '"';
+        }).join(',');
+        csv += line + '\\n';
+      });
+
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = \`consulta_sql_\${new Date().toISOString().slice(0, 10)}.csv\`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast('Exportado', 'Archivo CSV descargado.', 'info', 2000);
+    }
+
+    // ==========================================
+    // MANTENIMIENTO, RESPALDOS & MOTOR
+    // ==========================================
+    async function optimizeDatabaseAction() {
+      showToast('Optimizando...', 'Ejecutando VACUUM y desfragmentación de base de datos...', 'info', 3000);
+      try {
+        const res = await apiRequest('/api/admin/database/optimize', { method: 'POST' });
+        if (res && res.success) {
+          showToast('Base de Datos Optimizada', \`Compactación finalizada en \${res.durationMs} ms.\`, 'success', 3000);
+          loadDatabaseStats();
+        } else {
+          showToast('Aviso', res?.message || 'No se pudo optimizar.', 'warning');
+        }
+      } catch (err) {
+        showToast('Error', 'Fallo al optimizar la base de datos.', 'error');
+      }
+    }
+
+    function downloadDatabaseBackup() {
+      showToast('Generando Copia...', 'Iniciando descarga de respaldo SQLite...', 'info', 2500);
+      const token = state.token;
+      
+      fetch('/api/admin/database/backup', {
+        headers: { 'Authorization': \`Bearer \${token}\` }
+      })
+      .then(async (response) => {
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.error || 'No se pudo generar la copia de seguridad.');
+        }
+        return response.blob();
+      })
+      .then((blob) => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = \`chatbot_backup_\${new Date().toISOString().slice(0, 10)}.db\`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        a.remove();
+        showToast('Descarga Completa', 'Respaldo descargado exitosamente.', 'success', 3000);
+      })
+      .catch((err) => {
+        showToast('Error', err.message || 'No se pudo descargar el respaldo.', 'error');
+      });
+    }
+
+    function handleDbEngineRadioChange() {
+      const isTurso = document.getElementById('radio-db-mode-turso')?.checked;
+      const fields = document.getElementById('db-turso-credentials-fields');
+      if (fields) {
+        fields.style.display = isTurso ? 'flex' : 'none';
+      }
+    }
+
+    async function saveDatabaseEngineSettings() {
+      const isTurso = document.getElementById('radio-db-mode-turso')?.checked;
+      const mode = isTurso ? 'turso' : 'local';
+      const tursoUrl = document.getElementById('db-config-turso-url')?.value?.trim();
+      const tursoToken = document.getElementById('db-config-turso-token')?.value?.trim();
+
+      if (isTurso && !tursoUrl) {
+        showToast('Campo Requerido', 'Ingresa la URL de la base de datos de Turso.', 'warning');
+        return;
+      }
+
+      showConfirmDialog(
+        'Cambiar Motor de Base de Datos',
+        \`¿Confirmas que deseas cambiar la base de datos activa a \${isTurso ? 'Turso Cloud (Nube)' : 'Servidor Local SQLite (VPS)'}? El sistema reiniciará su conexión al instante.\`,
+        async () => {
+          try {
+            const res = await apiRequest('/api/admin/database/switch-mode', {
+              method: 'POST',
+              body: JSON.stringify({ mode, tursoUrl, tursoToken }),
+            });
+
+            if (res && res.success) {
+              showToast('Motor Actualizado', res.message, 'success', 4000);
+              loadDatabaseViewData();
+            } else {
+              showToast('Error', res?.error || 'No se pudo cambiar el motor.', 'error');
+            }
+          } catch (err) {
+            showToast('Error', 'Fallo al comunicar cambio de motor.', 'error');
+          }
+        }
+      );
+    }
+
+    async function testDatabaseConnectionHealth() {
+      showToast('Probando...', 'Verificando comunicación con la base de datos...', 'info', 2000);
+      try {
+        const res = await apiRequest('/api/admin/database/stats');
+        if (res && res.success && res.status === 'healthy') {
+          showToast('Conexión Exitosa', \`Base de datos respondiendo correctamente en \${res.latencyMs} ms (\${res.tablesCount} tablas detectadas).\`, 'success', 3500);
+        } else {
+          showToast('Falla de Conexión', res?.error || 'No responde la base de datos.', 'error');
+        }
+      } catch (err) {
+        showToast('Error', 'No se pudo contactar a la base de datos.', 'error');
+      }
+    }
+
+    function openJsonViewerModal(title, jsonStr) {
+      let formatted = jsonStr;
+      try {
+        const parsed = JSON.parse(jsonStr);
+        formatted = JSON.stringify(parsed, null, 2);
+      } catch (_) {}
+
+      const content = \`
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 12px; color: var(--text-dim);">Campo: <strong>\${escapeHtml(title)}</strong></span>
+            <button class="btn btn-secondary btn-xs" onclick="navigator.clipboard.writeText(this.getAttribute('data-copy')); showToast('Copiado', 'JSON copiado al portapapeles', 'info', 1500);" data-copy="\${escapeHtml(formatted)}">📋 Copiar JSON</button>
+          </div>
+          <pre style="background: #060911; border: 1px solid var(--card-border); border-radius: var(--radius-sm); padding: 14px; font-family: var(--font-mono); font-size: 12px; color: #38bdf8; max-height: 420px; overflow: auto; white-space: pre-wrap; word-break: break-word;">\${escapeHtml(formatted)}</pre>
+        </div>
+      \`;
+
+      openModal('Visor de Datos JSON', content, null, 'Cerrar');
     }
 
     // Utilities
