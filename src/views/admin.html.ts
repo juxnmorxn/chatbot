@@ -6974,6 +6974,151 @@ export function getAdminDashboardHtml(): string {
       }
     }
 
+    function renderClientsTable(clients) {
+      const tbody = document.getElementById('table-clients-body');
+      if (!tbody) return;
+
+      if (!clients || clients.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; color: var(--text-dim); padding: 24px;">No se encontraron clientes con los filtros aplicados.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = clients.map(c => {
+        const isActivo = String(c.estado || '').toLowerCase().includes('act');
+        const estadoBadge = isActivo
+          ? '<span class="badge badge-success">Activo</span>'
+          : '<span class="badge badge-danger">Suspendido</span>';
+
+        const facturasBadge = String(c.estado_facturas || '').toLowerCase().includes('pagad')
+          ? '<span class="badge badge-info" style="font-size: 10px;">Pagadas</span>'
+          : '<span class="badge badge-warning" style="font-size: 10px;">Pendientes</span>';
+
+        // Render Teléfonos (Principal + Adicionales/Familiares)
+        const primaryPhone = c.telefono_principal ? String(c.telefono_principal).replace(/\\D/g, '') : '';
+        const extraPhones = Array.isArray(c.telefonos_adicionales) ? c.telefonos_adicionales : [];
+
+        let phonesHtml = '';
+        if (primaryPhone) {
+          phonesHtml += \`
+            <div style="display: flex; align-items: center; gap: 4px; margin-bottom: 4px;">
+              <span class="badge badge-success" style="font-family: var(--font-mono); font-size: 11px; padding: 3px 8px; cursor: pointer;" title="Teléfono Principal de WhatsApp" onclick="selectChat('\${primaryPhone}'); navigateTo('live-chat');">
+                📱 \${primaryPhone}
+              </span>
+              <a href="https://wa.me/52\${primaryPhone}" target="_blank" class="btn btn-secondary btn-sm" style="padding: 2px 6px; font-size: 10px;" title="Abrir en WhatsApp">
+                💬
+              </a>
+            </div>
+          \`;
+        }
+
+        if (extraPhones.length > 0) {
+          phonesHtml += \`
+            <div style="display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px;">
+              \${extraPhones.map(ep => \`
+                <span class="badge badge-purple" style="font-family: var(--font-mono); font-size: 10px; padding: 2px 6px; cursor: pointer;" title="Número adicional / Familiar" onclick="copyToClipboard('\${ep}')">
+                  📞 \${ep}
+                </span>
+              \`).join('')}
+            </div>
+          \`;
+        }
+
+        if (!primaryPhone && extraPhones.length === 0) {
+          phonesHtml = '<span style="color: var(--text-dim); font-size: 11px;">Sin teléfono</span>';
+        }
+
+        phonesHtml += \`
+          <button class="btn btn-secondary btn-sm" style="padding: 2px 6px; font-size: 10px; margin-top: 2px;" onclick='openClientPhonesModal(\${JSON.stringify(c).replace(/'/g, "&apos;")})'>
+            ✏️ Teléfonos
+          </button>
+        \`;
+
+        // Render Ubicación & GPS
+        let gpsHtml = '';
+        const coords = c.coordenadas_gps;
+        const mapsUrl = c.google_maps_url || (coords ? \`https://www.google.com/maps?q=\${coords}\` : '');
+
+        if (coords || mapsUrl) {
+          gpsHtml = \`
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <span class="badge badge-success" style="font-family: var(--font-mono); font-size: 11px; padding: 2px 6px;">
+                  📍 \${coords || 'GPS'}
+                </span>
+                <a href="\${mapsUrl || '#'}" target="_blank" class="btn btn-primary btn-sm" style="padding: 3px 8px; font-size: 10.5px; text-decoration: none;" title="Abrir en Google Maps">
+                  🗺️ Maps
+                </a>
+              </div>
+              \${c.direccion ? \`<span style="font-size: 11px; color: var(--text-dim); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="\${escapeHtml(c.direccion)}">🏠 \${escapeHtml(c.direccion)}</span>\` : ''}
+              <button class="btn btn-secondary btn-sm" style="padding: 2px 6px; font-size: 10px; align-self: flex-start;" onclick='openClientLocationModal(\${JSON.stringify(c).replace(/'/g, "&apos;")})'>
+                ✏️ Editar GPS
+              </button>
+            </div>
+          \`;
+        } else {
+          gpsHtml = \`
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+              <span class="badge badge-warning" style="font-size: 10px; padding: 2px 6px;">
+                ⚠️ Sin ubicación GPS
+              </span>
+              \${c.direccion ? \`<span style="font-size: 11px; color: var(--text-dim); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="\${escapeHtml(c.direccion)}">\${escapeHtml(c.direccion)}</span>\` : ''}
+              <button class="btn btn-secondary btn-sm" style="padding: 2px 6px; font-size: 10.5px; align-self: flex-start;" onclick='openClientLocationModal(\${JSON.stringify(c).replace(/'/g, "&apos;")})'>
+                📍 Asignar GPS
+              </button>
+            </div>
+          \`;
+        }
+
+        return \`
+          <tr>
+            <td>
+              <div style="font-weight: 700; font-size: 13px; color: #fff;">\${escapeHtml(c.nombre)}</div>
+              \${c.comentarios ? \`<div style="font-size: 10.5px; color: var(--text-dim); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">\${escapeHtml(c.comentarios)}</div>\` : ''}
+            </td>
+            <td>
+              <div style="font-family: var(--font-mono); color: var(--primary); font-weight: 700; font-size: 12px;">#\${c.id_servicio || '--'}</div>
+              <div style="font-size: 11px; color: var(--text-muted); max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">\${escapeHtml(c.servicio || '')}</div>
+            </td>
+            <td>
+              <div style="display: flex; flex-direction: column; gap: 2px; font-size: 11.5px;">
+                <div><span style="color: var(--text-dim);">IP:</span> <span style="font-family: var(--font-mono); font-weight: 600; color: #38bdf8;">\${c.ip || '--'}</span></div>
+                <div><span style="color: var(--text-dim);">SN:</span> <span style="font-family: var(--font-mono); color: var(--accent-cyan); font-weight: 600;">\${c.sn_onu || '--'}</span></div>
+              </div>
+            </td>
+            <td>
+              <div style="display: flex; flex-direction: column; gap: 4px;">
+                \${estadoBadge}
+                \${facturasBadge}
+              </div>
+            </td>
+            <td>
+              <span class="badge badge-purple" style="font-size: 11px; font-weight: 600; white-space: nowrap;">
+                \${escapeHtml(c.plan_internet || '--')}
+              </span>
+            </td>
+            <td>
+              <div style="font-size: 11.5px; font-weight: 600; color: var(--text-main);">\${escapeHtml(c.router || '--')}</div>
+              \${c.zona ? \`<div style="font-size: 10.5px; color: var(--text-dim);">\${escapeHtml(c.zona)}</div>\` : ''}
+            </td>
+            <td>\${phonesHtml}</td>
+            <td>\${gpsHtml}</td>
+            <td style="text-align: right;">
+              <div style="display: flex; gap: 6px; justify-content: flex-end;">
+                <button class="btn btn-secondary btn-sm" onclick="openClientDetailModal(\${c.id_servicio})" title="Ver Expediente Completo">
+                  👁️ Ficha
+                </button>
+                \${primaryPhone ? \`
+                  <button class="btn btn-primary btn-sm" onclick="selectChat('\${primaryPhone}'); navigateTo('live-chat');" title="Abrir Chat WhatsApp">
+                    💬 Chat
+                  </button>
+                \` : ''}
+              </div>
+            </td>
+          </tr>
+        \`;
+      }).join('');
+    }
+
     function populateClientsRouterFilter() {
       const selRouter = document.getElementById('filter-client-router');
       if (!selRouter) return;
