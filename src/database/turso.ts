@@ -109,13 +109,24 @@ export async function getDatabaseStatsInfo(): Promise<any> {
     }
   }
 
+  let fileSizeFormatted = '0.00 MB';
+  if (fileSizeBytes > 0) {
+    if (fileSizeBytes < 1024 * 1024) {
+      fileSizeFormatted = (fileSizeBytes / 1024).toFixed(1) + ' KB';
+    } else {
+      fileSizeFormatted = (fileSizeBytes / (1024 * 1024)).toFixed(2) + ' MB';
+    }
+  } else if (!isLocal) {
+    fileSizeFormatted = 'Nube Externa';
+  }
+
   return {
     mode: isLocal ? 'local' : 'turso',
     isLocal,
     url: isLocal ? `file:${filePath}` : rawUrl.replace(/(:\/\/[^@]+@).*/, '$1***'),
     filePath: isLocal ? filePath : null,
     fileSizeBytes,
-    fileSizeFormatted: (fileSizeBytes / (1024 * 1024)).toFixed(2) + ' MB',
+    fileSizeFormatted,
     latencyMs,
     tablesCount: tables.length,
     totalRows,

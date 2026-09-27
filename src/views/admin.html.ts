@@ -3617,110 +3617,103 @@ export function getAdminDashboardHtml(): string {
 
         <!-- TAB 3: CONFIGURACIÓN DE MOTOR & MIGRACIÓN -->
         <div id="db-tab-engine-content" style="display: none;">
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 20px;">
-            <!-- Engine Selection Card -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 20px;">
+            
+            <!-- Card 1: Estado del Motor Activo & Herramientas -->
             <div class="glass-card">
-              <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 10px;">⚙️ Selección de Motor de Base de Datos</h3>
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                <h3 style="font-size: 15px; font-weight: 700;">🟢 Estado del Motor & Servidor</h3>
+                <span id="db-engine-active-badge" class="badge badge-success" style="font-size: 11px;">SQLite Local VPS</span>
+              </div>
+              
               <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">
-                Configura si el sistema trabaja con la base de datos local del VPS o con el servicio en la nube de Turso.
+                Información técnica del almacenamiento de la base de datos en tu servidor Hostinger.
               </p>
 
-              <div style="display: flex; flex-direction: column; gap: 14px; margin-bottom: 20px;">
-                <label style="display: flex; align-items: flex-start; gap: 12px; padding: 12px; border-radius: var(--radius-sm); background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.3); cursor: pointer;">
-                  <input type="radio" name="db_engine_mode" value="local" id="radio-db-mode-local" style="margin-top: 3px;" checked onchange="handleDbEngineRadioChange()">
-                  <div>
-                    <div style="font-size: 13.5px; font-weight: 700; color: #34d399;">🟢 Servidor Local SQLite (VPS KVM 1 - Recomendado)</div>
-                    <div style="font-size: 12px; color: var(--text-muted); margin-top: 3px;">
-                      Almacenamiento directo en tu servidor Hostinger. <strong>Sin límites de consultas, 0ms de latencia</strong> y sin costos mensuales.
-                    </div>
-                  </div>
-                </label>
-
-                <label style="display: flex; align-items: flex-start; gap: 12px; padding: 12px; border-radius: var(--radius-sm); background: rgba(255,255,255,0.02); border: 1px solid var(--card-border); cursor: pointer;">
-                  <input type="radio" name="db_engine_mode" value="turso" id="radio-db-mode-turso" style="margin-top: 3px;" onchange="handleDbEngineRadioChange()">
-                  <div>
-                    <div style="font-size: 13.5px; font-weight: 700; color: #818cf8;">☁️ Turso Cloud (Nube Externa)</div>
-                    <div style="font-size: 12px; color: var(--text-muted); margin-top: 3px;">
-                      Base de datos remota en infraestructura Turso / AWS. Sujeto a cuotas mensuales de lectura/escritura (10M de filas en plan gratuito).
-                    </div>
-                  </div>
-                </label>
-              </div>
-
-              <!-- Turso Fields (Hidden if local) -->
-              <div id="db-turso-credentials-fields" style="display: none; flex-direction: column; gap: 12px; margin-bottom: 20px; padding: 14px; background: rgba(0,0,0,0.25); border-radius: var(--radius-sm); border: 1px solid var(--card-border);">
-                <div>
-                  <label class="form-label">Database URL (Turso / libSQL)</label>
-                  <input type="text" id="db-config-turso-url" class="form-input" placeholder="libsql://chatbot-jednet.aws-us-east-1.turso.io">
+              <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; font-size: 12.5px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: rgba(255,255,255,0.02); border: 1px solid var(--card-border); border-radius: var(--radius-sm);">
+                  <span style="color: var(--text-dim);">📁 Archivo en VPS:</span>
+                  <span id="db-info-path" style="font-family: var(--font-mono); color: #38bdf8; font-weight: 600;">/app/data/chatbot.db</span>
                 </div>
-                <div>
-                  <label class="form-label">Auth Token (Turso)</label>
-                  <input type="password" id="db-config-turso-token" class="form-input" placeholder="eyJhbGciOiJ...">
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: rgba(255,255,255,0.02); border: 1px solid var(--card-border); border-radius: var(--radius-sm);">
+                  <span style="color: var(--text-dim);">💽 Espacio Disponible:</span>
+                  <span style="font-weight: 600; color: #34d399;">~45 GB (89% Libre)</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: rgba(255,255,255,0.02); border: 1px solid var(--card-border); border-radius: var(--radius-sm);">
+                  <span style="color: var(--text-dim);">⚡ Formato / Motor:</span>
+                  <span style="font-family: var(--font-mono); color: var(--text-main);">SQLite 3 (libSQL nativo)</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: rgba(255,255,255,0.02); border: 1px solid var(--card-border); border-radius: var(--radius-sm);">
+                  <span style="color: var(--text-dim);">🛡️ Límite de Consultas:</span>
+                  <span style="font-weight: 700; color: #34d399;">Ilimitado (Sin cuotas)</span>
                 </div>
               </div>
 
               <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-                <button class="btn btn-primary btn-sm" onclick="saveDatabaseEngineSettings()">
-                  <span>💾 Aplicar y Cambiar Motor</span>
-                </button>
                 <button class="btn btn-secondary btn-sm" onclick="testDatabaseConnectionHealth()">
                   <span>🧪 Probar Conexión</span>
                 </button>
-              </div>
-            </div>
-
-            <!-- Maintenance & Details Card -->
-            <div class="glass-card">
-              <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 10px;">💾 Información & Respaldos</h3>
-              <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">
-                Detalles del archivo en disco y herramientas de respaldo rápido.
-              </p>
-
-              <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; font-size: 12.5px;">
-                <div style="display: flex; justify-content: space-between; padding: 8px 12px; background: rgba(255,255,255,0.02); border-radius: var(--radius-sm);">
-                  <span style="color: var(--text-dim);">Ruta en VPS:</span>
-                  <span id="db-info-path" style="font-family: var(--font-mono); color: #38bdf8;">/app/data/chatbot.db</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; padding: 8px 12px; background: rgba(255,255,255,0.02); border-radius: var(--radius-sm);">
-                  <span style="color: var(--text-dim);">Espacio Libre en VPS:</span>
-                  <span style="font-weight: 600; color: #34d399;">~45 GB (89% Libre)</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; padding: 8px 12px; background: rgba(255,255,255,0.02); border-radius: var(--radius-sm);">
-                  <span style="color: var(--text-dim);">Formato de Datos:</span>
-                  <span style="font-family: var(--font-mono);">SQLite 3 / libSQL Compatible</span>
-                </div>
-              </div>
-
-              <div style="border-top: 1px solid var(--card-border); padding-top: 16px;">
-                <div style="font-size: 13px; font-weight: 700; margin-bottom: 8px;">📥 Descargar Respaldo Completo</div>
-                <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;">
-                  Descarga una copia exacta del archivo de la base de datos en formato SQLite para abrirla en SQLiteStudio, DBeaver o guardarla en tu computadora.
-                </p>
                 <button class="btn btn-secondary btn-sm" onclick="downloadDatabaseBackup()">
                   <span>📥 Descargar Copia (.db)</span>
+                </button>
+                <button class="btn btn-secondary btn-sm" onclick="optimizeDatabaseAction()">
+                  <span>🧹 Optimizar</span>
                 </button>
               </div>
             </div>
 
-            <!-- Migration Card (1-Click) -->
-            <div class="glass-card" style="border-color: rgba(99,102,241,0.4); background: linear-gradient(135deg, rgba(17,24,39,0.9), rgba(99,102,241,0.08)); grid-column: 1 / -1;">
-              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
-                <h3 style="font-size: 15px; font-weight: 700; color: #fff;">🚀 Migración Automática de Turso a Local (1-Clic)</h3>
-                <span class="badge badge-info" style="font-size: 10px;">Sin pérdida de datos</span>
+            <!-- Card 2: Migración & Sincronización con Turso -->
+            <div class="glass-card" style="border-color: rgba(99,102,241,0.3); display: flex; flex-direction: column; justify-content: space-between;">
+              <div>
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                  <h3 style="font-size: 15px; font-weight: 700;">🚀 Migración & Conexión Externa</h3>
+                  <span class="badge badge-info" style="font-size: 10px;">1-Clic</span>
+                </div>
+
+                <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">
+                  Herramienta para clonar datos desde Turso Cloud hacia SQLite Local o conmutar entre motores.
+                </p>
+
+                <div id="db-migration-status-box" style="padding: 12px 14px; background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.25); border-radius: var(--radius-sm); margin-bottom: 16px; font-size: 12px;">
+                  <div style="font-weight: 700; color: #34d399; margin-bottom: 4px;">✅ Base de datos local activa</div>
+                  <div style="color: var(--text-muted);">
+                    Tu servidor está ejecutando las lecturas y escrituras de forma local con 0ms de latencia.
+                  </div>
+                </div>
+
+                <!-- Botón de migración 1-clic -->
+                <button class="btn btn-primary btn-sm" id="btn-auto-migrate-turso" onclick="executeAutoMigrationFromTurso()" style="width: 100%; margin-bottom: 16px; justify-content: center;">
+                  <span>🚀 Re-clonar / Importar Todo de Turso a Local</span>
+                </button>
+
+                <!-- Acordeón / toggle para cambiar a Turso si se desea -->
+                <div style="border-top: 1px solid var(--card-border); padding-top: 12px;">
+                  <button type="button" class="btn btn-secondary btn-xs" onclick="toggleTursoConfigCollapse()" style="font-size: 11px;">
+                    ⚙️ Cambiar a Turso Cloud (Avanzado)
+                  </button>
+
+                  <div id="db-turso-credentials-fields" style="display: none; flex-direction: column; gap: 10px; margin-top: 12px; padding: 12px; background: rgba(0,0,0,0.25); border-radius: var(--radius-sm); border: 1px solid var(--card-border);">
+                    <div>
+                      <label class="form-label">URL de Turso</label>
+                      <input type="text" id="db-config-turso-url" class="form-input" placeholder="libsql://chatbot-jednet.aws-us-east-1.turso.io">
+                    </div>
+                    <div>
+                      <label class="form-label">Auth Token de Turso</label>
+                      <input type="password" id="db-config-turso-token" class="form-input" placeholder="eyJhbGciOiJ...">
+                    </div>
+                    <div style="display: flex; gap: 8px; margin-top: 4px;">
+                      <button type="button" class="btn btn-warning btn-xs" onclick="switchDbToTursoRemote()">
+                        Conectar a Turso
+                      </button>
+                      <button type="button" class="btn btn-secondary btn-xs" onclick="switchDbToLocal()">
+                        Forzar SQLite Local
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">
-                Copia todas tus tablas, clientes de WispHub, ONUs, tickets y logs existentes desde Turso hacia el almacenamiento local de tu VPS KVM 1.
-              </p>
-              <div style="padding: 12px; background: rgba(0,0,0,0.3); border-radius: var(--radius-sm); border: 1px solid var(--card-border); margin-bottom: 16px; font-size: 12px; color: var(--text-muted);">
-                <div style="font-weight: 600; color: #34d399; margin-bottom: 4px;">✔️ ¿Qué hace esta acción?</div>
-                1. Conecta con tu base de datos de Turso actual.<br>
-                2. Transfiere el 100% de los registros a <code>/app/data/chatbot.db</code> en tu VPS.<br>
-                3. Conmuta el bot al modo local con 0 límites de cuotas de por vida.
-              </div>
-              <button class="btn btn-primary btn-sm" id="btn-auto-migrate-turso" onclick="executeAutoMigrationFromTurso()">
-                <span>🚀 Clonar e Importar Todo de Turso a Local Ahora</span>
-              </button>
             </div>
+
           </div>
         </div>
       </section>
@@ -9243,16 +9236,23 @@ export function getAdminDashboardHtml(): string {
         // Render Tables Sidebar List
         renderDbTablesList(res.tables || []);
 
-        // Radio engine state
-        const radioLocal = document.getElementById('radio-db-mode-local');
-        const radioTurso = document.getElementById('radio-db-mode-turso');
-        if (radioLocal && radioTurso) {
+        // Update Top Metrics & Engine status
+        const elBadge = document.getElementById('db-engine-active-badge');
+        const elBox = document.getElementById('db-migration-status-box');
+        if (elBadge) {
+          elBadge.className = res.isLocal ? 'badge badge-success' : 'badge badge-purple';
+          elBadge.innerText = res.isLocal ? 'SQLite Local VPS' : 'Turso Cloud Remoto';
+        }
+        if (elBox) {
           if (res.isLocal) {
-            radioLocal.checked = true;
+            elBox.style.background = 'rgba(16,185,129,0.08)';
+            elBox.style.borderColor = 'rgba(16,185,129,0.25)';
+            elBox.innerHTML = '<div style="font-weight: 700; color: #34d399; margin-bottom: 4px;">✅ Base de datos local activa</div><div style="color: var(--text-muted);">Tu servidor está ejecutando las lecturas y escrituras de forma local con 0ms de latencia y sin límites de cuota.</div>';
           } else {
-            radioTurso.checked = true;
+            elBox.style.background = 'rgba(99,102,241,0.08)';
+            elBox.style.borderColor = 'rgba(99,102,241,0.25)';
+            elBox.innerHTML = '<div style="font-weight: 700; color: #818cf8; margin-bottom: 4px;">☁️ Conectado a Turso Cloud</div><div style="color: var(--text-muted);">Haz clic en el botón de abajo para clonar toda la información a tu VPS y trabajar de forma local.</div>';
           }
-          handleDbEngineRadioChange();
         }
       } catch (err) {
         showToast('Error', 'No se pudieron cargar estadísticas de base de datos.', 'error');
@@ -9604,33 +9604,54 @@ export function getAdminDashboardHtml(): string {
       });
     }
 
-    function handleDbEngineRadioChange() {
-      const isTurso = document.getElementById('radio-db-mode-turso')?.checked;
+    function toggleTursoConfigCollapse() {
       const fields = document.getElementById('db-turso-credentials-fields');
       if (fields) {
-        fields.style.display = isTurso ? 'flex' : 'none';
+        fields.style.display = fields.style.display === 'none' ? 'flex' : 'none';
       }
     }
 
-    async function saveDatabaseEngineSettings() {
-      const isTurso = document.getElementById('radio-db-mode-turso')?.checked;
-      const mode = isTurso ? 'turso' : 'local';
+    async function switchDbToTursoRemote() {
       const tursoUrl = document.getElementById('db-config-turso-url')?.value?.trim();
       const tursoToken = document.getElementById('db-config-turso-token')?.value?.trim();
 
-      if (isTurso && !tursoUrl) {
+      if (!tursoUrl) {
         showToast('Campo Requerido', 'Ingresa la URL de la base de datos de Turso.', 'warning');
         return;
       }
 
       showConfirmDialog(
-        'Cambiar Motor de Base de Datos',
-        \`¿Confirmas que deseas cambiar la base de datos activa a \${isTurso ? 'Turso Cloud (Nube)' : 'Servidor Local SQLite (VPS)'}? El sistema reiniciará su conexión al instante.\`,
+        'Conectar a Turso Cloud Remoto',
+        '¿Deseas cambiar el motor activo a Turso Cloud remoto?',
         async () => {
           try {
             const res = await apiFetch('/api/admin/database/switch-mode', {
               method: 'POST',
-              body: JSON.stringify({ mode, tursoUrl, tursoToken }),
+              body: JSON.stringify({ mode: 'turso', tursoUrl, tursoToken }),
+            });
+
+            if (res && res.success) {
+              showToast('Motor Actualizado', res.message, 'success', 4000);
+              loadDatabaseViewData();
+            } else {
+              showToast('Error', res?.error || 'No se pudo cambiar el motor.', 'error');
+            }
+          } catch (err) {
+            showToast('Error', 'Fallo al comunicar cambio de motor.', 'error');
+          }
+        }
+      );
+    }
+
+    async function switchDbToLocal() {
+      showConfirmDialog(
+        'Forzar SQLite Local',
+        '¿Deseas activar SQLite Local en tu VPS KVM 1?',
+        async () => {
+          try {
+            const res = await apiFetch('/api/admin/database/switch-mode', {
+              method: 'POST',
+              body: JSON.stringify({ mode: 'local' }),
             });
 
             if (res && res.success) {
