@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { createClient } from '@libsql/client';
 import { SettingsService } from '../services/settings.service';
 import { TursoService } from '../services/turso.service';
 import { 
@@ -2246,6 +2247,111 @@ export class AdminController {
       }
     } catch (error: any) {
       logger.error('Error al cambiar modo de BD:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Clona e importa automáticamente todas las tablas y datos de Turso hacia la base de datos local SQLite en VPS
+   */
+  static async autoMigrateFromTurso(req: Request, res: Response): Promise<void> {
+    try {
+      const dbUrl = req.body?.tursoUrl || (await SettingsService.get('TURSO_DATABASE_URL')) || config.turso.url;
+      const dbToken = req.body?.tursoToken || (await SettingsService.get('TURSO_AUTH_TOKEN')) || config.turso.authToken;
+
+      if (!dbUrl || dbUrl.startsWith('file:')) {
+        res.status(400).json({ success: false, error: 'No se especificó una URL de Turso válida para clonar.' });
+        return;
+      }
+
+      logger.info(`Iniciando clonación y migración de Turso (${dbUrl}) hacia SQLite Local...`);
+
+      const remoteClient = createClient({
+        url: dbUrl,
+        authToken: dbToken,
+      });
+
+      const localPath = getLocalDbFilePath();
+      const dir = path.dirname(localPath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+
+      const localClient = createClient({
+        url: `file:${localPath.replace(/\\/g, '/')}`,
+      });
+
+      // 1. Obtener tablas de Turso
+      const tablesRes = await remoteClient.execute(`
+        SELECT name, sql FROM sqlite_master 
+        WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_litestream_%'
+        ORDER BY name ASC;
+      `);
+
+      let totalMigratedRows = 0;
+      const migratedTables: Array<{ name: string; rows: number }> = [];
+
+      for (const row of tablesRes.rows) {
+        const tableName = String(row.name);
+        const createSql = String(row.sql);
+
+        // Crear tabla en local
+        await localClient.execute(`DROP TABLE IF EXISTS "${tableName}";`);
+        await localClient.execute(createSql);
+
+        // Leer datos de remoto
+        const dataRes = await remoteClient.execute(`SELECT * FROM "${tableName}";`);
+        const rowCount = dataRes.rows.length;
+
+        if (rowCount > 0) {
+          const cols = dataRes.columns;
+          const placeholders = cols.map(() => '?').join(', ');
+          const insertSql = `INSERT INTO "${tableName}" (${cols.map(c => `"${c}"`).join(', ')}) VALUES (${placeholders})`;
+
+          // Lotes de 100
+          const batchSize = 100;
+          for (let i = 0; i < rowCount; i += batchSize) {
+            const chunk = dataRes.rows.slice(i, i + batchSize);
+            const stmts = chunk.map(r => ({
+              sql: insertSql,
+              args: cols.map(c => r[c]),
+            }));
+            await localClient.batch(stmts, 'write');
+          }
+        }
+
+        totalMigratedRows += rowCount;
+        migratedTables.push({ name: tableName, rows: rowCount });
+      }
+
+      // Índices
+      const indexRes = await remoteClient.execute(`
+        SELECT sql FROM sqlite_master 
+        WHERE type='index' AND sql IS NOT NULL AND name NOT LIKE 'sqlite_%'
+      `);
+      for (const row of indexRes.rows) {
+        try {
+          await localClient.execute(String(row.sql));
+        } catch (_) {}
+      }
+
+      // Cambiar modo a local
+      const localUrl = 'file:./data/chatbot.db';
+      resetDatabaseConnection(localUrl, '');
+      await SettingsService.set('DATABASE_MODE', 'local');
+      await SettingsService.set('TURSO_DATABASE_URL', localUrl);
+      await SettingsService.set('TURSO_AUTH_TOKEN', '');
+
+      logger.info(`Migración completada con éxito: ${totalMigratedRows} filas transferidas en ${migratedTables.length} tablas.`);
+
+      res.json({
+        success: true,
+        message: `¡Migración completada con éxito! Se transfirieron ${totalMigratedRows.toLocaleString()} registros de ${migratedTables.length} tablas a SQLite Local en tu VPS.`,
+        totalMigratedRows,
+        migratedTables,
+      });
+    } catch (error: any) {
+      logger.error('Error durante la migración de Turso a local:', error?.message || error);
       res.status(500).json({ success: false, error: error?.message || error });
     }
   }

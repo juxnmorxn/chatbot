@@ -163,6 +163,7 @@ router.post('/api/admin/database/query', requireAdminAuth(['superadmin']), Admin
 router.post('/api/admin/database/optimize', requireAdminAuth(['superadmin']), AdminController.optimizeDatabase);
 router.get('/api/admin/database/backup', requireAdminAuth(['superadmin']), AdminController.downloadDatabaseBackup);
 router.post('/api/admin/database/switch-mode', requireAdminAuth(['superadmin']), AdminController.switchDatabaseMode);
+router.post('/api/admin/database/auto-migrate', requireAdminAuth(['superadmin']), AdminController.autoMigrateFromTurso);
 
 // ==========================================
 // RUTAS DE LIMPIEZA Y REINICIO DE PRUEBAS (SOLO SUPERADMIN)

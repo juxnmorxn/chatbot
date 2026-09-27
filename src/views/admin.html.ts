@@ -3701,6 +3701,26 @@ export function getAdminDashboardHtml(): string {
                 </button>
               </div>
             </div>
+
+            <!-- Migration Card (1-Click) -->
+            <div class="glass-card" style="border-color: rgba(99,102,241,0.4); background: linear-gradient(135deg, rgba(17,24,39,0.9), rgba(99,102,241,0.08)); grid-column: 1 / -1;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+                <h3 style="font-size: 15px; font-weight: 700; color: #fff;">🚀 Migración Automática de Turso a Local (1-Clic)</h3>
+                <span class="badge badge-info" style="font-size: 10px;">Sin pérdida de datos</span>
+              </div>
+              <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">
+                Copia todas tus tablas, clientes de WispHub, ONUs, tickets y logs existentes desde Turso hacia el almacenamiento local de tu VPS KVM 1.
+              </p>
+              <div style="padding: 12px; background: rgba(0,0,0,0.3); border-radius: var(--radius-sm); border: 1px solid var(--card-border); margin-bottom: 16px; font-size: 12px; color: var(--text-muted);">
+                <div style="font-weight: 600; color: #34d399; margin-bottom: 4px;">✔️ ¿Qué hace esta acción?</div>
+                1. Conecta con tu base de datos de Turso actual.<br>
+                2. Transfiere el 100% de los registros a <code>/app/data/chatbot.db</code> en tu VPS.<br>
+                3. Conmuta el bot al modo local con 0 límites de cuotas de por vida.
+              </div>
+              <button class="btn btn-primary btn-sm" id="btn-auto-migrate-turso" onclick="executeAutoMigrationFromTurso()">
+                <span>🚀 Clonar e Importar Todo de Turso a Local Ahora</span>
+              </button>
+            </div>
           </div>
         </div>
       </section>
@@ -9197,7 +9217,7 @@ export function getAdminDashboardHtml(): string {
 
     async function loadDatabaseStats() {
       try {
-        const res = await apiRequest('/api/admin/database/stats');
+        const res = await apiFetch('/api/admin/database/stats');
         if (!res || !res.success) return;
 
         state.db.stats = res;
@@ -9318,7 +9338,7 @@ export function getAdminDashboardHtml(): string {
         });
         if (state.db.search) queryParams.set('search', state.db.search);
 
-        const res = await apiRequest(\`/api/admin/database/tables/\${encodeURIComponent(tableName)}?\${queryParams.toString()}\`);
+        const res = await apiFetch(\`/api/admin/database/tables/\${encodeURIComponent(tableName)}?\${queryParams.toString()}\`);
         if (!res || !res.success) {
           if (tbody) tbody.innerHTML = \`<tr><td colspan="10" style="padding: 24px; text-align: center; color: var(--accent-rose);">Error: \${escapeHtml(res?.error || 'No se pudo leer la tabla')}</td></tr>\`;
           return;
@@ -9444,7 +9464,7 @@ export function getAdminDashboardHtml(): string {
       }
 
       try {
-        const res = await apiRequest('/api/admin/database/query', {
+        const res = await apiFetch('/api/admin/database/query', {
           method: 'POST',
           body: JSON.stringify({ sql }),
         });
@@ -9542,7 +9562,7 @@ export function getAdminDashboardHtml(): string {
     async function optimizeDatabaseAction() {
       showToast('Optimizando...', 'Ejecutando VACUUM y desfragmentación de base de datos...', 'info', 3000);
       try {
-        const res = await apiRequest('/api/admin/database/optimize', { method: 'POST' });
+        const res = await apiFetch('/api/admin/database/optimize', { method: 'POST' });
         if (res && res.success) {
           showToast('Base de Datos Optimizada', \`Compactación finalizada en \${res.durationMs} ms.\`, 'success', 3000);
           loadDatabaseStats();
@@ -9608,7 +9628,7 @@ export function getAdminDashboardHtml(): string {
         \`¿Confirmas que deseas cambiar la base de datos activa a \${isTurso ? 'Turso Cloud (Nube)' : 'Servidor Local SQLite (VPS)'}? El sistema reiniciará su conexión al instante.\`,
         async () => {
           try {
-            const res = await apiRequest('/api/admin/database/switch-mode', {
+            const res = await apiFetch('/api/admin/database/switch-mode', {
               method: 'POST',
               body: JSON.stringify({ mode, tursoUrl, tursoToken }),
             });
@@ -9629,7 +9649,7 @@ export function getAdminDashboardHtml(): string {
     async function testDatabaseConnectionHealth() {
       showToast('Probando...', 'Verificando comunicación con la base de datos...', 'info', 2000);
       try {
-        const res = await apiRequest('/api/admin/database/stats');
+        const res = await apiFetch('/api/admin/database/stats');
         if (res && res.success && res.status === 'healthy') {
           showToast('Conexión Exitosa', \`Base de datos respondiendo correctamente en \${res.latencyMs} ms (\${res.tablesCount} tablas detectadas).\`, 'success', 3500);
         } else {
@@ -9638,6 +9658,42 @@ export function getAdminDashboardHtml(): string {
       } catch (err) {
         showToast('Error', 'No se pudo contactar a la base de datos.', 'error');
       }
+    }
+
+    async function executeAutoMigrationFromTurso() {
+      const btn = document.getElementById('btn-auto-migrate-turso');
+      showConfirmDialog(
+        '🚀 Iniciar Migración Automática a Local',
+        '¿Deseas iniciar la clonación de todos los registros de Turso Cloud hacia el almacenamiento SQLite local en tu VPS? La migración creará el archivo local, transferirá los datos y activará el modo local.',
+        async () => {
+          if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<span>⏳ Migrando tablas y registros...</span>';
+          }
+          showToast('Migración en Proceso', 'Copiando tablas y datos desde Turso...', 'info', 10000);
+
+          try {
+            const res = await apiFetch('/api/admin/database/auto-migrate', {
+              method: 'POST',
+              body: JSON.stringify({}),
+            });
+
+            if (res && res.success) {
+              showToast('¡Migración Exitosa!', res.message, 'success', 6000);
+              await loadDatabaseViewData();
+            } else {
+              showToast('Error de Migración', res?.error || 'Fallo al migrar.', 'error', 5000);
+            }
+          } catch (err) {
+            showToast('Error', 'No se pudo completar la migración: ' + (err.message || err), 'error', 5000);
+          } finally {
+            if (btn) {
+              btn.disabled = false;
+              btn.innerHTML = '<span>🚀 Clonar e Importar Todo de Turso a Local Ahora</span>';
+            }
+          }
+        }
+      );
     }
 
     function openJsonViewerModal(title, jsonStr) {
