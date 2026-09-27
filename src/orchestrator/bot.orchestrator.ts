@@ -3599,29 +3599,38 @@ export class BotOrchestrator {
       } catch {}
     }
 
-    // 2. Si no encontró por ID exacto, buscar por coincidencia en ID, nombre o IP
+    // 2. Búsqueda inteligente difusa (ignora acentos, stopwords como 'del/de', mayúsculas y prefijos)
     if (!targetClient) {
       try {
-        const res = await client.execute({
-          sql: `
-            SELECT id_servicio, nombre, ip, router, direccion, coordenadas_gps 
-            FROM wisphub_clients 
-            WHERE id_servicio LIKE ? OR nombre LIKE ? OR nombre_normalized LIKE ? OR ip LIKE ?
-            LIMIT 5
-          `,
-          args: [`%${cleanInput}%`, `%${cleanInput}%`, `%${cleanInput}%`, `%${cleanInput}%`],
-        });
-        if (res.rows.length === 1) {
-          targetClient = res.rows[0];
-        } else if (res.rows.length > 1) {
-          let listMsg = `🔍 Encontré varias coincidencias para "*${cleanInput}*":\n\n`;
-          res.rows.slice(0, 5).forEach((r: any) => {
-            listMsg += `• *#${r.id_servicio}* - ${r.nombre} (IP: ${r.ip || 'N/A'})\n`;
-          });
-          listMsg += `\n✍️ Por favor responde escribiendo únicamente el *Número de ID* del cliente a asignar (ej: *${res.rows[0].id_servicio}*):`;
+        const fuzzyList = await TursoService.searchWisphubClientsFuzzy(cleanInput, 5);
+        if (fuzzyList && fuzzyList.length > 0) {
+          if (fuzzyList.length === 1 || fuzzyList[0].matchScore >= 80) {
+            targetClient = fuzzyList[0];
+          } else {
+            let listMsg = `🔍 Encontré varias coincidencias para "*${cleanInput}*":\n\n`;
+            fuzzyList.slice(0, 5).forEach((r: any) => {
+              listMsg += `• *#${r.id_servicio}* - ${r.nombre} (IP: ${r.ip || 'N/A'})\n`;
+            });
+            listMsg += `\n✍️ Por favor responde escribiendo únicamente el *Número de ID* del cliente a asignar (ej: *${fuzzyList[0].id_servicio}*):`;
 
-          await this.enviarYLoguear(phone, listMsg, 'ACTIVACION_TECNICO', 'GPS_MULTIPLES_COINCIDENCIAS', targetJid);
-          return;
+            await this.enviarYLoguear(phone, listMsg, 'ACTIVACION_TECNICO', 'GPS_MULTIPLES_COINCIDENCIAS', targetJid);
+            return;
+          }
+        }
+      } catch {}
+    }
+
+    // 3. Búsqueda en vivo en API de WispHub si no está en caché local
+    if (!targetClient) {
+      try {
+        const whResults = await WispHubService.buscarClientePorNombre(cleanInput);
+        if (whResults && whResults.length > 0) {
+          targetClient = {
+            id_servicio: whResults[0].id,
+            nombre: whResults[0].nombre,
+            ip: whResults[0].ip,
+            direccion: whResults[0].direccion,
+          };
         }
       } catch {}
     }
@@ -3701,6 +3710,7 @@ export class BotOrchestrator {
     let targetClient: any = null;
     const numId = cleanInput.replace(/\D/g, '');
 
+    // 1. Si es numérico (ID de servicio)
     if (numId && /^\d+$/.test(cleanInput)) {
       try {
         const res = await client.execute({
@@ -3711,13 +3721,27 @@ export class BotOrchestrator {
       } catch {}
     }
 
+    // 2. Búsqueda difusa inteligente (ignora 'del', acentos, prefijos numéricos)
+    if (!targetClient && cleanInput.length >= 2) {
+      try {
+        const fuzzyList = await TursoService.searchWisphubClientsFuzzy(cleanInput, 3);
+        if (fuzzyList && fuzzyList.length > 0) {
+          targetClient = fuzzyList[0];
+        }
+      } catch {}
+    }
+
+    // 3. Búsqueda en API de WispHub en vivo
     if (!targetClient && cleanInput.length >= 3) {
       try {
-        const res = await client.execute({
-          sql: `SELECT id_servicio, nombre, direccion FROM wisphub_clients WHERE nombre LIKE ? OR nombre_normalized LIKE ? LIMIT 1`,
-          args: [`%${cleanInput}%`, `%${cleanInput}%`],
-        });
-        if (res.rows.length > 0) targetClient = res.rows[0];
+        const whResults = await WispHubService.buscarClientePorNombre(cleanInput);
+        if (whResults && whResults.length > 0) {
+          targetClient = {
+            id_servicio: whResults[0].id,
+            nombre: whResults[0].nombre,
+            direccion: whResults[0].direccion,
+          };
+        }
       } catch {}
     }
 
