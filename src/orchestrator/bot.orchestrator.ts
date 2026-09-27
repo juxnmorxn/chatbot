@@ -482,7 +482,7 @@ export class BotOrchestrator {
       /^cambiar\s+(?:paquete|plan)\b/i.test(lowerMsg);
 
     const esComandoCambioModem = /^(?:cambio\s+de\s+m[oó]dem|reemplazar\s+m[oó]dem|reemplazo\s+de\s+m[oó]dem|cambiar\s+m[oó]dem|swap\s+modem|swap\s+onu)\b/i.test(lowerMsg) ||
-      /\b(?:cambio|reemplazo)\s+de\s+m[oó]dem\b/i.test(lowerMsg);
+      /^(?:realizar|hacer|ejecutar|solicitar)?\s*(?:un\s+)?(?:cambio|reemplazo)\s+de\s+m[oó]dem\b/i.test(lowerMsg);
 
     const esComandoActivacion = buttonId === 'BTN_ACTIVAR_MODEM' ||
       /^(?:activar|activaci[oó]n|alta|aprovisionar|registrar)\b/i.test(lowerMsg) ||
@@ -744,15 +744,15 @@ export class BotOrchestrator {
         return;
       }
 
-      // Caso 3: El técnico envía comando de cambio / reemplazo de módem
-      if (esComandoCambioModem) {
-        await this.procesarSolicitudCambioModemTecnico(phone, rawText, session, targetJid);
+      // Caso 3: El técnico envía comando de activación / alta
+      if (esComandoActivacion) {
+        await this.procesarSolicitudActivacionTecnico(phone, rawText, session, targetJid);
         return;
       }
 
-      // Caso 4: El técnico envía comando de activación
-      if (esComandoActivacion) {
-        await this.procesarSolicitudActivacionTecnico(phone, rawText, session, targetJid);
+      // Caso 4: El técnico envía comando de cambio / reemplazo de módem
+      if (esComandoCambioModem) {
+        await this.procesarSolicitudCambioModemTecnico(phone, rawText, session, targetJid);
         return;
       }
     } else {
