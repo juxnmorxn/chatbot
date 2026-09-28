@@ -289,6 +289,41 @@ export function getAdminDashboardHtml(): string {
       background: var(--primary);
     }
 
+    .nav-subitem {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 6px 12px 6px 36px;
+      border-radius: var(--radius-sm);
+      color: var(--text-dim);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: var(--transition);
+      position: relative;
+      white-space: nowrap;
+      user-select: none;
+      margin: 1px 0;
+    }
+
+    .nav-subitem:hover {
+      color: var(--text-main);
+      background: rgba(255, 255, 255, 0.04);
+      border-color: rgba(255, 255, 255, 0.05);
+    }
+
+    .nav-subitem.active {
+      color: var(--accent-cyan);
+      background: rgba(6, 182, 212, 0.1);
+      border-color: rgba(6, 182, 212, 0.25);
+      font-weight: 600;
+    }
+
+    #sidebar.collapsed .nav-subitem {
+      display: none !important;
+    }
+
     .nav-icon {
       width: 20px;
       height: 20px;
@@ -2418,12 +2453,21 @@ export function getAdminDashboardHtml(): string {
         </div>
 
         <div class="nav-category">Red & Operación Bot</div>
-        <div class="nav-item" data-view="ipam" onclick="navigateTo('ipam')" title="Control de Pools IP">
+        <div class="nav-item" id="nav-item-ipam" data-view="ipam" onclick="navigateTo('ipam')" title="Control de Pools IP">
           <span class="nav-icon">
             <svg class="svg-icon" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
           </span>
           <span class="nav-text">Control de Pools IP</span>
           <span id="badge-unconfigured-onus" class="nav-badge" style="display: none;">0</span>
+        </div>
+        <div class="nav-subitem active" id="nav-subitem-ipam-pools" onclick="switchIpamTab('pools'); navigateTo('ipam', true);" title="Subredes & Pools por VLAN">
+          <span style="font-size: 11.5px; opacity: 0.85;">📊</span>
+          <span class="nav-text">Subredes & VLANs</span>
+        </div>
+        <div class="nav-subitem" id="nav-subitem-ipam-onus" onclick="switchIpamTab('unconfigured'); navigateTo('ipam', true);" title="ONUs Nuevas Sin Configurar en SmartOLT">
+          <span style="font-size: 11.5px; opacity: 0.85;">🔌</span>
+          <span class="nav-text">ONUs Sin Autorizar</span>
+          <span id="badge-unconfigured-onus-sub" class="nav-badge" style="display: none; padding: 1px 6px; font-size: 10px;">0</span>
         </div>
         <div class="nav-item" data-view="audit" onclick="navigateTo('audit')" title="Auditoría SmartOLT">
           <span class="nav-icon">
@@ -2991,75 +3035,95 @@ export function getAdminDashboardHtml(): string {
         </div>
       </section>
 
-      <!-- VIEW 4: IPAM & POOLS -->
+      <!-- VIEW 4: IPAM & POOLS (DIVIDED INTO 2 CLEAR SUBSECTIONS) -->
       <section id="view-ipam" class="view-container">
-        <div class="glass-card" style="margin-bottom: 24px;">
-          <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
-            <div>
-              <h3 style="font-size: 16px; font-weight: 700;">Ocupación de Pools por VLAN & Subredes</h3>
-              <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Detección 100% automática de subredes, gateways y cálculo de capacidad en tiempo real.</p>
-            </div>
-            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-              <button class="btn btn-secondary btn-sm" onclick="triggerAutoDiscoverVlans()" title="Escanear base de datos y detectar nuevas subredes de ONUs automáticamente">
-                <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                <span>Auto-Detectar Subredes</span>
-              </button>
-              <button class="btn btn-secondary btn-sm" onclick="loadIpamData()" title="Refrescar ocupación">
-                <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"></path></svg>
-                <span>Actualizar</span>
-              </button>
-            </div>
-          </div>
-          <div id="ipam-pools-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px;"></div>
-        </div>
-
-        <div class="glass-card">
-          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <h3 style="font-size: 15px; font-weight: 700;">ONUs Nuevas Sin Configurar en SmartOLT</h3>
-            </div>
-            <button class="btn btn-secondary btn-sm" onclick="loadIpamData()">
-              <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"></path></svg>
-              <span>Refrescar PON</span>
+        <!-- Sub-Navigation Tab Bar for IPAM -->
+        <div class="glass-card" style="margin-bottom: 18px; padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <button id="btn-ipam-tab-pools" class="btn btn-primary btn-sm" onclick="switchIpamTab('pools')">
+              📊 <span>Subredes & Pools por VLAN</span>
+            </button>
+            <button id="btn-ipam-tab-unconfigured" class="btn btn-secondary btn-sm" onclick="switchIpamTab('unconfigured')">
+              🔌 <span>ONUs Sin Configurar (PON)</span>
+              <span id="badge-tab-unconfigured-count" class="badge badge-purple" style="display: none; margin-left: 4px; padding: 2px 6px; font-size: 10px;">0</span>
             </button>
           </div>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <button id="btn-ipam-auto-detect" class="btn btn-secondary btn-xs" onclick="triggerAutoDiscoverVlans()" title="Escanear base de datos y detectar nuevas subredes de ONUs automáticamente">
+              <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+              <span>Auto-Detectar Subredes</span>
+            </button>
+            <button class="btn btn-secondary btn-xs" onclick="loadIpamData()" title="Refrescar datos de IPAM">
+              <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"></path></svg>
+              <span>Refrescar</span>
+            </button>
+          </div>
+        </div>
 
-          <!-- Datatable Toolbar -->
-          <div class="datatable-toolbar" style="justify-content: flex-end;">
-            <div class="datatable-filters-group">
-              <select id="filter-pon-olt" class="datatable-select" onchange="filterUnconfiguredOnus()">
-                <option value="">Todas las OLTs</option>
-              </select>
-              <select id="filter-pon-model" class="datatable-select" onchange="filterUnconfiguredOnus()">
-                <option value="">Todos los Modelos</option>
-              </select>
-              <select id="filter-ipam-unconf-sort" class="datatable-select" onchange="sortUnconfiguredOnusBy(this.value)">
-                <option value="sn_asc">Serial (A-Z)</option>
-                <option value="olt_asc">OLT</option>
-                <option value="port_asc">Puerto PON</option>
-                <option value="model_asc">Modelo ONT</option>
-              </select>
-              <button class="btn btn-secondary btn-sm" onclick="clearUnconfiguredOnusFilters()" title="Limpiar filtros">
-                Limpiar
+        <!-- SUBSECTION 1: POOLS GRID -->
+        <div id="ipam-tab-pools-content" class="ipam-tab-content">
+          <div class="glass-card">
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
+              <div>
+                <h3 style="font-size: 16px; font-weight: 700;">Ocupación de Pools por VLAN & Subredes</h3>
+                <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Detección 100% automática de subredes, gateways y cálculo de capacidad en tiempo real.</p>
+              </div>
+            </div>
+            <div id="ipam-pools-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px;"></div>
+          </div>
+        </div>
+
+        <!-- SUBSECTION 2: UNCONFIGURED ONUS TABLE -->
+        <div id="ipam-tab-unconfigured-content" class="ipam-tab-content" style="display: none;">
+          <div class="glass-card">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+              <div>
+                <h3 style="font-size: 15px; font-weight: 700;">ONUs Nuevas Sin Configurar en SmartOLT</h3>
+                <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Equipos detectados en puertos PON en espera de autorización y asignación de cliente.</p>
+              </div>
+              <button class="btn btn-secondary btn-sm" onclick="loadIpamData()">
+                <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"></path></svg>
+                <span>Refrescar PON</span>
               </button>
             </div>
-          </div>
 
-          <div class="table-responsive">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th class="sortable-th" onclick="sortUnconfiguredOnusBy('olt')" style="min-width: 140px;">OLT <span id="sort-pon-olt" class="sort-icon">↕</span></th>
-                  <th class="sortable-th" onclick="sortUnconfiguredOnusBy('port')" style="min-width: 110px;">PON <span id="sort-pon-port" class="sort-icon">↕</span></th>
-                  <th class="sortable-th" onclick="sortUnconfiguredOnusBy('sn')" style="min-width: 180px;">Serial (SN) <span id="sort-pon-sn" class="sort-icon">↕</span></th>
-                  <th class="sortable-th" onclick="sortUnconfiguredOnusBy('model')" style="min-width: 140px;">Modelo <span id="sort-pon-model" class="sort-icon">↕</span></th>
-                  <th style="text-align: right; min-width: 120px;">Acción</th>
-                </tr>
-              </thead>
-              <tbody id="table-unconfigured-onus-body">
-                <tr><td colspan="5" style="text-align: center; color: var(--text-dim);">Buscando ONUs en espera...</td></tr>
-              </tbody>
-            </table>
+            <!-- Datatable Toolbar -->
+            <div class="datatable-toolbar" style="justify-content: flex-end;">
+              <div class="datatable-filters-group">
+                <select id="filter-pon-olt" class="datatable-select" onchange="filterUnconfiguredOnus()">
+                  <option value="">Todas las OLTs</option>
+                </select>
+                <select id="filter-pon-model" class="datatable-select" onchange="filterUnconfiguredOnus()">
+                  <option value="">Todos los Modelos</option>
+                </select>
+                <select id="filter-ipam-unconf-sort" class="datatable-select" onchange="sortUnconfiguredOnusBy(this.value)">
+                  <option value="sn_asc">Serial (A-Z)</option>
+                  <option value="olt_asc">OLT</option>
+                  <option value="port_asc">Puerto PON</option>
+                  <option value="model_asc">Modelo ONT</option>
+                </select>
+                <button class="btn btn-secondary btn-sm" onclick="clearUnconfiguredOnusFilters()" title="Limpiar filtros">
+                  Limpiar
+                </button>
+              </div>
+            </div>
+
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th class="sortable-th" onclick="sortUnconfiguredOnusBy('olt')" style="min-width: 140px;">OLT <span id="sort-pon-olt" class="sort-icon">↕</span></th>
+                    <th class="sortable-th" onclick="sortUnconfiguredOnusBy('port')" style="min-width: 110px;">PON <span id="sort-pon-port" class="sort-icon">↕</span></th>
+                    <th class="sortable-th" onclick="sortUnconfiguredOnusBy('sn')" style="min-width: 180px;">Serial (SN) <span id="sort-pon-sn" class="sort-icon">↕</span></th>
+                    <th class="sortable-th" onclick="sortUnconfiguredOnusBy('model')" style="min-width: 140px;">Modelo <span id="sort-pon-model" class="sort-icon">↕</span></th>
+                    <th style="text-align: right; min-width: 120px;">Acción</th>
+                  </tr>
+                </thead>
+                <tbody id="table-unconfigured-onus-body">
+                  <tr><td colspan="5" style="text-align: center; color: var(--text-dim);">Buscando ONUs en espera...</td></tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       </section>
@@ -4250,7 +4314,7 @@ export function getAdminDashboardHtml(): string {
       const parts = rawHash.split('?');
       const viewName = parts[0];
       const queryStr = parts[1];
-      const validViews = ['dashboard', 'live-chat', 'clients', 'tickets', 'ipam', 'audit', 'personal', 'technicians', 'modem-swap', 'database', 'settings', 'users'];
+      const validViews = ['dashboard', 'live-chat', 'clients', 'tickets', 'ipam', 'ipam-pools', 'ipam-onus', 'audit', 'personal', 'technicians', 'modem-swap', 'database', 'settings', 'users'];
       if (validViews.includes(viewName)) {
         if (queryStr && viewName === 'live-chat') {
           const params = new URLSearchParams(queryStr);
@@ -4264,6 +4328,14 @@ export function getAdminDashboardHtml(): string {
         if (viewName === 'users') {
           setTimeout(() => switchPersonalTab('users'), 50);
           return 'personal';
+        }
+        if (viewName === 'ipam-pools') {
+          setTimeout(() => switchIpamTab('pools'), 50);
+          return 'ipam';
+        }
+        if (viewName === 'ipam-onus' || viewName === 'ipam-unconfigured') {
+          setTimeout(() => switchIpamTab('unconfigured'), 50);
+          return 'ipam';
         }
         return viewName;
       }
@@ -4279,6 +4351,12 @@ export function getAdminDashboardHtml(): string {
       } else if (viewId === 'users') {
         viewId = 'personal';
         setTimeout(() => switchPersonalTab('users'), 50);
+      } else if (viewId === 'ipam-pools') {
+        viewId = 'ipam';
+        setTimeout(() => switchIpamTab('pools'), 50);
+      } else if (viewId === 'ipam-onus' || viewId === 'ipam-unconfigured') {
+        viewId = 'ipam';
+        setTimeout(() => switchIpamTab('unconfigured'), 50);
       }
       state.currentView = viewId;
       localStorage.setItem('cloudware_last_view', viewId);
@@ -4407,7 +4485,11 @@ export function getAdminDashboardHtml(): string {
       } else if (v === 'tickets') {
         filterTicketsTable();
       } else if (v === 'ipam') {
-        filterUnconfiguredOnus();
+        if (state.ipamTab === 'unconfigured') {
+          filterUnconfiguredOnus();
+        } else {
+          filterIpamPools();
+        }
       } else if (v === 'audit') {
         handleAuditColFilter();
       } else if (v === 'technicians') {
@@ -4513,7 +4595,12 @@ export function getAdminDashboardHtml(): string {
         case 'live-chat': loadLiveChatData(); break;
         case 'clients': loadClientsData(); break;
         case 'tickets': loadTicketsData(); break;
-        case 'ipam': loadIpamData(); break;
+        case 'ipam': {
+          const savedIpamTab = localStorage.getItem('cloudware_ipam_tab') || state.ipamTab || 'pools';
+          switchIpamTab(savedIpamTab);
+          loadIpamData();
+          break;
+        }
         case 'audit': loadAuditData(); break;
         case 'personal':
           loadAdminUsersData();
@@ -4551,6 +4638,39 @@ export function getAdminDashboardHtml(): string {
         if (btnUsers) { btnUsers.className = 'btn btn-primary btn-sm'; }
         if (btnTechs) { btnTechs.className = 'btn btn-secondary btn-sm'; }
         loadAdminUsersData();
+      }
+    }
+
+    function switchIpamTab(tab) {
+      state.ipamTab = tab;
+      try { localStorage.setItem('cloudware_ipam_tab', tab); } catch (e) {}
+
+      const poolsContent = document.getElementById('ipam-tab-pools-content');
+      const unconfContent = document.getElementById('ipam-tab-unconfigured-content');
+      const btnPools = document.getElementById('btn-ipam-tab-pools');
+      const btnUnconf = document.getElementById('btn-ipam-tab-unconfigured');
+      const subPools = document.getElementById('nav-subitem-ipam-pools');
+      const subOnus = document.getElementById('nav-subitem-ipam-onus');
+      const btnAutoDetect = document.getElementById('btn-ipam-auto-detect');
+
+      if (tab === 'unconfigured') {
+        if (poolsContent) poolsContent.style.display = 'none';
+        if (unconfContent) unconfContent.style.display = 'block';
+        if (btnPools) btnPools.className = 'btn btn-secondary btn-sm';
+        if (btnUnconf) btnUnconf.className = 'btn btn-primary btn-sm';
+        if (subPools) subPools.classList.remove('active');
+        if (subOnus) subOnus.classList.add('active');
+        if (btnAutoDetect) btnAutoDetect.style.display = 'none';
+        filterUnconfiguredOnus();
+      } else {
+        if (poolsContent) poolsContent.style.display = 'block';
+        if (unconfContent) unconfContent.style.display = 'none';
+        if (btnPools) btnPools.className = 'btn btn-primary btn-sm';
+        if (btnUnconf) btnUnconf.className = 'btn btn-secondary btn-sm';
+        if (subPools) subPools.classList.add('active');
+        if (subOnus) subOnus.classList.remove('active');
+        if (btnAutoDetect) btnAutoDetect.style.display = 'inline-flex';
+        filterIpamPools();
       }
     }
 
@@ -6150,88 +6270,133 @@ export function getAdminDashboardHtml(): string {
           apiFetch('/api/smartolt/unconfigured'),
         ]);
 
-        const grid = document.getElementById('ipam-pools-grid');
-        if (poolsRes.pools && poolsRes.pools.length > 0) {
-          grid.innerHTML = poolsRes.pools.map(p => {
-            const used = p.usedCount ?? p.used ?? 0;
-            const total = p.totalUsable ?? p.total ?? 252;
-            const free = p.availableCount ?? p.free ?? Math.max(0, total - used);
-            const pct = p.usagePercent ?? (total > 0 ? Math.round((used / total) * 100) : 0);
-            const subnet = p.segment ?? p.subnet ?? p.name ?? '';
-            const gateway = p.gateway || '';
-            const olt = p.oltName || 'OLT';
-            const isActive = p.isActive !== false;
-            const badgeClass = pct > 85 ? 'badge-danger' : (pct > 60 ? 'badge-warning' : 'badge-success');
+        state.ipamPools = poolsRes.pools || [];
+        state.unconfiguredOnus = unconfRes.unconfigured || [];
 
-            return \`
-              <div class="glass-card" style="background: rgba(0,0,0,0.35); border: 1px solid \${isActive ? 'rgba(255,255,255,0.08)' : 'rgba(239, 68, 68, 0.3)'}; display: flex; flex-direction: column; justify-content: space-between; \${isActive ? '' : 'opacity: 0.88;'}">
-                <div>
-                  <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
-                    <div>
-                      <div style="font-weight: 700; font-size: 15px; color: \${isActive ? 'var(--accent-cyan)' : 'var(--text-muted)'};">VLAN \${escapeHtml(p.vlan)}</div>
-                      <div style="font-size: 12px; color: var(--text-muted);">\${escapeHtml(p.name || subnet)}</div>
-                    </div>
-                    <span class="badge \${badgeClass}">\${pct}% Ocupado</span>
-                  </div>
-
-                  <div style="font-family: var(--font-mono); font-size: 11.5px; color: var(--text-dim); margin-bottom: 10px; background: rgba(0,0,0,0.25); padding: 6px 10px; border-radius: var(--radius-sm);">
-                    <div>🌐 <strong>Subred:</strong> \${escapeHtml(subnet)}</div>
-                    <div>🚪 <strong>Gateway:</strong> \${escapeHtml(gateway || '172.19.x.254')}</div>
-                    <div>📡 <strong>OLT:</strong> \${escapeHtml(olt)}</div>
-                  </div>
-
-                  <!-- Switch de Asignación por el Bot -->
-                  <div style="display: flex; justify-content: space-between; align-items: center; background: \${isActive ? 'rgba(16, 185, 129, 0.08)' : 'rgba(239, 68, 68, 0.08)'}; border: 1px solid \${isActive ? 'rgba(16, 185, 129, 0.25)' : 'rgba(239, 68, 68, 0.25)'}; padding: 7px 10px; border-radius: var(--radius-sm); margin-bottom: 10px;">
-                    <div style="display: flex; align-items: center; gap: 7px;">
-                      <span style="font-size: 13px;">\${isActive ? '🤖' : '⛔'}</span>
-                      <div>
-                        <div style="font-size: 11.5px; font-weight: 700; color: \${isActive ? 'var(--accent-emerald)' : 'var(--accent-rose)'};">
-                          \${isActive ? 'Bot Habilitado' : 'Ignorado por Bot'}
-                        </div>
-                        <div style="font-size: 10px; color: var(--text-dim);">
-                          \${isActive ? 'Asigna IPs automáticamente' : 'Pausado para el bot'}
-                        </div>
-                      </div>
-                    </div>
-                    <label class="switch" title="\${isActive ? 'Desactivar para que el bot ignore esta VLAN' : 'Activar para que el bot use esta VLAN'}">
-                      <input type="checkbox" \${isActive ? 'checked' : ''} onchange="togglePoolBotActive('\${escapeHtml(p.vlan)}', this.checked)">
-                      <span class="slider"></span>
-                    </label>
-                  </div>
-
-                  <div style="background: rgba(255,255,255,0.08); height: 8px; border-radius: 4px; overflow: hidden; margin-bottom: 8px;">
-                    <div style="background: \${isActive ? 'linear-gradient(90deg, var(--accent-cyan), var(--primary))' : '#6b7280'}; width: \${Math.min(100, pct)}%; height: 100%;"></div>
-                  </div>
-
-                  <div style="display: flex; justify-content: space-between; font-size: 11.5px; color: var(--text-muted); font-family: var(--font-mono); margin-bottom: 12px;">
-                    <span>Usadas: <strong style="color: var(--text-main);">\${used}</strong></span>
-                    <span>Libres: <strong style="color: var(--accent-green);">\${free}</strong></span>
-                    <span>Total: <strong>\${total}</strong></span>
-                  </div>
-                </div>
-
-                <div style="border-top: 1px solid rgba(255,255,255,0.06); padding-top: 10px;">
-                  <button class="btn btn-secondary btn-sm" style="width: 100%; font-size: 11.5px; padding: 5px 8px;" onclick="viewAvailableIps('\${p.vlan}')" title="Ver IPs libres disponibles para asignar">
-                    👁️ Ver IPs Disponibles
-                  </button>
-                </div>
-              </div>
-            \`;
-          }).join('');
-        } else {
-          grid.innerHTML = \`
-            <div style="grid-column: 1 / -1; text-align: center; padding: 30px; color: var(--text-dim);">
-              No hay pools registrados. Haz clic en <strong>🔍 Auto-Detectar Subredes</strong> o sincroniza SmartOLT.
-            </div>
-          \`;
+        // Synchronize badges across main nav, sub-item, and tab header
+        const unconfCount = state.unconfiguredOnus.length;
+        const bMain = document.getElementById('badge-unconfigured-onus');
+        if (bMain) {
+          bMain.innerText = unconfCount;
+          bMain.style.display = unconfCount > 0 ? 'inline-block' : 'none';
+        }
+        const bSub = document.getElementById('badge-unconfigured-onus-sub');
+        if (bSub) {
+          bSub.innerText = unconfCount;
+          bSub.style.display = unconfCount > 0 ? 'inline-block' : 'none';
+        }
+        const bTab = document.getElementById('badge-tab-unconfigured-count');
+        if (bTab) {
+          bTab.innerText = unconfCount;
+          bTab.style.display = unconfCount > 0 ? 'inline-block' : 'none';
         }
 
-        state.unconfiguredOnus = unconfRes.unconfigured || [];
         populateIpamUnconfiguredFilters();
-        filterUnconfiguredOnus();
+        if (state.ipamTab === 'unconfigured') {
+          filterUnconfiguredOnus();
+        } else {
+          filterIpamPools();
+        }
       } catch (err) {
         console.error('Error loading IPAM:', err);
       }
+    }
+
+    function renderIpamPoolsCards(pools) {
+      const grid = document.getElementById('ipam-pools-grid');
+      if (!grid) return;
+      if (pools && pools.length > 0) {
+        grid.innerHTML = pools.map(p => {
+          const used = p.usedCount ?? p.used ?? 0;
+          const total = p.totalUsable ?? p.total ?? 252;
+          const free = p.availableCount ?? p.free ?? Math.max(0, total - used);
+          const pct = p.usagePercent ?? (total > 0 ? Math.round((used / total) * 100) : 0);
+          const subnet = p.segment ?? p.subnet ?? p.name ?? '';
+          const gateway = p.gateway || '';
+          const olt = p.oltName || 'OLT';
+          const isActive = p.isActive !== false;
+          const badgeClass = pct > 85 ? 'badge-danger' : (pct > 60 ? 'badge-warning' : 'badge-success');
+
+          return \`
+            <div class="glass-card" style="background: rgba(0,0,0,0.35); border: 1px solid \${isActive ? 'rgba(255,255,255,0.08)' : 'rgba(239, 68, 68, 0.3)'}; display: flex; flex-direction: column; justify-content: space-between; \${isActive ? '' : 'opacity: 0.88;'}">
+              <div>
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
+                  <div>
+                    <div style="font-weight: 700; font-size: 15px; color: \${isActive ? 'var(--accent-cyan)' : 'var(--text-muted)'};">VLAN \${escapeHtml(p.vlan)}</div>
+                    <div style="font-size: 12px; color: var(--text-muted);">\${escapeHtml(p.name || subnet)}</div>
+                  </div>
+                  <span class="badge \${badgeClass}">\${pct}% Ocupado</span>
+                </div>
+
+                <div style="font-family: var(--font-mono); font-size: 11.5px; color: var(--text-dim); margin-bottom: 10px; background: rgba(0,0,0,0.25); padding: 6px 10px; border-radius: var(--radius-sm);">
+                  <div>🌐 <strong>Subred:</strong> \${escapeHtml(subnet)}</div>
+                  <div>🚪 <strong>Gateway:</strong> \${escapeHtml(gateway || '172.19.x.254')}</div>
+                  <div>📡 <strong>OLT:</strong> \${escapeHtml(olt)}</div>
+                </div>
+
+                <!-- Switch de Asignación por el Bot -->
+                <div style="display: flex; justify-content: space-between; align-items: center; background: \${isActive ? 'rgba(16, 185, 129, 0.08)' : 'rgba(239, 68, 68, 0.08)'}; border: 1px solid \${isActive ? 'rgba(16, 185, 129, 0.25)' : 'rgba(239, 68, 68, 0.25)'}; padding: 7px 10px; border-radius: var(--radius-sm); margin-bottom: 10px;">
+                  <div style="display: flex; align-items: center; gap: 7px;">
+                    <span style="font-size: 13px;">\${isActive ? '🤖' : '⛔'}</span>
+                    <div>
+                      <div style="font-size: 11.5px; font-weight: 700; color: \${isActive ? 'var(--accent-emerald)' : 'var(--accent-rose)'};">
+                        \${isActive ? 'Bot Habilitado' : 'Ignorado por Bot'}
+                      </div>
+                      <div style="font-size: 10px; color: var(--text-dim);">
+                        \${isActive ? 'Asigna IPs automáticamente' : 'Pausado para el bot'}
+                      </div>
+                    </div>
+                  </div>
+                  <label class="switch" title="\${isActive ? 'Desactivar para que el bot ignore esta VLAN' : 'Activar para que el bot use esta VLAN'}">
+                    <input type="checkbox" \${isActive ? 'checked' : ''} onchange="togglePoolBotActive('\${escapeHtml(p.vlan)}', this.checked)">
+                    <span class="slider"></span>
+                  </label>
+                </div>
+
+                <div style="background: rgba(255,255,255,0.08); height: 8px; border-radius: 4px; overflow: hidden; margin-bottom: 8px;">
+                  <div style="background: \${isActive ? 'linear-gradient(90deg, var(--accent-cyan), var(--primary))' : '#6b7280'}; width: \${Math.min(100, pct)}%; height: 100%;"></div>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; font-size: 11.5px; color: var(--text-muted); font-family: var(--font-mono); margin-bottom: 12px;">
+                  <span>Usadas: <strong style="color: var(--text-main);">\${used}</strong></span>
+                  <span>Libres: <strong style="color: var(--accent-green);">\${free}</strong></span>
+                  <span>Total: <strong>\${total}</strong></span>
+                </div>
+              </div>
+
+              <div style="border-top: 1px solid rgba(255,255,255,0.06); padding-top: 10px;">
+                <button class="btn btn-secondary btn-sm" style="width: 100%; font-size: 11.5px; padding: 5px 8px;" onclick="viewAvailableIps('\${p.vlan}')" title="Ver IPs libres disponibles para asignar">
+                  👁️ Ver IPs Disponibles
+                </button>
+              </div>
+            </div>
+          \`;
+        }).join('');
+      } else {
+        grid.innerHTML = \`
+          <div style="grid-column: 1 / -1; text-align: center; padding: 30px; color: var(--text-dim);">
+            No hay pools registrados o coincidentes. Haz clic en <strong>🔍 Auto-Detectar Subredes</strong> o sincroniza SmartOLT.
+          </div>
+        \`;
+      }
+    }
+
+    function filterIpamPools() {
+      const q = (document.getElementById('global-context-search')?.value || '').toLowerCase().trim();
+      if (!state.ipamPools || state.ipamPools.length === 0) return;
+      if (!q) {
+        renderIpamPoolsCards(state.ipamPools);
+        return;
+      }
+      const filtered = state.ipamPools.filter(p => {
+        const vlanStr = String(p.vlan || '');
+        const nameStr = String(p.name || '');
+        const subnetStr = String(p.segment || p.subnet || '');
+        const gwStr = String(p.gateway || '');
+        const oltStr = String(p.oltName || '');
+        return matchesFuzzyTokens(q, vlanStr, nameStr, subnetStr, gwStr, oltStr);
+      });
+      renderIpamPoolsCards(filtered);
     }
 
     function populateIpamUnconfiguredFilters() {
