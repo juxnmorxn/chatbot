@@ -494,8 +494,11 @@ export class BotOrchestrator {
     const esPasoTecnicoEnCurso = session?.step?.startsWith('ACTIVACION_') ||
       session?.step === 'PENDIENTE_CONFIRMACION_ACTIVACION_ONU' ||
       session?.step === 'PENDIENTE_SN_ACTIVACION' ||
+      session?.step === 'PENDIENTE_CLIENTE_CAMBIO_MODEM' ||
       session?.step === 'PENDIENTE_SELECCION_IP_CAMBIO_MODEM' ||
-      session?.step === 'PENDIENTE_CONFIRMACION_CAMBIO_MODEM';
+      session?.step === 'PENDIENTE_SN_CAMBIO_MODEM' ||
+      session?.step === 'PENDIENTE_CONFIRMACION_CAMBIO_MODEM' ||
+      session?.step === 'TECNICO_ESPERANDO_CLIENTE_GPS';
 
     const esComandoTecnicoExplicito = esComandoActivacion || esComandoCambioPaquete || esComandoCambioModem || esComandoCambioWifi;
     const esAccionTecnica = esComandoTecnicoExplicito || esPasoTecnicoEnCurso;
@@ -511,7 +514,7 @@ export class BotOrchestrator {
     // 1. Verificar si hay Intervención Humana activa (Memoria o Turso DB)
     // EXCEPCIÓN: Comandos técnicos, fotos de contratos y activaciones NUNCA son bloqueados por human takeover
     if (esAccionTecnica) {
-      await this.finalizarIntervencionHumana(phone);
+      await this.reanudarBot(phone);
     } else {
       const estadoPausa = this.estaBotPausado(phone, session);
       if (estadoPausa.pausado) {
@@ -3364,7 +3367,11 @@ export class BotOrchestrator {
     const isTechStep = session?.step?.startsWith('ACTIVACION_') ||
       session?.step === 'PENDIENTE_CONFIRMACION_ACTIVACION_ONU' ||
       session?.step === 'PENDIENTE_SN_ACTIVACION' ||
-      session?.step === 'PENDIENTE_CONFIRMACION_CAMBIO_MODEM';
+      session?.step === 'PENDIENTE_CLIENTE_CAMBIO_MODEM' ||
+      session?.step === 'PENDIENTE_SELECCION_IP_CAMBIO_MODEM' ||
+      session?.step === 'PENDIENTE_SN_CAMBIO_MODEM' ||
+      session?.step === 'PENDIENTE_CONFIRMACION_CAMBIO_MODEM' ||
+      session?.step === 'TECNICO_ESPERANDO_CLIENTE_GPS';
 
     const esTecnicoAuth = isTechStep || await TursoService.isAuthorizedTechnician(phone.replace(/\D/g, '')).catch(() => false);
 

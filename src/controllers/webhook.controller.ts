@@ -281,7 +281,7 @@ export class WebhookController {
 
       // Comandos técnicos y fotos de contratos tienen prioridad absoluta y NUNCA son bloqueados por human takeover
       if (isTechAction || isTechnician) {
-        BotOrchestrator.finalizarIntervencionHumana(phone).catch(() => {});
+        BotOrchestrator.reanudarBot(phone).catch(() => {});
         setImmediate(() => {
           BotOrchestrator.procesarMensaje(incomingEvent).catch((err) => {
             logger.error(`Error en BotOrchestrator para técnico ${phone}:`, err?.message || err);
