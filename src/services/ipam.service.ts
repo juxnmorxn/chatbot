@@ -68,6 +68,56 @@ export class IpamService {
   ];
 
   /**
+   * Obtiene la VLAN correspondiente a una dirección IP de forma determinista
+   * 172.16.80.x -> 800 (San Agustín)
+   * 172.19.1.x -> 510, 172.19.2.x -> 520, ... 172.19.12.x -> 620 (Actopan)
+   */
+  static getVlanFromIp(ip?: string | null): string {
+    if (!ip) return '510';
+    const cleanIp = String(ip).trim().split('/')[0].trim();
+    if (!cleanIp) return '510';
+
+    if (cleanIp.startsWith('172.16.80.') || cleanIp.startsWith('172.16.')) {
+      return '800';
+    }
+
+    const match = cleanIp.match(/^172\.19\.(\d+)\.\d+$/);
+    if (match) {
+      const thirdOctet = parseInt(match[1], 10);
+      if (thirdOctet >= 1 && thirdOctet <= 12) {
+        return String(500 + thirdOctet * 10);
+      }
+    }
+
+    return '510';
+  }
+
+  /**
+   * Obtiene la configuración de subred (Gateway, Netmask, OLT, VLAN) a partir de una IP
+   */
+  static getSubnetConfigFromIp(ip?: string | null): VlanSubnetConfig {
+    const vlan = this.getVlanFromIp(ip);
+    const found = this.DEFAULT_SUBNETS.find(s => s.vlan === vlan);
+    if (found) return found;
+
+    const vlanNum = parseInt(vlan, 10);
+    const octet = !isNaN(vlanNum) && vlanNum >= 510 && vlanNum <= 620 ? (vlanNum - 500) / 10 : 1;
+
+    return {
+      vlan,
+      name: `${vlan} - Internet`,
+      segment: vlan === '800' ? '172.16.80.0/24' : `172.19.${octet}.0/24`,
+      gateway: vlan === '800' ? '172.16.80.254' : `172.19.${octet}.254`,
+      netmask: '255.255.255.0',
+      startHost: 2,
+      endHost: 253,
+      oltId: vlan === '800' ? '2' : '3',
+      oltName: vlan === '800' ? 'OLT-SanAgustin' : 'OLT5800-Actopan',
+      isActive: true,
+    };
+  }
+
+  /**
    * Obtiene la lista completa de VLANs y Subredes de fibra óptica (FTTH)
    * Actopan (VLANs 510 a 620) y San Agustín (VLAN 800).
    * Excluye antenas / segmentos inalámbricos (172.17.x.x, 192.168.x.x, etc.).

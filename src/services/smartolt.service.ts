@@ -2,6 +2,7 @@ import axios, { AxiosInstance } from 'axios';
 import { config } from '../config/env';
 import { SettingsService } from './settings.service';
 import { TursoService, SmartOltOnuRecord } from './turso.service';
+import { IpamService } from './ipam.service';
 import { Logger } from '../utils/logger';
 
 const logger = new Logger('SmartOLTService');
@@ -539,17 +540,18 @@ export class SmartOLTService {
         return null;
       }
 
-      // 1. Coincidencia exacta (completo, terminación o inclusión)
+      // 1. Coincidencia exacta (completo, terminación de sufijo o inclusión de 6+ caracteres)
       const exactMatch = unconfiguredList.find((onu) => {
         const onuSn = (onu.sn || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
-        return onuSn === clean || onuSn.endsWith(clean) || (clean.length >= 6 && onuSn.includes(clean));
+        return onuSn === clean || (clean.length >= 4 && onuSn.endsWith(clean)) || (clean.length >= 6 && onuSn.includes(clean));
       });
       if (exactMatch) {
-        logger.info(`[SmartOLT Match] Coincidencia exacta encontrada: ${exactMatch.sn}`);
+        logger.info(`[SmartOLT Match] Coincidencia exacta encontrada: ${exactMatch.sn} (Modelo: ${exactMatch.onu_type_name || exactMatch.onu_type || 'Desconocido'})`);
         return exactMatch;
       }
 
       // 2. Coincidencia con normalización de caracteres confusos de OCR (B<->8, O<->0, I<->1, S<->5, G<->6, Z<->2)
+      // SOLO comparar sufijo (endsWith), NUNCA inclusión libre (includes) para evitar falsos positivos con series cortas
       const normalizeVisualConfusions = (str: string) => {
         return str
           .replace(/B/g, '8')
@@ -563,20 +565,21 @@ export class SmartOLTService {
       };
 
       const normSearch = normalizeVisualConfusions(clean);
-      const normSearchSuffix = normSearch.length >= 6 ? normSearch.slice(-6) : normSearch;
 
-      const visualMatch = unconfiguredList.find((onu) => {
-        const onuSn = (onu.sn || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
-        const normOnu = normalizeVisualConfusions(onuSn);
-        return normOnu === normSearch || normOnu.endsWith(normSearchSuffix) || normOnu.includes(normSearchSuffix);
-      });
+      if (clean.length >= 4) {
+        const visualMatch = unconfiguredList.find((onu) => {
+          const onuSn = (onu.sn || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+          const normOnu = normalizeVisualConfusions(onuSn);
+          return normOnu === normSearch || normOnu.endsWith(normSearch);
+        });
 
-      if (visualMatch) {
-        logger.info(`[SmartOLT Match] Coincidencia visual OCR encontrada (${clean} -> ${visualMatch.sn})`);
-        return visualMatch;
+        if (visualMatch) {
+          logger.info(`[SmartOLT Match] Coincidencia visual OCR encontrada (${clean} -> ${visualMatch.sn}, Modelo: ${visualMatch.onu_type_name || visualMatch.onu_type || 'Desconocido'})`);
+          return visualMatch;
+        }
       }
 
-      // 3. Coincidencia difusa (Levenshtein / Distancia de edición)
+      // 3. Coincidencia difusa (Levenshtein) únicamente con sufijos largos (>= 6 caracteres) o si solo hay 1 ONU sin autorizar
       const levenshtein = (a: string, b: string): number => {
         const matrix: number[][] = [];
         for (let i = 0; i <= b.length; i++) matrix[i] = [i];
@@ -597,36 +600,38 @@ export class SmartOLTService {
         return matrix[b.length][a.length];
       };
 
-      const searchSuffix = clean.length >= 6 ? clean.slice(-6) : clean;
-      let bestCandidate: UnconfiguredOnu | null = null;
-      let minDistance = 999;
+      if (clean.length >= 6) {
+        const searchSuffix = clean.slice(-6);
+        let bestCandidate: UnconfiguredOnu | null = null;
+        let minDistance = 999;
 
-      for (const onu of unconfiguredList) {
-        const onuSn = (onu.sn || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
-        const onuSuffix = onuSn.length >= 6 ? onuSn.slice(-6) : onuSn;
+        for (const onu of unconfiguredList) {
+          const onuSn = (onu.sn || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+          const onuSuffix = onuSn.length >= 6 ? onuSn.slice(-6) : onuSn;
 
-        const distSuffix = levenshtein(searchSuffix, onuSuffix);
-        const distFull = clean.length >= 10 ? levenshtein(clean, onuSn) : 999;
-        const currentMin = Math.min(distSuffix, distFull);
+          const distSuffix = levenshtein(searchSuffix, onuSuffix);
+          const distFull = clean.length >= 10 ? levenshtein(clean, onuSn) : 999;
+          const currentMin = Math.min(distSuffix, distFull);
 
-        if (currentMin < minDistance) {
-          minDistance = currentMin;
-          bestCandidate = onu;
+          if (currentMin < minDistance) {
+            minDistance = currentMin;
+            bestCandidate = onu;
+          }
+        }
+
+        // Tolerancia estricta: Distancia <= 1 para 6 caracteres cuando hay múltiples ONUs
+        if (bestCandidate && minDistance <= 1) {
+          logger.info(`[SmartOLT Match] Coincidencia difusa (distancia ${minDistance}): ${clean} emparejado con ${bestCandidate.sn}`);
+          return bestCandidate;
         }
       }
 
-      // Tolerancia: Distancia <= 2 para 6 caracteres (más de 66% de similitud)
-      if (bestCandidate && minDistance <= 2) {
-        logger.info(`[SmartOLT Match] Coincidencia difusa (distancia ${minDistance}): ${clean} emparejado con ${bestCandidate.sn}`);
-        return bestCandidate;
-      }
-
-      // Si solo hay 1 ONU sin autorizar en la OLT y comparte al menos 3 caracteres
-      if (unconfiguredList.length === 1) {
+      // Si solo hay 1 ONU sin autorizar en la central y comparte al menos 4 caracteres finales
+      if (unconfiguredList.length === 1 && clean.length >= 4) {
         const onlyOnu = unconfiguredList[0];
         const onlySn = (onlyOnu.sn || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
-        const dist = levenshtein(searchSuffix, onlySn.slice(-6));
-        if (dist <= 3) {
+        const dist = levenshtein(clean.slice(-4), onlySn.slice(-4));
+        if (dist <= 1) {
           logger.info(`[SmartOLT Match] Única ONU sin autorizar en OLT seleccionada: ${onlyOnu.sn} (distancia ${dist} con ${clean})`);
           return onlyOnu;
         }
@@ -641,6 +646,7 @@ export class SmartOLTService {
 
   /**
    * Normaliza el modelo/tipo de ONU según el catálogo oficial registrado en SmartOLT
+   * Si SmartOLT ya reporta un modelo válido detectado por la OLT, lo respeta.
    */
   static normalizeOnuType(rawModel?: string, sn?: string): string {
     const cleanModel = (rawModel || '').trim();
@@ -657,18 +663,18 @@ export class SmartOLTService {
       'ZTE-F660V5.2', 'ZTE-F660V6.0', 'ZTE-F668'
     ];
 
-    if (cleanModel) {
+    if (cleanModel && !['UNKNOWN', 'ONU', 'DEFAULT', 'NONE', 'NULL', 'UNDEFINED'].includes(cleanModel.toUpperCase())) {
       const exactMatch = catalog.find(c => c.toLowerCase() === cleanModel.toLowerCase());
       if (exactMatch) return exactMatch;
 
       const upper = cleanModel.toUpperCase().replace(/[\s_]/g, '-');
 
-      // Huawei matches
+      // Huawei matches específicos
       if (upper.includes('8041')) return 'EG8041V5';
       if (upper.includes('8145X6-12') || upper.includes('8145X612')) return 'HG8145X6-12';
       if (upper.includes('8145X6-10') || upper.includes('8145X610')) return 'HG8145X6-10';
       if (upper.includes('8145X6')) return 'HG8145X6';
-      if (upper.includes('8145V5V3') || upper.includes('8145V5-V3')) return 'HG8145V5V3';
+      if (upper.includes('8145V5V3') || upper.includes('8145V5-V3') || upper.includes('8145V53')) return 'HG8145V5V3';
       if (upper.includes('EG8145V5') || (upper.startsWith('EG') && upper.includes('8145'))) return 'EG8145V5';
       if (upper.includes('8145V5') || upper.includes('8145')) return 'HG8145V5';
       if (upper.includes('8240H')) return 'HG8240H';
@@ -692,7 +698,7 @@ export class SmartOLTService {
       if (upper.includes('HS8145') || upper.includes('HS8145V')) return 'HS8145V';
       if (upper.includes('HS8546') || upper.includes('HS8546V')) return 'HS8546V';
 
-      // ZTE matches
+      // ZTE matches específicos
       if (upper.includes('F668')) return 'ZTE-F668';
       if (upper.includes('F660')) {
         if (upper.includes('V5.0') || upper.includes('V50')) return 'ZTE-F660V5.0';
@@ -714,9 +720,12 @@ export class SmartOLTService {
         if (upper.includes('V6.0') || upper.includes('V60')) return 'ZTE-F643V6.0';
         return 'ZTE-F643';
       }
+
+      // Si SmartOLT ya reportó un modelo limpio, usarlo directamente
+      return cleanModel;
     }
 
-    // Heurística por prefijo de Número de Serie (SN)
+    // Heurística por prefijo de Número de Serie (SN) SOLO si NO se proporcionó ningún modelo
     if (cleanSn.startsWith('HWTC') || cleanSn.startsWith('48575443')) {
       return 'EG8041V5';
     }
@@ -803,11 +812,12 @@ export class SmartOLTService {
       form.append('dns1', '8.8.8.8');
       form.append('dns2', '8.8.4.4');
       
-      // Perfiles de velocidad y Line-Profile VLAN mapping obligatorio
+      // Perfiles de velocidad y Line-Profile VLAN mapping obligatorio (evitar PRIO mapping por defecto)
       form.append('line_profile', 'VLAN mapping');
       form.append('line_profile_mode', 'VLAN mapping');
-      form.append('line_profile_name', 'VLAN mapping');
-      form.append('custom_line_profile', 'VLAN mapping');
+      form.append('line_profile_name', 'VLAN mapping - better than Generic profiles');
+      form.append('custom_line_profile', 'VLAN mapping - better than Generic profiles');
+      form.append('use_custom_profile', '1');
       form.append('download_speed_profile_name', String(payload.download_speed_profile_name || '40MB-DOWN'));
       form.append('upload_speed_profile_name', String(payload.upload_speed_profile_name || '40MB-UP'));
       if (cleanAddress) form.append('address', cleanAddress);
@@ -1450,7 +1460,21 @@ export class SmartOLTService {
         const res = await api.get(`/onu/get_onu_details/${encodeURIComponent(cleanId)}`);
         if (res.data?.status === true || res.data?.response_code === 'success' || res.data?.onu_details) {
           const det = res.data.onu_details || res.data;
-          const isSanAgustin = String(det.olt_id) === '2' || (det.zone || det.zone_name || '').toLowerCase().includes('san agustin');
+          const ipAddr = String(det.ip_address || det.ip || '').trim();
+          const dynamicSubnet = ipAddr ? IpamService.getSubnetConfigFromIp(ipAddr) : null;
+          const isSanAgustin = String(det.olt_id) === '2' || (det.zone || det.zone_name || '').toLowerCase().includes('san agustin') || (dynamicSubnet?.oltId === '2');
+
+          const rawSpeed = det.download_speed_profile_name || det.speed_profile || det.download_speed || det.speed_profile_name || det.plan || '';
+          let dlProfile = rawSpeed ? String(rawSpeed).trim() : '40MB-DOWN';
+          if (dlProfile && !dlProfile.toUpperCase().includes('-DOWN')) {
+            const mb = dlProfile.match(/(\d+)\s*(?:MB|MEGAS?|M)?/i);
+            if (mb) dlProfile = `${mb[1]}MB-DOWN`;
+          }
+          let ulProfile = det.upload_speed_profile_name || (dlProfile ? dlProfile.replace(/-DOWN$/i, '-UP') : '40MB-UP');
+
+          const vlanVal = det.vlan || dynamicSubnet?.vlan || (isSanAgustin ? '800' : '510');
+          const gatewayVal = det.default_gateway || det.gateway || dynamicSubnet?.gateway || (isSanAgustin ? '172.16.80.254' : '172.19.2.254');
+
           return {
             unique_external_id: det.unique_external_id || cleanId,
             sn: String(det.sn || det.onu_sn || cleanId).toUpperCase(),
@@ -1461,12 +1485,12 @@ export class SmartOLTService {
             olt_name: det.olt_name || (isSanAgustin ? 'OLT-SanAgustin' : 'OLT5800-Actopan'),
             board: det.board ?? det.slot ?? '0',
             port: det.port ?? det.pon ?? '0',
-            vlan: det.vlan || (isSanAgustin ? '800' : '510'),
-            ip_address: det.ip_address || det.ip || '',
-            netmask: det.subnet_mask || det.netmask || '255.255.255.0',
-            gateway: det.default_gateway || det.gateway || (isSanAgustin ? '172.19.6.254' : '172.19.2.254'),
-            download_speed_profile_name: det.download_speed_profile_name || det.speed_profile || '40MB-DOWN',
-            upload_speed_profile_name: det.upload_speed_profile_name || '40MB-UP',
+            vlan: String(vlanVal),
+            ip_address: ipAddr,
+            netmask: det.subnet_mask || det.netmask || dynamicSubnet?.netmask || '255.255.255.0',
+            gateway: String(gatewayVal),
+            download_speed_profile_name: dlProfile,
+            upload_speed_profile_name: ulProfile,
             onu_type: det.onu_type_name || det.onu_type || det.model || 'EG8041V5',
             onu_mode: det.mode || det.onu_mode || 'Routing',
             wan_mode: det.wan_mode || 'Static',
@@ -1488,7 +1512,21 @@ export class SmartOLTService {
     if (onu) {
       let rawObj: any = {};
       try { rawObj = JSON.parse(onu.raw_data || '{}'); } catch {}
-      const isSanAgustin = (onu.zone_name || '').toLowerCase().includes('san agustin') || (onu.olt_name || '').toLowerCase().includes('san agustin');
+      const ipAddr = String(onu.ip_address || rawObj.ip_address || '').trim();
+      const dynamicSubnet = ipAddr ? IpamService.getSubnetConfigFromIp(ipAddr) : null;
+      const isSanAgustin = (onu.zone_name || '').toLowerCase().includes('san agustin') || (onu.olt_name || '').toLowerCase().includes('san agustin') || (dynamicSubnet?.oltId === '2');
+
+      const rawSpeed = onu.speed_profile || rawObj.download_speed_profile_name || rawObj.speed_profile || '';
+      let dlProfile = rawSpeed ? String(rawSpeed).trim() : '40MB-DOWN';
+      if (dlProfile && !dlProfile.toUpperCase().includes('-DOWN')) {
+        const mb = dlProfile.match(/(\d+)\s*(?:MB|MEGAS?|M)?/i);
+        if (mb) dlProfile = `${mb[1]}MB-DOWN`;
+      }
+      let ulProfile = rawObj.upload_speed_profile_name || (dlProfile ? dlProfile.replace(/-DOWN$/i, '-UP') : '40MB-UP');
+
+      const vlanVal = rawObj.vlan || dynamicSubnet?.vlan || (isSanAgustin ? '800' : '510');
+      const gatewayVal = rawObj.gateway || rawObj.default_gateway || dynamicSubnet?.gateway || (isSanAgustin ? '172.16.80.254' : '172.19.2.254');
+
       return {
         unique_external_id: onu.unique_external_id,
         sn: (onu.sn || cleanId).toUpperCase(),
@@ -1499,13 +1537,13 @@ export class SmartOLTService {
         olt_name: onu.olt_name || (isSanAgustin ? 'OLT-SanAgustin' : 'OLT5800-Actopan'),
         board: rawObj.board ?? rawObj.slot ?? '0',
         port: rawObj.port ?? rawObj.pon ?? '0',
-        vlan: rawObj.vlan || (isSanAgustin ? '800' : '510'),
-        ip_address: onu.ip_address || rawObj.ip_address || '',
-        netmask: rawObj.netmask || rawObj.subnet_mask || '255.255.255.0',
-        gateway: rawObj.gateway || rawObj.default_gateway || (isSanAgustin ? '172.19.6.254' : '172.19.2.254'),
-        download_speed_profile_name: onu.speed_profile || rawObj.download_speed_profile_name || '40MB-DOWN',
-        upload_speed_profile_name: rawObj.upload_speed_profile_name || '40MB-UP',
-        onu_type: rawObj.onu_type_name || rawObj.onu_type || 'EG8041V5',
+        vlan: String(vlanVal),
+        ip_address: ipAddr,
+        netmask: rawObj.netmask || rawObj.subnet_mask || dynamicSubnet?.netmask || '255.255.255.0',
+        gateway: String(gatewayVal),
+        download_speed_profile_name: dlProfile,
+        upload_speed_profile_name: ulProfile,
+        onu_type: rawObj.onu_type_name || rawObj.onu_type || rawObj.model || 'EG8041V5',
         onu_mode: rawObj.onu_mode || 'Routing',
         wan_mode: rawObj.wan_mode || 'Static',
         raw: rawObj,
@@ -1576,6 +1614,17 @@ export class SmartOLTService {
     const targetPonType = unconfiguredMatch?.pon_type || oldOnu.pon_type || 'gpon';
     const targetOnuType = this.normalizeOnuType(unconfiguredMatch?.onu_type_name || unconfiguredMatch?.onu_type || oldOnu.onu_type, cleanNewSn);
 
+    const dynamicSubnet = IpamService.getSubnetConfigFromIp(oldOnu.ip_address);
+    const targetVlan = String(oldOnu.vlan && oldOnu.vlan !== '510' ? oldOnu.vlan : (dynamicSubnet.vlan || oldOnu.vlan || '510'));
+    const targetGateway = oldOnu.gateway || dynamicSubnet.gateway || '172.19.2.254';
+
+    let dlProfile = oldOnu.download_speed_profile_name || '40MB-DOWN';
+    if (!dlProfile.toUpperCase().includes('-DOWN')) {
+      const mb = dlProfile.match(/(\d+)\s*(?:MB|MEGAS?|M)?/i);
+      if (mb) dlProfile = `${mb[1]}MB-DOWN`;
+    }
+    let ulProfile = oldOnu.upload_speed_profile_name || (dlProfile ? dlProfile.replace(/-DOWN$/i, '-UP') : '40MB-UP');
+
     // 4. Eliminar el módem anterior de SmartOLT
     logger.info(`[Cambio de Módem] Eliminando módem anterior (${oldOnu.unique_external_id})...`);
     const deleteRes = await this.deleteOnu(oldOnu.unique_external_id);
@@ -1596,13 +1645,13 @@ export class SmartOLTService {
       onu_type: targetOnuType,
       name: oldOnu.name,
       onu_mode: oldOnu.onu_mode || 'Routing',
-      vlan: String(oldOnu.vlan || '510'),
+      vlan: targetVlan,
       ip_address: oldOnu.ip_address,
-      netmask: oldOnu.netmask || '255.255.255.0',
-      gateway: oldOnu.gateway || '172.19.2.254',
+      netmask: oldOnu.netmask || dynamicSubnet.netmask || '255.255.255.0',
+      gateway: targetGateway,
       line_profile: 'VLAN mapping',
-      download_speed_profile_name: oldOnu.download_speed_profile_name || '40MB-DOWN',
-      upload_speed_profile_name: oldOnu.upload_speed_profile_name || '40MB-UP',
+      download_speed_profile_name: dlProfile,
+      upload_speed_profile_name: ulProfile,
       zone: oldOnu.zone || 'Actopan',
       address: oldOnu.address,
       comment: `Cambio de módem (reemplazo de ${oldOnu.sn || oldOnu.unique_external_id})`,

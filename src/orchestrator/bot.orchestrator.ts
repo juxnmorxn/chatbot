@@ -6216,15 +6216,16 @@ Módem aprovisionado en la OLT con su VLAN y Perfil de Velocidad.`;
         const cand = distinctMatches[0];
         oldOnu = await SmartOLTService.getOnuDetails(cand.unique_external_id || cand.sn);
         if (!oldOnu) {
+          const candSubnet = cand.ip_address ? IpamService.getSubnetConfigFromIp(cand.ip_address) : null;
           oldOnu = {
             unique_external_id: cand.unique_external_id,
             sn: cand.sn,
             name: cand.name,
             ip_address: cand.ip_address,
-            vlan: (cand as any).vlan || (cand.zone_name?.toLowerCase().includes('san agustin') ? '800' : '510'),
-            zone: cand.zone_name || 'Actopan',
-            download_speed_profile_name: cand.speed_profile || '40MB',
-            olt_id: cand.zone_name?.toLowerCase().includes('san agustin') ? '2' : '3',
+            vlan: (cand as any).vlan || candSubnet?.vlan || IpamService.getVlanFromIp(cand.ip_address),
+            zone: cand.zone_name || (candSubnet?.oltId === '2' ? 'San Agustin Tlaxiaca' : 'Actopan'),
+            download_speed_profile_name: cand.speed_profile || '40MB-DOWN',
+            olt_id: candSubnet?.oltId || (cand.zone_name?.toLowerCase().includes('san agustin') ? '2' : '3'),
             board: '0',
             port: '0',
             onu_type: 'EG8041V5',
@@ -6246,6 +6247,8 @@ Módem aprovisionado en la OLT con su VLAN y Perfil de Velocidad.`;
       return;
     }
 
+    const calculatedVlan = IpamService.getVlanFromIp(oldOnu.ip_address) || oldOnu.vlan || '510';
+
     // 1 SOLO SERVICIO ENCONTRADO: Mostrar ficha y pedir SN del nuevo módem
     let metaObj: any = {};
     try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
@@ -6254,7 +6257,7 @@ Módem aprovisionado en la OLT con su VLAN y Perfil de Velocidad.`;
       oldSn: oldOnu.sn,
       clientName: oldOnu.name,
       ip: oldOnu.ip_address,
-      vlan: oldOnu.vlan,
+      vlan: calculatedVlan,
       zone: oldOnu.zone,
       speedProfile: oldOnu.download_speed_profile_name,
       oltId: oldOnu.olt_id,
@@ -6274,7 +6277,7 @@ Módem aprovisionado en la OLT con su VLAN y Perfil de Velocidad.`;
 ──────────────────────────────
 • *Cliente / Folio:* *${oldOnu.name}*
 • *Zona / Municipio:* *${oldOnu.zone || 'Actopan'}*
-• *IP:* \`${oldOnu.ip_address}\` (VLAN ${oldOnu.vlan})
+• *IP:* \`${oldOnu.ip_address}\` (VLAN ${calculatedVlan})
 • *Paquete:* *${planDisplay}*
 • *Modem Actual (a retirar):* \`${oldOnu.sn}\`
 ──────────────────────────────
@@ -6358,13 +6361,15 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
       return;
     }
 
+    const calculatedVlan = IpamService.getVlanFromIp(oldOnu.ip_address) || oldOnu.vlan || '510';
+
     metaObj.pendingModemSwapChoice = null;
     metaObj.pendingModemSwapService = {
       oldOnuId: oldOnu.unique_external_id,
       oldSn: oldOnu.sn,
       clientName: oldOnu.name,
       ip: oldOnu.ip_address,
-      vlan: oldOnu.vlan,
+      vlan: calculatedVlan,
       zone: oldOnu.zone,
       speedProfile: oldOnu.download_speed_profile_name,
       oltId: oldOnu.olt_id,
@@ -6384,7 +6389,7 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
 ──────────────────────────────
 • *Cliente / Folio:* *${oldOnu.name}*
 • *Zona / Municipio:* *${oldOnu.zone || 'Actopan'}*
-• *IP:* \`${oldOnu.ip_address}\` (VLAN ${oldOnu.vlan})
+• *IP:* \`${oldOnu.ip_address}\` (VLAN ${calculatedVlan})
 • *Paquete:* *${planDisplay}*
 • *Modem Actual (a retirar):* \`${oldOnu.sn}\`
 ──────────────────────────────
@@ -6538,6 +6543,7 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
     targetJid?: string
   ): Promise<void> {
     const onuModel = SmartOLTService.normalizeOnuType(unconfigured.onu_type_name || unconfigured.onu_type, unconfigured.sn);
+    const finalVlan = IpamService.getVlanFromIp(oldService.ip) || oldService.vlan || '510';
 
     metaObj.pendingModemSwapChoice = null;
     metaObj.pendingModemSwap = {
@@ -6546,7 +6552,7 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
       newSn: unconfigured.sn,
       clientName: oldService.clientName,
       ip: oldService.ip,
-      vlan: oldService.vlan,
+      vlan: finalVlan,
       zone: oldService.zone,
       speedProfile: oldService.speedProfile,
       oltId: unconfigured.olt_id || oldService.oltId,
@@ -6569,7 +6575,7 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
 ──────────────────────────────
 • *Cliente / Folio:* *${oldService.clientName}*
 • *Zona:* *${oldService.zone || 'Actopan'}*
-• *IP a Conservar:* \`${oldService.ip}\` (VLAN ${oldService.vlan})
+• *IP a Conservar:* \`${oldService.ip}\` (VLAN ${finalVlan})
 • *Paquete:* *${planDisplay}*
 • *Modem Anterior (a retirar):* \`${oldService.oldSn}\`
 • *Nuevo Modem (a instalar):* \`${unconfigured.sn}\` (${onuModel})
