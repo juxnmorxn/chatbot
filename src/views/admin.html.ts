@@ -4076,7 +4076,8 @@ export function getAdminDashboardHtml(): string {
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
           <div>
             <h3 style="font-size: 17px; font-weight: 800; letter-spacing: -0.3px; display: flex; align-items: center; gap: 8px;">
-              <span>👥</span> Grupos de WhatsApp & Derivación de Tickets
+              <svg class="svg-icon" viewBox="0 0 24 24" style="color: var(--accent-cyan);"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+              <span>Grupos de WhatsApp & Derivación de Tickets</span>
             </h3>
             <p style="font-size: 12.5px; color: var(--text-muted); margin-top: 4px;">
               Configura los grupos de WhatsApp por oficina/sucursal para transferir folios de soporte técnico entre oficinas y define el canal de notificaciones para Activaciones y Cambio de Módem.
@@ -4088,7 +4089,8 @@ export function getAdminDashboardHtml(): string {
               <span>Refrescar</span>
             </button>
             <button class="btn btn-primary btn-sm" onclick="openOfficeGroupModal()">
-              <span>➕ Vincular Nuevo Grupo</span>
+              <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              <span>Vincular Nuevo Grupo</span>
             </button>
           </div>
         </div>
@@ -4098,7 +4100,7 @@ export function getAdminDashboardHtml(): string {
           <div class="glass-card stat-card">
             <div style="display: flex; align-items: center; justify-content: space-between;">
               <span style="font-size: 12px; color: var(--text-muted); font-weight: 600;">TOTAL GRUPOS</span>
-              <span style="font-size: 20px;">🏢</span>
+              <svg class="svg-icon" viewBox="0 0 24 24" style="color: var(--text-dim);"><rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect><line x1="9" y1="6" x2="9" y2="6.01"></line><line x1="15" y1="6" x2="15" y2="6.01"></line><line x1="9" y1="10" x2="9" y2="10.01"></line><line x1="15" y1="10" x2="15" y2="10.01"></line><line x1="9" y1="14" x2="9" y2="14.01"></line><line x1="15" y1="14" x2="15" y2="14.01"></line><line x1="9" y1="18" x2="15" y2="18"></line></svg>
             </div>
             <div id="stat-office-groups-total" style="font-size: 26px; font-weight: 800; margin-top: 8px; color: #fff;">0</div>
             <div style="font-size: 11px; color: var(--text-dim); margin-top: 4px;">Configurados en BD Hostinger</div>
@@ -4107,7 +4109,7 @@ export function getAdminDashboardHtml(): string {
           <div class="glass-card stat-card">
             <div style="display: flex; align-items: center; justify-content: space-between;">
               <span style="font-size: 12px; color: var(--text-muted); font-weight: 600;">GRUPOS ACTIVOS</span>
-              <span style="font-size: 20px;">🟢</span>
+              <span class="status-dot online" style="width: 10px; height: 10px;"></span>
             </div>
             <div id="stat-office-groups-active" style="font-size: 26px; font-weight: 800; margin-top: 8px; color: var(--accent-emerald);">0</div>
             <div style="font-size: 11px; color: var(--text-dim); margin-top: 4px;">Recibiendo tickets y avisos</div>
@@ -4116,7 +4118,7 @@ export function getAdminDashboardHtml(): string {
           <div class="glass-card stat-card" style="border-top: 3px solid var(--accent-emerald);">
             <div style="display: flex; align-items: center; justify-content: space-between;">
               <span style="font-size: 12px; color: var(--accent-emerald); font-weight: 700;">CANAL DE ACTIVACIONES & SWAP</span>
-              <span style="font-size: 18px;">⭐</span>
+              <svg class="svg-icon" viewBox="0 0 24 24" style="color: var(--accent-emerald);"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
             </div>
             <div id="stat-activations-group-name" style="font-size: 15px; font-weight: 700; margin-top: 8px; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">No configurado</div>
             <div id="stat-activations-group-jid" style="font-size: 10.5px; font-family: var(--font-mono); color: var(--text-dim); margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">--</div>
@@ -4163,9 +4165,9 @@ export function getAdminDashboardHtml(): string {
         <!-- Help Notice Box -->
         <div class="glass-card" style="margin-top: 20px; border-left: 4px solid var(--accent-cyan); background: rgba(6, 182, 212, 0.05);">
           <div style="display: flex; gap: 12px; align-items: flex-start;">
-            <span style="font-size: 22px;">💡</span>
+            <svg class="svg-icon" viewBox="0 0 24 24" style="color: var(--accent-cyan); width: 22px; height: 22px; flex-shrink: 0; margin-top: 2px;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
             <div>
-              <h5 style="font-size: 13.5px; font-weight: 700; color: var(--accent-cyan); margin-bottom: 4px;">¿Cómo funciona el ruteo de tickets por grupos?</h5>
+              <h5 style="font-size: 13.5px; font-weight: 700; color: var(--accent-cyan); margin-bottom: 4px;">Guía de Ruteo de Tickets por Grupos</h5>
               <p style="font-size: 12px; color: var(--text-muted); line-height: 1.5; margin-bottom: 6px;">
                 1. <strong>Crear grupo en WhatsApp:</strong> Agrega al bot como participante o administrador al nuevo grupo de la oficina.<br>
                 2. <strong>Vincular al Panel:</strong> Haz clic en <em>"Vincular Nuevo Grupo"</em> y selecciona el grupo de la lista desplegable o pega el enlace de invitación.<br>
@@ -6182,10 +6184,10 @@ export function getAdminDashboardHtml(): string {
             <td>\${statusBadge}</td>
             <td>
               \${t.assigned_technician_name ? \`
-                <span class="badge badge-info" style="font-size: 11px;">🔧 \${escapeHtml(t.assigned_technician_name)}</span>
+                <span class="badge badge-info" style="font-size: 11px;">\${escapeHtml(t.assigned_technician_name)}</span>
               \` : '<span style="color: var(--text-dim); font-size: 11.5px;">Sin asignar</span>'}
               \${t.assigned_office ? \`
-                <div style="margin-top: 3px;"><span class="badge badge-secondary" style="font-size: 10px;">🏢 \${escapeHtml(t.assigned_office)}</span></div>
+                <div style="margin-top: 3px;"><span class="badge badge-secondary" style="font-size: 10px;">\${escapeHtml(t.assigned_office)}</span></div>
               \` : ''}
             </td>
             <td style="font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); white-space: nowrap;">
@@ -6194,14 +6196,14 @@ export function getAdminDashboardHtml(): string {
             <td style="text-align: right;">
               <div style="display: flex; gap: 6px; justify-content: flex-end;">
                 <button class="btn btn-secondary btn-xs" onclick='openTicketDetailModal(\${JSON.stringify(t).replace(/'/g, "&apos;")})' title="Ver expediente y cambiar estado">
-                  ✏️ Gestionar
+                  Gestionar
                 </button>
                 <button class="btn btn-secondary btn-xs" onclick="openForwardTicketModal('\${escapeHtml(t.folio || t.id)}')" title="Derivar ticket a grupo de oficina WhatsApp">
-                  📤 Oficina
+                  Derivar
                 </button>
                 \${phone ? \`
                   <button class="btn btn-primary btn-xs" onclick="selectChat('\${phone}'); navigateTo('live-chat');" title="Abrir Chat WhatsApp">
-                    💬
+                    Chat
                   </button>
                 \` : ''}
               </div>
@@ -6300,12 +6302,12 @@ export function getAdminDashboardHtml(): string {
           <div class="ticket-client">\${escapeHtml(t.client_name || 'Cliente')}</div>
           <div class="ticket-issue">\${escapeHtml(t.issue_summary || 'Sin descripción')}</div>
           <div class="ticket-footer">
-            <span>\${t.assigned_technician_name ? '🔧 ' + escapeHtml(t.assigned_technician_name) : 'Sin asignar'}</span>
+            <span>\${t.assigned_technician_name ? escapeHtml(t.assigned_technician_name) : 'Sin asignar'}</span>
             <span>\${formatShortTime(t.created_at)}</span>
           </div>
           \${t.assigned_office ? \`
             <div style="margin-top: 4px;">
-              <span class="badge badge-secondary" style="font-size: 10px; padding: 1px 6px;">🏢 \${escapeHtml(t.assigned_office)}</span>
+              <span class="badge badge-secondary" style="font-size: 10px; padding: 1px 6px;">\${escapeHtml(t.assigned_office)}</span>
             </div>
           \` : ''}
         \`;
@@ -6334,13 +6336,13 @@ export function getAdminDashboardHtml(): string {
           <p><strong>ONU ID / SN:</strong> \${escapeHtml(t.onu_id || 'N/A')}</p>
           <p><strong>Diagnóstico / Falla:</strong> \${escapeHtml(t.issue_summary || '')}</p>
           \${t.checks_performed ? \`<p><strong>Pruebas:</strong> \${escapeHtml(t.checks_performed)}</p>\` : ''}
-          \${t.assigned_office ? \`<p><strong>Oficina Asignada:</strong> <span class="badge badge-info" style="font-size: 11px;">🏢 \${escapeHtml(t.assigned_office)}</span></p>\` : ''}
+          \${t.assigned_office ? \`<p><strong>Oficina Asignada:</strong> <span class="badge badge-info" style="font-size: 11px;">\${escapeHtml(t.assigned_office)}</span></p>\` : ''}
           <div style="margin: 6px 0; padding: 10px 12px; background: rgba(6, 182, 212, 0.08); border-radius: var(--radius-sm); border: 1px solid rgba(6, 182, 212, 0.25); display: flex; justify-content: space-between; align-items: center; gap: 8px;">
             <div style="font-size: 11.5px; color: var(--text-muted);">
               <strong style="color: var(--accent-cyan);">Ruteo de Oficina:</strong> Transfiere este ticket a un grupo de WhatsApp de oficina.
             </div>
             <button type="button" class="btn btn-info btn-xs" onclick="closeModal(); setTimeout(() => openForwardTicketModal('\${t.folio}'), 120);">
-              📤 Derivar a Oficina
+              Derivar a Oficina
             </button>
           </div>
           <div class="form-group" style="margin-top: 6px;">
@@ -10171,27 +10173,27 @@ export function getAdminDashboardHtml(): string {
       if (!tbody) return;
 
       if (!groups || groups.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-dim); padding: 28px;">No hay grupos de WhatsApp registrados. Pulsa en <strong>"➕ Vincular Nuevo Grupo"</strong> para comenzar a recibir y derivar tickets.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-dim); padding: 28px;">No hay grupos de WhatsApp registrados. Pulsa en <strong>"Vincular Nuevo Grupo"</strong> para comenzar a recibir y derivar tickets.</td></tr>';
         return;
       }
 
       tbody.innerHTML = groups.map(g => {
-        let roleBadge = '<span class="badge badge-info" style="font-size: 11px;">🏢 Tickets Oficina</span>';
+        let roleBadge = '<span class="badge badge-info" style="font-size: 11px;">TICKETS OFICINA</span>';
         if (g.role === 'ACTIVACIONES') {
-          roleBadge = '<span class="badge badge-success" style="font-size: 11px; background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4);">⭐ Activaciones & Swap</span>';
+          roleBadge = '<span class="badge badge-success" style="font-size: 11px; background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4);">ACTIVACIONES & SWAP</span>';
         } else if (g.role === 'SOPORTE_GENERAL') {
-          roleBadge = '<span class="badge badge-purple" style="font-size: 11px;">🛡️ Soporte General</span>';
+          roleBadge = '<span class="badge badge-purple" style="font-size: 11px;">SOPORTE GENERAL</span>';
         }
 
         const isActive = g.is_active === 1 || g.is_active === true;
         const officeBadge = g.office ? \`<span class="badge badge-secondary" style="font-size: 10px; margin-left: 6px;">\${escapeHtml(g.office)}</span>\` : '';
-        const zonesStr = g.zones ? \`<div style="font-size: 11.5px; color: var(--text-muted); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="\${escapeHtml(g.zones)}">📍 \${escapeHtml(g.zones)}</div>\` : '<span style="color: var(--text-dim); font-size: 11px;">Todas las zonas</span>';
+        const zonesStr = g.zones ? \`<div style="font-size: 11.5px; color: var(--text-muted); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="\${escapeHtml(g.zones)}">Zonas: \${escapeHtml(g.zones)}</div>\` : '<span style="color: var(--text-dim); font-size: 11px;">Todas las zonas</span>';
 
         return \`
           <tr>
             <td>
-              <div style="font-weight: 700; color: #fff; font-size: 13.5px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
-                <span>💬 \${escapeHtml(g.name || 'Sin nombre')}</span>
+              <div style="font-weight: 700; color: #fff; font-size: 13.5px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                <span>\${escapeHtml(g.name || 'Sin nombre')}</span>
                 \${officeBadge}
               </div>
               \${g.invite_link ? \`<div style="margin-top: 3px;"><a href="\${escapeHtml(g.invite_link)}" target="_blank" rel="noopener" style="font-size: 11px; color: var(--accent-cyan); text-decoration: underline;">Enlace de Invitación ↗</a></div>\` : ''}
@@ -10204,20 +10206,21 @@ export function getAdminDashboardHtml(): string {
               </code>
             </td>
             <td style="text-align: center;">
-              <button class="btn \${isActive ? 'btn-success' : 'btn-secondary'} btn-xs" style="padding: 2px 8px; font-size: 11px;" onclick="handleToggleOfficeGroup(\${g.id}, \${!isActive})">
-                \${isActive ? '🟢 Activo' : '⚪ Inactivo'}
+              <button class="btn \${isActive ? 'btn-success' : 'btn-secondary'} btn-xs" style="padding: 2px 8px; font-size: 11px; display: inline-flex; align-items: center; gap: 5px;" onclick="handleToggleOfficeGroup(\${g.id}, \${!isActive})">
+                <span class="status-dot \${isActive ? 'online' : 'offline'}" style="width: 7px; height: 7px;"></span>
+                <span>\${isActive ? 'Activo' : 'Inactivo'}</span>
               </button>
             </td>
             <td style="text-align: right;">
               <div style="display: flex; gap: 6px; justify-content: flex-end;">
                 <button class="btn btn-secondary btn-xs" onclick="handleTestOfficeGroup('\${escapeHtml(g.jid)}', '\${escapeHtml(g.name || '')}')" title="Enviar mensaje de prueba de WhatsApp al grupo">
-                  ⚡ Probar
+                  Probar
                 </button>
                 <button class="btn btn-secondary btn-xs" onclick='openOfficeGroupModal(\${JSON.stringify(g).replace(/'/g, "&apos;")})' title="Editar grupo">
-                  ✏️
+                  Editar
                 </button>
                 <button class="btn btn-danger btn-xs" onclick="handleDeleteOfficeGroup(\${g.id}, '\${escapeHtml(g.name || '')}')" title="Eliminar grupo">
-                  🗑️
+                  Eliminar
                 </button>
               </div>
             </td>
@@ -10259,10 +10262,10 @@ export function getAdminDashboardHtml(): string {
           <div style="background: rgba(0,0,0,0.25); border: 1px solid var(--card-border); border-radius: var(--radius-sm); padding: 12px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
               <label class="form-label" style="margin-bottom: 0; font-size: 12px; font-weight: 700; color: var(--accent-cyan);">
-                📥 Cargar desde WhatsApp (Evolution API)
+                Cargar desde WhatsApp (Evolution API)
               </label>
               <button type="button" class="btn btn-secondary btn-xs" onclick="fetchAndFillWhatsAppGroupsDropdown()">
-                🔄 Buscar Grupos del Bot
+                Buscar Grupos del Bot
               </button>
             </div>
             <select id="modal-wa-group-select" class="form-control" style="font-size: 12px;" onchange="handleSelectWhatsAppGroupPreset(this.value)">
@@ -10284,9 +10287,9 @@ export function getAdminDashboardHtml(): string {
             <div class="form-group">
               <label class="form-label">Rol del Grupo *</label>
               <select id="modal-group-role" class="form-control">
-                <option value="TICKETS_OFICINA" \${g.role === 'TICKETS_OFICINA' || !g.role ? 'selected' : ''}>🏢 TICKETS DE OFICINA (Derivación)</option>
-                <option value="ACTIVACIONES" \${g.role === 'ACTIVACIONES' ? 'selected' : ''}>⭐ ACTIVACIONES & CAMBIO DE MÓDEM</option>
-                <option value="SOPORTE_GENERAL" \${g.role === 'SOPORTE_GENERAL' ? 'selected' : ''}>🛡️ SOPORTE GENERAL</option>
+                <option value="TICKETS_OFICINA" \${g.role === 'TICKETS_OFICINA' || !g.role ? 'selected' : ''}>TICKETS DE OFICINA (Derivación)</option>
+                <option value="ACTIVACIONES" \${g.role === 'ACTIVACIONES' ? 'selected' : ''}>ACTIVACIONES & CAMBIO DE MÓDEM</option>
+                <option value="SOPORTE_GENERAL" \${g.role === 'SOPORTE_GENERAL' ? 'selected' : ''}>SOPORTE GENERAL</option>
               </select>
             </div>
           </div>
@@ -10503,8 +10506,8 @@ export function getAdminDashboardHtml(): string {
         <div style="display: flex; flex-direction: column; gap: 14px;">
           <div style="padding: 10px 14px; background: rgba(0,0,0,0.3); border-radius: var(--radius-sm); border-left: 3px solid var(--accent-cyan);">
             <div style="font-weight: 700; color: #fff; font-size: 13.5px;">Ticket #\${escapeHtml(folio)} - \${escapeHtml(clientName)}</div>
-            <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">📱 Teléfono: \${escapeHtml(clientPhone)}</div>
-            <div style="font-size: 12px; color: var(--text-dim); margin-top: 4px;">⚠️ Reporte: \${escapeHtml(issueSummary)}</div>
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Teléfono: \${escapeHtml(clientPhone)}</div>
+            <div style="font-size: 12px; color: var(--text-dim); margin-top: 4px;">Reporte: \${escapeHtml(issueSummary)}</div>
           </div>
 
           <div class="form-group">
@@ -10554,7 +10557,7 @@ export function getAdminDashboardHtml(): string {
           showToast('Error', err.message || 'Error al derivar el ticket.', 'error');
           return false;
         }
-      }, '📤 Enviar a Oficina');
+      }, 'Enviar a Oficina');
     }
 
     // Bootstrap
