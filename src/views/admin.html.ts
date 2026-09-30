@@ -2438,6 +2438,13 @@ export function getAdminDashboardHtml(): string {
           <span class="nav-text">Mesa de Tickets</span>
           <span id="badge-tickets-open" class="nav-badge alert-badge" style="display: none;">0</span>
         </div>
+        <div class="nav-item" data-view="office-groups" onclick="navigateTo('office-groups')" title="Grupos de WhatsApp & Derivación de Tickets">
+          <span class="nav-icon">
+            <svg class="svg-icon" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+          </span>
+          <span class="nav-text">Grupos & Oficinas</span>
+          <span id="badge-office-groups" class="nav-badge" style="display: none;">0</span>
+        </div>
         <div class="nav-item" data-view="clients" onclick="navigateTo('clients')" title="Directorio de Clientes & GPS">
           <span class="nav-icon">
             <svg class="svg-icon" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M20 8c0 3-4 7-4 7s-4-4-4-7a4 4 0 0 1 8 0z"></path><circle cx="16" cy="8" r="1.5"></circle></svg>
@@ -4064,6 +4071,112 @@ export function getAdminDashboardHtml(): string {
         </div>
       </section>
 
+      <!-- VIEW: GRUPOS DE WHATSAPP & OFICINAS -->
+      <section id="view-office-groups" class="view-container">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
+          <div>
+            <h3 style="font-size: 17px; font-weight: 800; letter-spacing: -0.3px; display: flex; align-items: center; gap: 8px;">
+              <span>👥</span> Grupos de WhatsApp & Derivación de Tickets
+            </h3>
+            <p style="font-size: 12.5px; color: var(--text-muted); margin-top: 4px;">
+              Configura los grupos de WhatsApp por oficina/sucursal para transferir folios de soporte técnico entre oficinas y define el canal de notificaciones para Activaciones y Cambio de Módem.
+            </p>
+          </div>
+          <div style="display: flex; gap: 10px; align-items: center;">
+            <button class="btn btn-secondary btn-sm" onclick="loadOfficeGroupsData()">
+              <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M21 2v6h-6"></path><path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path><path d="M3 22v-6h6"></path><path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path></svg>
+              <span>Refrescar</span>
+            </button>
+            <button class="btn btn-primary btn-sm" onclick="openOfficeGroupModal()">
+              <span>➕ Vincular Nuevo Grupo</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Metric KPI Cards -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-bottom: 22px;">
+          <div class="glass-card stat-card">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <span style="font-size: 12px; color: var(--text-muted); font-weight: 600;">TOTAL GRUPOS</span>
+              <span style="font-size: 20px;">🏢</span>
+            </div>
+            <div id="stat-office-groups-total" style="font-size: 26px; font-weight: 800; margin-top: 8px; color: #fff;">0</div>
+            <div style="font-size: 11px; color: var(--text-dim); margin-top: 4px;">Configurados en BD Hostinger</div>
+          </div>
+
+          <div class="glass-card stat-card">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <span style="font-size: 12px; color: var(--text-muted); font-weight: 600;">GRUPOS ACTIVOS</span>
+              <span style="font-size: 20px;">🟢</span>
+            </div>
+            <div id="stat-office-groups-active" style="font-size: 26px; font-weight: 800; margin-top: 8px; color: var(--accent-emerald);">0</div>
+            <div style="font-size: 11px; color: var(--text-dim); margin-top: 4px;">Recibiendo tickets y avisos</div>
+          </div>
+
+          <div class="glass-card stat-card" style="border-top: 3px solid var(--accent-emerald);">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <span style="font-size: 12px; color: var(--accent-emerald); font-weight: 700;">CANAL DE ACTIVACIONES & SWAP</span>
+              <span style="font-size: 18px;">⭐</span>
+            </div>
+            <div id="stat-activations-group-name" style="font-size: 15px; font-weight: 700; margin-top: 8px; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">No configurado</div>
+            <div id="stat-activations-group-jid" style="font-size: 10.5px; font-family: var(--font-mono); color: var(--text-dim); margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">--</div>
+          </div>
+        </div>
+
+        <!-- Groups Table Container -->
+        <div class="glass-card">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <h4 style="font-size: 15px; font-weight: 700;">Directorio de Grupos de WhatsApp</h4>
+              <span id="badge-groups-count" class="badge badge-info" style="font-size: 10px;">0 grupos</span>
+            </div>
+            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+              <select id="filter-group-role" class="form-control" style="font-size: 12px; width: auto; padding: 4px 10px;" onchange="filterOfficeGroupsTable()">
+                <option value="">Todos los Roles</option>
+                <option value="TICKETS_OFICINA">Tickets de Oficina</option>
+                <option value="ACTIVACIONES">Activaciones & Swap Módem</option>
+                <option value="SOPORTE_GENERAL">Soporte General</option>
+              </select>
+              <input type="text" id="filter-group-search" class="form-control" placeholder="Buscar por nombre, oficina o JID..." style="font-size: 12px; width: 220px; padding: 4px 10px;" oninput="filterOfficeGroupsTable()">
+            </div>
+          </div>
+
+          <div class="table-responsive">
+            <table class="datatable">
+              <thead>
+                <tr>
+                  <th>Grupo & Sucursal</th>
+                  <th>Rol / Propósito</th>
+                  <th>Zonas Asignadas</th>
+                  <th>WhatsApp JID / Enlace</th>
+                  <th style="text-align: center;">Estado</th>
+                  <th style="text-align: right;">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="table-office-groups-body">
+                <tr><td colspan="6" style="text-align: center; color: var(--text-dim); padding: 24px;">Cargando grupos...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Help Notice Box -->
+        <div class="glass-card" style="margin-top: 20px; border-left: 4px solid var(--accent-cyan); background: rgba(6, 182, 212, 0.05);">
+          <div style="display: flex; gap: 12px; align-items: flex-start;">
+            <span style="font-size: 22px;">💡</span>
+            <div>
+              <h5 style="font-size: 13.5px; font-weight: 700; color: var(--accent-cyan); margin-bottom: 4px;">¿Cómo funciona el ruteo de tickets por grupos?</h5>
+              <p style="font-size: 12px; color: var(--text-muted); line-height: 1.5; margin-bottom: 6px;">
+                1. <strong>Crear grupo en WhatsApp:</strong> Agrega al bot como participante o administrador al nuevo grupo de la oficina.<br>
+                2. <strong>Vincular al Panel:</strong> Haz clic en <em>"Vincular Nuevo Grupo"</em> y selecciona el grupo de la lista desplegable o pega el enlace de invitación.<br>
+                3. <strong>Derivar Tickets:</strong> En la <a href="javascript:navigateTo('tickets')" style="color: var(--accent-cyan); text-decoration: underline;">Mesa de Tickets</a>, pulsa <strong>"Derivar a Oficina"</strong> en cualquier ticket y selecciona la sucursal de destino. El bot notificará instantáneamente al grupo de WhatsApp con la ficha completa del cliente, ubicación GPS y falla técnica.<br>
+                4. <strong>Cambio de Módem y Activaciones:</strong> Las activaciones y los cambios de módem se envían automáticamente al grupo con rol <code>ACTIVACIONES</code> con el formato estándar (Nombre, IP, Zona, CAMBIO DE MODEM).
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- VIEW 8: USUARIOS & ROLES (Consolidado en Personal & Accesos) -->
       <section id="view-users" class="view-container" style="display: none;"></section>
 
@@ -4076,6 +4189,8 @@ export function getAdminDashboardHtml(): string {
       token: localStorage.getItem('cloudware_admin_token') || '',
       user: null,
       currentView: 'dashboard',
+      officeGroups: [],
+      activationsGroupJid: '',
       chats: [],
       activeChatPhone: null,
       chatDeptFilter: 'all',
@@ -4395,6 +4510,7 @@ export function getAdminDashboardHtml(): string {
         'live-chat': 'Live WhatsApp & Atención en Vivo',
         'clients': 'Directorio de Clientes & Geolocalización GPS',
         'tickets': 'Mesa de Tickets & Órdenes de Servicio',
+        'office-groups': 'Grupos de WhatsApp & Derivación de Tickets',
         'ipam': 'Control de Subredes & Pools de IP',
         'audit': 'Auditoría SmartOLT vs WispHub',
         'personal': 'Personal, Roles & Técnicos de Campo',
@@ -4419,6 +4535,7 @@ export function getAdminDashboardHtml(): string {
       'live-chat': { label: 'Live Chat', placeholder: 'Buscar cliente por nombre o teléfono...' },
       'clients': { label: 'Clientes & GPS', placeholder: 'Buscar por cliente, folio, IP, SN o teléfono...' },
       'tickets': { label: 'Tickets', placeholder: 'Buscar por folio, cliente o falla...' },
+      'office-groups': { label: 'Grupos & Oficinas', placeholder: 'Buscar grupo por nombre, oficina o JID...' },
       'ipam': { label: 'Pools IP', placeholder: 'Buscar ONUs o subredes...' },
       'audit': { label: 'Auditoría', placeholder: 'Buscar por cliente, IP, servicio o plan...' },
       'personal': { label: 'Personal', placeholder: 'Buscar usuarios o técnicos con PIN...' },
@@ -4595,6 +4712,7 @@ export function getAdminDashboardHtml(): string {
         case 'live-chat': loadLiveChatData(); break;
         case 'clients': loadClientsData(); break;
         case 'tickets': loadTicketsData(); break;
+        case 'office-groups': loadOfficeGroupsData(); break;
         case 'ipam': {
           const savedIpamTab = localStorage.getItem('cloudware_ipam_tab') || state.ipamTab || 'pools';
           switchIpamTab(savedIpamTab);
@@ -6066,6 +6184,9 @@ export function getAdminDashboardHtml(): string {
               \${t.assigned_technician_name ? \`
                 <span class="badge badge-info" style="font-size: 11px;">🔧 \${escapeHtml(t.assigned_technician_name)}</span>
               \` : '<span style="color: var(--text-dim); font-size: 11.5px;">Sin asignar</span>'}
+              \${t.assigned_office ? \`
+                <div style="margin-top: 3px;"><span class="badge badge-secondary" style="font-size: 10px;">🏢 \${escapeHtml(t.assigned_office)}</span></div>
+              \` : ''}
             </td>
             <td style="font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); white-space: nowrap;">
               \${formatShortDate(t.created_at)}
@@ -6074,6 +6195,9 @@ export function getAdminDashboardHtml(): string {
               <div style="display: flex; gap: 6px; justify-content: flex-end;">
                 <button class="btn btn-secondary btn-xs" onclick='openTicketDetailModal(\${JSON.stringify(t).replace(/'/g, "&apos;")})' title="Ver expediente y cambiar estado">
                   ✏️ Gestionar
+                </button>
+                <button class="btn btn-secondary btn-xs" onclick="openForwardTicketModal('\${escapeHtml(t.folio || t.id)}')" title="Derivar ticket a grupo de oficina WhatsApp">
+                  📤 Oficina
                 </button>
                 \${phone ? \`
                   <button class="btn btn-primary btn-xs" onclick="selectChat('\${phone}'); navigateTo('live-chat');" title="Abrir Chat WhatsApp">
@@ -6179,6 +6303,11 @@ export function getAdminDashboardHtml(): string {
             <span>\${t.assigned_technician_name ? '🔧 ' + escapeHtml(t.assigned_technician_name) : 'Sin asignar'}</span>
             <span>\${formatShortTime(t.created_at)}</span>
           </div>
+          \${t.assigned_office ? \`
+            <div style="margin-top: 4px;">
+              <span class="badge badge-secondary" style="font-size: 10px; padding: 1px 6px;">🏢 \${escapeHtml(t.assigned_office)}</span>
+            </div>
+          \` : ''}
         \`;
 
         targetCol.appendChild(card);
@@ -6205,7 +6334,16 @@ export function getAdminDashboardHtml(): string {
           <p><strong>ONU ID / SN:</strong> \${escapeHtml(t.onu_id || 'N/A')}</p>
           <p><strong>Diagnóstico / Falla:</strong> \${escapeHtml(t.issue_summary || '')}</p>
           \${t.checks_performed ? \`<p><strong>Pruebas:</strong> \${escapeHtml(t.checks_performed)}</p>\` : ''}
-          <div class="form-group" style="margin-top: 10px;">
+          \${t.assigned_office ? \`<p><strong>Oficina Asignada:</strong> <span class="badge badge-info" style="font-size: 11px;">🏢 \${escapeHtml(t.assigned_office)}</span></p>\` : ''}
+          <div style="margin: 6px 0; padding: 10px 12px; background: rgba(6, 182, 212, 0.08); border-radius: var(--radius-sm); border: 1px solid rgba(6, 182, 212, 0.25); display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+            <div style="font-size: 11.5px; color: var(--text-muted);">
+              <strong style="color: var(--accent-cyan);">Ruteo de Oficina:</strong> Transfiere este ticket a un grupo de WhatsApp de oficina.
+            </div>
+            <button type="button" class="btn btn-info btn-xs" onclick="closeModal(); setTimeout(() => openForwardTicketModal('\${t.folio}'), 120);">
+              📤 Derivar a Oficina
+            </button>
+          </div>
+          <div class="form-group" style="margin-top: 6px;">
             <label class="form-label">Cambiar Estado</label>
             <select id="modal-ticket-status-select" class="form-control">
               <option value="ABIERTO" \${t.status === 'ABIERTO' ? 'selected' : ''}>ABIERTO</option>
@@ -9969,6 +10107,454 @@ export function getAdminDashboardHtml(): string {
       } catch {
         return '';
       }
+    }
+
+    // ==========================================
+    // GRUPOS DE WHATSAPP Y OFICINAS (RUTEO DE TICKETS Y ACTIVACIONES)
+    // ==========================================
+    async function loadOfficeGroupsData() {
+      try {
+        const res = await apiFetch('/api/office-groups');
+        if (res && res.success) {
+          state.officeGroups = res.groups || [];
+          state.activationsGroupJid = res.currentActivationJid || '';
+          renderOfficeGroupsTable(state.officeGroups);
+          updateOfficeGroupsStats();
+        } else {
+          showToast('Error', res?.error || 'No se pudieron consultar los grupos de WhatsApp.', 'error');
+        }
+      } catch (err) {
+        console.error('Error al cargar grupos:', err);
+        showToast('Error', 'Fallo al comunicar con la API de grupos.', 'error');
+      }
+    }
+
+    function updateOfficeGroupsStats() {
+      const total = (state.officeGroups || []).length;
+      const active = (state.officeGroups || []).filter(g => g.is_active === 1 || g.is_active === true).length;
+
+      const totalEl = document.getElementById('stat-office-groups-total');
+      const activeEl = document.getElementById('stat-office-groups-active');
+      const countLabel = document.getElementById('badge-groups-count');
+      const navBadge = document.getElementById('badge-office-groups');
+
+      if (totalEl) totalEl.innerText = total;
+      if (activeEl) activeEl.innerText = active;
+      if (countLabel) countLabel.innerText = \`\${total} grupos\`;
+      if (navBadge) {
+        navBadge.innerText = total;
+        navBadge.style.display = total > 0 ? 'inline-block' : 'none';
+      }
+
+      // Buscar grupo oficial de activaciones
+      const actGroup = (state.officeGroups || []).find(g => g.role === 'ACTIVACIONES' && (g.is_active === 1 || g.is_active === true)) ||
+                       (state.officeGroups || []).find(g => g.jid === state.activationsGroupJid);
+
+      const nameEl = document.getElementById('stat-activations-group-name');
+      const jidEl = document.getElementById('stat-activations-group-jid');
+      if (nameEl && jidEl) {
+        if (actGroup) {
+          nameEl.innerText = actGroup.name || 'Grupo Activaciones';
+          jidEl.innerText = actGroup.jid;
+        } else if (state.activationsGroupJid) {
+          nameEl.innerText = 'Activaciones (Configurado en Ajustes)';
+          jidEl.innerText = state.activationsGroupJid;
+        } else {
+          nameEl.innerText = 'No configurado';
+          jidEl.innerText = 'Asigna un grupo con rol "ACTIVACIONES"';
+        }
+      }
+    }
+
+    function renderOfficeGroupsTable(groups) {
+      const tbody = document.getElementById('table-office-groups-body');
+      if (!tbody) return;
+
+      if (!groups || groups.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-dim); padding: 28px;">No hay grupos de WhatsApp registrados. Pulsa en <strong>"➕ Vincular Nuevo Grupo"</strong> para comenzar a recibir y derivar tickets.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = groups.map(g => {
+        let roleBadge = '<span class="badge badge-info" style="font-size: 11px;">🏢 Tickets Oficina</span>';
+        if (g.role === 'ACTIVACIONES') {
+          roleBadge = '<span class="badge badge-success" style="font-size: 11px; background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4);">⭐ Activaciones & Swap</span>';
+        } else if (g.role === 'SOPORTE_GENERAL') {
+          roleBadge = '<span class="badge badge-purple" style="font-size: 11px;">🛡️ Soporte General</span>';
+        }
+
+        const isActive = g.is_active === 1 || g.is_active === true;
+        const officeBadge = g.office ? \`<span class="badge badge-secondary" style="font-size: 10px; margin-left: 6px;">\${escapeHtml(g.office)}</span>\` : '';
+        const zonesStr = g.zones ? \`<div style="font-size: 11.5px; color: var(--text-muted); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="\${escapeHtml(g.zones)}">📍 \${escapeHtml(g.zones)}</div>\` : '<span style="color: var(--text-dim); font-size: 11px;">Todas las zonas</span>';
+
+        return \`
+          <tr>
+            <td>
+              <div style="font-weight: 700; color: #fff; font-size: 13.5px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
+                <span>💬 \${escapeHtml(g.name || 'Sin nombre')}</span>
+                \${officeBadge}
+              </div>
+              \${g.invite_link ? \`<div style="margin-top: 3px;"><a href="\${escapeHtml(g.invite_link)}" target="_blank" rel="noopener" style="font-size: 11px; color: var(--accent-cyan); text-decoration: underline;">Enlace de Invitación ↗</a></div>\` : ''}
+            </td>
+            <td>\${roleBadge}</td>
+            <td>\${zonesStr}</td>
+            <td>
+              <code style="font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px; display: inline-block; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                \${escapeHtml(g.jid || '')}
+              </code>
+            </td>
+            <td style="text-align: center;">
+              <button class="btn \${isActive ? 'btn-success' : 'btn-secondary'} btn-xs" style="padding: 2px 8px; font-size: 11px;" onclick="handleToggleOfficeGroup(\${g.id}, \${!isActive})">
+                \${isActive ? '🟢 Activo' : '⚪ Inactivo'}
+              </button>
+            </td>
+            <td style="text-align: right;">
+              <div style="display: flex; gap: 6px; justify-content: flex-end;">
+                <button class="btn btn-secondary btn-xs" onclick="handleTestOfficeGroup('\${escapeHtml(g.jid)}', '\${escapeHtml(g.name || '')}')" title="Enviar mensaje de prueba de WhatsApp al grupo">
+                  ⚡ Probar
+                </button>
+                <button class="btn btn-secondary btn-xs" onclick='openOfficeGroupModal(\${JSON.stringify(g).replace(/'/g, "&apos;")})' title="Editar grupo">
+                  ✏️
+                </button>
+                <button class="btn btn-danger btn-xs" onclick="handleDeleteOfficeGroup(\${g.id}, '\${escapeHtml(g.name || '')}')" title="Eliminar grupo">
+                  🗑️
+                </button>
+              </div>
+            </td>
+          </tr>
+        \`;
+      }).join('');
+    }
+
+    function filterOfficeGroupsTable() {
+      const q = (document.getElementById('filter-group-search')?.value || '').toLowerCase().trim();
+      const role = (document.getElementById('filter-group-role')?.value || '').trim();
+
+      const filtered = (state.officeGroups || []).filter(g => {
+        if (role && g.role !== role) return false;
+        if (q) {
+          const matchName = String(g.name || '').toLowerCase().includes(q);
+          const matchOffice = String(g.office || '').toLowerCase().includes(q);
+          const matchJid = String(g.jid || '').toLowerCase().includes(q);
+          const matchZones = String(g.zones || '').toLowerCase().includes(q);
+          if (!matchName && !matchOffice && !matchJid && !matchZones) return false;
+        }
+        return true;
+      });
+
+      renderOfficeGroupsTable(filtered);
+    }
+
+    async function openOfficeGroupModal(existingGroup = null) {
+      const isEdit = !!existingGroup;
+      const g = existingGroup || {};
+
+      const content = \`
+        <div style="display: flex; flex-direction: column; gap: 14px;">
+          <p style="font-size: 12.5px; color: var(--text-muted); line-height: 1.4;">
+            Vincula un grupo de WhatsApp para derivar tickets de soporte técnico o para recibir avisos de <strong>Activaciones y Cambio de Módem</strong>.
+          </p>
+
+          <!-- Evolution WhatsApp Quick Selector -->
+          <div style="background: rgba(0,0,0,0.25); border: 1px solid var(--card-border); border-radius: var(--radius-sm); padding: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <label class="form-label" style="margin-bottom: 0; font-size: 12px; font-weight: 700; color: var(--accent-cyan);">
+                📥 Cargar desde WhatsApp (Evolution API)
+              </label>
+              <button type="button" class="btn btn-secondary btn-xs" onclick="fetchAndFillWhatsAppGroupsDropdown()">
+                🔄 Buscar Grupos del Bot
+              </button>
+            </div>
+            <select id="modal-wa-group-select" class="form-control" style="font-size: 12px;" onchange="handleSelectWhatsAppGroupPreset(this.value)">
+              <option value="">-- O selecciona un grupo de WhatsApp detectado --</option>
+            </select>
+            <div id="modal-wa-group-status" style="font-size: 11px; color: var(--text-dim); margin-top: 4px;">Pulsa el botón para buscar grupos donde el bot ya esté agregado.</div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Nombre del Grupo / Sucursal *</label>
+            <input type="text" id="modal-group-name" class="form-control" placeholder="Ej: Oficina Actopan - Soporte" value="\${escapeHtml(g.name || '')}">
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div class="form-group">
+              <label class="form-label">Oficina / Sucursal</label>
+              <input type="text" id="modal-group-office" class="form-control" placeholder="Ej: Actopan, San Agustín..." value="\${escapeHtml(g.office || '')}">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Rol del Grupo *</label>
+              <select id="modal-group-role" class="form-control">
+                <option value="TICKETS_OFICINA" \${g.role === 'TICKETS_OFICINA' || !g.role ? 'selected' : ''}>🏢 TICKETS DE OFICINA (Derivación)</option>
+                <option value="ACTIVACIONES" \${g.role === 'ACTIVACIONES' ? 'selected' : ''}>⭐ ACTIVACIONES & CAMBIO DE MÓDEM</option>
+                <option value="SOPORTE_GENERAL" \${g.role === 'SOPORTE_GENERAL' ? 'selected' : ''}>🛡️ SOPORTE GENERAL</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">WhatsApp JID del Grupo (@g.us) *</label>
+            <input type="text" id="modal-group-jid" class="form-control" placeholder="120363xxxxxxxxxx@g.us" value="\${escapeHtml(g.jid || '')}">
+            <span style="font-size: 11px; color: var(--text-dim);">Identificador único de WhatsApp del grupo.</span>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">O Enlace de Invitación de WhatsApp (Opcional)</label>
+            <input type="text" id="modal-group-invite" class="form-control" placeholder="https://chat.whatsapp.com/..." value="\${escapeHtml(g.invite_link || '')}">
+            <span style="font-size: 11px; color: var(--text-dim);">Si no tienes el JID, pega el enlace; el sistema intentará resolverlo automáticamente.</span>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Zonas / Comunidades Atendidas</label>
+            <input type="text" id="modal-group-zones" class="form-control" placeholder="Ej: Actopan, Chicavasco, Boxaxni, El Arenal..." value="\${escapeHtml(g.zones || '')}">
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
+            <input type="checkbox" id="modal-group-active" \${g.is_active === 0 ? '' : 'checked'} style="width: 16px; height: 16px; accent-color: var(--accent-emerald);">
+            <label for="modal-group-active" style="font-size: 12.5px; cursor: pointer;">Grupo activo para recibir notificaciones y tickets</label>
+          </div>
+        </div>
+      \`;
+
+      openModal(isEdit ? 'Editar Grupo de WhatsApp' : 'Vincular Nuevo Grupo de WhatsApp', content, async () => {
+        const name = (document.getElementById('modal-group-name')?.value || '').trim();
+        const office = (document.getElementById('modal-group-office')?.value || '').trim();
+        const role = document.getElementById('modal-group-role')?.value || 'TICKETS_OFICINA';
+        const jid = (document.getElementById('modal-group-jid')?.value || '').trim();
+        const invite_link = (document.getElementById('modal-group-invite')?.value || '').trim();
+        const zones = (document.getElementById('modal-group-zones')?.value || '').trim();
+        const is_active = document.getElementById('modal-group-active')?.checked ? 1 : 0;
+
+        if (!name) {
+          showToast('Campo Requerido', 'Ingresa un nombre identificador para el grupo.', 'warning');
+          return false;
+        }
+        if (!jid && !invite_link) {
+          showToast('Identificador Requerido', 'Ingresa el WhatsApp JID (@g.us) o el enlace de invitación del grupo.', 'warning');
+          return false;
+        }
+
+        try {
+          const payload = {
+            id: g.id || undefined,
+            name,
+            office: office || null,
+            role,
+            jid: jid || undefined,
+            invite_link: invite_link || null,
+            zones: zones || null,
+            is_active,
+          };
+
+          const res = await apiFetch('/api/office-groups', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+          });
+
+          if (res && res.success) {
+            showToast('Grupo Guardado', res.message || \`Grupo "\${name}" registrado correctamente.\`, 'success', 3500);
+            await loadOfficeGroupsData();
+            return true;
+          } else {
+            showToast('Error', res?.error || 'No se pudo guardar el grupo.', 'error');
+            return false;
+          }
+        } catch (err) {
+          showToast('Error', err.message || 'Error al guardar el grupo.', 'error');
+          return false;
+        }
+      }, isEdit ? 'Guardar Cambios' : 'Vincular Grupo');
+
+      // Intentar precargar grupos automáticamente
+      setTimeout(fetchAndFillWhatsAppGroupsDropdown, 150);
+    }
+
+    async function fetchAndFillWhatsAppGroupsDropdown() {
+      const select = document.getElementById('modal-wa-group-select');
+      const status = document.getElementById('modal-wa-group-status');
+      if (!select) return;
+
+      if (status) status.innerText = 'Consultando grupos de WhatsApp desde Evolution API...';
+      try {
+        const res = await apiFetch('/api/whatsapp/groups');
+        if (res && res.success && Array.isArray(res.groups)) {
+          if (res.groups.length === 0) {
+            if (status) status.innerText = 'El bot aún no pertenece a ningún grupo en esta instancia.';
+            return;
+          }
+          window._loadedWaGroups = res.groups;
+          select.innerHTML = '<option value="">-- Selecciona un grupo detectado (' + res.groups.length + ') --</option>' +
+            res.groups.map((grp, idx) => {
+              const label = (grp.subject || grp.name || 'Grupo ' + idx) + ' (' + grp.id + ')';
+              return '<option value="' + escapeHtml(grp.id) + '">' + escapeHtml(label) + '</option>';
+            }).join('');
+          if (status) status.innerText = \`✅ Se detectaron \${res.groups.length} grupos en WhatsApp.\`;
+        } else {
+          if (status) status.innerText = 'No se pudieron listar grupos de Evolution API.';
+        }
+      } catch (err) {
+        if (status) status.innerText = 'Error al conectar con Evolution API para listar grupos.';
+      }
+    }
+
+    function handleSelectWhatsAppGroupPreset(jid) {
+      if (!jid || !window._loadedWaGroups) return;
+      const grp = window._loadedWaGroups.find(g => g.id === jid);
+      if (grp) {
+        const nameInput = document.getElementById('modal-group-name');
+        const jidInput = document.getElementById('modal-group-jid');
+        if (nameInput && !nameInput.value.trim()) {
+          nameInput.value = grp.subject || grp.name || '';
+        }
+        if (jidInput) {
+          jidInput.value = grp.id || jid;
+        }
+      }
+    }
+
+    async function handleTestOfficeGroup(jid, name) {
+      if (!jid) {
+        showToast('JID no válido', 'El grupo no tiene un JID asignado.', 'warning');
+        return;
+      }
+      showToast('Enviando...', \`Enviando mensaje de prueba a "\${name}"...\`, 'info', 2000);
+      try {
+        const res = await apiFetch('/api/office-groups/test', {
+          method: 'POST',
+          body: JSON.stringify({ jid, name }),
+        });
+        if (res && res.success) {
+          showToast('Prueba Exitosa', res.message || 'Mensaje de WhatsApp entregado correctamente al grupo.', 'success', 3500);
+        } else {
+          showToast('Falla de Envío', res?.error || 'No se pudo enviar el mensaje al grupo.', 'error');
+        }
+      } catch (err) {
+        showToast('Error', err.message || 'Error al enviar mensaje de prueba.', 'error');
+      }
+    }
+
+    async function handleToggleOfficeGroup(id, isActive) {
+      try {
+        const res = await apiFetch(\`/api/office-groups/\${id}/toggle\`, {
+          method: 'PUT',
+          body: JSON.stringify({ isActive }),
+        });
+        if (res && res.success) {
+          showToast('Estado Actualizado', isActive ? 'Grupo activado.' : 'Grupo desactivado.', 'info', 2000);
+          loadOfficeGroupsData();
+        } else {
+          showToast('Error', res?.error || 'No se pudo cambiar el estado.', 'error');
+        }
+      } catch (err) {
+        showToast('Error', 'Fallo al comunicar cambio de estado.', 'error');
+      }
+    }
+
+    function handleDeleteOfficeGroup(id, name) {
+      showConfirmDialog(
+        'Eliminar Grupo de WhatsApp',
+        \`¿Estás seguro de desvincular el grupo "<strong>\${escapeHtml(name)}</strong>"? Dejará de recibir tickets y avisos de oficina.\`,
+        async () => {
+          try {
+            const res = await apiFetch(\`/api/office-groups/\${id}\`, {
+              method: 'DELETE',
+            });
+            if (res && res.success) {
+              showToast('Grupo Eliminado', res.message || 'Grupo desvinculado con éxito.', 'success');
+              loadOfficeGroupsData();
+            } else {
+              showToast('Error', res?.error || 'No se pudo eliminar el grupo.', 'error');
+            }
+          } catch (err) {
+            showToast('Error', 'Fallo al eliminar el grupo.', 'error');
+          }
+        },
+        true
+      );
+    }
+
+    // Modal para Derivar Ticket a Grupo de Oficina
+    async function openForwardTicketModal(folio) {
+      if (!folio) return;
+      const ticket = (state.tickets || []).find(t => String(t.folio) === String(folio) || String(t.id) === String(folio));
+      
+      // Si la lista de grupos está vacía, cargarla
+      if (!state.officeGroups || state.officeGroups.length === 0) {
+        try {
+          const res = await apiFetch('/api/office-groups');
+          if (res && res.success) {
+            state.officeGroups = res.groups || [];
+          }
+        } catch (_) {}
+      }
+
+      const activeGroups = (state.officeGroups || []).filter(g => g.is_active === 1 || g.is_active === true);
+
+      if (activeGroups.length === 0) {
+        showToast('Sin Grupos Activos', 'No hay grupos de oficina registrados y activos. Registra uno primero en Grupos & Oficinas.', 'warning', 4500);
+        navigateTo('office-groups');
+        return;
+      }
+
+      const clientName = ticket?.client_name || 'Desconocido';
+      const clientPhone = ticket?.phone || '';
+      const issueSummary = ticket?.issue_summary || 'Sin descripción';
+
+      const content = \`
+        <div style="display: flex; flex-direction: column; gap: 14px;">
+          <div style="padding: 10px 14px; background: rgba(0,0,0,0.3); border-radius: var(--radius-sm); border-left: 3px solid var(--accent-cyan);">
+            <div style="font-weight: 700; color: #fff; font-size: 13.5px;">Ticket #\${escapeHtml(folio)} - \${escapeHtml(clientName)}</div>
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">📱 Teléfono: \${escapeHtml(clientPhone)}</div>
+            <div style="font-size: 12px; color: var(--text-dim); margin-top: 4px;">⚠️ Reporte: \${escapeHtml(issueSummary)}</div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Selecciona la Oficina / Grupo de WhatsApp de Destino *</label>
+            <select id="forward-target-group-jid" class="form-control" style="font-size: 13px;">
+              \${activeGroups.map(g => {
+                const label = (g.name || 'Grupo') + (g.office ? ' [' + g.office + ']' : '') + (g.zones ? ' - ' + g.zones : '');
+                return \`<option value="\${escapeHtml(g.jid)}">\${escapeHtml(label)}</option>\`;
+              }).join('')}
+            </select>
+            <span style="font-size: 11px; color: var(--text-dim);">El ticket se enviará con su ficha completa a este grupo de WhatsApp.</span>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Instrucciones o Notas de Derivación (Opcional)</label>
+            <textarea id="forward-custom-notes" class="form-control" rows="3" placeholder="Ej: Cliente reporta caída tras corte de luz, favor de mandar técnico de zona o cambio de acometida..."></textarea>
+            <span style="font-size: 11px; color: var(--text-dim);">Estas notas se adjuntarán en el mensaje de WhatsApp enviado a la oficina.</span>
+          </div>
+        </div>
+      \`;
+
+      openModal(\`Derivar Folio #\${folio} a Oficina\`, content, async () => {
+        const groupJid = document.getElementById('forward-target-group-jid')?.value;
+        const customNotes = (document.getElementById('forward-custom-notes')?.value || '').trim();
+
+        if (!groupJid) {
+          showToast('Selección Requerida', 'Selecciona el grupo de destino.', 'warning');
+          return false;
+        }
+
+        try {
+          showToast('Derivando...', 'Enviando ticket al grupo de WhatsApp...', 'info', 2000);
+          const res = await apiFetch(\`/api/tickets/\${folio}/forward-group\`, {
+            method: 'POST',
+            body: JSON.stringify({ groupJid, customNotes }),
+          });
+
+          if (res && res.success) {
+            showToast('Ticket Derivado', res.message || \`Folio #\${folio} derivado exitosamente a la oficina.\`, 'success', 4000);
+            await loadTicketsData();
+            return true;
+          } else {
+            showToast('Error', res?.error || 'No se pudo derivar el ticket a la oficina.', 'error');
+            return false;
+          }
+        } catch (err) {
+          showToast('Error', err.message || 'Error al derivar el ticket.', 'error');
+          return false;
+        }
+      }, '📤 Enviar a Oficina');
     }
 
     // Bootstrap

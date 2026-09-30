@@ -6059,11 +6059,7 @@ Módem aprovisionado en la OLT con su VLAN y Perfil de Velocidad.`;
       if (extraTags.length > 0) {
         groupMsg += `\n${extraTags.join(' | ')}`;
       }
-      let configuredGroupJid = SettingsService.get(
-        'ACTIVATIONS_GROUP_JID',
-        'ACTIVATIONS_GROUP_JID',
-        SettingsService.get('GRUPO_ACTIVACIONES', 'GRUPO_ACTIVACIONES', '')
-      ).trim();
+      let configuredGroupJid = (await TursoService.getActivationsGroupJid()).trim();
 
       if (configuredGroupJid) {
         if (!configuredGroupJid.endsWith('@g.us')) {

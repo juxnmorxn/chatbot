@@ -3590,6 +3590,222 @@ export class TursoService {
       logger.error(`Error al actualizar referencias de cliente (${oldSn} -> ${newSn}):`, error?.message || error);
     }
   }
+
+  // ==========================================
+  // GESTIÓN DE GRUPOS DE WHATSAPP Y OFICINAS
+  // ==========================================
+
+  /**
+   * Obtiene todos los grupos de WhatsApp configurados (Oficinas, Tickets y Activaciones)
+   */
+  static async getAllOfficeGroups(): Promise<WhatsAppOfficeGroupRecord[]> {
+    try {
+      const client = getTursoClient();
+      const res = await client.execute(`
+        SELECT * FROM whatsapp_office_groups 
+        ORDER BY CASE WHEN role = 'ACTIVACIONES' THEN 0 ELSE 1 END, name ASC
+      `);
+      return res.rows.map((r: any) => ({
+        id: Number(r.id),
+        name: String(r.name || ''),
+        jid: String(r.jid || ''),
+        invite_link: r.invite_link ? String(r.invite_link) : null,
+        role: (r.role || 'TICKETS_OFICINA') as any,
+        office: r.office ? String(r.office) : null,
+        zones: r.zones ? String(r.zones) : null,
+        is_active: r.is_active !== 0 && r.is_active !== '0' ? 1 : 0,
+        created_at: r.created_at ? String(r.created_at) : undefined,
+        updated_at: r.updated_at ? String(r.updated_at) : undefined,
+      }));
+    } catch (err: any) {
+      logger.error('Error al obtener grupos de WhatsApp de oficinas:', err?.message || err);
+      return [];
+    }
+  }
+
+  /**
+   * Guarda o actualiza un grupo de WhatsApp
+   */
+  static async saveOfficeGroup(group: Partial<WhatsAppOfficeGroupRecord>): Promise<number> {
+    try {
+      const client = getTursoClient();
+      const now = new Date().toISOString();
+      const cleanJid = String(group.jid || '').trim();
+      const cleanName = String(group.name || 'Grupo WhatsApp').trim();
+      const cleanRole = group.role || 'TICKETS_OFICINA';
+      const cleanOffice = group.office ? String(group.office).trim() : null;
+      const cleanZones = group.zones ? String(group.zones).trim() : null;
+      const cleanLink = group.invite_link ? String(group.invite_link).trim() : null;
+      const activeInt = group.is_active !== 0 ? 1 : 0;
+
+      if (!cleanJid) {
+        throw new Error('El JID del grupo es obligatorio (ej: 120363xxx@g.us)');
+      }
+
+      const res = await client.execute({
+        sql: `
+          INSERT INTO whatsapp_office_groups 
+          (name, jid, invite_link, role, office, zones, is_active, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(jid) DO UPDATE SET
+            name = excluded.name,
+            invite_link = coalesce(excluded.invite_link, whatsapp_office_groups.invite_link),
+            role = excluded.role,
+            office = excluded.office,
+            zones = excluded.zones,
+            is_active = excluded.is_active,
+            updated_at = excluded.updated_at
+        `,
+        args: [cleanName, cleanJid, cleanLink, cleanRole, cleanOffice, cleanZones, activeInt, now, now],
+      });
+
+      // Si se configuró como grupo de activaciones, sincronizar con Settings
+      if (cleanRole === 'ACTIVACIONES' && activeInt === 1) {
+        const { SettingsService } = await import('./settings.service');
+        await SettingsService.set('ACTIVATIONS_GROUP_JID', cleanJid).catch(() => {});
+        logger.info(`[Grupos] Grupo de Activaciones principal configurado como: ${cleanJid} (${cleanName})`);
+      }
+
+      logger.info(`[Grupos] Grupo "${cleanName}" (${cleanJid}) guardado exitosamente.`);
+      return Number(res.lastInsertRowid || 1);
+    } catch (err: any) {
+      logger.error('Error al guardar grupo de oficina:', err?.message || err);
+      throw err;
+    }
+  }
+
+  /**
+   * Elimina un grupo de WhatsApp de oficinas
+   */
+  static async deleteOfficeGroup(id: number): Promise<boolean> {
+    try {
+      const client = getTursoClient();
+      await client.execute({ sql: `DELETE FROM whatsapp_office_groups WHERE id = ?`, args: [id] });
+      logger.info(`[Grupos] Grupo con ID ${id} eliminado.`);
+      return true;
+    } catch (err: any) {
+      logger.error(`Error al eliminar grupo ${id}:`, err?.message || err);
+      return false;
+    }
+  }
+
+  /**
+   * Activa o desactiva un grupo de WhatsApp
+   */
+  static async toggleOfficeGroupActive(id: number, isActive: boolean): Promise<boolean> {
+    try {
+      const client = getTursoClient();
+      const now = new Date().toISOString();
+      await client.execute({
+        sql: `UPDATE whatsapp_office_groups SET is_active = ?, updated_at = ? WHERE id = ?`,
+        args: [isActive ? 1 : 0, now, id],
+      });
+      return true;
+    } catch (err: any) {
+      logger.error(`Error al alternar estado de grupo ${id}:`, err?.message || err);
+      return false;
+    }
+  }
+
+  /**
+   * Obtiene el JID del grupo de activaciones de forma infalible (primero de BD grupos, luego settings)
+   */
+  static async getActivationsGroupJid(): Promise<string> {
+    try {
+      const client = getTursoClient();
+      const res = await client.execute(`
+        SELECT jid FROM whatsapp_office_groups 
+        WHERE role = 'ACTIVACIONES' AND is_active = 1 
+        ORDER BY id DESC LIMIT 1
+      `);
+      if (res.rows.length > 0 && res.rows[0].jid) {
+        return String(res.rows[0].jid).trim();
+      }
+    } catch (_) {}
+
+    const { SettingsService } = await import('./settings.service');
+    return SettingsService.get(
+      'ACTIVATIONS_GROUP_JID',
+      'ACTIVATIONS_GROUP_JID',
+      SettingsService.get('GRUPO_ACTIVACIONES', 'GRUPO_ACTIVACIONES', '')
+    ).trim();
+  }
+
+  /**
+   * Deriva/transfiere un ticket a un grupo de WhatsApp de oficina específico
+   */
+  static async forwardTicketToOfficeGroup(
+    folio: string,
+    groupJid: string,
+    customNotes?: string
+  ): Promise<{ success: boolean; message: string; groupName?: string }> {
+    try {
+      const client = getTursoClient();
+      const ticketRes = await client.execute({
+        sql: `SELECT * FROM tickets WHERE folio = ? OR id = ? LIMIT 1`,
+        args: [folio, folio],
+      });
+      if (ticketRes.rows.length === 0) {
+        return { success: false, message: `Ticket con folio #${folio} no encontrado.` };
+      }
+      const t = ticketRes.rows[0];
+
+      // Obtener info del grupo de destino
+      const groupRes = await client.execute({
+        sql: `SELECT * FROM whatsapp_office_groups WHERE jid = ? LIMIT 1`,
+        args: [groupJid],
+      });
+      const groupName = groupRes.rows[0]?.name ? String(groupRes.rows[0].name) : 'Oficina';
+
+      const msg = `📋 *TICKET DERIVADO A ${groupName.toUpperCase()}*\n` +
+        `──────────────────────────────\n` +
+        `• *Folio:* #${t.folio}\n` +
+        `• *Cliente:* *${t.client_name || 'Sin titular'}*\n` +
+        `• *Teléfono:* ${t.phone}\n` +
+        `• *Reporte / Falla:* ${t.issue_summary}\n` +
+        (t.checks_performed ? `• *Diagnóstico / Notas:* ${t.checks_performed}\n` : '') +
+        (t.google_maps_url ? `• *Ubicación Maps:* ${t.google_maps_url}\n` : '') +
+        (customNotes ? `• *Instrucción de Derivación:* ${customNotes}\n` : '') +
+        `──────────────────────────────\n` +
+        `_Favor de dar seguimiento a este reporte desde esta oficina._`;
+
+      const { EvolutionService } = await import('./evolution.service');
+      await EvolutionService.enviarTexto(groupJid, msg, { instant: true });
+
+      // Actualizar ticket en base de datos
+      const now = new Date().toISOString();
+      await client.execute({
+        sql: `
+          UPDATE tickets 
+          SET assigned_office = ?, 
+              whatsapp_group_jid = ?, 
+              status = CASE WHEN status = 'ABIERTO' THEN 'EN_PROCESO' ELSE status END, 
+              updated_at = ? 
+          WHERE folio = ?
+        `,
+        args: [groupName, groupJid, now, t.folio],
+      });
+
+      logger.info(`Ticket #${t.folio} derivado exitosamente al grupo "${groupName}" (${groupJid})`);
+      return { success: true, message: `Ticket #${t.folio} transferido exitosamente a ${groupName}.`, groupName };
+    } catch (err: any) {
+      logger.error('Error al derivar ticket a grupo:', err?.message || err);
+      return { success: false, message: err?.message || 'Error al enviar a WhatsApp' };
+    }
+  }
+}
+
+export interface WhatsAppOfficeGroupRecord {
+  id?: number;
+  name: string;
+  jid: string;
+  invite_link?: string | null;
+  role: 'ACTIVACIONES' | 'TICKETS_OFICINA' | 'SOPORTE_GENERAL';
+  office?: string | null;
+  zones?: string | null;
+  is_active: number;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface ModemSwapRecord {

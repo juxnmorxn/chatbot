@@ -524,6 +524,28 @@ export async function initTursoDatabase(): Promise<void> {
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_modem_swaps_new_sn ON modem_swaps(new_sn);`);
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_modem_swaps_created ON modem_swaps(created_at);`);
 
+    // Tabla de Grupos de WhatsApp para Oficinas, Tickets y Activaciones
+    await client.execute(`
+      CREATE TABLE IF NOT EXISTS whatsapp_office_groups (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        jid TEXT UNIQUE NOT NULL,
+        invite_link TEXT,
+        role TEXT DEFAULT 'TICKETS_OFICINA',
+        office TEXT,
+        zones TEXT,
+        is_active INTEGER DEFAULT 1,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+    `);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_wag_jid ON whatsapp_office_groups(jid);`);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_wag_role ON whatsapp_office_groups(role);`);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_wag_active ON whatsapp_office_groups(is_active);`);
+
+    try { await client.execute(`ALTER TABLE tickets ADD COLUMN assigned_office TEXT;`); } catch (_) {}
+    try { await client.execute(`ALTER TABLE tickets ADD COLUMN whatsapp_group_jid TEXT;`); } catch (_) {}
+
     // Sembrar superadmin inicial si la tabla está vacía
     const { hashPassword } = await import('../utils/auth');
     const existingAdmins = await client.execute(`SELECT COUNT(*) as count FROM admin_users`);
@@ -537,7 +559,7 @@ export async function initTursoDatabase(): Promise<void> {
       logger.info('Usuario inicial "admin" (superadmin) creado exitosamente en Turso DB.');
     }
 
-    logger.info('Tablas "sessions", "settings", "conversation_logs", "smartolt_onus", "wisphub_clients", "tickets", "technicians", "admin_users", "ipam_vlan_pools", "network_outages", "whatsapp_instances" y "modem_swaps" listas en Turso.');
+    logger.info('Tablas "sessions", "settings", "conversation_logs", "smartolt_onus", "wisphub_clients", "tickets", "technicians", "admin_users", "ipam_vlan_pools", "network_outages", "whatsapp_instances", "modem_swaps" y "whatsapp_office_groups" listas en Base de Datos.');
   } catch (error: any) {
     logger.error('Error al inicializar Turso DB:', error?.message || error);
     throw error;

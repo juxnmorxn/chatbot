@@ -1218,6 +1218,147 @@ export class AdminController {
   }
 
   /**
+   * Obtiene la lista de grupos configurados para oficinas y tickets
+   */
+  static async getOfficeGroups(req: Request, res: Response): Promise<void> {
+    try {
+      const groups = await TursoService.getAllOfficeGroups();
+      const currentActivationJid = await TursoService.getActivationsGroupJid();
+      res.json({ success: true, groups, currentActivationJid });
+    } catch (error: any) {
+      logger.error('Error al obtener grupos de oficinas:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Guarda o actualiza un grupo de oficina (soporta enlace de invitación o JID directo)
+   */
+  static async saveOfficeGroup(req: Request, res: Response): Promise<void> {
+    try {
+      const { name, jid, invite_link, role, office, zones, is_active } = req.body;
+      let targetJid = String(jid || '').trim();
+      let targetName = String(name || '').trim();
+
+      // Si viene enlace pero no JID (o JID inválido), resolver con Evolution API
+      if (invite_link && (!targetJid || !targetJid.endsWith('@g.us'))) {
+        const resolved = await EvolutionService.resolveAndJoinGroupInvite(invite_link);
+        if (resolved.success && resolved.jid) {
+          targetJid = resolved.jid;
+          if (!targetName) targetName = resolved.name || 'Grupo WhatsApp';
+        } else if (!targetJid) {
+          res.status(400).json({ success: false, error: resolved.message || 'No se pudo resolver el enlace de invitación de WhatsApp.' });
+          return;
+        }
+      }
+
+      if (!targetJid) {
+        res.status(400).json({ success: false, error: 'Se requiere el JID o un enlace de invitación válido del grupo.' });
+        return;
+      }
+
+      const id = await TursoService.saveOfficeGroup({
+        name: targetName || 'Grupo WhatsApp',
+        jid: targetJid,
+        invite_link: invite_link || null,
+        role: role || 'TICKETS_OFICINA',
+        office: office || null,
+        zones: zones || null,
+        is_active: is_active !== false && is_active !== 0 ? 1 : 0,
+      });
+
+      res.json({
+        success: true,
+        id,
+        jid: targetJid,
+        name: targetName,
+        message: `Grupo "${targetName}" guardado correctamente.`,
+      });
+    } catch (error: any) {
+      logger.error('Error al guardar grupo de oficina:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Elimina un grupo de oficina
+   */
+  static async deleteOfficeGroup(req: Request, res: Response): Promise<void> {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) {
+        res.status(400).json({ success: false, error: 'ID de grupo no válido' });
+        return;
+      }
+      const success = await TursoService.deleteOfficeGroup(id);
+      res.json({ success, message: success ? 'Grupo eliminado' : 'No se pudo eliminar el grupo' });
+    } catch (error: any) {
+      logger.error('Error al eliminar grupo de oficina:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Alterna el estado activo de un grupo de oficina
+   */
+  static async toggleOfficeGroupActive(req: Request, res: Response): Promise<void> {
+    try {
+      const id = parseInt(req.params.id, 10);
+      const isActive = req.body.is_active === true || req.body.is_active === 1;
+      const success = await TursoService.toggleOfficeGroupActive(id, isActive);
+      res.json({ success, message: success ? 'Estado actualizado' : 'No se pudo actualizar el estado' });
+    } catch (error: any) {
+      logger.error('Error al alternar estado de grupo:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Envía un mensaje de prueba al grupo de WhatsApp
+   */
+  static async testOfficeGroup(req: Request, res: Response): Promise<void> {
+    try {
+      const { jid, name } = req.body;
+      if (!jid || !String(jid).endsWith('@g.us')) {
+        res.status(400).json({ success: false, error: 'JID de grupo no válido (debe terminar en @g.us)' });
+        return;
+      }
+      const groupLabel = name ? ` "${name}"` : '';
+      const testMsg = `🔔 *Mensaje de Prueba - CloudWareMx*\n\nEl bot de WhatsApp se ha vinculado correctamente a este grupo${groupLabel}.\n\nDesde aquí podrás recibir tickets derivados de oficinas y notificaciones operativas en tiempo real. 🚀`;
+      await EvolutionService.enviarTexto(jid, testMsg, { instant: true });
+      res.json({ success: true, message: `Mensaje de prueba enviado exitosamente al grupo.` });
+    } catch (error: any) {
+      logger.error('Error al enviar mensaje de prueba a grupo:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Deriva o transfiere un ticket a un grupo de oficina de WhatsApp
+   */
+  static async forwardTicketToOffice(req: Request, res: Response): Promise<void> {
+    try {
+      const folio = req.params.folio;
+      const { groupJid, customNotes } = req.body;
+
+      if (!folio || !groupJid) {
+        res.status(400).json({ success: false, error: 'Folio de ticket y JID de grupo de destino requeridos.' });
+        return;
+      }
+
+      const result = await TursoService.forwardTicketToOfficeGroup(folio, groupJid, customNotes);
+      if (result.success) {
+        res.json({ success: true, message: result.message, groupName: result.groupName });
+      } else {
+        res.status(400).json({ success: false, error: result.message });
+      }
+    } catch (error: any) {
+      logger.error('Error al transferir ticket a grupo:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
    * Dispara la sincronización de SmartOLT hacia Turso DB
    */
   static async syncSmartOlt(req: Request, res: Response): Promise<void> {

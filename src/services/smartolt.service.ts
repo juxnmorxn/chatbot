@@ -1612,13 +1612,9 @@ export class SmartOLTService {
     if (shouldNotify) {
       try {
         const { EvolutionService } = await import('./evolution.service');
-        const groupMsg = `${payload.name} ${payload.ip_address} ${payload.zone || 'Actopan'} CAMBIO DE MODEM`;
+        const groupMsg = `${payload.name}\n${payload.ip_address}\n${payload.zone || 'Actopan'}\nCAMBIO DE MODEM`;
 
-        let configuredGroupJid = SettingsService.get(
-          'ACTIVATIONS_GROUP_JID',
-          'ACTIVATIONS_GROUP_JID',
-          SettingsService.get('GRUPO_ACTIVACIONES', 'GRUPO_ACTIVACIONES', '')
-        ).trim();
+        let configuredGroupJid = (await TursoService.getActivationsGroupJid()).trim();
 
         if (configuredGroupJid) {
           if (!configuredGroupJid.endsWith('@g.us')) {
@@ -1632,7 +1628,7 @@ export class SmartOLTService {
           if (configuredGroupJid.endsWith('@g.us')) {
             await EvolutionService.enviarTexto(configuredGroupJid, groupMsg, { instant: true });
             waNotified = true;
-            logger.info(`[Cambio de Módem] Notificación enviada al grupo WhatsApp: "${groupMsg}"`);
+            logger.info(`[Cambio de Módem] Notificación enviada al grupo WhatsApp (${configuredGroupJid}): "${groupMsg.replace(/\n/g, ' ')}"`);
           }
         }
       } catch (waErr: any) {

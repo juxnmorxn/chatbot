@@ -151,8 +151,20 @@ router.post('/api/tickets/clear-all', requireAdminAuth(['superadmin']), AdminCon
 router.patch('/api/tickets/:folio/status', AdminController.updateTicketStatus);
 router.post('/api/tickets/:folio/status', AdminController.updateTicketStatus);
 router.post('/api/tickets/:folio/assign', AdminController.assignTicketTechnician);
+router.post('/api/tickets/:folio/forward-group', AdminController.forwardTicketToOffice);
 router.delete('/api/tickets/:folio', requireAdminAuth(['superadmin']), AdminController.deleteTicket);
 router.post('/api/tickets/:folio/delete', requireAdminAuth(['superadmin']), AdminController.deleteTicket);
+
+// ==========================================
+// GRUPOS DE WHATSAPP Y OFICINAS (RUTEO DE TICKETS Y ACTIVACIONES)
+// ==========================================
+router.get('/api/office-groups', AdminController.getOfficeGroups);
+router.post('/api/office-groups', AdminController.saveOfficeGroup);
+router.delete('/api/office-groups/:id', requireAdminAuth(['superadmin']), AdminController.deleteOfficeGroup);
+router.post('/api/office-groups/:id/delete', requireAdminAuth(['superadmin']), AdminController.deleteOfficeGroup);
+router.put('/api/office-groups/:id/toggle', AdminController.toggleOfficeGroupActive);
+router.post('/api/office-groups/:id/toggle', AdminController.toggleOfficeGroupActive);
+router.post('/api/office-groups/test', AdminController.testOfficeGroup);
 
 // ==========================================
 // GESTIÓN Y EXPLORADOR DE BASE DE DATOS
