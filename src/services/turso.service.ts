@@ -3873,3 +3873,5 @@ export interface WhatsAppInstanceRecord {
   created_at?: string;
   updated_at?: string;
 }
+
+export const DbService = TursoService;

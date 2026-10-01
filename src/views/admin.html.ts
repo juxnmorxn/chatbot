@@ -2571,7 +2571,7 @@ export function getAdminDashboardHtml(): string {
               </div>
             </div>
             <div id="metric-onus" class="metric-value">--</div>
-            <div class="metric-footer">Sincronizadas en Turso DB</div>
+            <div class="metric-footer">Sincronizadas en BD Local</div>
           </div>
           
           <div class="glass-card metric-card">
@@ -2612,8 +2612,8 @@ export function getAdminDashboardHtml(): string {
         <div class="glass-card" style="margin-bottom: 18px; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
           <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
             <span style="font-size: 11.5px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-right: 4px;">⚡ Diagnóstico Rápido:</span>
-            <button class="btn btn-secondary btn-xs" onclick="testServiceConnection('turso')" title="Probar conexión a Turso DB">
-              <span class="pulse-dot" style="width: 7px; height: 7px; margin-right: 2px;"></span> Turso DB
+            <button class="btn btn-secondary btn-xs" onclick="testServiceConnection('turso')" title="Probar conexión a Base de Datos Local">
+              <span class="pulse-dot" style="width: 7px; height: 7px; margin-right: 2px;"></span> BD Local (Hostinger)
             </button>
             <button class="btn btn-secondary btn-xs" onclick="testServiceConnection('smartolt')" title="Probar API SmartOLT">
               <span class="pulse-dot" style="width: 7px; height: 7px; margin-right: 2px;"></span> SmartOLT

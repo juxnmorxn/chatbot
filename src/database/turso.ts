@@ -10,7 +10,7 @@ let clientInstance: Client | null = null;
 let activeDbUrl: string = '';
 
 /**
- * Obtiene la ruta del archivo SQLite local en caso de usar motor en VPS
+ * Obtiene la ruta del archivo SQLite local en el VPS
  */
 export function getLocalDbFilePath(): string {
   const rawUrl = config.turso.url || 'file:./data/chatbot.db';
@@ -22,13 +22,13 @@ export function getLocalDbFilePath(): string {
 }
 
 /**
- * Obtiene la instancia activa de conexión a la base de datos
+ * Obtiene la instancia activa de conexión a la base de datos local SQLite
  */
 export function getTursoClient(): Client {
-  const targetUrl = config.turso.url && config.turso.url.trim() !== '' ? config.turso.url.trim() : 'file:./data/chatbot.db';
+  const targetUrl = (config.turso.url && config.turso.url.trim() !== '') ? config.turso.url.trim() : 'file:./data/chatbot.db';
   
   if (!clientInstance || activeDbUrl !== targetUrl) {
-    if (targetUrl.startsWith('file:')) {
+    if (targetUrl.startsWith('file:') || !config.turso.authToken) {
       const localPath = getLocalDbFilePath();
       const dir = path.dirname(localPath);
       if (!fs.existsSync(dir)) {
@@ -40,18 +40,20 @@ export function getTursoClient(): Client {
         url: `file:${localPath.replace(/\\/g, '/')}`,
       });
       activeDbUrl = targetUrl;
-      logger.info(`Conectado a Base de Datos Local SQLite: ${localPath}`);
+      logger.info(`Conectado a Base de Datos Local SQLite (Hostinger): ${localPath}`);
     } else {
       clientInstance = createClient({
         url: targetUrl,
         authToken: config.turso.authToken,
       });
       activeDbUrl = targetUrl;
-      logger.info(`Conectado a Base de Datos Turso Cloud: ${targetUrl}`);
+      logger.info(`Conectado a Base de Datos: ${targetUrl}`);
     }
   }
   return clientInstance;
 }
+
+export const getDbClient = getTursoClient;
 
 /**
  * Reinicia la conexión a la base de datos (por ejemplo, al cambiar de Turso a Local)
