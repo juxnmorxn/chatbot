@@ -3467,7 +3467,7 @@ export function getAdminDashboardHtml(): string {
           <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
             <div>
               <h4 style="font-size: 15px; font-weight: 700;">📋 Historial de Cambios de Módem Realizados</h4>
-              <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Bitácora de reemplazos y respaldos de equipos en Turso DB.</p>
+              <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Bitácora de reemplazos y respaldos de equipos en la Base de Datos Local.</p>
             </div>
             <button class="btn btn-secondary btn-xs" onclick="loadModemSwapHistory()">🔄 Actualizar Historial</button>
           </div>
@@ -3947,10 +3947,10 @@ export function getAdminDashboardHtml(): string {
                 <button type="button" class="btn btn-secondary btn-sm" onclick="testSingleApi('smartolt', this)">⚡ Probar</button>
               </div>
 
-              <!-- Item 5: Turso DB -->
+              <!-- Item 5: Base de Datos Local -->
               <div style="background: rgba(0,0,0,0.25); border: 1px solid var(--card-border); border-radius: var(--radius-sm); padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; gap: 10px;">
                 <div>
-                  <div style="font-size: 13px; font-weight: 600;">☁️ Turso DB (libSQL Cloud)</div>
+                  <div style="font-size: 13px; font-weight: 600;">💾 Base de Datos Local (SQLite Hostinger)</div>
                   <div id="diag-status-turso" style="font-size: 11px; color: var(--text-dim);">Sin probar aún</div>
                 </div>
                 <button type="button" class="btn btn-secondary btn-sm" onclick="testSingleApi('turso', this)">⚡ Probar</button>

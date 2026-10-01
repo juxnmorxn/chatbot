@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import crypto from 'crypto';
 
-const SECRET = process.env.JWT_SECRET || process.env.TURSO_AUTH_TOKEN || 'cloudware-admin-secret-key-2026';
+const SECRET = process.env.JWT_SECRET || 'cloudware-admin-secret-key-2026';
 
 export type AdminRole = 'superadmin' | 'soporte' | 'tecnico' | 'facturacion' | 'atencion';
 
