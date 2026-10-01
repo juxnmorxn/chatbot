@@ -561,87 +561,19 @@ export class SmartOLTService {
   }
 
   /**
-   * Normaliza el modelo/tipo de ONU según el catálogo oficial registrado en SmartOLT
-   * Si SmartOLT ya reporta un modelo válido detectado por la OLT, lo respeta.
+   * Normaliza el modelo/tipo de ONU según lo detectado automáticamente por SmartOLT.
+   * Si SmartOLT ya detectó y reporta un modelo válido en la OLT, lo respeta exactamente y no lo altera.
    */
   static normalizeOnuType(rawModel?: string, sn?: string): string {
     const cleanModel = (rawModel || '').trim();
     const cleanSn = (sn || '').trim().toUpperCase();
 
-    const catalog = [
-      'EG8041V5', 'EG8145V5', 'HG8010H', 'HG8120C', 'HG8145V5', 'HG8145V5V3',
-      'HG8145X6', 'HG8145X6-10', 'HG8145X6-12', 'HG8145X610', 'HG8240H', 'HG8240T',
-      'HG8242', 'HG8242H', 'HG8245H', 'HG8310M', 'HG8311', 'HG8321R', 'HG8326R',
-      'HG8340M', 'HG8346M', 'HG8346R', 'HG8347R', 'HG8545M', 'HG8546M', 'HG865',
-      'HS8145V', 'HS8546V', 'ONU-type-eth-4-pots-1-catv-1', 'ONU-type-eth-4-pots-2-catv-0',
-      'ZTE-F600', 'ZTE-F601', 'ZTE-F601V6.0', 'ZTE-F620', 'ZTE-F623', 'ZTE-F625',
-      'ZTE-F625G', 'ZTE-F627', 'ZTE-F643', 'ZTE-F643V6.0', 'ZTE-F660', 'ZTE-F660V5.0',
-      'ZTE-F660V5.2', 'ZTE-F660V6.0', 'ZTE-F668'
-    ];
-
+    // 1. Si SmartOLT / OLT ya detectó un modelo específico válido, usarlo directamente sin modificarlo
     if (cleanModel && !['UNKNOWN', 'ONU', 'DEFAULT', 'NONE', 'NULL', 'UNDEFINED'].includes(cleanModel.toUpperCase())) {
-      const exactMatch = catalog.find(c => c.toLowerCase() === cleanModel.toLowerCase());
-      if (exactMatch) return exactMatch;
-
-      const upper = cleanModel.toUpperCase().replace(/[\s_]/g, '-');
-
-      // Huawei matches específicos
-      if (upper.includes('8041')) return 'EG8041V5';
-      if (upper.includes('8145X6-12') || upper.includes('8145X612')) return 'HG8145X6-12';
-      if (upper.includes('8145X6-10') || upper.includes('8145X610')) return 'HG8145X6-10';
-      if (upper.includes('8145X6')) return 'HG8145X6';
-      if (upper.includes('8145V5V3') || upper.includes('8145V5-V3') || upper.includes('8145V53')) return 'HG8145V5V3';
-      if (upper.includes('EG8145V5') || (upper.startsWith('EG') && upper.includes('8145'))) return 'EG8145V5';
-      if (upper.includes('8145V5') || upper.includes('8145')) return 'HG8145V5';
-      if (upper.includes('8240H')) return 'HG8240H';
-      if (upper.includes('8240T')) return 'HG8240T';
-      if (upper.includes('8242H')) return 'HG8242H';
-      if (upper.includes('8242')) return 'HG8242';
-      if (upper.includes('8245H') || upper.includes('8245')) return 'HG8245H';
-      if (upper.includes('8010')) return 'HG8010H';
-      if (upper.includes('8120')) return 'HG8120C';
-      if (upper.includes('8310')) return 'HG8310M';
-      if (upper.includes('8311')) return 'HG8311';
-      if (upper.includes('8321')) return 'HG8321R';
-      if (upper.includes('8326')) return 'HG8326R';
-      if (upper.includes('8340')) return 'HG8340M';
-      if (upper.includes('8346M')) return 'HG8346M';
-      if (upper.includes('8346R') || upper.includes('8346')) return 'HG8346R';
-      if (upper.includes('8347')) return 'HG8347R';
-      if (upper.includes('8545')) return 'HG8545M';
-      if (upper.includes('8546M')) return 'HG8546M';
-      if (upper.includes('865')) return 'HG865';
-      if (upper.includes('HS8145') || upper.includes('HS8145V')) return 'HS8145V';
-      if (upper.includes('HS8546') || upper.includes('HS8546V')) return 'HS8546V';
-
-      // ZTE matches específicos
-      if (upper.includes('F668')) return 'ZTE-F668';
-      if (upper.includes('F660')) {
-        if (upper.includes('V5.0') || upper.includes('V50')) return 'ZTE-F660V5.0';
-        if (upper.includes('V5.2') || upper.includes('V52')) return 'ZTE-F660V5.2';
-        if (upper.includes('V6.0') || upper.includes('V60')) return 'ZTE-F660V6.0';
-        return 'ZTE-F660';
-      }
-      if (upper.includes('F601')) {
-        if (upper.includes('V6.0') || upper.includes('V60')) return 'ZTE-F601V6.0';
-        return 'ZTE-F601';
-      }
-      if (upper.includes('F600')) return 'ZTE-F600';
-      if (upper.includes('F620')) return 'ZTE-F620';
-      if (upper.includes('F623')) return 'ZTE-F623';
-      if (upper.includes('F625G')) return 'ZTE-F625G';
-      if (upper.includes('F625')) return 'ZTE-F625';
-      if (upper.includes('F627')) return 'ZTE-F627';
-      if (upper.includes('F643')) {
-        if (upper.includes('V6.0') || upper.includes('V60')) return 'ZTE-F643V6.0';
-        return 'ZTE-F643';
-      }
-
-      // Si SmartOLT ya reportó un modelo limpio, usarlo directamente
       return cleanModel;
     }
 
-    // Heurística por prefijo de Número de Serie (SN) SOLO si NO se proporcionó ningún modelo
+    // 2. Heurística únicamente si la OLT NO reportó ningún modelo (vacío / UNKNOWN)
     if (cleanSn.startsWith('HWTC') || cleanSn.startsWith('48575443')) {
       return 'EG8041V5';
     }
@@ -1380,13 +1312,26 @@ export class SmartOLTService {
           const dynamicSubnet = ipAddr ? IpamService.getSubnetConfigFromIp(ipAddr) : null;
           const isSanAgustin = String(det.olt_id) === '2' || (det.zone || det.zone_name || '').toLowerCase().includes('san agustin') || (dynamicSubnet?.oltId === '2');
 
-          const rawSpeed = det.download_speed_profile_name || det.speed_profile || det.download_speed || det.speed_profile_name || det.plan || '';
+          const speedFromProfiles = (Array.isArray(det.speed_profiles) && det.speed_profiles.length > 0)
+            ? (det.speed_profiles[0].download_speed_profile_name || det.speed_profiles[0].name || det.speed_profiles[0].download_speed_profile)
+            : ((Array.isArray(det.service_ports) && det.service_ports.length > 0)
+              ? (det.service_ports[0].download_speed_profile_name || det.service_ports[0].speed_profile)
+              : null);
+
+          const rawSpeed = det.download_speed_profile_name || speedFromProfiles || det.speed_profile || det.download_speed || det.speed_profile_name || det.plan || '';
           let dlProfile = rawSpeed ? String(rawSpeed).trim() : '40MB-DOWN';
           if (dlProfile && !dlProfile.toUpperCase().includes('-DOWN')) {
             const mb = dlProfile.match(/(\d+)\s*(?:MB|MEGAS?|M)?/i);
             if (mb) dlProfile = `${mb[1]}MB-DOWN`;
           }
-          let ulProfile = det.upload_speed_profile_name || (dlProfile ? dlProfile.replace(/-DOWN$/i, '-UP') : '40MB-UP');
+
+          const ulSpeedFromProfiles = (Array.isArray(det.speed_profiles) && det.speed_profiles.length > 0)
+            ? det.speed_profiles[0].upload_speed_profile_name
+            : ((Array.isArray(det.service_ports) && det.service_ports.length > 0)
+              ? det.service_ports[0].upload_speed_profile_name
+              : null);
+
+          let ulProfile = det.upload_speed_profile_name || ulSpeedFromProfiles || (dlProfile ? dlProfile.replace(/-DOWN$/i, '-UP') : '40MB-UP');
 
           const vlanVal = det.vlan || dynamicSubnet?.vlan || (isSanAgustin ? '800' : '510');
           const gatewayVal = det.default_gateway || det.gateway || dynamicSubnet?.gateway || (isSanAgustin ? '172.16.80.254' : '172.19.2.254');
@@ -1432,13 +1377,25 @@ export class SmartOLTService {
       const dynamicSubnet = ipAddr ? IpamService.getSubnetConfigFromIp(ipAddr) : null;
       const isSanAgustin = (onu.zone_name || '').toLowerCase().includes('san agustin') || (onu.olt_name || '').toLowerCase().includes('san agustin') || (dynamicSubnet?.oltId === '2');
 
-      const rawSpeed = onu.speed_profile || rawObj.download_speed_profile_name || rawObj.speed_profile || '';
+      const speedFromProfiles = (Array.isArray(rawObj.speed_profiles) && rawObj.speed_profiles.length > 0)
+        ? (rawObj.speed_profiles[0].download_speed_profile_name || rawObj.speed_profiles[0].name)
+        : ((Array.isArray(rawObj.service_ports) && rawObj.service_ports.length > 0)
+          ? (rawObj.service_ports[0].download_speed_profile_name || rawObj.service_ports[0].speed_profile)
+          : null);
+
+      const rawSpeed = onu.speed_profile || rawObj.download_speed_profile_name || speedFromProfiles || rawObj.speed_profile || '';
       let dlProfile = rawSpeed ? String(rawSpeed).trim() : '40MB-DOWN';
       if (dlProfile && !dlProfile.toUpperCase().includes('-DOWN')) {
         const mb = dlProfile.match(/(\d+)\s*(?:MB|MEGAS?|M)?/i);
         if (mb) dlProfile = `${mb[1]}MB-DOWN`;
       }
-      let ulProfile = rawObj.upload_speed_profile_name || (dlProfile ? dlProfile.replace(/-DOWN$/i, '-UP') : '40MB-UP');
+      const ulSpeedFromProfiles = (Array.isArray(rawObj.speed_profiles) && rawObj.speed_profiles.length > 0)
+        ? rawObj.speed_profiles[0].upload_speed_profile_name
+        : ((Array.isArray(rawObj.service_ports) && rawObj.service_ports.length > 0)
+          ? rawObj.service_ports[0].upload_speed_profile_name
+          : null);
+
+      let ulProfile = rawObj.upload_speed_profile_name || ulSpeedFromProfiles || (dlProfile ? dlProfile.replace(/-DOWN$/i, '-UP') : '40MB-UP');
 
       const vlanVal = rawObj.vlan || dynamicSubnet?.vlan || (isSanAgustin ? '800' : '510');
       const gatewayVal = rawObj.gateway || rawObj.default_gateway || dynamicSubnet?.gateway || (isSanAgustin ? '172.16.80.254' : '172.19.2.254');
