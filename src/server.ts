@@ -70,7 +70,7 @@ async function startServer() {
     // Verificación inicial 10 segundos después del arranque
     setTimeout(async () => {
       try {
-        const stats = await TursoService.getSmartOltSyncStats();
+        const stats = await DbService.getSmartOltSyncStats();
         if (stats.count === 0) {
           logger.info('Inventario de SmartOLT vacío en Turso. Intentando sincronización inicial...');
           await SmartOLTService.syncAllOnusToTurso(false);
@@ -79,7 +79,7 @@ async function startServer() {
         }
 
         // Verificación e importación inicial de WispHub
-        const whStats = await TursoService.getWisphubSyncStats();
+        const whStats = await DbService.getWisphubSyncStats();
         if (whStats.count === 0) {
           logger.info('Tabla wisphub_clients vacía en Turso. Iniciando sincronización inicial de WispHub...');
           await WispHubService.syncAllClientesToTurso();
