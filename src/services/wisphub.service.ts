@@ -4,7 +4,7 @@ import { SettingsService } from './settings.service';
 import { Logger } from '../utils/logger';
 import { normalizePhone10 } from '../utils/spintax';
 import { cleanPersonName, computeNameMatchScore } from '../utils/fuzzy-matcher';
-import { TursoService, WisphubClientRecord } from './turso.service';
+import { TursoService, WisphubClientRecord, DbService } from './db.service';
 
 const logger = new Logger('WispHubService');
 
@@ -114,7 +114,7 @@ export class WispHubService {
     }
 
     let targetId: number | null = null;
-    const { getTursoClient } = await import('../database/turso');
+    const { getTursoClient } = await import('../database/db');
     const client = getTursoClient();
 
     // 1. Si tenemos rawId estrictamente numérico, validar si existe en wisphub_clients
@@ -935,7 +935,7 @@ export class WispHubService {
 
       // Actualizar también la base local en Turso DB a 'Activo'
       try {
-        const { getTursoClient } = await import('../database/turso');
+        const { getTursoClient } = await import('../database/db');
         const client = getTursoClient();
         await client.execute({
           sql: `UPDATE wisphub_clients SET estado = 'Activo' WHERE id_servicio = ?`,

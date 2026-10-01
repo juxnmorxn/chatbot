@@ -1,5 +1,5 @@
-import { initTursoDatabase, getTursoClient } from '../database/turso';
-import { TursoService } from '../services/turso.service';
+import { initTursoDatabase, getTursoClient, getDbClient } from '../database/db';
+import { TursoService, DbService } from '../services/db.service';
 
 async function testTurso() {
   console.log('--- Iniciando prueba de conexión con Turso DB ---');

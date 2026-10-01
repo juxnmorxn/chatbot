@@ -1,4 +1,4 @@
-import { TursoService, Session } from '../services/turso.service';
+import { TursoService, Session, DbService } from '../services/db.service';
 import { GroqService, GroqClassificationResult, GroqImageAnalysisResult, ContratoInstalacionDatos, ActivacionModificacionesParsed } from '../services/groq.service';
 import { WispHubService, WispHubCliente } from '../services/wisphub.service';
 import { SmartOLTService, SmartOltStatusResult, getSmartOltSpeedProfiles, AuthorizeOnuPayload } from '../services/smartolt.service';
@@ -3658,7 +3658,7 @@ export class BotOrchestrator {
       return;
     }
 
-    const { getTursoClient } = await import('../database/turso');
+    const { getTursoClient } = await import('../database/db');
     const client = getTursoClient();
 
     let targetClient: any = null;
@@ -3782,7 +3782,7 @@ export class BotOrchestrator {
     const pendingGps = meta.pendingGpsAssignment;
 
     const cleanInput = rawText.trim();
-    const { getTursoClient } = await import('../database/turso');
+    const { getTursoClient } = await import('../database/db');
     const client = getTursoClient();
 
     let targetClient: any = null;

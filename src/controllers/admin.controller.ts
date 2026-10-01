@@ -1,9 +1,10 @@
 import { Request, Response } from 'express';
 import { createClient } from '@libsql/client';
 import { SettingsService } from '../services/settings.service';
-import { TursoService } from '../services/turso.service';
+import { TursoService, DbService } from '../services/db.service';
 import { 
   getTursoClient, 
+  getDbClient,
   getDatabaseStatsInfo, 
   getTableDataAndSchema, 
   executeCustomQuery, 
@@ -11,7 +12,7 @@ import {
   getLocalDbFilePath,
   resetDatabaseConnection,
   initTursoDatabase
-} from '../database/turso';
+} from '../database/db';
 import { GroqService } from '../services/groq.service';
 import fs from 'fs';
 import path from 'path';

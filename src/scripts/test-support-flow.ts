@@ -1,6 +1,6 @@
-import { TursoService } from '../services/turso.service';
+import { TursoService, DbService } from '../services/db.service';
 import { SettingsService } from '../services/settings.service';
-import { initTursoDatabase } from '../database/turso';
+import { initTursoDatabase } from '../database/db';
 import { BotOrchestrator } from '../orchestrator/bot.orchestrator';
 
 async function testSupportFlow() {

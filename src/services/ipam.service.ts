@@ -1,5 +1,5 @@
-import { TursoService } from './turso.service';
-import { getTursoClient } from '../database/turso';
+import { TursoService, DbService } from './db.service';
+import { getTursoClient, getDbClient } from '../database/db';
 import { Logger } from '../utils/logger';
 
 const logger = new Logger('IpamService');

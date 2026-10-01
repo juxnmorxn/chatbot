@@ -1,8 +1,8 @@
-import { getTursoClient } from '../database/turso';
+import { getDbClient, getTursoClient } from '../database/db';
 import { Logger } from '../utils/logger';
 import { normalizeText, computeNameMatchScore, cleanPersonName, generateSearchFragments, phoneticNormalize } from '../utils/fuzzy-matcher';
 
-const logger = new Logger('TursoService');
+const logger = new Logger('DbService');
 
 export interface SmartOltOnuRecord {
   unique_external_id: string;
@@ -151,7 +151,7 @@ function parseOnuIpv6Status(rawJson?: any): 'DUAL_STACK' | 'IPV4_ONLY' | 'MISSIN
   }
 }
 
-export class TursoService {
+export class DbService {
   /**
    * Obtiene la sesión activa de un número de teléfono
    */
@@ -3874,4 +3874,4 @@ export interface WhatsAppInstanceRecord {
   updated_at?: string;
 }
 
-export const DbService = TursoService;
+export const TursoService = DbService;

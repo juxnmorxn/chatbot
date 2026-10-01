@@ -1,7 +1,7 @@
 import axios, { AxiosInstance } from 'axios';
 import { config } from '../config/env';
 import { SettingsService } from './settings.service';
-import { TursoService, SmartOltOnuRecord } from './turso.service';
+import { TursoService, SmartOltOnuRecord, DbService } from './db.service';
 import { IpamService } from './ipam.service';
 import { Logger } from '../utils/logger';
 

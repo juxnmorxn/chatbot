@@ -4,7 +4,7 @@ import { config } from '../config/env';
 import { SettingsService } from '../services/settings.service';
 import { EvolutionService } from '../services/evolution.service';
 import { GroqService } from '../services/groq.service';
-import { TursoService } from '../services/turso.service';
+import { TursoService, DbService } from '../services/db.service';
 import { MercadoPagoService } from '../services/mercadopago.service';
 import { WispHubService } from '../services/wisphub.service';
 import { Logger } from '../utils/logger';

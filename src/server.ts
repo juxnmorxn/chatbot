@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import { config } from './config/env';
-import { initTursoDatabase } from './database/turso';
+import { initTursoDatabase } from './database/db';
 import { SettingsService } from './services/settings.service';
 import apiRoutes from './routes/api.routes';
 import { Logger } from './utils/logger';
@@ -65,7 +65,7 @@ async function startServer() {
     // Sincronización en segundo plano de SmartOLT hacia Turso DB (Cada 60 minutos = 1 llamada/hora de las 15 permitidas)
     const { SmartOLTService } = await import('./services/smartolt.service');
     const { WispHubService } = await import('./services/wisphub.service');
-    const { TursoService } = await import('./services/turso.service');
+    const { TursoService, DbService } = await import('./services/db.service');
     
     // Verificación inicial 10 segundos después del arranque
     setTimeout(async () => {

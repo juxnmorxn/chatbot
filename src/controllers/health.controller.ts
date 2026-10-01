@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { getTursoClient } from '../database/turso';
+import { getTursoClient, getDbClient } from '../database/db';
 import { config } from '../config/env';
 import { SettingsService } from '../services/settings.service';
 import { Logger } from '../utils/logger';

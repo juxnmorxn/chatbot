@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { getTursoClient } from '../database/turso';
+import { getTursoClient, getDbClient } from '../database/db';
 import { Logger } from '../utils/logger';
 
 const logger = new Logger('SettingsService');
