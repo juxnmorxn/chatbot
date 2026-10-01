@@ -1,5 +1,5 @@
-import { TursoService, DbService } from './db.service';
-import { getTursoClient, getDbClient } from '../database/db';
+import { DbService } from './db.service';
+import { getDbClient } from '../database/db';
 import { Logger } from '../utils/logger';
 
 const logger = new Logger('IpamService');
@@ -132,7 +132,7 @@ export class IpamService {
 
     // 2. Limpiar en Turso DB cualquier subred de antenas / no-FTTH previa
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       await client.execute(`
         DELETE FROM ipam_vlan_pools 
         WHERE vlan LIKE 'VLAN-%' 
@@ -207,7 +207,7 @@ export class IpamService {
    */
   static async toggleVlanPoolActive(vlan: string, isActive: boolean): Promise<boolean> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const now = new Date().toISOString();
       const cleanVlan = String(vlan).trim();
       const activeInt = isActive ? 1 : 0;
@@ -259,7 +259,7 @@ export class IpamService {
     oltName?: string;
   }): Promise<boolean> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const now = new Date().toISOString();
       const vlan = String(config.vlan).trim();
       const name = String(config.name || `${vlan} - Internet`).trim();
@@ -304,7 +304,7 @@ export class IpamService {
    */
   static async deleteVlanPool(vlan: string): Promise<boolean> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const res = await client.execute({
         sql: `DELETE FROM ipam_vlan_pools WHERE vlan = ?`,
         args: [String(vlan).trim()],
@@ -324,7 +324,7 @@ export class IpamService {
 
     try {
       // 1. Obtener IPs de SmartOLT ONUs almacenadas en Turso
-      const onus = await TursoService.getAllSmartOltOnus();
+      const onus = await DbService.getAllSmartOltOnus();
       for (const o of onus) {
         if (o.ip_address && o.ip_address.trim()) {
           const cleanIp = o.ip_address.trim().split('/')[0].trim();
@@ -333,7 +333,7 @@ export class IpamService {
       }
 
       // 2. Obtener IPs de clientes WispHub almacenados en Turso
-      const clientes = await TursoService.getAllWispHubClientes();
+      const clientes = await DbService.getAllWispHubClientes();
       for (const c of clientes) {
         if (c.ip && c.ip.trim()) {
           const cleanIp = c.ip.trim().split('/')[0].trim();

@@ -1,7 +1,7 @@
 import axios, { AxiosInstance } from 'axios';
 import { config } from '../config/env';
 import { SettingsService } from './settings.service';
-import { TursoService, SmartOltOnuRecord, DbService } from './db.service';
+import { DbService, SmartOltOnuRecord } from './db.service';
 import { IpamService } from './ipam.service';
 import { Logger } from '../utils/logger';
 
@@ -199,7 +199,7 @@ export class SmartOLTService {
     if (!force && elapsed < this.MIN_SYNC_INTERVAL_MS) {
       const waitSeconds = Math.ceil((this.MIN_SYNC_INTERVAL_MS - elapsed) / 1000);
       logger.warn(`Sincronización en cooldown para proteger la API de SmartOLT (esperar ${waitSeconds}s)`);
-      const stats = await TursoService.getSmartOltSyncStats();
+      const stats = await DbService.getSmartOltSyncStats();
       return {
         success: true,
         count: stats.count,
@@ -257,11 +257,11 @@ export class SmartOLTService {
         updated_at: new Date().toISOString(),
       }));
 
-      await TursoService.saveSmartOltOnus(transformed);
+      await DbService.saveSmartOltOnus(transformed);
 
       // Reconciliación: Purgar de Turso DB las ONUs eliminadas en SmartOLT para liberar sus IPs
       const activeIds = new Set<string>(transformed.map(t => t.unique_external_id).filter(Boolean));
-      const prunedCount = await TursoService.pruneSmartOltOnus(activeIds);
+      const prunedCount = await DbService.pruneSmartOltOnus(activeIds);
 
       this.lastSyncTimestamp = Date.now();
       logger.info(`✅ Sincronización completada exitosamente: ${transformed.length} ONUs activas guardadas, ${prunedCount} eliminadas/purgadas.`);
@@ -313,9 +313,9 @@ export class SmartOLTService {
 
     try {
       const api = this.getApi();
-      let onuRecord = await TursoService.getOnuById(cleanId);
+      let onuRecord = await DbService.getOnuById(cleanId);
       if (!onuRecord && cleanId.length < 12) {
-        const matches = await TursoService.searchOnusFuzzy(cleanId, 1);
+        const matches = await DbService.searchOnusFuzzy(cleanId, 1);
         if (matches.length > 0) onuRecord = matches[0];
       }
 
@@ -411,9 +411,9 @@ export class SmartOLTService {
     }
 
     try {
-      let onuRecord = await TursoService.getOnuById(onuId);
+      let onuRecord = await DbService.getOnuById(onuId);
       if (!onuRecord && onuId.length < 12) {
-        const matches = await TursoService.searchOnusFuzzy(onuId, 1);
+        const matches = await DbService.searchOnusFuzzy(onuId, 1);
         if (matches.length > 0) onuRecord = matches[0];
       }
       const externalId = onuRecord?.unique_external_id || onuId;
@@ -772,7 +772,7 @@ export class SmartOLTService {
         }
 
         // Forzar registro en Turso DB
-        TursoService.saveSmartOltOnus([
+        DbService.saveSmartOltOnus([
           {
             unique_external_id: onuExternalId,
             sn: cleanSn,
@@ -824,9 +824,9 @@ export class SmartOLTService {
       const cleanId = onuIdOrExternalId.trim();
 
       // 1. Obtener registro de Turso o detalles para conocer IP, Zona, etc.
-      let onuRecord = await TursoService.getOnuById(cleanId);
+      let onuRecord = await DbService.getOnuById(cleanId);
       if (!onuRecord && cleanId.length < 12) {
-        const matches = await TursoService.searchOnusFuzzy(cleanId, 1);
+        const matches = await DbService.searchOnusFuzzy(cleanId, 1);
         if (matches.length > 0) onuRecord = matches[0];
       }
 
@@ -936,7 +936,7 @@ export class SmartOLTService {
           ip_protocol: 'ipv4ipv6',
           ipv6_address_mode: 'Auto',
         };
-        await TursoService.saveSmartOltOnus([{
+        await DbService.saveSmartOltOnus([{
           ...onuRecord,
           raw_data: JSON.stringify(updatedRaw),
           updated_at: new Date().toISOString(),
@@ -1033,9 +1033,9 @@ export class SmartOLTService {
     clientName?: string;
   }> {
     const cleanId = onuIdOrExternalId.trim();
-    let onuRecord = await TursoService.getOnuById(cleanId);
+    let onuRecord = await DbService.getOnuById(cleanId);
     if (!onuRecord && cleanId.length < 12) {
-      const matches = await TursoService.searchOnusFuzzy(cleanId, 1);
+      const matches = await DbService.searchOnusFuzzy(cleanId, 1);
       if (matches.length > 0) onuRecord = matches[0];
     }
     const externalId = onuRecord?.unique_external_id || cleanId;
@@ -1168,9 +1168,9 @@ export class SmartOLTService {
     logger.info(`Actualizando perfil de velocidad para ONU ${idOrSn} a ${profiles.down} / ${profiles.up}`);
 
     // 1. Buscar registro en Turso DB para tener datos completos del cliente
-    let onuRecord = await TursoService.getOnuById(idOrSn);
+    let onuRecord = await DbService.getOnuById(idOrSn);
     if (!onuRecord) {
-      const fuzzy = await TursoService.searchOnusFuzzy(idOrSn, 1);
+      const fuzzy = await DbService.searchOnusFuzzy(idOrSn, 1);
       if (fuzzy.length > 0 && fuzzy[0].matchScore >= 50) {
         onuRecord = fuzzy[0];
       }
@@ -1182,7 +1182,7 @@ export class SmartOLTService {
     if (!apiKey || apiKey.includes('tu_token')) {
       logger.info('Modo DEV: Actualización de perfil de velocidad simulada.');
       if (onuRecord) {
-        TursoService.saveSmartOltOnus([
+        DbService.saveSmartOltOnus([
           {
             ...onuRecord,
             speed_profile: profiles.down,
@@ -1223,7 +1223,7 @@ export class SmartOLTService {
 
       if (resData?.status === true || response.status === 200 || resData?.response_code === 'success' || resData?.response === 'success') {
         if (onuRecord) {
-          TursoService.saveSmartOltOnus([
+          DbService.saveSmartOltOnus([
             {
               ...onuRecord,
               speed_profile: profiles.down,
@@ -1272,7 +1272,7 @@ export class SmartOLTService {
       const resData = response.data;
 
       if (resData?.status === true || resData?.response_code === 'success' || response.status === 200) {
-        await TursoService.deleteSmartOltOnu(onuExternalId);
+        await DbService.deleteSmartOltOnu(onuExternalId);
         logger.info(`ONU ${onuExternalId} eliminada de SmartOLT y de Turso DB. IP liberada.`);
         return {
           success: true,
@@ -1364,9 +1364,9 @@ export class SmartOLTService {
     }
 
     // Fallback: Consultar en Turso DB
-    let onu = await TursoService.getOnuById(cleanId);
+    let onu = await DbService.getOnuById(cleanId);
     if (!onu) {
-      const match = await TursoService.searchOnusFuzzy(cleanId, 1);
+      const match = await DbService.searchOnusFuzzy(cleanId, 1);
       if (match.length > 0) onu = match[0];
     }
 
@@ -1458,7 +1458,7 @@ export class SmartOLTService {
     logger.info(`[Cambio de Módem] Datos de ONU anterior localizados: Cliente="${oldOnu.name}", IP="${oldOnu.ip_address}", VLAN="${oldOnu.vlan}", Zona="${oldOnu.zone}", SN="${oldOnu.sn}"`);
 
     // 2. Respaldar en Turso DB (Crear registro de swap)
-    const swapId = await TursoService.saveModemSwap({
+    const swapId = await DbService.saveModemSwap({
       client_name: oldOnu.name,
       old_sn: oldOnu.sn || cleanOld,
       new_sn: cleanNewSn,
@@ -1536,7 +1536,7 @@ export class SmartOLTService {
     if (!authResult.success) {
       logger.error(`[Cambio de Módem] Falló la autorización del nuevo módem: ${authResult.message}`);
       if (swapId > 0) {
-        await TursoService.updateModemSwap(swapId, {
+        await DbService.updateModemSwap(swapId, {
           status: 'ERROR',
           error_message: authResult.message,
         });
@@ -1554,12 +1554,12 @@ export class SmartOLTService {
 
     // 6. Actualizar referencias en base de datos
     if (swapId > 0) {
-      await TursoService.updateModemSwap(swapId, {
+      await DbService.updateModemSwap(swapId, {
         status: 'COMPLETADO',
         new_onu_id: newOnuId,
       });
     }
-    await TursoService.updateClientOnuReferences(oldOnu.sn, cleanNewSn, newOnuId);
+    await DbService.updateClientOnuReferences(oldOnu.sn, cleanNewSn, newOnuId);
 
     // 7. Enviar notificación al grupo de WhatsApp de Activaciones
     // Formato exacto solicitado: "[Nombre] [IP] [Zona] CAMBIO DE MODEM"
@@ -1571,7 +1571,7 @@ export class SmartOLTService {
         const { EvolutionService } = await import('./evolution.service');
         const groupMsg = `${payload.name}\n${payload.ip_address}\n${payload.zone || 'Actopan'}\nCAMBIO DE MODEM`;
 
-        let configuredGroupJid = (await TursoService.getActivationsGroupJid()).trim();
+        let configuredGroupJid = (await DbService.getActivationsGroupJid()).trim();
 
         if (configuredGroupJid) {
           if (!configuredGroupJid.endsWith('@g.us')) {

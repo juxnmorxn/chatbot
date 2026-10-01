@@ -4,7 +4,7 @@ import { SettingsService } from './settings.service';
 import { Logger } from '../utils/logger';
 import { normalizePhone10 } from '../utils/spintax';
 import { cleanPersonName, computeNameMatchScore } from '../utils/fuzzy-matcher';
-import { TursoService, WisphubClientRecord, DbService } from './db.service';
+import { DbService, WisphubClientRecord } from './db.service';
 
 const logger = new Logger('WispHubService');
 
@@ -168,7 +168,7 @@ export class WispHubService {
 
         // B. Búsqueda difusa (fuzzy) por nombre completo
         if (!targetId) {
-          const fuzzy = await TursoService.searchWisphubClientsFuzzy(nameParam, 3);
+          const fuzzy = await DbService.searchWisphubClientsFuzzy(nameParam, 3);
           if (fuzzy.length > 0 && fuzzy[0].matchScore >= 50) {
             targetId = Number(fuzzy[0].id_servicio);
             logger.info(`[WispHub API] Activación: Cliente identificado por Nombre difuso ("${nameParam}"): ID=${targetId}, Nombre="${fuzzy[0].nombre}" (Score: ${fuzzy[0].matchScore}).`);
@@ -208,7 +208,7 @@ export class WispHubService {
               }
             }
             if (!targetId && oltRow.name) {
-              const whByName = await TursoService.getWisphubClientByAny({ name: String(oltRow.name) });
+              const whByName = await DbService.getWisphubClientByAny({ name: String(oltRow.name) });
               if (whByName?.id_servicio) {
                 targetId = Number(whByName.id_servicio);
                 logger.info(`[WispHub API] Activación: Cliente identificado cruzando SmartOLT ONU Nombre ("${oltRow.name}"): ID=${targetId}, Nombre="${whByName.nombre}".`);
@@ -219,10 +219,10 @@ export class WispHubService {
       } catch {}
     }
 
-    // 5. Fallback por TursoService.getWisphubClientByAny
+    // 5. Fallback por DbService.getWisphubClientByAny
     if (!targetId) {
       try {
-        const dbClient = await TursoService.getWisphubClientByAny({
+        const dbClient = await DbService.getWisphubClientByAny({
           id: /^\d+$/.test(rawId) ? rawId : undefined,
           name: nameParam || undefined,
           ip: ipParam || undefined,
@@ -730,7 +730,7 @@ export class WispHubService {
     // 1. Ubicar el registro en la base de datos indexada de Turso (sincronizada con todos los 3400+ clientes)
     let targetId: string | number | null = null;
     try {
-      const dbClient = await TursoService.getWisphubClientByAny({
+      const dbClient = await DbService.getWisphubClientByAny({
         id: idNum || clienteId,
         phone,
         sn,
@@ -1086,7 +1086,7 @@ export class WispHubService {
           };
         });
 
-        await TursoService.saveWisphubClients(records);
+        await DbService.saveWisphubClients(records);
         totalFetched += results.length;
         offset += results.length;
 

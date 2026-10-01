@@ -1,5 +1,5 @@
 import { SettingsService } from './settings.service';
-import { TursoService, DbService } from './db.service';
+import { DbService } from './db.service';
 import { WispHubService } from './wisphub.service';
 import { EvolutionService } from './evolution.service';
 import { Logger } from '../utils/logger';
@@ -77,7 +77,7 @@ export class NotificationService {
     const instance = SettingsService.get('NOTIF_INSTANCE_NAME', 'NOTIF_INSTANCE_NAME', 'atencion');
 
     logger.info(`Iniciando lote de recordatorios preventivos (${dias} días antes) vía instancia [${instance}]...`);
-    const candidates = await TursoService.getNotificationCandidates('RECORDATORIO_PREVIO', dias);
+    const candidates = await DbService.getNotificationCandidates('RECORDATORIO_PREVIO', dias);
 
     const result: NotificationBatchResult = {
       totalCandidates: candidates.length,
@@ -138,9 +138,9 @@ export class NotificationService {
         if (ok) {
           result.sent++;
           result.details.push({ phone: rawPhone, nombre: c.nombre, status: 'SENT' });
-          await TursoService.logMessage(rawPhone, 'OUT', msg, 'RECORDATORIO_PAGO_PREVIO', 'ENVIO_AUTOMATICO_COBRANZA', instance);
-          await TursoService.updateDepartment(rawPhone, 'ATENCION');
-          await TursoService.updateLastInstance(rawPhone, instance);
+          await DbService.logMessage(rawPhone, 'OUT', msg, 'RECORDATORIO_PAGO_PREVIO', 'ENVIO_AUTOMATICO_COBRANZA', instance);
+          await DbService.updateDepartment(rawPhone, 'ATENCION');
+          await DbService.updateLastInstance(rawPhone, instance);
         } else {
           result.errors++;
           result.details.push({ phone: rawPhone, nombre: c.nombre, status: 'ERROR', motivo: 'Error al enviar por Evolution API' });
@@ -166,7 +166,7 @@ export class NotificationService {
     }
 
     const instance = SettingsService.get('NOTIF_INSTANCE_NAME', 'NOTIF_INSTANCE_NAME', 'atencion');
-    const candidates = await TursoService.getNotificationCandidates('SUSPENSION');
+    const candidates = await DbService.getNotificationCandidates('SUSPENSION');
 
     const result: NotificationBatchResult = {
       totalCandidates: candidates.length,
@@ -213,8 +213,8 @@ export class NotificationService {
         if (ok) {
           result.sent++;
           result.details.push({ phone: rawPhone, nombre: c.nombre, status: 'SENT' });
-          await TursoService.logMessage(rawPhone, 'OUT', msg, 'AVISO_SUSPENSION', 'ENVIO_AUTOMATICO_COBRANZA', instance);
-          await TursoService.updateDepartment(rawPhone, 'ATENCION');
+          await DbService.logMessage(rawPhone, 'OUT', msg, 'AVISO_SUSPENSION', 'ENVIO_AUTOMATICO_COBRANZA', instance);
+          await DbService.updateDepartment(rawPhone, 'ATENCION');
         } else {
           result.errors++;
         }
