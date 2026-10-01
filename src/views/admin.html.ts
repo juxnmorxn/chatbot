@@ -2612,7 +2612,7 @@ export function getAdminDashboardHtml(): string {
         <div class="glass-card" style="margin-bottom: 18px; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
           <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
             <span style="font-size: 11.5px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-right: 4px;">⚡ Diagnóstico Rápido:</span>
-            <button class="btn btn-secondary btn-xs" onclick="testServiceConnection('turso')" title="Probar conexión a Base de Datos Local">
+            <button class="btn btn-secondary btn-xs" onclick="testServiceConnection('local_db')" title="Probar conexión a Base de Datos Local">
               <span class="pulse-dot" style="width: 7px; height: 7px; margin-right: 2px;"></span> BD Local (Hostinger)
             </button>
             <button class="btn btn-secondary btn-xs" onclick="testServiceConnection('smartolt')" title="Probar API SmartOLT">
@@ -3643,7 +3643,7 @@ export function getAdminDashboardHtml(): string {
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
               <div>
                 <h3 style="font-size: 15px; font-weight: 700;">⚡ Editor SQL en Vivo</h3>
-                <p style="font-size: 12px; color: var(--text-muted);">Ejecuta consultas SQL directas contra SQLite / Turso con total libertad.</p>
+                <p style="font-size: 12px; color: var(--text-muted);">Ejecuta consultas SQL directas contra SQLite / Base de Datos Local con total libertad.</p>
               </div>
               <div style="display: flex; gap: 8px;">
                 <button class="btn btn-primary btn-sm" onclick="runDatabaseSqlQuery()">
@@ -3733,7 +3733,7 @@ export function getAdminDashboardHtml(): string {
               </div>
             </div>
 
-            <!-- Card 2: Migración & Sincronización con Turso -->
+            <!-- Card 2: Migración & Sincronización con Base de Datos Local -->
             <div class="glass-card" style="border-color: rgba(99,102,241,0.3); display: flex; flex-direction: column; justify-content: space-between;">
               <div>
                 <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
@@ -3742,7 +3742,7 @@ export function getAdminDashboardHtml(): string {
                 </div>
 
                 <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">
-                  Herramienta para clonar datos desde Turso Cloud hacia SQLite Local o conmutar entre motores.
+                  Herramienta para clonar datos desde Base de Datos Local hacia SQLite Local o conmutar entre motores.
                 </p>
 
                 <div id="db-migration-status-box" style="padding: 12px 14px; background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.25); border-radius: var(--radius-sm); margin-bottom: 16px; font-size: 12px;">
@@ -3753,28 +3753,28 @@ export function getAdminDashboardHtml(): string {
                 </div>
 
                 <!-- Botón de migración 1-clic -->
-                <button class="btn btn-primary btn-sm" id="btn-auto-migrate-turso" onclick="executeAutoMigrationFromTurso()" style="width: 100%; margin-bottom: 16px; justify-content: center;">
-                  <span>🚀 Re-clonar / Importar Todo de Turso a Local</span>
+                <button class="btn btn-primary btn-sm" id="btn-auto-migrate-local_db" onclick="executeAutoMigrationFromBase de Datos Local()" style="width: 100%; margin-bottom: 16px; justify-content: center;">
+                  <span>🚀 Re-clonar / Importar Todo de Base de Datos Local a Local</span>
                 </button>
 
-                <!-- Acordeón / toggle para cambiar a Turso si se desea -->
+                <!-- Acordeón / toggle para cambiar a Base de Datos Local si se desea -->
                 <div style="border-top: 1px solid var(--card-border); padding-top: 12px;">
-                  <button type="button" class="btn btn-secondary btn-xs" onclick="toggleTursoConfigCollapse()" style="font-size: 11px;">
-                    ⚙️ Cambiar a Turso Cloud (Avanzado)
+                  <button type="button" class="btn btn-secondary btn-xs" onclick="toggleBase de Datos LocalConfigCollapse()" style="font-size: 11px;">
+                    ⚙️ Cambiar a Base de Datos Local (Avanzado)
                   </button>
 
-                  <div id="db-turso-credentials-fields" style="display: none; flex-direction: column; gap: 10px; margin-top: 12px; padding: 12px; background: rgba(0,0,0,0.25); border-radius: var(--radius-sm); border: 1px solid var(--card-border);">
+                  <div id="db-local_db-credentials-fields" style="display: none; flex-direction: column; gap: 10px; margin-top: 12px; padding: 12px; background: rgba(0,0,0,0.25); border-radius: var(--radius-sm); border: 1px solid var(--card-border);">
                     <div>
-                      <label class="form-label">URL de Turso</label>
-                      <input type="text" id="db-config-turso-url" class="form-input" placeholder="libsql://chatbot-jednet.aws-us-east-1.turso.io">
+                      <label class="form-label">URL de Base de Datos Local</label>
+                      <input type="text" id="db-config-local_db-url" class="form-input" placeholder="libsql://chatbot-jednet.aws-us-east-1.local_db.io">
                     </div>
                     <div>
-                      <label class="form-label">Auth Token de Turso</label>
-                      <input type="password" id="db-config-turso-token" class="form-input" placeholder="eyJhbGciOiJ...">
+                      <label class="form-label">Auth Token de Base de Datos Local</label>
+                      <input type="password" id="db-config-local_db-token" class="form-input" placeholder="eyJhbGciOiJ...">
                     </div>
                     <div style="display: flex; gap: 8px; margin-top: 4px;">
-                      <button type="button" class="btn btn-warning btn-xs" onclick="switchDbToTursoRemote()">
-                        Conectar a Turso
+                      <button type="button" class="btn btn-warning btn-xs" onclick="switchDbToBase de Datos LocalRemote()">
+                        Conectar a Base de Datos Local
                       </button>
                       <button type="button" class="btn btn-secondary btn-xs" onclick="switchDbToLocal()">
                         Forzar SQLite Local
@@ -3951,9 +3951,9 @@ export function getAdminDashboardHtml(): string {
               <div style="background: rgba(0,0,0,0.25); border: 1px solid var(--card-border); border-radius: var(--radius-sm); padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; gap: 10px;">
                 <div>
                   <div style="font-size: 13px; font-weight: 600;">💾 Base de Datos Local (SQLite Hostinger)</div>
-                  <div id="diag-status-turso" style="font-size: 11px; color: var(--text-dim);">Sin probar aún</div>
+                  <div id="diag-status-local_db" style="font-size: 11px; color: var(--text-dim);">Sin probar aún</div>
                 </div>
-                <button type="button" class="btn btn-secondary btn-sm" onclick="testSingleApi('turso', this)">⚡ Probar</button>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="testSingleApi('local_db', this)">⚡ Probar</button>
               </div>
             </div>
           </div>
@@ -5293,7 +5293,7 @@ export function getAdminDashboardHtml(): string {
       if (icon) icon.classList.add('spin');
       if (btnText) btnText.innerText = 'Sincronizando...';
 
-      showToast('Sincronización Global', 'Consultando SmartOLT y WispHub para actualizar Turso DB...', 'info', 4000);
+      showToast('Sincronización Global', 'Consultando SmartOLT y WispHub para actualizar Base de Datos Local...', 'info', 4000);
 
       try {
         const [oltRes, whRes] = await Promise.allSettled([
@@ -5341,7 +5341,7 @@ export function getAdminDashboardHtml(): string {
       try {
         const res = await apiFetch('/api/smartolt/sync', { method: 'POST', body: JSON.stringify({ force }) });
         if (res.success) {
-          showToast('Sincronización Completada', \`\${res.count} ONUs procesadas en Turso DB.\`, 'success');
+          showToast('Sincronización Completada', \`\${res.count} ONUs procesadas en Base de Datos Local.\`, 'success');
           refreshCurrentView();
         } else {
           showToast('Error', res.message || 'Error al sincronizar', 'error');
@@ -7580,7 +7580,7 @@ export function getAdminDashboardHtml(): string {
           body: JSON.stringify({ settings }),
         });
         if (res.success) {
-          showToast('Configuraciones Guardadas', 'Parámetros, credenciales y switches actualizados en Turso DB.', 'success');
+          showToast('Configuraciones Guardadas', 'Parámetros, credenciales y switches actualizados en Base de Datos Local.', 'success');
         } else {
           showToast('Error', res.error || 'No se pudieron guardar los ajustes', 'error');
         }
@@ -7650,7 +7650,7 @@ export function getAdminDashboardHtml(): string {
       }
       showToast('Diagnóstico Iniciado', 'Comprobando conectividad en vivo con todas las APIs...', 'info');
 
-      const services = ['evolution', 'groq', 'wisphub', 'smartolt', 'turso'];
+      const services = ['evolution', 'groq', 'wisphub', 'smartolt', 'local_db'];
       await Promise.all(services.map(s => testSingleApi(s)));
 
       if (btn) {
@@ -8122,7 +8122,7 @@ export function getAdminDashboardHtml(): string {
         showToast('Acceso Denegado', 'Solo el superadmin puede vaciar sesiones.', 'error');
         return;
       }
-      showConfirmDialog('⚠️ Vaciar Sesiones de Clientes', '¿Estás seguro de que deseas eliminar todas las sesiones activas en Turso DB? El bot reiniciará el flujo con los clientes.', async () => {
+      showConfirmDialog('⚠️ Vaciar Sesiones de Clientes', '¿Estás seguro de que deseas eliminar todas las sesiones activas en Base de Datos Local? El bot reiniciará el flujo con los clientes.', async () => {
         const res = await apiFetch('/api/sessions/clear-all', { method: 'DELETE' });
         if (res.success) {
           showToast('Sesiones Vaciadas', res.message || 'Sesiones eliminadas correctamente.', 'success');
@@ -9579,7 +9579,7 @@ export function getAdminDashboardHtml(): string {
         const elInfoPath = document.getElementById('db-info-path');
 
         if (elStatus) elStatus.innerHTML = res.status === 'healthy' ? '🟢 En Línea' : '🔴 Error';
-        if (elEngine) elEngine.innerText = res.isLocal ? 'SQLite Local (VPS KVM 1)' : 'Turso Cloud (Nube)';
+        if (elEngine) elEngine.innerText = res.isLocal ? 'SQLite Local (VPS KVM 1)' : 'Base de Datos Local (Nube)';
         if (elLatency) elLatency.innerText = res.latencyMs + ' ms';
         if (elSize) elSize.innerText = res.fileSizeFormatted || (res.isLocal ? '0.00 MB' : 'Nube');
         if (elRows) elRows.innerText = (res.totalRows || 0).toLocaleString();
@@ -9594,7 +9594,7 @@ export function getAdminDashboardHtml(): string {
         const elBox = document.getElementById('db-migration-status-box');
         if (elBadge) {
           elBadge.className = res.isLocal ? 'badge badge-success' : 'badge badge-purple';
-          elBadge.innerText = res.isLocal ? 'SQLite Local VPS' : 'Turso Cloud Remoto';
+          elBadge.innerText = res.isLocal ? 'SQLite Local VPS' : 'Base de Datos Local Remoto';
         }
         if (elBox) {
           if (res.isLocal) {
@@ -9604,7 +9604,7 @@ export function getAdminDashboardHtml(): string {
           } else {
             elBox.style.background = 'rgba(99,102,241,0.08)';
             elBox.style.borderColor = 'rgba(99,102,241,0.25)';
-            elBox.innerHTML = '<div style="font-weight: 700; color: #818cf8; margin-bottom: 4px;">☁️ Conectado a Turso Cloud</div><div style="color: var(--text-muted);">Haz clic en el botón de abajo para clonar toda la información a tu VPS y trabajar de forma local.</div>';
+            elBox.innerHTML = '<div style="font-weight: 700; color: #818cf8; margin-bottom: 4px;">☁️ Conectado a Base de Datos Local</div><div style="color: var(--text-muted);">Haz clic en el botón de abajo para clonar toda la información a tu VPS y trabajar de forma local.</div>';
           }
         }
       } catch (err) {
@@ -9957,30 +9957,30 @@ export function getAdminDashboardHtml(): string {
       });
     }
 
-    function toggleTursoConfigCollapse() {
-      const fields = document.getElementById('db-turso-credentials-fields');
+    function toggleBase de Datos LocalConfigCollapse() {
+      const fields = document.getElementById('db-local_db-credentials-fields');
       if (fields) {
         fields.style.display = fields.style.display === 'none' ? 'flex' : 'none';
       }
     }
 
-    async function switchDbToTursoRemote() {
-      const tursoUrl = document.getElementById('db-config-turso-url')?.value?.trim();
-      const tursoToken = document.getElementById('db-config-turso-token')?.value?.trim();
+    async function switchDbToBase de Datos LocalRemote() {
+      const dbUrl = document.getElementById('db-config-local_db-url')?.value?.trim();
+      const dbToken = document.getElementById('db-config-local_db-token')?.value?.trim();
 
-      if (!tursoUrl) {
-        showToast('Campo Requerido', 'Ingresa la URL de la base de datos de Turso.', 'warning');
+      if (!dbUrl) {
+        showToast('Campo Requerido', 'Ingresa la URL de la base de datos de Base de Datos Local.', 'warning');
         return;
       }
 
       showConfirmDialog(
-        'Conectar a Turso Cloud Remoto',
-        '¿Deseas cambiar el motor activo a Turso Cloud remoto?',
+        'Conectar a Base de Datos Local Remoto',
+        '¿Deseas cambiar el motor activo a Base de Datos Local remoto?',
         async () => {
           try {
             const res = await apiFetch('/api/admin/database/switch-mode', {
               method: 'POST',
-              body: JSON.stringify({ mode: 'turso', tursoUrl, tursoToken }),
+              body: JSON.stringify({ mode: 'local_db', dbUrl, dbToken }),
             });
 
             if (res && res.success) {
@@ -10034,17 +10034,17 @@ export function getAdminDashboardHtml(): string {
       }
     }
 
-    async function executeAutoMigrationFromTurso() {
-      const btn = document.getElementById('btn-auto-migrate-turso');
+    async function executeAutoMigrationFromBase de Datos Local() {
+      const btn = document.getElementById('btn-auto-migrate-local_db');
       showConfirmDialog(
         '🚀 Iniciar Migración Automática a Local',
-        '¿Deseas iniciar la clonación de todos los registros de Turso Cloud hacia el almacenamiento SQLite local en tu VPS? La migración creará el archivo local, transferirá los datos y activará el modo local.',
+        '¿Deseas iniciar la clonación de todos los registros de Base de Datos Local hacia el almacenamiento SQLite local en tu VPS? La migración creará el archivo local, transferirá los datos y activará el modo local.',
         async () => {
           if (btn) {
             btn.disabled = true;
             btn.innerHTML = '<span>⏳ Migrando tablas y registros...</span>';
           }
-          showToast('Migración en Proceso', 'Copiando tablas y datos desde Turso...', 'info', 10000);
+          showToast('Migración en Proceso', 'Copiando tablas y datos desde Base de Datos Local...', 'info', 10000);
 
           try {
             const res = await apiFetch('/api/admin/database/auto-migrate', {
@@ -10063,7 +10063,7 @@ export function getAdminDashboardHtml(): string {
           } finally {
             if (btn) {
               btn.disabled = false;
-              btn.innerHTML = '<span>🚀 Clonar e Importar Todo de Turso a Local Ahora</span>';
+              btn.innerHTML = '<span>🚀 Clonar e Importar Todo de Base de Datos Local a Local Ahora</span>';
             }
           }
         }

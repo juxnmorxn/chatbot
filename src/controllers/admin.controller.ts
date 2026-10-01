@@ -3,15 +3,14 @@ import { createClient } from '@libsql/client';
 import { SettingsService } from '../services/settings.service';
 import { DbService } from '../services/db.service';
 import { 
-  getTursoClient, 
-  getDbClient,
+  getDbClient, 
   getDatabaseStatsInfo, 
   getTableDataAndSchema, 
   executeCustomQuery, 
   optimizeDatabase as dbOptimize,
   getLocalDbFilePath,
   resetDatabaseConnection,
-  initTursoDatabase
+  initDatabase
 } from '../database/db';
 import { GroqService } from '../services/groq.service';
 import fs from 'fs';
@@ -378,7 +377,7 @@ export class AdminController {
         return;
       }
 
-      // Registrar en el historial de Turso
+      // Registrar en el historial de Base de Datos Local
       await DbService.logMessage(cleanPhone, 'OUT', text, 'HUMAN_TAKEOVER', 'Mensaje enviado por operador humano');
 
       // Activar pausa automática del bot por defecto 240m (o especificado)
@@ -549,7 +548,7 @@ export class AdminController {
   }
 
   /**
-   * Actualiza las configuraciones en Turso DB
+   * Actualiza las configuraciones en Base de Datos Local
    */
   static async updateSettings(req: Request, res: Response): Promise<void> {
     try {
@@ -560,7 +559,7 @@ export class AdminController {
       }
 
       await SettingsService.updateAll(settings);
-      res.json({ success: true, message: 'Configuraciones guardadas exitosamente en Turso DB' });
+      res.json({ success: true, message: 'Configuraciones guardadas exitosamente en Base de Datos Local' });
     } catch (error: any) {
       logger.error('Error al actualizar settings:', error?.message || error);
       res.status(500).json({ success: false, error: error?.message || error });
@@ -576,11 +575,11 @@ export class AdminController {
   }
 
   /**
-   * Lista las sesiones activas de clientes desde Turso
+   * Lista las sesiones activas de clientes desde Base de Datos Local
    */
   static async getSessions(req: Request, res: Response): Promise<void> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const result = await client.execute('SELECT * FROM sessions ORDER BY last_interaction DESC LIMIT 50');
       res.json({ success: true, sessions: result.rows });
     } catch (error: any) {
@@ -589,7 +588,7 @@ export class AdminController {
   }
 
   /**
-   * Obtiene el historial de mensajes, problemas y soluciones registrados en Turso
+   * Obtiene el historial de mensajes, problemas y soluciones registrados en Base de Datos Local
    */
   static async getLogs(req: Request, res: Response): Promise<void> {
     try {
@@ -604,7 +603,7 @@ export class AdminController {
   }
 
   /**
-   * Vacía todas las sesiones registradas en Turso (Modo Pruebas)
+   * Vacía todas las sesiones registradas en Base de Datos Local (Modo Pruebas)
    */
   static async clearAllSessions(req: Request, res: Response): Promise<void> {
     try {
@@ -644,7 +643,7 @@ export class AdminController {
   }
 
   /**
-   * Vacía todos los tickets registrados en Turso (Modo Pruebas)
+   * Vacía todos los tickets registrados en Base de Datos Local (Modo Pruebas)
    */
   static async clearAllTickets(req: Request, res: Response): Promise<void> {
     try {
@@ -679,12 +678,12 @@ export class AdminController {
 
 
   /**
-   * Busca clientes en SmartOLT / Turso para diagnóstico
+   * Busca clientes en SmartOLT / Base de Datos Local para diagnóstico
    */
   static async searchClients(req: Request, res: Response): Promise<void> {
     try {
       const q = String(req.query.q || '');
-      const client = getTursoClient();
+      const client = getDbClient();
       const dbRows = await client.execute({
         sql: 'SELECT name, unique_external_id, sn, phone FROM smartolt_onus WHERE name LIKE ? LIMIT 20',
         args: [`%${q}%`]
@@ -811,8 +810,8 @@ export class AdminController {
         };
       }
 
-      if (service === 'turso') {
-        const client = getTursoClient();
+      if (service === 'local_db') {
+        const client = getDbClient();
         const [settRes, logsRes] = await Promise.all([
           client.execute('SELECT count(*) as count FROM settings'),
           client.execute('SELECT count(*) as count FROM logs'),
@@ -820,9 +819,9 @@ export class AdminController {
         const latencyMs = Date.now() - startTime;
         return {
           success: true,
-          service: 'turso',
+          service: 'local_db',
           latencyMs,
-          message: `Turso DB operativo (${latencyMs}ms). ${settRes.rows[0]?.count || 0} configuraciones y ${logsRes.rows[0]?.count || 0} registros.`,
+          message: `Base de Datos Local operativo (${latencyMs}ms). ${settRes.rows[0]?.count || 0} configuraciones y ${logsRes.rows[0]?.count || 0} registros.`,
           details: { settingsCount: settRes.rows[0]?.count, logsCount: logsRes.rows[0]?.count }
         };
       }
@@ -851,15 +850,15 @@ export class AdminController {
 
     try {
       if (service === 'all') {
-        const [evo, groq, wh, so, turso] = await Promise.all([
+        const [evo, groq, wh, so, local_db] = await Promise.all([
           AdminController.runInternalTest('evolution', bodySettings),
           AdminController.runInternalTest('groq', bodySettings),
           AdminController.runInternalTest('wisphub', bodySettings),
           AdminController.runInternalTest('smartolt', bodySettings),
-          AdminController.runInternalTest('turso', bodySettings),
+          AdminController.runInternalTest('local_db', bodySettings),
         ]);
 
-        const results = { evolution: evo, groq, wisphub: wh, smartolt: so, turso };
+        const results = { evolution: evo, groq, wisphub: wh, smartolt: so, local_db };
         const allOk = Object.values(results).every((r: any) => r.success);
 
         res.json({
@@ -1360,12 +1359,12 @@ export class AdminController {
   }
 
   /**
-   * Dispara la sincronización de SmartOLT hacia Turso DB
+   * Dispara la sincronización de SmartOLT hacia Base de Datos Local
    */
   static async syncSmartOlt(req: Request, res: Response): Promise<void> {
     try {
       const force = req.body?.force === true;
-      const result = await SmartOLTService.syncAllOnusToTurso(force);
+      const result = await SmartOLTService.syncAllOnusToLocalDb(force);
       res.json(result);
     } catch (error: any) {
       logger.error('Error en syncSmartOlt controller:', error?.message || error);
@@ -1374,7 +1373,7 @@ export class AdminController {
   }
 
   /**
-   * Obtiene estadísticas de ONUs guardadas en Turso DB
+   * Obtiene estadísticas de ONUs guardadas en Base de Datos Local
    */
   static async getSmartOltStats(_req: Request, res: Response): Promise<void> {
     try {
@@ -1469,15 +1468,15 @@ export class AdminController {
   }
 
   /**
-   * Dispara la sincronización completa de clientes de WispHub a Turso DB (100% solo lectura de API)
+   * Dispara la sincronización completa de clientes de WispHub a Base de Datos Local (100% solo lectura de API)
    */
   static async syncWisphub(req: Request, res: Response): Promise<void> {
     try {
       logger.info('Iniciando sincronización manual de clientes WispHub...');
-      const result = await WispHubService.syncAllClientesToTurso();
+      const result = await WispHubService.syncAllClientesToLocalDb();
       res.json({
         success: result.success,
-        message: result.message || `Sincronización completada: ${result.count} clientes procesados en Turso DB.`,
+        message: result.message || `Sincronización completada: ${result.count} clientes procesados en Base de Datos Local.`,
         stats: result,
       });
     } catch (error: any) {
@@ -1487,7 +1486,7 @@ export class AdminController {
   }
 
   /**
-   * Obtiene estadísticas de sincronización de WispHub en Turso
+   * Obtiene estadísticas de sincronización de WispHub en Base de Datos Local
    */
   static async getWisphubStats(_req: Request, res: Response): Promise<void> {
     try {
@@ -2335,7 +2334,7 @@ export class AdminController {
     try {
       const localPath = getLocalDbFilePath();
       if (!fs.existsSync(localPath)) {
-        res.status(404).json({ success: false, error: 'El archivo de base de datos local aún no existe o está usando Turso en la nube.' });
+        res.status(404).json({ success: false, error: 'El archivo de base de datos local aún no existe o está usando Base de Datos Local en la nube.' });
         return;
       }
 
@@ -2348,41 +2347,41 @@ export class AdminController {
   }
 
   /**
-   * Cambia el modo / motor de base de datos (Local SQLite vs Turso Cloud)
+   * Cambia el modo / motor de base de datos (Local SQLite vs Base de Datos Local)
    */
   static async switchDatabaseMode(req: Request, res: Response): Promise<void> {
     try {
-      const { mode, tursoUrl, tursoToken } = req.body;
+      const { mode, dbUrl, dbToken } = req.body;
 
       if (mode === 'local') {
         const localUrl = 'file:./data/chatbot.db';
         resetDatabaseConnection(localUrl, '');
-        await initTursoDatabase();
+        await initDatabase();
         // Guardar en settings para persistencia
         await SettingsService.set('DATABASE_MODE', 'local');
-        await SettingsService.set('TURSO_DATABASE_URL', localUrl);
-        await SettingsService.set('TURSO_AUTH_TOKEN', '');
+        await SettingsService.set('DATABASE_URL', localUrl);
+        await SettingsService.set('DB_AUTH_TOKEN', '');
         res.json({ 
           success: true, 
           message: 'Base de datos cambiada a SQLite Local en Servidor (VPS KVM 1). Sin límites de consultas.',
           mode: 'local',
           url: localUrl
         });
-      } else if (mode === 'turso') {
-        if (!tursoUrl) {
-          res.status(400).json({ success: false, error: 'La URL de Turso es obligatoria para el modo nube' });
+      } else if (mode === 'local_db') {
+        if (!dbUrl) {
+          res.status(400).json({ success: false, error: 'La URL de Base de Datos Local es obligatoria para el modo nube' });
           return;
         }
-        resetDatabaseConnection(tursoUrl, tursoToken || '');
-        await SettingsService.set('DATABASE_MODE', 'turso');
-        await SettingsService.set('TURSO_DATABASE_URL', tursoUrl);
-        await SettingsService.set('TURSO_AUTH_TOKEN', tursoToken || '');
-        await initTursoDatabase();
+        resetDatabaseConnection(dbUrl, dbToken || '');
+        await SettingsService.set('DATABASE_MODE', 'local_db');
+        await SettingsService.set('DATABASE_URL', dbUrl);
+        await SettingsService.set('DB_AUTH_TOKEN', dbToken || '');
+        await initDatabase();
         res.json({ 
           success: true, 
-          message: 'Base de datos conectada exitosamente a Turso Cloud.',
-          mode: 'turso',
-          url: tursoUrl
+          message: 'Base de datos conectada exitosamente a Base de Datos Local.',
+          mode: 'local_db',
+          url: dbUrl
         });
       } else {
         res.status(400).json({ success: false, error: 'Modo de base de datos desconocido' });
@@ -2394,19 +2393,19 @@ export class AdminController {
   }
 
   /**
-   * Clona e importa automáticamente todas las tablas y datos de Turso hacia la base de datos local SQLite en VPS
+   * Clona e importa automáticamente todas las tablas y datos de Base de Datos Local hacia la base de datos local SQLite en VPS
    */
-  static async autoMigrateFromTurso(req: Request, res: Response): Promise<void> {
+  static async autoMigrateFromRemoteDb(req: Request, res: Response): Promise<void> {
     try {
-      const dbUrl = req.body?.tursoUrl || (await SettingsService.get('TURSO_DATABASE_URL')) || config.turso.url;
-      const dbToken = req.body?.tursoToken || (await SettingsService.get('TURSO_AUTH_TOKEN')) || config.turso.authToken;
+      const dbUrl = req.body?.dbUrl || (await SettingsService.get('DATABASE_URL')) || config.db.url;
+      const dbToken = req.body?.dbToken || (await SettingsService.get('DB_AUTH_TOKEN')) || config.db.authToken;
 
       if (!dbUrl || dbUrl.startsWith('file:')) {
-        res.status(400).json({ success: false, error: 'No se especificó una URL de Turso válida para clonar.' });
+        res.status(400).json({ success: false, error: 'No se especificó una URL de Base de Datos Local válida para clonar.' });
         return;
       }
 
-      logger.info(`Iniciando clonación y migración de Turso (${dbUrl}) hacia SQLite Local...`);
+      logger.info(`Iniciando clonación y migración de Base de Datos Local (${dbUrl}) hacia SQLite Local...`);
 
       const remoteClient = createClient({
         url: dbUrl,
@@ -2423,7 +2422,7 @@ export class AdminController {
         url: `file:${localPath.replace(/\\/g, '/')}`,
       });
 
-      // 1. Obtener tablas de Turso
+      // 1. Obtener tablas de Base de Datos Local
       const tablesRes = await remoteClient.execute(`
         SELECT name, sql FROM sqlite_master 
         WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_litestream_%'
@@ -2481,8 +2480,8 @@ export class AdminController {
       const localUrl = 'file:./data/chatbot.db';
       resetDatabaseConnection(localUrl, '');
       await SettingsService.set('DATABASE_MODE', 'local');
-      await SettingsService.set('TURSO_DATABASE_URL', localUrl);
-      await SettingsService.set('TURSO_AUTH_TOKEN', '');
+      await SettingsService.set('DATABASE_URL', localUrl);
+      await SettingsService.set('DB_AUTH_TOKEN', '');
 
       logger.info(`Migración completada con éxito: ${totalMigratedRows} filas transferidas en ${migratedTables.length} tablas.`);
 
@@ -2493,7 +2492,7 @@ export class AdminController {
         migratedTables,
       });
     } catch (error: any) {
-      logger.error('Error durante la migración de Turso a local:', error?.message || error);
+      logger.error('Error durante la migración de Base de Datos Local a local:', error?.message || error);
       res.status(500).json({ success: false, error: error?.message || error });
     }
   }

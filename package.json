@@ -1,13 +1,13 @@
 {
   "name": "chatbot-isp",
   "version": "1.0.0",
-  "description": "Chatbot WhatsApp inteligente para ISP con Express, TypeScript, Turso, Groq y Evolution API",
+  "description": "Chatbot WhatsApp inteligente para ISP con Express, TypeScript, Base de Datos Local, Groq y Evolution API",
   "main": "dist/server.js",
   "scripts": {
     "build": "tsc",
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
-    "test:turso": "tsx src/scripts/test-turso.ts",
+    "test:local_db": "tsx src/scripts/test-db.ts",
     "test:groq": "tsx src/scripts/test-groq.ts",
     "test:tickets": "tsx src/scripts/test-tickets.ts"
   },
@@ -16,7 +16,7 @@
     "chatbot",
     "isp",
     "groq",
-    "turso",
+    "local_db",
     "evolution-api",
     "wisphub",
     "smartolt"

@@ -1,4 +1,4 @@
-import { getDbClient, getTursoClient } from '../database/db';
+import { getDbClient } from '../database/db';
 import { Logger } from '../utils/logger';
 import { normalizeText, computeNameMatchScore, cleanPersonName, generateSearchFragments, phoneticNormalize } from '../utils/fuzzy-matcher';
 
@@ -157,7 +157,7 @@ export class DbService {
    */
   static async getSession(phone: string): Promise<Session | null> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const result = await client.execute({
         sql: 'SELECT * FROM sessions WHERE phone = ? LIMIT 1',
         args: [phone],
@@ -190,7 +190,7 @@ export class DbService {
   }
 
   /**
-   * Crea o actualiza una sesión existente en Turso
+   * Crea o actualiza una sesión existente en Base de Datos Local
    */
   static async upsertSession(data: Partial<Session> & { phone: string }): Promise<Session> {
     const existing = await this.getSession(data.phone);
@@ -213,7 +213,7 @@ export class DbService {
     };
 
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       await client.execute({
         sql: `
           INSERT INTO sessions (phone, step, client_id, service_id, client_name, onu_id, opt_out, last_interaction, metadata, human_takeover_until, human_takeover_status, department, last_instance)
@@ -261,7 +261,7 @@ export class DbService {
    */
   static async updateDepartment(phone: string, department: string, targetInstance?: string): Promise<void> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const now = new Date().toISOString();
       const cleanDept = (department || 'General').trim();
       if (targetInstance) {
@@ -299,7 +299,7 @@ export class DbService {
    */
   static async updateLastInstance(phone: string, instanceName: string): Promise<void> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const now = new Date().toISOString();
       await client.execute({
         sql: `
@@ -317,7 +317,7 @@ export class DbService {
   }
 
   /**
-   * Actualiza el estado de intervención humana directamente en Turso
+   * Actualiza el estado de intervención humana directamente en Base de Datos Local
    */
   static async setHumanTakeover(
     phone: string,
@@ -325,7 +325,7 @@ export class DbService {
     status: 'OPERATOR_ACTIVE' | 'OPERATOR_WAITING_CLIENT' | 'RESOLVED' | 'BOT' = 'OPERATOR_ACTIVE'
   ): Promise<void> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const now = new Date().toISOString();
       await client.execute({
         sql: `
@@ -358,7 +358,7 @@ export class DbService {
     const metadataStr = metadataObj ? JSON.stringify(metadataObj) : null;
 
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       await client.execute({
         sql: `
           INSERT INTO sessions (phone, step, last_interaction, metadata)
@@ -380,7 +380,7 @@ export class DbService {
    */
   static async setOptOut(phone: string, optOut: boolean): Promise<void> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       await client.execute({
         sql: `
           INSERT INTO sessions (phone, opt_out, last_interaction)
@@ -417,7 +417,7 @@ export class DbService {
     instanceName?: string | null
   ): Promise<void> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const now = new Date().toISOString();
       await client.execute({
         sql: `
@@ -436,7 +436,7 @@ export class DbService {
    */
   static async getLogs(limit: number = 60, phone?: string): Promise<any[]> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       let query = `
         SELECT l.*, s.client_name 
         FROM conversation_logs l
@@ -465,7 +465,7 @@ export class DbService {
    */
   static async getHistorialReciente(phone: string, limit: number = 8): Promise<Array<{ role: 'user' | 'assistant'; content: string }>> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const result = await client.execute({
         sql: `
           SELECT direction, message 
@@ -489,13 +489,13 @@ export class DbService {
   }
 
   /**
-   * Guarda o actualiza un lote de registros de ONUs provenientes de SmartOLT en Turso DB
-   * OPTIMIZACIÓN QUOTA TURSO: Compara los registros existentes y solo escribe los que hayan cambiado o sean nuevos.
+   * Guarda o actualiza un lote de registros de ONUs provenientes de SmartOLT en Base de Datos Local
+   * OPTIMIZACIÓN QUOTA DB: Compara los registros existentes y solo escribe los que hayan cambiado o sean nuevos.
    */
   static async saveSmartOltOnus(onus: SmartOltOnuRecord[]): Promise<number> {
     if (!onus || onus.length === 0) return 0;
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const now = new Date().toISOString();
 
       // 1. Obtener mapa de registros existentes para calcular diferencias (0 escrituras si no hay cambios)
@@ -539,11 +539,11 @@ export class DbService {
       });
 
       if (toUpsert.length === 0) {
-        logger.info(`Sincronización SmartOLT completada: 0 cambios detectados de ${onus.length} ONUs (0 escrituras en Turso).`);
+        logger.info(`Sincronización SmartOLT completada: 0 cambios detectados de ${onus.length} ONUs (0 escrituras en Base de Datos Local).`);
         return 0;
       }
 
-      logger.info(`Sincronización SmartOLT: Escribiendo ${toUpsert.length} ONUs modificadas/nuevas (Ahorradas ${onus.length - toUpsert.length} escrituras en Turso)...`);
+      logger.info(`Sincronización SmartOLT: Escribiendo ${toUpsert.length} ONUs modificadas/nuevas (Ahorradas ${onus.length - toUpsert.length} escrituras en Base de Datos Local)...`);
 
       // Procesar en batches para no exceder límites de argumentos de libSQL
       const batchSize = 40;
@@ -593,38 +593,38 @@ export class DbService {
         totalInserted += batch.length;
       }
 
-      logger.info(`Sincronización exitosa: ${totalInserted} ONUs guardadas en Turso DB`);
+      logger.info(`Sincronización exitosa: ${totalInserted} ONUs guardadas en Base de Datos Local`);
       return totalInserted;
     } catch (error: any) {
-      logger.error('Error al guardar lote de ONUs en Turso DB:', error?.message || error);
+      logger.error('Error al guardar lote de ONUs en Base de Datos Local:', error?.message || error);
       throw error;
     }
   }
 
   /**
-   * Elimina una ONU de la base de datos local Turso DB liberando de inmediato su IP
+   * Elimina una ONU de la base de datos local Base de Datos Local liberando de inmediato su IP
    */
   static async deleteSmartOltOnu(identifier: string): Promise<boolean> {
     if (!identifier) return false;
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const res = await client.execute({
         sql: `DELETE FROM smartolt_onus WHERE unique_external_id = ? OR sn = ?`,
         args: [identifier, identifier.toUpperCase()],
       });
       const deleted = (res.rowsAffected || 0) > 0;
       if (deleted) {
-        logger.info(`ONU ${identifier} eliminada de Turso DB. IP liberada para reasignación.`);
+        logger.info(`ONU ${identifier} eliminada de Base de Datos Local. IP liberada para reasignación.`);
       }
       return deleted;
     } catch (error: any) {
-      logger.error(`Error al eliminar ONU ${identifier} en Turso DB:`, error?.message || error);
+      logger.error(`Error al eliminar ONU ${identifier} en Base de Datos Local:`, error?.message || error);
       return false;
     }
   }
 
   /**
-   * Elimina de Turso DB todas las ONUs que ya no existen en SmartOLT (Reconciliación y liberación masiva de IPs)
+   * Elimina de Base de Datos Local todas las ONUs que ya no existen en SmartOLT (Reconciliación y liberación masiva de IPs)
    * Solo opera si el conjunto de ONUs activas es representativo (>500) para proteger contra respuestas parciales o vacías.
    */
   static async pruneSmartOltOnus(activeIds: Set<string>): Promise<number> {
@@ -633,7 +633,7 @@ export class DbService {
       return 0;
     }
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const existingRes = await client.execute(`SELECT unique_external_id FROM smartolt_onus`);
       const toDelete: string[] = [];
 
@@ -663,22 +663,22 @@ export class DbService {
         totalDeleted += batch.length;
       }
 
-      logger.info(`✅ Reconciliación completada: ${totalDeleted} ONUs purgadas de Turso DB. IPs liberadas exitosamente.`);
+      logger.info(`✅ Reconciliación completada: ${totalDeleted} ONUs purgadas de Base de Datos Local. IPs liberadas exitosamente.`);
       return totalDeleted;
     } catch (error: any) {
-      logger.error('Error al purgar ONUs eliminadas en Turso DB:', error?.message || error);
+      logger.error('Error al purgar ONUs eliminadas en Base de Datos Local:', error?.message || error);
       return 0;
     }
   }
 
   /**
-   * Guarda o actualiza un lote de clientes provenientes de WispHub en Turso DB
-   * OPTIMIZACIÓN QUOTA TURSO: Compara contra la base de datos y únicamente escribe los clientes que hayan cambiado o sean nuevos.
+   * Guarda o actualiza un lote de clientes provenientes de WispHub en Base de Datos Local
+   * OPTIMIZACIÓN QUOTA DB: Compara contra la base de datos y únicamente escribe los clientes que hayan cambiado o sean nuevos.
    */
   static async saveWisphubClients(clients: WisphubClientRecord[]): Promise<number> {
     if (!clients || clients.length === 0) return 0;
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const now = new Date().toISOString();
 
       // 1. Obtener registros existentes para este lote específico
@@ -845,7 +845,7 @@ export class DbService {
       logger.info(`Sincronización WispHub: Escribiendo ${totalInserted} clientes nuevos/modificados de ${clients.length} analizados en lote.`);
       return totalInserted;
     } catch (error: any) {
-      logger.error('Error al guardar clientes de WispHub en Turso DB:', error?.message || error);
+      logger.error('Error al guardar clientes de WispHub en Base de Datos Local:', error?.message || error);
       throw error;
     }
   }
@@ -858,7 +858,7 @@ export class DbService {
     diasAnticipacion: number = 3
   ): Promise<WisphubClientRecord[]> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const now = new Date();
       // Calcular día objetivo en hora local México
       const nowMx = new Date(now.toLocaleString('en-US', { timeZone: 'America/Mexico_City' }));
@@ -895,12 +895,12 @@ export class DbService {
   }
 
   /**
-   * Actualiza y vincula el teléfono de un cliente de WispHub en Turso DB cuando el usuario interactúa por WhatsApp
+   * Actualiza y vincula el teléfono de un cliente de WispHub en Base de Datos Local cuando el usuario interactúa por WhatsApp
    * Si ya tiene un teléfono principal, añade los nuevos números a telefonos_adicionales (familiares / líneas secundarias).
    */
   static async updateWisphubClientPhone(idServicio: string | number, phone: string): Promise<boolean> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const cleanPhone = phone.replace(/\D/g, '');
       if (cleanPhone.length < 10) return false;
 
@@ -967,7 +967,7 @@ export class DbService {
     }
   ): Promise<boolean> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const now = new Date().toISOString();
 
       let coordsStr = '';
@@ -1135,7 +1135,7 @@ export class DbService {
     adicionales: string[] = []
   ): Promise<boolean> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const cleanPrincipal = (principal || '').replace(/\D/g, '');
       const cleanExtras = (adicionales || []).map(p => p.replace(/\D/g, '')).filter(p => p.length >= 10 && p !== cleanPrincipal);
       const uniqueExtras = Array.from(new Set(cleanExtras));
@@ -1193,7 +1193,7 @@ export class DbService {
     totalWithoutGps: number;
   }> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const limit = Math.min(Math.max(Number(options.limit || 50), 1), 200);
       const offset = Math.max(Number(options.offset || 0), 0);
       const search = (options.search || '').trim().toLowerCase();
@@ -1462,7 +1462,7 @@ export class DbService {
    */
   static async getClientDetail(idServicio: string | number): Promise<any | null> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const res = await client.execute({
         sql: `
           SELECT 
@@ -1564,7 +1564,7 @@ export class DbService {
     if (!normQuery) return [];
 
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
 
       // 1. Búsqueda directa por nombre, folio, número de serie, IP o teléfono en SmartOLT
       const directMatch = await client.execute({
@@ -1740,7 +1740,7 @@ export class DbService {
    */
   static async getOnuById(idOrSn: string): Promise<SmartOltOnuRecord | null> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const res = await client.execute({
         sql: `SELECT * FROM smartolt_onus WHERE unique_external_id = ? OR sn = ? LIMIT 1`,
         args: [idOrSn, idOrSn],
@@ -1780,7 +1780,7 @@ export class DbService {
     if (!normQuery) return [];
 
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
 
       // 1. Búsqueda directa por ID de servicio, teléfono, SN o IP
       const directMatch = await client.execute({
@@ -1895,7 +1895,7 @@ export class DbService {
       scored.sort((a, b) => b.matchScore - a.matchScore);
       return scored.slice(0, limit);
     } catch (error: any) {
-      logger.error('Error en búsqueda difusa de WispHub en Turso:', error?.message || error);
+      logger.error('Error en búsqueda difusa de WispHub en Base de Datos Local:', error?.message || error);
       return [];
     }
   }
@@ -1911,7 +1911,7 @@ export class DbService {
     ip?: string | null;
   }): Promise<WisphubClientRecord | null> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const { id, phone, sn, name, ip } = params;
 
       // 1. Búsqueda prioritaria por IP en el sistema
@@ -2022,7 +2022,7 @@ export class DbService {
 
       return null;
     } catch (error: any) {
-      logger.error('Error al buscar cliente WispHub por datos generales en Turso:', error?.message || error);
+      logger.error('Error al buscar cliente WispHub por datos generales en Base de Datos Local:', error?.message || error);
       return null;
     }
   }
@@ -2032,7 +2032,7 @@ export class DbService {
    */
   static async getSmartOltSyncStats(): Promise<{ count: number; lastSync: string | null }> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const res = await client.execute(`
         SELECT COUNT(*) as total, MAX(updated_at) as last_sync 
         FROM smartolt_onus
@@ -2043,7 +2043,7 @@ export class DbService {
         lastSync: row?.last_sync ? String(row.last_sync) : null,
       };
     } catch (error: any) {
-      logger.error('Error al obtener estadísticas de SmartOLT en Turso:', error?.message || error);
+      logger.error('Error al obtener estadísticas de SmartOLT en Base de Datos Local:', error?.message || error);
       return { count: 0, lastSync: null };
     }
   }
@@ -2053,7 +2053,7 @@ export class DbService {
    */
   static async getWisphubSyncStats(): Promise<{ count: number; lastSync: string | null }> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const res = await client.execute(`
         SELECT COUNT(*) as total, MAX(updated_at) as last_sync 
         FROM wisphub_clients
@@ -2064,17 +2064,17 @@ export class DbService {
         lastSync: row?.last_sync ? String(row.last_sync) : null,
       };
     } catch (error: any) {
-      logger.error('Error al obtener estadísticas de WispHub en Turso:', error?.message || error);
+      logger.error('Error al obtener estadísticas de WispHub en Base de Datos Local:', error?.message || error);
       return { count: 0, lastSync: null };
     }
   }
 
   /**
-   * Obtiene todas las ONUs registradas en SmartOLT desde Turso DB
+   * Obtiene todas las ONUs registradas en SmartOLT desde Base de Datos Local
    */
   static async getAllSmartOltOnus(): Promise<SmartOltOnuRecord[]> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const res = await client.execute('SELECT * FROM smartolt_onus');
       return res.rows.map((row) => ({
         unique_external_id: String(row.unique_external_id || ''),
@@ -2091,17 +2091,17 @@ export class DbService {
         updated_at: row.updated_at ? String(row.updated_at) : undefined,
       }));
     } catch (error: any) {
-      logger.error('Error al obtener todas las ONUs de SmartOLT desde Turso:', error?.message || error);
+      logger.error('Error al obtener todas las ONUs de SmartOLT desde Base de Datos Local:', error?.message || error);
       return [];
     }
   }
 
   /**
-   * Obtiene todos los clientes registrados en WispHub desde Turso DB
+   * Obtiene todos los clientes registrados en WispHub desde Base de Datos Local
    */
   static async getAllWispHubClientes(): Promise<WisphubClientRecord[]> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const res = await client.execute('SELECT * FROM wisphub_clients');
       return res.rows.map((row) => ({
         id_servicio: row.id_servicio as number | string,
@@ -2122,7 +2122,7 @@ export class DbService {
         updated_at: row.updated_at ? String(row.updated_at) : undefined,
       }));
     } catch (error: any) {
-      logger.error('Error al obtener todos los clientes de WispHub desde Turso:', error?.message || error);
+      logger.error('Error al obtener todos los clientes de WispHub desde Base de Datos Local:', error?.message || error);
       return [];
     }
   }
@@ -2161,7 +2161,7 @@ export class DbService {
     const offset = options.offset !== undefined ? options.offset : (page - 1) * limit;
 
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
 
       // 1. Obtener todas las ONUs de SmartOLT
       const resOlt = await client.execute('SELECT * FROM smartolt_onus');
@@ -2427,7 +2427,7 @@ export class DbService {
   }
 
   /**
-   * Crea un nuevo ticket de soporte en Turso DB para ajustes manuales en SmartOLT
+   * Crea un nuevo ticket de soporte en Base de Datos Local para ajustes manuales en SmartOLT
    */
   static async createTicket(ticket: {
     folio?: string;
@@ -2449,7 +2449,7 @@ export class DbService {
     const isOutOfHours = ticket.is_out_of_hours ?? 0;
 
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       await client.execute({
         sql: `
           INSERT INTO tickets (
@@ -2476,7 +2476,7 @@ export class DbService {
         ],
       });
 
-      logger.info(`Ticket ${folio} creado exitosamente en Turso para ${ticket.phone}`);
+      logger.info(`Ticket ${folio} creado exitosamente en Base de Datos Local para ${ticket.phone}`);
       return {
         folio,
         phone: ticket.phone,
@@ -2494,7 +2494,7 @@ export class DbService {
         updated_at: now,
       };
     } catch (error: any) {
-      logger.error('Error al crear ticket en Turso:', error?.message || error);
+      logger.error('Error al crear ticket en Base de Datos Local:', error?.message || error);
       throw error;
     }
   }
@@ -2504,7 +2504,7 @@ export class DbService {
    */
   static async getTickets(status?: string, limit: number = 60): Promise<TicketRecord[]> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       let sql = `SELECT * FROM tickets`;
       const args: any[] = [];
 
@@ -2536,7 +2536,7 @@ export class DbService {
         resolved_at: r.resolved_at ? String(r.resolved_at) : null,
       }));
     } catch (error: any) {
-      logger.error('Error al obtener tickets en Turso:', error?.message || error);
+      logger.error('Error al obtener tickets en Base de Datos Local:', error?.message || error);
       return [];
     }
   }
@@ -2549,7 +2549,7 @@ export class DbService {
     const resolvedAt = ['RESUELTO', 'CERRADO'].includes(status.toUpperCase()) ? now : null;
 
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const res = await client.execute({
         sql: `
           UPDATE tickets SET
@@ -2575,7 +2575,7 @@ export class DbService {
    */
   static async getTicketStats(): Promise<{ total: number; abiertos: number; enProceso: number; resueltos: number; fueraHorario: number }> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const res = await client.execute(`
         SELECT 
           COUNT(*) as total,
@@ -2600,12 +2600,12 @@ export class DbService {
   }
 
   /**
-   * Elimina todas las sesiones activas en Turso (Modo Pruebas)
+   * Elimina todas las sesiones activas en Base de Datos Local (Modo Pruebas)
    */
   static async clearAllSessions(): Promise<number> {
-    const client = getTursoClient();
+    const client = getDbClient();
     const res = await client.execute('DELETE FROM sessions');
-    logger.info('Todas las sesiones han sido eliminadas de Turso DB.');
+    logger.info('Todas las sesiones han sido eliminadas de Base de Datos Local.');
     return res.rowsAffected || 0;
   }
 
@@ -2613,7 +2613,7 @@ export class DbService {
    * Elimina la sesión de un teléfono específico
    */
   static async deleteSession(phone: string): Promise<boolean> {
-    const client = getTursoClient();
+    const client = getDbClient();
     const cleanPhone = phone.replace(/\D/g, '');
     await client.execute({ sql: 'DELETE FROM sessions WHERE phone = ? OR phone = ?', args: [phone, cleanPhone] });
     logger.info(`Sesión del teléfono ${phone} eliminada.`);
@@ -2624,7 +2624,7 @@ export class DbService {
    * Elimina completamente la conversación (sesión y mensajes) de un teléfono específico
    */
   static async deleteChatAndLogs(phone: string): Promise<boolean> {
-    const client = getTursoClient();
+    const client = getDbClient();
     const cleanPhone = phone.replace(/\D/g, '');
     await client.execute({ sql: 'DELETE FROM sessions WHERE phone = ? OR phone = ?', args: [phone, cleanPhone] });
     await client.execute({ sql: 'DELETE FROM conversation_logs WHERE phone = ? OR phone = ?', args: [phone, cleanPhone] });
@@ -2633,22 +2633,22 @@ export class DbService {
   }
 
   /**
-   * Elimina todo el historial de conversaciones de Turso (Modo Pruebas)
+   * Elimina todo el historial de conversaciones de Base de Datos Local (Modo Pruebas)
    */
   static async clearAllLogs(): Promise<number> {
-    const client = getTursoClient();
+    const client = getDbClient();
     const res = await client.execute('DELETE FROM conversation_logs');
-    logger.info('Todo el historial de conversaciones ha sido eliminado de Turso DB.');
+    logger.info('Todo el historial de conversaciones ha sido eliminado de Base de Datos Local.');
     return res.rowsAffected || 0;
   }
 
   /**
-   * Elimina todos los tickets registrados en Turso (Modo Pruebas)
+   * Elimina todos los tickets registrados en Base de Datos Local (Modo Pruebas)
    */
   static async clearAllTickets(): Promise<number> {
-    const client = getTursoClient();
+    const client = getDbClient();
     const res = await client.execute('DELETE FROM tickets');
-    logger.info('Todos los tickets han sido eliminados de Turso DB.');
+    logger.info('Todos los tickets han sido eliminados de Base de Datos Local.');
     return res.rowsAffected || 0;
   }
 
@@ -2657,12 +2657,12 @@ export class DbService {
    */
   static async deleteTicket(folio: string): Promise<boolean> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const res = await client.execute({
         sql: 'DELETE FROM tickets WHERE folio = ?',
         args: [folio],
       });
-      logger.info(`Ticket ${folio} eliminado de Turso DB.`);
+      logger.info(`Ticket ${folio} eliminado de Base de Datos Local.`);
       return (res.rowsAffected || 0) > 0;
     } catch (error: any) {
       logger.error(`Error al eliminar ticket ${folio}:`, error?.message || error);
@@ -2680,7 +2680,7 @@ export class DbService {
    */
   static async getTechnicians(): Promise<TechnicianRecord[]> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const res = await client.execute('SELECT * FROM technicians ORDER BY name ASC');
       return res.rows.map((r: any) => ({
         id: Number(r.id),
@@ -2704,7 +2704,7 @@ export class DbService {
    */
   static async getTechnicianById(id: number): Promise<TechnicianRecord | null> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const res = await client.execute({
         sql: 'SELECT * FROM technicians WHERE id = ? LIMIT 1',
         args: [id],
@@ -2739,7 +2739,7 @@ export class DbService {
     notes?: string;
     is_active?: number;
   }): Promise<TechnicianRecord> {
-    const client = getTursoClient();
+    const client = getDbClient();
     const now = new Date().toISOString();
     const cleanPhone = data.phone.replace(/\D/g, '');
     const cleanPin = (data.pin || '').replace(/\D/g, '').slice(0, 5);
@@ -2800,7 +2800,7 @@ export class DbService {
     }
   ): Promise<boolean> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const now = new Date().toISOString();
 
       const sets: string[] = ['updated_at = ?'];
@@ -2852,7 +2852,7 @@ export class DbService {
    */
   static async deleteTechnician(id: number): Promise<boolean> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const res = await client.execute({
         sql: 'DELETE FROM technicians WHERE id = ?',
         args: [id],
@@ -2869,7 +2869,7 @@ export class DbService {
    */
   static async toggleTechnicianActive(id: number): Promise<{ success: boolean; is_active: number }> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       await client.execute({
         sql: `UPDATE technicians SET is_active = CASE WHEN is_active = 1 THEN 0 ELSE 1 END, updated_at = ? WHERE id = ?`,
         args: [new Date().toISOString(), id],
@@ -2888,7 +2888,7 @@ export class DbService {
    */
   static async isAuthorizedTechnician(phone: string, pin?: string): Promise<TechnicianRecord | null> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const cleanPhone = (phone || '').replace(/\D/g, '');
       const last10 = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
 
@@ -2958,7 +2958,7 @@ export class DbService {
 
   static async getAdminUserByUsername(username: string): Promise<AdminUserRecord | null> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const res = await client.execute({
         sql: 'SELECT * FROM admin_users WHERE username = ? AND is_active = 1 LIMIT 1',
         args: [username.toLowerCase().trim()],
@@ -2983,7 +2983,7 @@ export class DbService {
 
   static async getAdminUserById(id: number): Promise<AdminUserRecord | null> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const res = await client.execute({
         sql: 'SELECT id, username, name, role, is_active, created_at, last_login FROM admin_users WHERE id = ? LIMIT 1',
         args: [id],
@@ -3007,7 +3007,7 @@ export class DbService {
 
   static async listAdminUsers(): Promise<Omit<AdminUserRecord, 'password_hash'>[]> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const res = await client.execute('SELECT id, username, name, role, is_active, created_at, last_login FROM admin_users ORDER BY id ASC');
       return res.rows.map((r: any) => ({
         id: Number(r.id),
@@ -3031,7 +3031,7 @@ export class DbService {
     role: 'superadmin' | 'soporte' | 'tecnico' | 'facturacion';
   }): Promise<{ success: boolean; message: string }> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const now = new Date().toISOString();
       await client.execute({
         sql: `INSERT INTO admin_users (username, password_hash, name, role, is_active, created_at) VALUES (?, ?, ?, ?, 1, ?)`,
@@ -3046,7 +3046,7 @@ export class DbService {
 
   static async deleteAdminUser(id: number): Promise<boolean> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const res = await client.execute({
         sql: 'DELETE FROM admin_users WHERE id = ?',
         args: [id],
@@ -3060,7 +3060,7 @@ export class DbService {
 
   static async updateAdminLastLogin(id: number): Promise<void> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       await client.execute({
         sql: 'UPDATE admin_users SET last_login = ? WHERE id = ?',
         args: [new Date().toISOString(), id],
@@ -3074,7 +3074,7 @@ export class DbService {
 
   static async getAllTicketsDetailed(statusFilter?: string, limit: number = 200): Promise<any[]> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       let query = `SELECT * FROM tickets`;
       const args: any[] = [];
       if (statusFilter && statusFilter !== 'ALL') {
@@ -3096,7 +3096,7 @@ export class DbService {
 
   static async assignTicketTechnician(folio: string, technicianName: string): Promise<boolean> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const now = new Date().toISOString();
       const res = await client.execute({
         sql: `UPDATE tickets SET assigned_technician_name = ?, status = 'VISITA_TECNICA', updated_at = ? WHERE folio = ?`,
@@ -3115,7 +3115,7 @@ export class DbService {
 
   static async getRecentChatConversations(limit: number = 50): Promise<ChatConversationItem[]> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const query = `
         SELECT 
           s.phone,
@@ -3177,7 +3177,7 @@ export class DbService {
 
   static async getChatMessagesByPhone(phone: string, limit: number = 60): Promise<any[]> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const cleanPhone = phone.replace(/\D/g, '');
       const last10 = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
 
@@ -3206,7 +3206,7 @@ export class DbService {
     estimated_time?: string;
     notes?: string;
   }): Promise<{ id: number; zone_name: string; status: string }> {
-    const client = getTursoClient();
+    const client = getDbClient();
     const zone = data.zone_name.trim();
     const estimated = (data.estimated_time || '').trim();
     const notes = (data.notes || '').trim();
@@ -3224,7 +3224,7 @@ export class DbService {
 
   static async getActiveOutages(): Promise<NetworkOutage[]> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const res = await client.execute({
         sql: `SELECT * FROM network_outages WHERE status = 'active' ORDER BY id DESC`,
         args: [],
@@ -3238,7 +3238,7 @@ export class DbService {
 
   static async getAllOutages(limit: number = 50): Promise<NetworkOutage[]> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const res = await client.execute({
         sql: `SELECT * FROM network_outages ORDER BY id DESC LIMIT ?`,
         args: [limit],
@@ -3252,7 +3252,7 @@ export class DbService {
 
   static async resolveOutage(id: number): Promise<boolean> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const now = new Date().toISOString();
       const res = await client.execute({
         sql: `UPDATE network_outages SET status = 'resolved', resolved_at = ? WHERE id = ?`,
@@ -3268,7 +3268,7 @@ export class DbService {
 
   static async checkActiveOutageForZone(zoneName?: string | null): Promise<NetworkOutage | null> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       // 1. Verificar si hay caída "General" / "Todas" activa
       const generalRes = await client.execute({
         sql: `SELECT * FROM network_outages WHERE status = 'active' AND (LOWER(zone_name) IN ('general', 'todas', 'todos', 'red general', 'global')) LIMIT 1`,
@@ -3303,7 +3303,7 @@ export class DbService {
 
   static async getDistinctZones(): Promise<string[]> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const [onusZones, whDirecciones] = await Promise.all([
         client.execute(`SELECT DISTINCT zone_name FROM smartolt_onus WHERE zone_name IS NOT NULL AND zone_name != ''`),
         client.execute(`SELECT DISTINCT direccion FROM wisphub_clients WHERE direccion IS NOT NULL AND direccion != '' LIMIT 100`),
@@ -3339,7 +3339,7 @@ export class DbService {
     is_active?: number;
   }): Promise<void> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const instName = data.instance_name.trim();
       const area = (data.area_name || instName).trim();
       const phone = data.phone_number ? data.phone_number.trim() : null;
@@ -3368,7 +3368,7 @@ export class DbService {
 
   static async getWhatsAppInstancesFromDb(): Promise<WhatsAppInstanceRecord[]> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const res = await client.execute(`SELECT * FROM whatsapp_instances ORDER BY area_name ASC`);
       return res.rows.map((r: any) => ({
         instance_name: String(r.instance_name),
@@ -3380,14 +3380,14 @@ export class DbService {
         updated_at: String(r.updated_at || ''),
       }));
     } catch (error: any) {
-      logger.error('Error al obtener instancias de WhatsApp de Turso:', error?.message || error);
+      logger.error('Error al obtener instancias de WhatsApp de Base de Datos Local:', error?.message || error);
       return [];
     }
   }
 
   static async getInstanceByArea(areaName: string): Promise<WhatsAppInstanceRecord | null> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const clean = areaName.trim();
       const res = await client.execute({
         sql: `SELECT * FROM whatsapp_instances WHERE LOWER(area_name) = LOWER(?) OR LOWER(instance_name) = LOWER(?) LIMIT 1`,
@@ -3412,7 +3412,7 @@ export class DbService {
 
   static async deleteWhatsAppInstanceRecord(instanceName: string): Promise<boolean> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const res = await client.execute({
         sql: `DELETE FROM whatsapp_instances WHERE instance_name = ?`,
         args: [instanceName.trim()],
@@ -3449,11 +3449,11 @@ export class DbService {
   // ==========================================
 
   /**
-   * Guarda un registro de cambio de módem en Turso DB
+   * Guarda un registro de cambio de módem en Base de Datos Local
    */
   static async saveModemSwap(swap: ModemSwapRecord): Promise<number> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const res = await client.execute({
         sql: `
           INSERT INTO modem_swaps (
@@ -3482,7 +3482,7 @@ export class DbService {
       });
       return Number(res.lastInsertRowid || 0);
     } catch (error: any) {
-      logger.error('Error al guardar registro de cambio de módem en Turso:', error?.message || error);
+      logger.error('Error al guardar registro de cambio de módem en Base de Datos Local:', error?.message || error);
       return 0;
     }
   }
@@ -3492,7 +3492,7 @@ export class DbService {
    */
   static async updateModemSwap(id: number, data: Partial<ModemSwapRecord>): Promise<void> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const fields: string[] = [];
       const args: any[] = [];
 
@@ -3517,7 +3517,7 @@ export class DbService {
    */
   static async getModemSwaps(limit: number = 50): Promise<ModemSwapRecord[]> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const res = await client.execute({
         sql: `
           SELECT * FROM modem_swaps
@@ -3556,7 +3556,7 @@ export class DbService {
    */
   static async deleteOnuFromSmartOltCache(uniqueExternalId: string): Promise<void> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       await client.execute({
         sql: `DELETE FROM smartolt_onus WHERE unique_external_id = ? OR sn = ?`,
         args: [uniqueExternalId, uniqueExternalId],
@@ -3572,7 +3572,7 @@ export class DbService {
    */
   static async updateClientOnuReferences(oldSn: string, newSn: string, newOnuId: string): Promise<void> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       // Actualizar sesiones que tengan el onu_id anterior
       await client.execute({
         sql: `UPDATE sessions SET onu_id = ?, service_id = ? WHERE onu_id = ? OR service_id = ?`,
@@ -3600,7 +3600,7 @@ export class DbService {
    */
   static async getAllOfficeGroups(): Promise<WhatsAppOfficeGroupRecord[]> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const res = await client.execute(`
         SELECT * FROM whatsapp_office_groups 
         ORDER BY CASE WHEN role = 'ACTIVACIONES' THEN 0 ELSE 1 END, name ASC
@@ -3628,7 +3628,7 @@ export class DbService {
    */
   static async saveOfficeGroup(group: Partial<WhatsAppOfficeGroupRecord>): Promise<number> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const now = new Date().toISOString();
       const cleanJid = String(group.jid || '').trim();
       const cleanName = String(group.name || 'Grupo WhatsApp').trim();
@@ -3679,7 +3679,7 @@ export class DbService {
    */
   static async deleteOfficeGroup(id: number): Promise<boolean> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       await client.execute({ sql: `DELETE FROM whatsapp_office_groups WHERE id = ?`, args: [id] });
       logger.info(`[Grupos] Grupo con ID ${id} eliminado.`);
       return true;
@@ -3694,7 +3694,7 @@ export class DbService {
    */
   static async toggleOfficeGroupActive(id: number, isActive: boolean): Promise<boolean> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const now = new Date().toISOString();
       await client.execute({
         sql: `UPDATE whatsapp_office_groups SET is_active = ?, updated_at = ? WHERE id = ?`,
@@ -3712,7 +3712,7 @@ export class DbService {
    */
   static async getActivationsGroupJid(): Promise<string> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const res = await client.execute(`
         SELECT jid FROM whatsapp_office_groups 
         WHERE role = 'ACTIVACIONES' AND is_active = 1 
@@ -3740,7 +3740,7 @@ export class DbService {
     customNotes?: string
   ): Promise<{ success: boolean; message: string; groupName?: string }> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const ticketRes = await client.execute({
         sql: `SELECT * FROM tickets WHERE folio = ? OR id = ? LIMIT 1`,
         args: [folio, folio],
@@ -3874,4 +3874,3 @@ export interface WhatsAppInstanceRecord {
   updated_at?: string;
 }
 
-export const TursoService = DbService;

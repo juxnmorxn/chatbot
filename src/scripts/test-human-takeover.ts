@@ -1,19 +1,19 @@
-import { TursoService, DbService } from '../services/db.service';
+import { DbService } from '../services/db.service';
 import { SettingsService } from '../services/settings.service';
-import { initTursoDatabase } from '../database/db';
+import { initDatabase } from '../database/db';
 import { BotOrchestrator } from '../orchestrator/bot.orchestrator';
 import { EvolutionService } from '../services/evolution.service';
 import { WebhookController } from '../controllers/webhook.controller';
 
 async function testHumanTakeover() {
   console.log('--- Iniciando Test de Intervención Humana, Debounce y Wi-Fi No Visible ---');
-  await initTursoDatabase();
+  await initDatabase();
   await SettingsService.init();
 
   const testPhone = '5215577889900';
 
   // 1. Simular cliente identificado
-  await TursoService.upsertSession({
+  await DbService.upsertSession({
     phone: testPhone,
     client_name: 'Martha Ramos',
     client_id: 'CLI-555',
@@ -29,12 +29,12 @@ async function testHumanTakeover() {
     text: 'Hola, disculpe, no me aparece mi red de internet en el celular ni en la tele',
   });
 
-  let session = await TursoService.getSession(testPhone);
+  let session = await DbService.getSession(testPhone);
   let meta = JSON.parse(session?.metadata || '{}');
   console.log('Folio de ticket generado:', meta.ticketFolio);
 
   // Verificar que el ticket se generó con el diagnóstico específico de Wi-Fi no visible
-  const tickets = await TursoService.getTickets('ABIERTO', 5);
+  const tickets = await DbService.getTickets('ABIERTO', 5);
   const ticketWifi = tickets.find(t => t.folio === meta.ticketFolio);
   console.log('✅ Ticket generado para el NOC/Soporte:', {
     folio: ticketWifi?.folio,

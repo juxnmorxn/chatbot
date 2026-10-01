@@ -1,17 +1,17 @@
-import { TursoService, DbService } from '../services/db.service';
+import { DbService } from '../services/db.service';
 import { SettingsService } from '../services/settings.service';
-import { initTursoDatabase } from '../database/db';
+import { initDatabase } from '../database/db';
 import { BotOrchestrator } from '../orchestrator/bot.orchestrator';
 
 async function testSupportFlow() {
   console.log('--- Iniciando Test de Flujo de Soporte Ágil y Humano ---');
-  await initTursoDatabase();
+  await initDatabase();
   await SettingsService.init();
 
   const testPhone = '5215500001111';
 
-  // 1. Simular cliente identificado con ONU en Turso
-  await TursoService.upsertSession({
+  // 1. Simular cliente identificado con ONU en Base de Datos Local
+  await DbService.upsertSession({
     phone: testPhone,
     client_name: 'Carlos Mendoza',
     client_id: 'CLI-999',
@@ -20,7 +20,7 @@ async function testSupportFlow() {
     metadata: JSON.stringify({ speed_profile: '50 Mbps' }),
   });
 
-  console.log('✅ 1. Cliente de prueba inicializado en Turso');
+  console.log('✅ 1. Cliente de prueba inicializado en Base de Datos Local');
 
   // 2. Simular mensaje de reporte de falla: "mi internet no sirve esta fallando"
   console.log('\n--- Paso 2: Cliente reporta falla de internet ---');
@@ -29,7 +29,7 @@ async function testSupportFlow() {
     text: 'Hola, mi internet no funciona, no tengo señal',
   });
 
-  let session = await TursoService.getSession(testPhone);
+  let session = await DbService.getSession(testPhone);
   console.log('Estado de sesión tras reporte de falla:', session?.step);
   let meta = JSON.parse(session?.metadata || '{}');
 
@@ -46,16 +46,16 @@ async function testSupportFlow() {
       text: 'falla en todos los teléfonos y en la tele',
     });
 
-    session = await TursoService.getSession(testPhone);
+    session = await DbService.getSession(testPhone);
     meta = JSON.parse(session?.metadata || '{}');
     console.log('Estado tras responder Turno 1:', session?.step);
     console.log('Folio de ticket generado:', meta.ticketFolio);
 
-    // Verificar ticket creado en Turso
+    // Verificar ticket creado en Base de Datos Local
     if (meta.ticketFolio) {
-      const tickets = await TursoService.getTickets('ABIERTO', 5);
+      const tickets = await DbService.getTickets('ABIERTO', 5);
       const creado = tickets.find(t => t.folio === meta.ticketFolio);
-      console.log('✅ Ticket verificado en Turso:', {
+      console.log('✅ Ticket verificado en Base de Datos Local:', {
         folio: creado?.folio,
         all_devices: creado?.all_devices,
         issue_summary: creado?.issue_summary,
@@ -71,13 +71,13 @@ async function testSupportFlow() {
       isMedia: true,
     });
 
-    session = await TursoService.getSession(testPhone);
+    session = await DbService.getSession(testPhone);
     console.log('Estado tras enviar evidencia:', session?.step);
   }
 
   // 5. Simular Caso Corte Físico (LOS) y Ubicación
   console.log('\n--- Paso 5: Simulación Caso Corte de Cable (LOS) y Captura de Domicilio ---');
-  const ticketLOS = await TursoService.createTicket({
+  const ticketLOS = await DbService.createTicket({
     phone: testPhone,
     client_name: 'Carlos Mendoza',
     onu_id: 'ONU-DEV-TEST',
@@ -86,7 +86,7 @@ async function testSupportFlow() {
     status: 'ABIERTO',
   });
 
-  await TursoService.upsertSession({
+  await DbService.upsertSession({
     phone: testPhone,
     step: 'ESPERANDO_UBICACION_TECNICO',
     metadata: JSON.stringify({
@@ -101,7 +101,7 @@ async function testSupportFlow() {
   });
 
   // Verificar que la dirección quedó guardada en el ticket
-  const ticketsAfterLocation = await TursoService.getTickets('ABIERTO', 10);
+  const ticketsAfterLocation = await DbService.getTickets('ABIERTO', 10);
   const ticketActualizado = ticketsAfterLocation.find(t => t.folio === ticketLOS.folio);
   console.log('✅ Ticket tras recibir ubicación:', {
     folio: ticketActualizado?.folio,

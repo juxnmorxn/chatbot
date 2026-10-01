@@ -8,12 +8,12 @@ export const config = {
 
   // Database (SQLite Local)
   db: {
-    url: process.env.DATABASE_URL || process.env.TURSO_DATABASE_URL || '',
-    authToken: process.env.TURSO_AUTH_TOKEN || '',
+    url: process.env.DATABASE_URL || '',
+    authToken: process.env.DB_AUTH_TOKEN || '',
   },
-  turso: {
-    url: process.env.DATABASE_URL || process.env.TURSO_DATABASE_URL || '',
-    authToken: process.env.TURSO_AUTH_TOKEN || '',
+  local_db: {
+    url: process.env.DATABASE_URL || '',
+    authToken: process.env.DB_AUTH_TOKEN || '',
   },
 
   // Groq

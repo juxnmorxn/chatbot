@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import { config } from './config/env';
-import { initTursoDatabase } from './database/db';
+import { initDatabase } from './database/db';
 import { SettingsService } from './services/settings.service';
 import apiRoutes from './routes/api.routes';
 import { Logger } from './utils/logger';
@@ -42,9 +42,9 @@ async function startServer() {
       logger.info(`====================================================`);
     });
 
-    // 2. Inicializar Turso libSQL
-    await initTursoDatabase().catch((err) => {
-      logger.error('Error al inicializar base de datos Turso:', err?.message || err);
+    // 2. Inicializar Base de Datos Local libSQL
+    await initDatabase().catch((err) => {
+      logger.error('Error al inicializar base de datos Base de Datos Local:', err?.message || err);
     });
 
     // 3. Inicializar caché de configuración dinámica
@@ -62,29 +62,29 @@ async function startServer() {
       logger.warn('Aviso: verifyAndEnableWebhook falló en segundo plano:', err?.message || err);
     });
 
-    // Sincronización en segundo plano de SmartOLT hacia Turso DB (Cada 60 minutos = 1 llamada/hora de las 15 permitidas)
+    // Sincronización en segundo plano de SmartOLT hacia Base de Datos Local (Cada 60 minutos = 1 llamada/hora de las 15 permitidas)
     const { SmartOLTService } = await import('./services/smartolt.service');
     const { WispHubService } = await import('./services/wisphub.service');
-    const { TursoService, DbService } = await import('./services/db.service');
+    const { DbService } = await import('./services/db.service');
     
     // Verificación inicial 10 segundos después del arranque
     setTimeout(async () => {
       try {
         const stats = await DbService.getSmartOltSyncStats();
         if (stats.count === 0) {
-          logger.info('Inventario de SmartOLT vacío en Turso. Intentando sincronización inicial...');
-          await SmartOLTService.syncAllOnusToTurso(false);
+          logger.info('Inventario de SmartOLT vacío en Base de Datos Local. Intentando sincronización inicial...');
+          await SmartOLTService.syncAllOnusToLocalDb(false);
         } else {
-          logger.info(`Inventario SmartOLT listo en Turso: ${stats.count} ONUs (Última sync: ${stats.lastSync || 'Previa'})`);
+          logger.info(`Inventario SmartOLT listo en Base de Datos Local: ${stats.count} ONUs (Última sync: ${stats.lastSync || 'Previa'})`);
         }
 
         // Verificación e importación inicial de WispHub
         const whStats = await DbService.getWisphubSyncStats();
         if (whStats.count === 0) {
-          logger.info('Tabla wisphub_clients vacía en Turso. Iniciando sincronización inicial de WispHub...');
-          await WispHubService.syncAllClientesToTurso();
+          logger.info('Tabla wisphub_clients vacía en Base de Datos Local. Iniciando sincronización inicial de WispHub...');
+          await WispHubService.syncAllClientesToLocalDb();
         } else {
-          logger.info(`Clientes WispHub listos en Turso: ${whStats.count} clientes (Última sync: ${whStats.lastSync || 'Previa'})`);
+          logger.info(`Clientes WispHub listos en Base de Datos Local: ${whStats.count} clientes (Última sync: ${whStats.lastSync || 'Previa'})`);
         }
       } catch (err: any) {
         logger.warn('No se pudo ejecutar sincronización inicial:', err?.message || err);
@@ -92,11 +92,11 @@ async function startServer() {
     }, 10000);
 
     // Ciclo recurrente de reconciliación de SmartOLT cada 2 horas
-    // Mantiene Turso sincronizado, purga ONUs eliminadas en la OLT y libera IPs automáticamente
+    // Mantiene Base de Datos Local sincronizado, purga ONUs eliminadas en la OLT y libera IPs automáticamente
     setInterval(async () => {
       try {
         logger.info('Ejecutando ciclo de reconciliación de inventario SmartOLT (cada 2 horas)...');
-        await SmartOLTService.syncAllOnusToTurso(false);
+        await SmartOLTService.syncAllOnusToLocalDb(false);
       } catch (err: any) {
         logger.warn('Error en reconciliación periódica de SmartOLT:', err?.message || err);
       }
@@ -106,7 +106,7 @@ async function startServer() {
     setInterval(async () => {
       try {
         logger.info('Ejecutando sincronización periódica de WispHub (cada 12 horas)...');
-        await WispHubService.syncAllClientesToTurso();
+        await WispHubService.syncAllClientesToLocalDb();
       } catch (err: any) {
         logger.warn('Error en sincronización periódica de WispHub:', err?.message || err);
       }

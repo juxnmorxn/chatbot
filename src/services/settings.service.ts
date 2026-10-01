@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { getTursoClient, getDbClient } from '../database/db';
+import { getDbClient } from '../database/db';
 import { Logger } from '../utils/logger';
 
 const logger = new Logger('SettingsService');
@@ -50,11 +50,11 @@ export class SettingsService {
   private static initialized: boolean = false;
 
   /**
-   * Carga todas las configuraciones de Turso en memoria
+   * Carga todas las configuraciones de Base de Datos Local en memoria
    */
   static async init(): Promise<void> {
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       const result = await client.execute('SELECT key, value FROM settings');
       for (const row of result.rows) {
         if (row.key && row.value !== null && row.value !== undefined) {
@@ -62,14 +62,14 @@ export class SettingsService {
         }
       }
       this.initialized = true;
-      logger.info(`Configuraciones cargadas desde Turso DB (${this.cache.size} valores)`);
+      logger.info(`Configuraciones cargadas desde Base de Datos Local (${this.cache.size} valores)`);
     } catch (error: any) {
-      logger.error('Error al cargar configuraciones desde Turso:', error?.message || error);
+      logger.error('Error al cargar configuraciones desde Base de Datos Local:', error?.message || error);
     }
   }
 
   /**
-   * Obtiene un valor de configuración: primero busca en Turso (caché), y si no existe usa process.env
+   * Obtiene un valor de configuración: primero busca en Base de Datos Local (caché), y si no existe usa process.env
    */
   static get(key: string, envFallbackKey?: string, defaultValue: string = ''): string {
     const isUrlKey = key.includes('URL');
@@ -101,7 +101,7 @@ export class SettingsService {
   }
 
   /**
-   * Guarda un valor en Turso DB y actualiza la caché
+   * Guarda un valor en Base de Datos Local y actualiza la caché
    */
   static async set(key: string, value: string): Promise<void> {
     try {
@@ -114,7 +114,7 @@ export class SettingsService {
         return;
       }
 
-      const client = getTursoClient();
+      const client = getDbClient();
       const now = new Date().toISOString();
       await client.execute({
         sql: `

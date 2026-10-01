@@ -138,7 +138,7 @@ export class BotOrchestrator {
   }
 
   /**
-   * Pausa las respuestas automáticas del bot para un número específico y persiste en Turso DB
+   * Pausa las respuestas automáticas del bot para un número específico y persiste en Base de Datos Local
    */
   static async activarPausaOperador(
     phone: string,
@@ -172,7 +172,7 @@ export class BotOrchestrator {
   }
 
   /**
-   * Reactiva el bot para un número específico y limpia estado en Turso DB
+   * Reactiva el bot para un número específico y limpia estado en Base de Datos Local
    */
   static async reanudarBot(phone: string): Promise<void> {
     const cleanPhone = phone.replace(/\D/g, '');
@@ -187,7 +187,7 @@ export class BotOrchestrator {
 
   /**
    * Finaliza la intervención humana cuando el operador envía una despedida (ej. "buen día") o pulsa Finalizar en el panel.
-   * Quita la pausa y reinicia el estado de la sesión en Turso para que el siguiente mensaje empiece limpiamente desde 0.
+   * Quita la pausa y reinicia el estado de la sesión en Base de Datos Local para que el siguiente mensaje empiece limpiamente desde 0.
    */
   static async finalizarIntervencionHumana(phone: string): Promise<void> {
     const cleanPhone = phone.replace(/\D/g, '');
@@ -220,7 +220,7 @@ export class BotOrchestrator {
 
   /**
    * Consulta si el bot está pausado para un número y cuántos minutos le restan
-   * Verifica memoria y base de datos Turso DB de forma resiliente ante reinicios
+   * Verifica memoria y base de datos Base de Datos Local de forma resiliente ante reinicios
    */
   static estaBotPausado(phone: string, session?: Session | null): {
     pausado: boolean;
@@ -246,7 +246,7 @@ export class BotOrchestrator {
       }
     }
 
-    // Si no está en memoria pero la sesión de Turso tiene human_takeover_until
+    // Si no está en memoria pero la sesión de Base de Datos Local tiene human_takeover_until
     const dbUntilIso = session?.human_takeover_until;
     if (dbUntilIso) {
       const dbUntilMs = new Date(dbUntilIso).getTime();
@@ -405,7 +405,7 @@ export class BotOrchestrator {
   }
 
   /**
-   * Envía un mensaje y lo registra automáticamente en la tabla conversation_logs de Turso
+   * Envía un mensaje y lo registra automáticamente en la tabla conversation_logs de Base de Datos Local
    */
   private static async enviarYLoguear(
     phone: string,
@@ -469,7 +469,7 @@ export class BotOrchestrator {
       this.activeInstanceByPhone.set(event.remoteJid, instance);
     }
 
-    // 0. Obtener sesión de Turso DB
+    // 0. Obtener sesión de Base de Datos Local
     let session = await DbService.getSession(phone);
     if (instance) {
       DbService.updateLastInstance(phone, instance).catch(() => {});
@@ -511,7 +511,7 @@ export class BotOrchestrator {
       });
     }
 
-    // 1. Verificar si hay Intervención Humana activa (Memoria o Turso DB)
+    // 1. Verificar si hay Intervención Humana activa (Memoria o Base de Datos Local)
     // EXCEPCIÓN: Comandos técnicos, fotos de contratos y activaciones NUNCA son bloqueados por human takeover
     if (esAccionTecnica) {
       await this.reanudarBot(phone);
@@ -566,7 +566,7 @@ export class BotOrchestrator {
       }
     }
 
-    // Registrar mensaje entrante en la auditoría de Turso
+    // Registrar mensaje entrante en la auditoría de Base de Datos Local
     await DbService.logMessage(phone, 'IN', inputContent, null, 'MENSAJE_ENTRANTE');
 
     if (!session) {
@@ -1030,9 +1030,9 @@ export class BotOrchestrator {
       return;
     }
 
-    // Si el cliente NO está identificado en absoluto (ni por SmartOLT ni por nombre en Turso)
+    // Si el cliente NO está identificado en absoluto (ni por SmartOLT ni por nombre en Base de Datos Local)
     if (!session?.onu_id && !session?.client_name) {
-      // 1. Intentar vinculación rápida automática si el teléfono coincide con alguna ONU en Turso
+      // 1. Intentar vinculación rápida automática si el teléfono coincide con alguna ONU en Base de Datos Local
       const onusPorTel = await DbService.searchOnusFuzzy(phone, 5);
       const coincidentesTel = onusPorTel.filter(o => o.matchScore >= 90);
 
@@ -1516,7 +1516,7 @@ export class BotOrchestrator {
 
       case 'DESCONOCIDO':
       default:
-        // Si el cliente NO está identificado en absoluto (ni por CRM ni por nombre en Turso)
+        // Si el cliente NO está identificado en absoluto (ni por CRM ni por nombre en Base de Datos Local)
         if (!session?.client_id && !session?.client_name) {
           const intro = c.resumen_queja ? `Entendido sobre: _"${c.resumen_queja}"_.\n\n` : '';
           await this.enviarYLoguear(
@@ -1590,7 +1590,7 @@ export class BotOrchestrator {
 
   /**
    * Flujo de Asistencia y Comprobaciones Técnicas Amigables con Diagnóstico Silencioso:
-   * 0. Revisa contingencias o caídas masivas activas en Turso (si hay caída en su zona o General, avisa y detiene flujo).
+   * 0. Revisa contingencias o caídas masivas activas en Base de Datos Local (si hay caída en su zona o General, avisa y detiene flujo).
    * 1. Revisa internamente morosidad en WispHub (si adeuda, envía ficha de pago sin tickets falsos).
    * 2. Revisa internamente estado físico en SmartOLT:
    *    - Si hay corte en cableado (LOS): genera reporte #TK-XXXX y pide ubicación/dirección para técnico.
@@ -2619,7 +2619,7 @@ export class BotOrchestrator {
       ? meta.registeredServices
       : [];
 
-    // Si no estaban en metadata pero tenemos el nombre del cliente, buscar en Turso
+    // Si no estaban en metadata pero tenemos el nombre del cliente, buscar en Base de Datos Local
     if (listaServicios.length <= 1 && session?.client_name) {
       const onus = await DbService.searchOnusFuzzy(session.client_name, 5);
       const coincidentes = onus.filter(o => o.matchScore >= 75);
@@ -2731,7 +2731,7 @@ export class BotOrchestrator {
 
   /**
    * Procesa la respuesta del Turno 1 (si falla en 1 o todos los aparatos),
-   * genera el ticket en Turso y solicita foto/speedtest de forma natural (Turno 2).
+   * genera el ticket en Base de Datos Local y solicita foto/speedtest de forma natural (Turno 2).
    */
   private static async procesarTurno1Comprobacion(
     phone: string,
@@ -2891,7 +2891,7 @@ export class BotOrchestrator {
   }
 
   /**
-   * Obtiene la información técnica y de plan más completa del cliente desde Turso DB (wisphub_clients y smartolt_onus)
+   * Obtiene la información técnica y de plan más completa del cliente desde Base de Datos Local (wisphub_clients y smartolt_onus)
    */
   private static async obtenerContextoClienteCompleto(phone: string, session: Session | null) {
     let meta: any = {};
@@ -3030,7 +3030,7 @@ export class BotOrchestrator {
       const ping = pingNum ? `${pingNum} ms` : null;
       const folio = meta.ticketFolio;
 
-      // Obtener plan y velocidad real del cliente en WispHub / Turso DB
+      // Obtener plan y velocidad real del cliente en WispHub / Base de Datos Local
       const clienteCtx = await this.obtenerContextoClienteCompleto(phone, session);
       const planContratado = clienteCtx.planInternet || meta.speed_profile || '';
       const velocidadMegasOficial = clienteCtx.velocidadMegas;
@@ -3251,7 +3251,7 @@ export class BotOrchestrator {
       const conceptoImg = (datos?.concepto || '').trim();
       const destinatario = datos?.destinatario || '';
 
-      // Reasignar departamento inmediatamente a ATENCION en Turso DB
+      // Reasignar departamento inmediatamente a ATENCION en Base de Datos Local
       await DbService.updateDepartment(phone, 'ATENCION').catch(() => {});
 
       // Buscar si el cliente ya está identificado o si podemos extraer su identidad
@@ -3551,7 +3551,7 @@ export class BotOrchestrator {
       return;
     }
 
-    // 1. Guardar en base de datos Turso DB (wisphub_clients, smartolt_onus, tickets) y sincronizar a WispHub
+    // 1. Guardar en base de datos Base de Datos Local (wisphub_clients, smartolt_onus, tickets) y sincronizar a WispHub
     await DbService.updateClientLocation(clientIdentified.id_servicio || phone, {
       lat,
       lng,
@@ -3658,8 +3658,8 @@ export class BotOrchestrator {
       return;
     }
 
-    const { getTursoClient } = await import('../database/db');
-    const client = getTursoClient();
+    const { getDbClient } = await import('../database/db');
+    const client = getDbClient();
 
     let targetClient: any = null;
 
@@ -3724,7 +3724,7 @@ export class BotOrchestrator {
       return;
     }
 
-    // Guardar en Turso DB y sincronizar con WispHub
+    // Guardar en Base de Datos Local y sincronizar con WispHub
     await DbService.updateClientLocation(targetClient.id_servicio, {
       lat: pendingGps.lat,
       lng: pendingGps.lng,
@@ -3782,8 +3782,8 @@ export class BotOrchestrator {
     const pendingGps = meta.pendingGpsAssignment;
 
     const cleanInput = rawText.trim();
-    const { getTursoClient } = await import('../database/db');
-    const client = getTursoClient();
+    const { getDbClient } = await import('../database/db');
+    const client = getDbClient();
 
     let targetClient: any = null;
     const numId = cleanInput.replace(/\D/g, '');
@@ -4271,7 +4271,7 @@ export class BotOrchestrator {
   }
 
   /**
-   * Consulta de paquete contratado, velocidad oficial de descarga y mensualidad en Turso / WispHub
+   * Consulta de paquete contratado, velocidad oficial de descarga y mensualidad en Base de Datos Local / WispHub
    */
   private static async flujoConsultarPlan(phone: string, session: Session | null, targetJid?: string): Promise<void> {
     if (!session?.client_id && !session?.client_name) {
@@ -4359,10 +4359,10 @@ export class BotOrchestrator {
 
   /**
    * Procesa la identificación de un cliente de forma inteligente y flexible:
-   * 1. Busca en SmartOLT (Caché en Turso DB) con algoritmo difuso tolerante a errores ortográficos y de digitación.
+   * 1. Busca en SmartOLT (Caché en Base de Datos Local) con algoritmo difuso tolerante a errores ortográficos y de digitación.
    * 2. Si no coincide, busca en WispHub por nombre o contrato.
    * 3. Si parece otra intención (ej. "no tengo internet"), la procesa sin trabar al usuario.
-   * 4. Si es un nombre personal (ej. "Carlos", "Juan"), lo memoriza en Turso DB.
+   * 4. Si es un nombre personal (ej. "Carlos", "Juan"), lo memoriza en Base de Datos Local.
    */
   private static async procesarIdentificacion(
     phone: string,
@@ -4380,7 +4380,7 @@ export class BotOrchestrator {
     const matchIp = rawInput.match(/\b(172\.\d{1,3}\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3})\b/);
     if (matchIp) {
       const ipBuscada = matchIp[1];
-      logger.info(`[Identificación por IP] Entrada contiene IP "${ipBuscada}". Buscando directamente en Turso...`);
+      logger.info(`[Identificación por IP] Entrada contiene IP "${ipBuscada}". Buscando directamente en Base de Datos Local...`);
       const whPorIp = await DbService.getWisphubClientByAny({ ip: ipBuscada });
       if (whPorIp) {
         logger.info(`[Identificación por IP] Cliente localizado en WispHub por IP: ID=${whPorIp.id_servicio}, Nombre="${whPorIp.nombre}"`);
@@ -4536,7 +4536,7 @@ export class BotOrchestrator {
     const cleanSearchTerm = cleanPersonName(searchTerm) || searchTerm;
     logger.info(`Buscando coincidencias para identificación de ${phone}: "${rawInput}" (Término búsqueda: "${searchTerm}", Limpio: "${cleanSearchTerm}")`);
 
-    // 1. Intentar búsqueda flexible en Turso DB (Caché local de SmartOLT y WispHub)
+    // 1. Intentar búsqueda flexible en Base de Datos Local (Caché local de SmartOLT y WispHub)
     try {
       const [coincidenciasOlt, coincidenciasWh] = await Promise.all([
         DbService.searchOnusFuzzy(cleanSearchTerm, 6).catch(() => []),
@@ -5508,7 +5508,7 @@ export class BotOrchestrator {
       targetJid
     );
 
-    // 1. Buscar en Turso DB / SmartOLT
+    // 1. Buscar en Base de Datos Local / SmartOLT
     let onuRecord = await DbService.getOnuById(target);
 
     if (!onuRecord) {
@@ -5585,7 +5585,7 @@ ${techInfo}───────────────────────
   ): Promise<void> {
     const query = targetQuery?.trim() || session?.onu_id || session?.client_name || phone;
 
-    // Buscar la ONU en SmartOLT / Turso
+    // Buscar la ONU en SmartOLT / Base de Datos Local
     let onuRecord = await DbService.getOnuById(query);
     if (!onuRecord) {
       const matches = await DbService.searchOnusFuzzy(query, 1);
@@ -6159,7 +6159,7 @@ Módem aprovisionado en la OLT con su VLAN y Perfil de Velocidad.`;
   }
 
   /**
-   * Busca el cliente/servicio en Turso DB y SmartOLT y gestiona el caso de 1 solo servicio o multiservicio
+   * Busca el cliente/servicio en Base de Datos Local y SmartOLT y gestiona el caso de 1 solo servicio o multiservicio
    */
   private static async buscarYProcesarServicioParaSwap(
     phone: string,

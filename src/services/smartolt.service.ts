@@ -180,10 +180,10 @@ export class SmartOLTService {
   }
 
   /**
-   * Sincroniza todas las ONUs desde SmartOLT hacia Turso DB
+   * Sincroniza todas las ONUs desde SmartOLT hacia Base de Datos Local
    * Protegido con cooldown de 4 minutos para respetar el límite de 15 llamadas/hora
    */
-  static async syncAllOnusToTurso(force: boolean = false): Promise<SmartOltSyncResult> {
+  static async syncAllOnusToLocalDb(force: boolean = false): Promise<SmartOltSyncResult> {
     const apiKey = this.getApiKey();
     if (!apiKey || apiKey.includes('tu_token')) {
       return {
@@ -259,7 +259,7 @@ export class SmartOLTService {
 
       await DbService.saveSmartOltOnus(transformed);
 
-      // Reconciliación: Purgar de Turso DB las ONUs eliminadas en SmartOLT para liberar sus IPs
+      // Reconciliación: Purgar de Base de Datos Local las ONUs eliminadas en SmartOLT para liberar sus IPs
       const activeIds = new Set<string>(transformed.map(t => t.unique_external_id).filter(Boolean));
       const prunedCount = await DbService.pruneSmartOltOnus(activeIds);
 
@@ -269,7 +269,7 @@ export class SmartOLTService {
       return {
         success: true,
         count: transformed.length,
-        message: `Sincronización exitosa: ${transformed.length} ONUs sincronizadas con Turso DB${prunedCount > 0 ? ` (${prunedCount} ONUs eliminadas purgadas y sus IPs liberadas)` : ''}.`,
+        message: `Sincronización exitosa: ${transformed.length} ONUs sincronizadas con Base de Datos Local${prunedCount > 0 ? ` (${prunedCount} ONUs eliminadas purgadas y sus IPs liberadas)` : ''}.`,
       };
     } catch (error: any) {
       logger.error('Error al sincronizar ONUs con SmartOLT:', error?.response?.data || error?.message || error);
@@ -771,7 +771,7 @@ export class SmartOLTService {
           }
         }
 
-        // Forzar registro en Turso DB
+        // Forzar registro en Base de Datos Local
         DbService.saveSmartOltOnus([
           {
             unique_external_id: onuExternalId,
@@ -823,7 +823,7 @@ export class SmartOLTService {
       const api = this.getApi();
       const cleanId = onuIdOrExternalId.trim();
 
-      // 1. Obtener registro de Turso o detalles para conocer IP, Zona, etc.
+      // 1. Obtener registro de Base de Datos Local o detalles para conocer IP, Zona, etc.
       let onuRecord = await DbService.getOnuById(cleanId);
       if (!onuRecord && cleanId.length < 12) {
         const matches = await DbService.searchOnusFuzzy(cleanId, 1);
@@ -926,7 +926,7 @@ export class SmartOLTService {
         }
       }
 
-      // Actualizar registro local en Turso DB
+      // Actualizar registro local en Base de Datos Local
       if (onuRecord) {
         const updatedRaw = {
           ...rawData,
@@ -1167,7 +1167,7 @@ export class SmartOLTService {
     const profiles = getSmartOltSpeedProfiles(plan, catalog);
     logger.info(`Actualizando perfil de velocidad para ONU ${idOrSn} a ${profiles.down} / ${profiles.up}`);
 
-    // 1. Buscar registro en Turso DB para tener datos completos del cliente
+    // 1. Buscar registro en Base de Datos Local para tener datos completos del cliente
     let onuRecord = await DbService.getOnuById(idOrSn);
     if (!onuRecord) {
       const fuzzy = await DbService.searchOnusFuzzy(idOrSn, 1);
@@ -1262,7 +1262,7 @@ export class SmartOLTService {
   }
 
   /**
-   * Elimina una ONU de SmartOLT y la purga inmediatamente de Turso DB para liberar su IP
+   * Elimina una ONU de SmartOLT y la purga inmediatamente de Base de Datos Local para liberar su IP
    */
   static async deleteOnu(onuExternalId: string): Promise<{ success: boolean; message: string }> {
     if (!onuExternalId) return { success: false, message: 'ID de ONU requerido' };
@@ -1273,7 +1273,7 @@ export class SmartOLTService {
 
       if (resData?.status === true || resData?.response_code === 'success' || response.status === 200) {
         await DbService.deleteSmartOltOnu(onuExternalId);
-        logger.info(`ONU ${onuExternalId} eliminada de SmartOLT y de Turso DB. IP liberada.`);
+        logger.info(`ONU ${onuExternalId} eliminada de SmartOLT y de Base de Datos Local. IP liberada.`);
         return {
           success: true,
           message: resData?.response || resData?.message || `ONU ${onuExternalId} eliminada correctamente de SmartOLT e IP liberada en el sistema.`,
@@ -1295,7 +1295,7 @@ export class SmartOLTService {
   }
 
   /**
-   * Obtiene los detalles completos y configuración de una ONU desde SmartOLT o Turso DB
+   * Obtiene los detalles completos y configuración de una ONU desde SmartOLT o Base de Datos Local
    */
   static async getOnuDetails(uniqueExternalId: string): Promise<any> {
     const cleanId = String(uniqueExternalId || '').trim();
@@ -1359,11 +1359,11 @@ export class SmartOLTService {
           };
         }
       } catch (err: any) {
-        logger.warn(`Error al consultar get_onu_details en SmartOLT para ${cleanId}, consultando Turso DB...`, err?.message || err);
+        logger.warn(`Error al consultar get_onu_details en SmartOLT para ${cleanId}, consultando Base de Datos Local...`, err?.message || err);
       }
     }
 
-    // Fallback: Consultar en Turso DB
+    // Fallback: Consultar en Base de Datos Local
     let onu = await DbService.getOnuById(cleanId);
     if (!onu) {
       const match = await DbService.searchOnusFuzzy(cleanId, 1);
@@ -1429,7 +1429,7 @@ export class SmartOLTService {
   /**
    * Ejecuta el flujo completo de Cambio de Módem (Reemplazo de ONU):
    * 1. Obtiene los datos del módem actual (IP, VLAN, Cliente, Zona, etc.)
-   * 2. Respalda la información en Turso DB (tabla modem_swaps)
+   * 2. Respalda la información en Base de Datos Local (tabla modem_swaps)
    * 3. Elimina el módem anterior en SmartOLT
    * 4. Autoriza y aprovisiona el nuevo módem con los MISMOS datos
    * 5. Actualiza base de datos y referencias de cliente
@@ -1457,7 +1457,7 @@ export class SmartOLTService {
 
     logger.info(`[Cambio de Módem] Datos de ONU anterior localizados: Cliente="${oldOnu.name}", IP="${oldOnu.ip_address}", VLAN="${oldOnu.vlan}", Zona="${oldOnu.zone}", SN="${oldOnu.sn}"`);
 
-    // 2. Respaldar en Turso DB (Crear registro de swap)
+    // 2. Respaldar en Base de Datos Local (Crear registro de swap)
     const swapId = await DbService.saveModemSwap({
       client_name: oldOnu.name,
       old_sn: oldOnu.sn || cleanOld,

@@ -130,7 +130,7 @@ export class IpamService {
       subnetsMap.set(d.vlan, { ...d });
     }
 
-    // 2. Limpiar en Turso DB cualquier subred de antenas / no-FTTH previa
+    // 2. Limpiar en Base de Datos Local cualquier subred de antenas / no-FTTH previa
     try {
       const client = getDbClient();
       await client.execute(`
@@ -189,7 +189,7 @@ export class IpamService {
         }
       }
     } catch (err: any) {
-      logger.warn('No se pudieron leer pools personalizados de Turso DB:', err?.message || err);
+      logger.warn('No se pudieron leer pools personalizados de Base de Datos Local:', err?.message || err);
     }
 
     // Ordenar por número de VLAN (510, 520, ... 620, 800)
@@ -317,13 +317,13 @@ export class IpamService {
   }
 
   /**
-   * Obtiene todas las IPs asignadas en Turso DB (desde SmartOLT y WispHub)
+   * Obtiene todas las IPs asignadas en Base de Datos Local (desde SmartOLT y WispHub)
    */
   private static async getUsedIpsSet(): Promise<Set<string>> {
     const usedIps = new Set<string>();
 
     try {
-      // 1. Obtener IPs de SmartOLT ONUs almacenadas en Turso
+      // 1. Obtener IPs de SmartOLT ONUs almacenadas en Base de Datos Local
       const onus = await DbService.getAllSmartOltOnus();
       for (const o of onus) {
         if (o.ip_address && o.ip_address.trim()) {
@@ -332,7 +332,7 @@ export class IpamService {
         }
       }
 
-      // 2. Obtener IPs de clientes WispHub almacenados en Turso
+      // 2. Obtener IPs de clientes WispHub almacenados en Base de Datos Local
       const clientes = await DbService.getAllWispHubClientes();
       for (const c of clientes) {
         if (c.ip && c.ip.trim()) {
@@ -341,7 +341,7 @@ export class IpamService {
         }
       }
     } catch (err: any) {
-      logger.warn('Error al obtener IPs ocupadas desde Turso DB:', err?.message || err);
+      logger.warn('Error al obtener IPs ocupadas desde Base de Datos Local:', err?.message || err);
     }
 
     return usedIps;

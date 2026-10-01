@@ -208,7 +208,7 @@ export class WebhookController {
           } catch {}
         }
 
-        // Auditoría en Turso
+        // Auditoría en Base de Datos Local
         if (extracted.text) {
           DbService.logMessage(phone, 'OUT', extracted.text, null, 'INTERVENCION_HUMANA').catch(() => {});
         }

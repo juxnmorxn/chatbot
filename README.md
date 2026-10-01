@@ -1,6 +1,6 @@
 # Chatbot WhatsApp ISP 🚀 (CloudWareMx)
 
-Backend inteligente para automatización de soporte técnico y cobranza para ISP (Proveedores de Internet) desplegado en **Render**, con base de datos en la nube en **Turso (libSQL)**, traducción de lenguaje natural a JSON con **Groq**, integración con **WispHub**, **SmartOLT** y **Evolution API**.
+Backend inteligente para automatización de soporte técnico y cobranza para ISP (Proveedores de Internet) desplegado en **Render**, con base de datos en la nube en **Base de Datos Local (libSQL)**, traducción de lenguaje natural a JSON con **Groq**, integración con **WispHub**, **SmartOLT** y **Evolution API**.
 
 ---
 
@@ -12,7 +12,7 @@ flowchart TD
     EVO -->|Webhook POST /webhook| BOT[Orquestador Express Backend]
     
     BOT -->|Keep-Alive GET /api/health| CRON[cron-job.org cada 10 min]
-    BOT -->|Sesiones y Opt-Out| TURSO[(Turso libSQL Cloud)]
+    BOT -->|Sesiones y Opt-Out| DB[(Base de Datos Local SQLite)]
     
     BOT -->|Botón Directo| ACC[Acción Inmediata sin IA]
     BOT -->|Texto Libre| GROQ[Groq Cloud JSON]
@@ -30,7 +30,7 @@ flowchart TD
 
 ## 🌟 Características Principales
 
-1. **Persistencia Cloud en Turso (libSQL):**
+1. **Persistencia Cloud en Base de Datos Local (libSQL):**
    - No pierde las sesiones cuando Render apaga o reinicia el contenedor (disco efímero resuelto).
    - Guarda número de teléfono, cliente, servicio, ONU ID y banderas de opt-out.
 
@@ -50,7 +50,7 @@ flowchart TD
    - Mecanismo de Opt-Out automático cuando el usuario responde `CANCELAR` o `BAJA`.
 
 5. **Anti-Sleep en Render (cron-job.org):**
-   - Endpoint `GET /api/health` con ping a Turso DB para mantener despierto el plan gratuito de Render.
+   - Endpoint `GET /api/health` con ping a Base de Datos Local para mantener despierto el plan gratuito de Render.
 
 ---
 
@@ -62,9 +62,9 @@ Copia `.env.example` a `.env` y configura tus valores:
 PORT=3000
 NODE_ENV=production
 
-# Turso DB
-TURSO_DATABASE_URL=libsql://chatbot-jednet.aws-us-east-1.turso.io
-TURSO_AUTH_TOKEN=tu-token-jwt-de-turso
+# Base de Datos Local
+DATABASE_URL=file:./data/chatbot.db
+DB_AUTH_TOKEN=tu-token-jwt-de-local_db
 
 # Groq Cloud
 GROQ_API_KEY=gsk_tu_clave_de_groq
@@ -93,7 +93,7 @@ SOPORTE_HUMANO_PHONE=521XXXXXXXXXX
 ## 🚀 Despliegue en VPS (Hostinger / Ubuntu)
 
 1. **Variables de Entorno (`.env`):**
-   Solo se requiere `PORT`, `NODE_ENV` y las credenciales de conexión a **Turso DB**.
+   Solo se requiere `PORT`, `NODE_ENV` y las credenciales de conexión a **Base de Datos Local**.
    El resto de credenciales (Evolution API, Groq IA, WispHub, SmartOLT, Banco, Webhooks) se configuran dinámicamente desde el **Panel Web (`/admin`)**.
 
 2. **Compilar y Ejecutar con PM2:**
@@ -135,8 +135,8 @@ Escanea el código QR en: `http://localhost:8080/instance/connect/isp-soporte`.
 ## 🧪 Pruebas Locales
 
 ```bash
-# Probar conexión con Turso DB
-npm run test:turso
+# Probar conexión con Base de Datos Local
+npm run test:local_db
 
 # Probar clasificador de lenguaje natural con Groq
 npm run test:groq

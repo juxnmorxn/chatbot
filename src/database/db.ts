@@ -13,7 +13,7 @@ let activeDbUrl: string = '';
  * Obtiene la ruta del archivo SQLite local en el VPS
  */
 export function getLocalDbFilePath(): string {
-  const rawUrl = config.turso.url || 'file:./data/chatbot.db';
+  const rawUrl = config.db.url || 'file:./data/chatbot.db';
   if (rawUrl.startsWith('file:')) {
     const rel = rawUrl.replace('file:', '');
     return path.resolve(process.cwd(), rel);
@@ -24,11 +24,11 @@ export function getLocalDbFilePath(): string {
 /**
  * Obtiene la instancia activa de conexión a la base de datos local SQLite
  */
-export function getTursoClient(): Client {
-  const targetUrl = (config.turso.url && config.turso.url.trim() !== '') ? config.turso.url.trim() : 'file:./data/chatbot.db';
+export function getDbClient(): Client {
+  const targetUrl = (config.db.url && config.db.url.trim() !== '') ? config.db.url.trim() : 'file:./data/chatbot.db';
   
   if (!clientInstance || activeDbUrl !== targetUrl) {
-    if (targetUrl.startsWith('file:') || !config.turso.authToken) {
+    if (targetUrl.startsWith('file:') || !config.db.authToken) {
       const localPath = getLocalDbFilePath();
       const dir = path.dirname(localPath);
       if (!fs.existsSync(dir)) {
@@ -44,7 +44,7 @@ export function getTursoClient(): Client {
     } else {
       clientInstance = createClient({
         url: targetUrl,
-        authToken: config.turso.authToken,
+        authToken: config.db.authToken,
       });
       activeDbUrl = targetUrl;
       logger.info(`Conectado a Base de Datos: ${targetUrl}`);
@@ -53,26 +53,26 @@ export function getTursoClient(): Client {
   return clientInstance;
 }
 
-export const getDbClient = getTursoClient;
+export const getLocalDbClient = getDbClient;
 
 /**
- * Reinicia la conexión a la base de datos (por ejemplo, al cambiar de Turso a Local)
+ * Reinicia la conexión a la base de datos (por ejemplo, al cambiar de Base de Datos Local a Local)
  */
 export function resetDatabaseConnection(newUrl?: string, newAuthToken?: string): Client {
-  if (newUrl !== undefined) config.turso.url = newUrl;
-  if (newAuthToken !== undefined) config.turso.authToken = newAuthToken;
+  if (newUrl !== undefined) config.db.url = newUrl;
+  if (newAuthToken !== undefined) config.db.authToken = newAuthToken;
   clientInstance = null;
   activeDbUrl = '';
-  return getTursoClient();
+  return getDbClient();
 }
 
 /**
  * Obtiene métricas e información técnica de la base de datos
  */
 export async function getDatabaseStatsInfo(): Promise<any> {
-  const client = getTursoClient();
-  const rawUrl = config.turso.url || 'file:./data/chatbot.db';
-  const isLocal = rawUrl.startsWith('file:') || !config.turso.url;
+  const client = getDbClient();
+  const rawUrl = config.db.url || 'file:./data/chatbot.db';
+  const isLocal = rawUrl.startsWith('file:') || !config.db.url;
   
   const startPing = Date.now();
   await client.execute('SELECT 1 as ping');
@@ -123,7 +123,7 @@ export async function getDatabaseStatsInfo(): Promise<any> {
   }
 
   return {
-    mode: isLocal ? 'local' : 'turso',
+    mode: isLocal ? 'local' : 'local_db',
     isLocal,
     url: isLocal ? `file:${filePath}` : rawUrl.replace(/(:\/\/[^@]+@).*/, '$1***'),
     filePath: isLocal ? filePath : null,
@@ -144,7 +144,7 @@ export async function getTableDataAndSchema(
   tableName: string,
   options: { page?: number; limit?: number; search?: string; sortBy?: string; sortDir?: string } = {}
 ): Promise<any> {
-  const client = getTursoClient();
+  const client = getDbClient();
 
   // Validar contra sqlite_master para prevenir SQL Injection en nombres de tabla
   const checkTable = await client.execute({
@@ -222,7 +222,7 @@ export async function getTableDataAndSchema(
  * Ejecuta una consulta SQL personalizada de forma controlada
  */
 export async function executeCustomQuery(sqlQuery: string): Promise<any> {
-  const client = getTursoClient();
+  const client = getDbClient();
   const trimmed = sqlQuery.trim();
 
   if (!trimmed) {
@@ -246,7 +246,7 @@ export async function executeCustomQuery(sqlQuery: string): Promise<any> {
  * Optimiza y desfragmenta la base de datos (VACUUM y PRAGMA optimize)
  */
 export async function optimizeDatabase(): Promise<any> {
-  const client = getTursoClient();
+  const client = getDbClient();
   const start = Date.now();
   try {
     await client.execute('PRAGMA optimize;');
@@ -258,10 +258,10 @@ export async function optimizeDatabase(): Promise<any> {
   return { success: true, durationMs, message: 'Base de datos optimizada y desfragmentada correctamente' };
 }
 
-export async function initTursoDatabase(): Promise<void> {
-  const client = getTursoClient();
+export async function initDatabase(): Promise<void> {
+  const client = getDbClient();
   try {
-    logger.info('Verificando e inicializando tablas en Turso DB...');
+    logger.info('Verificando e inicializando tablas en Base de Datos Local...');
     await client.execute(`
       CREATE TABLE IF NOT EXISTS sessions (
         phone TEXT PRIMARY KEY,
@@ -558,12 +558,14 @@ export async function initTursoDatabase(): Promise<void> {
         sql: `INSERT INTO admin_users (username, password_hash, name, role, is_active, created_at) VALUES (?, ?, ?, ?, 1, ?)`,
         args: ['admin', initialHash, 'Super Administrador', 'superadmin', now],
       });
-      logger.info('Usuario inicial "admin" (superadmin) creado exitosamente en Turso DB.');
+      logger.info('Usuario inicial "admin" (superadmin) creado exitosamente en Base de Datos Local.');
     }
 
     logger.info('Tablas "sessions", "settings", "conversation_logs", "smartolt_onus", "wisphub_clients", "tickets", "technicians", "admin_users", "ipam_vlan_pools", "network_outages", "whatsapp_instances", "modem_swaps" y "whatsapp_office_groups" listas en Base de Datos.');
   } catch (error: any) {
-    logger.error('Error al inicializar Turso DB:', error?.message || error);
+    logger.error('Error al inicializar Base de Datos Local:', error?.message || error);
     throw error;
   }
 }
+
+export const initLocalDbDatabase = initDatabase;

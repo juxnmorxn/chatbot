@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { getTursoClient, getDbClient } from '../database/db';
+import { getDbClient } from '../database/db';
 import { config } from '../config/env';
 import { SettingsService } from '../services/settings.service';
 import { Logger } from '../utils/logger';
@@ -16,7 +16,7 @@ export class HealthController {
     let dbStatus = 'unknown';
 
     try {
-      const client = getTursoClient();
+      const client = getDbClient();
       await client.execute('SELECT 1 as ping');
       dbStatus = 'connected';
     } catch (error: any) {

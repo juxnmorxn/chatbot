@@ -1,10 +1,10 @@
-import { TursoService, DbService } from '../services/db.service';
+import { DbService } from '../services/db.service';
 import { SettingsService } from '../services/settings.service';
-import { initTursoDatabase } from '../database/db';
+import { initDatabase } from '../database/db';
 
 async function testFeatures() {
   console.log('--- Iniciando verificación de Tickets y Settings ---');
-  await initTursoDatabase();
+  await initDatabase();
   await SettingsService.init();
 
   // 1. Guardar configuraciones de prueba
@@ -27,7 +27,7 @@ async function testFeatures() {
   });
 
   // 2. Crear Ticket de prueba
-  const ticket = await TursoService.createTicket({
+  const ticket = await DbService.createTicket({
     phone: '5215598765432',
     client_name: 'Juan Pérez Test',
     onu_id: 'ONU-TEST-99',
@@ -42,15 +42,15 @@ async function testFeatures() {
   console.log('✅ Ticket creado con folio:', ticket.folio);
 
   // 3. Listar tickets
-  const tickets = await TursoService.getTickets('ABIERTO', 10);
+  const tickets = await DbService.getTickets('ABIERTO', 10);
   console.log(`✅ Tickets abiertos recuperados (${tickets.length} encontrados)`);
 
   // 4. Actualizar estado
-  const updated = await TursoService.updateTicketStatus(ticket.folio, 'EN_PROCESO', 'Ajuste manual aplicado en SmartOLT');
+  const updated = await DbService.updateTicketStatus(ticket.folio, 'EN_PROCESO', 'Ajuste manual aplicado en SmartOLT');
   console.log('✅ Ticket actualizado a EN_PROCESO:', updated);
 
   // 5. Estadísticas
-  const stats = await TursoService.getTicketStats();
+  const stats = await DbService.getTicketStats();
   console.log('✅ Estadísticas de tickets:', stats);
 
   console.log('🎉 ¡Todas las pruebas de integración pasaron correctamente!');

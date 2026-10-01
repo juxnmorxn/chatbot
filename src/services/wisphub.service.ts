@@ -114,8 +114,8 @@ export class WispHubService {
     }
 
     let targetId: number | null = null;
-    const { getTursoClient } = await import('../database/db');
-    const client = getTursoClient();
+    const { getDbClient } = await import('../database/db');
+    const client = getDbClient();
 
     // 1. Si tenemos rawId estrictamente numérico, validar si existe en wisphub_clients
     if (rawId && /^\d+$/.test(rawId)) {
@@ -283,7 +283,7 @@ export class WispHubService {
         }
       }
 
-      // 3. Actualizar base de datos local Turso a 'Activo'
+      // 3. Actualizar base de datos local Base de Datos Local a 'Activo'
       try {
         await client.execute({
           sql: `UPDATE wisphub_clients SET estado = 'Activo' WHERE id_servicio = ?`,
@@ -727,7 +727,7 @@ export class WispHubService {
 
     logger.info(`[WispHub Live Diagnostic] Verificando en tiempo real: ID_Contrato=${idNum || 'N/A'}, Nombre="${nombre || 'N/A'}", Tel="${phone || 'N/A'}", IP="${ip || 'N/A'}"`);
 
-    // 1. Ubicar el registro en la base de datos indexada de Turso (sincronizada con todos los 3400+ clientes)
+    // 1. Ubicar el registro en la base de datos indexada de Base de Datos Local (sincronizada con todos los 3400+ clientes)
     let targetId: string | number | null = null;
     try {
       const dbClient = await DbService.getWisphubClientByAny({
@@ -740,7 +740,7 @@ export class WispHubService {
 
       if (dbClient) {
         targetId = dbClient.id_servicio;
-        logger.info(`Cliente ubicado en base local Turso: ID=${dbClient.id_servicio}, Nombre="${dbClient.nombre}", Servicio="${dbClient.servicio}", Estado="${dbClient.estado}", Facturas="${dbClient.estado_facturas}", IP="${dbClient.ip}"`);
+        logger.info(`Cliente ubicado en base local Base de Datos Local: ID=${dbClient.id_servicio}, Nombre="${dbClient.nombre}", Servicio="${dbClient.servicio}", Estado="${dbClient.estado}", Facturas="${dbClient.estado_facturas}", IP="${dbClient.ip}"`);
         clienteEncontrado = {
           id: dbClient.id_servicio,
           nombre: dbClient.nombre,
@@ -756,10 +756,10 @@ export class WispHubService {
         };
       }
     } catch (err: any) {
-      logger.warn('Error al consultar cliente en Turso:', err?.message || err);
+      logger.warn('Error al consultar cliente en Base de Datos Local:', err?.message || err);
     }
 
-    // 2. Si no se ubicó en Turso y tenemos idNum, usar idNum como targetId
+    // 2. Si no se ubicó en Base de Datos Local y tenemos idNum, usar idNum como targetId
     if (!targetId && idNum) {
       targetId = idNum;
     }
@@ -933,10 +933,10 @@ export class WispHubService {
         } catch {}
       }
 
-      // Actualizar también la base local en Turso DB a 'Activo'
+      // Actualizar también la base local en Base de Datos Local a 'Activo'
       try {
-        const { getTursoClient } = await import('../database/db');
-        const client = getTursoClient();
+        const { getDbClient } = await import('../database/db');
+        const client = getDbClient();
         await client.execute({
           sql: `UPDATE wisphub_clients SET estado = 'Activo' WHERE id_servicio = ?`,
           args: [Number(id)],
@@ -1002,10 +1002,10 @@ export class WispHubService {
   private static lastSyncTimestamp: number = 0;
 
   /**
-   * Sincroniza todos los clientes desde WispHub API hacia Turso DB (Solo lectura de la API de WispHub)
+   * Sincroniza todos los clientes desde WispHub API hacia Base de Datos Local (Solo lectura de la API de WispHub)
    * Recorre la paginación con lotes de 100 registros.
    */
-  static async syncAllClientesToTurso(force: boolean = false): Promise<{
+  static async syncAllClientesToLocalDb(force: boolean = false): Promise<{
     success: boolean;
     count: number;
     message: string;
@@ -1101,7 +1101,7 @@ export class WispHubService {
       return {
         success: true,
         count: totalFetched,
-        message: `Sincronización exitosa: ${totalFetched} clientes de WispHub guardados en Turso DB.`,
+        message: `Sincronización exitosa: ${totalFetched} clientes de WispHub guardados en Base de Datos Local.`,
       };
     } catch (error: any) {
       logger.error('Error al sincronizar clientes de WispHub:', error?.response?.data || error?.message || error);
