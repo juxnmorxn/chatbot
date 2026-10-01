@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { createClient } from '@libsql/client';
 import { SettingsService } from '../services/settings.service';
-import { TursoService, DbService } from '../services/db.service';
+import { DbService } from '../services/db.service';
 import { 
   getTursoClient, 
   getDbClient,
@@ -92,7 +92,7 @@ export class AdminController {
         return;
       }
 
-      const user = await TursoService.getAdminUserByUsername(String(username).trim().toLowerCase());
+      const user = await DbService.getAdminUserByUsername(String(username).trim().toLowerCase());
       if (!user) {
         res.status(401).json({ success: false, error: 'Credenciales inválidas' });
         return;
@@ -109,7 +109,7 @@ export class AdminController {
         return;
       }
 
-      await TursoService.updateAdminLastLogin(user.id);
+      await DbService.updateAdminLastLogin(user.id);
 
       const token = generateSessionToken({
         id: user.id,
@@ -158,7 +158,7 @@ export class AdminController {
    */
   static async getAdminUsers(_req: Request, res: Response): Promise<void> {
     try {
-      const users = await TursoService.listAdminUsers();
+      const users = await DbService.listAdminUsers();
       res.json({ success: true, users });
     } catch (error: any) {
       res.status(500).json({ success: false, error: error?.message || error });
@@ -183,7 +183,7 @@ export class AdminController {
       }
 
       const password_hash = hashPassword(String(password));
-      const result = await TursoService.createAdminUser({
+      const result = await DbService.createAdminUser({
         username: String(username).trim().toLowerCase(),
         password_hash,
         name: String(name).trim(),
@@ -212,7 +212,7 @@ export class AdminController {
         return;
       }
 
-      const ok = await TursoService.deleteAdminUser(id);
+      const ok = await DbService.deleteAdminUser(id);
       if (ok) {
         res.json({ success: true, message: 'Usuario eliminado exitosamente' });
       } else {
@@ -233,7 +233,7 @@ export class AdminController {
   static async getChatConversations(req: Request, res: Response): Promise<void> {
     try {
       const limit = parseInt(req.query.limit as string, 10) || 50;
-      const conversations = await TursoService.getRecentChatConversations(limit);
+      const conversations = await DbService.getRecentChatConversations(limit);
       res.json({ success: true, conversations });
     } catch (error: any) {
       logger.error('Error al obtener conversaciones:', error?.message || error);
@@ -248,8 +248,8 @@ export class AdminController {
     try {
       const phone = String(req.params.phone || '');
       const limit = parseInt(req.query.limit as string, 10) || 80;
-      const messages = await TursoService.getChatMessagesByPhone(phone, limit);
-      const session = await TursoService.getSession(phone);
+      const messages = await DbService.getChatMessagesByPhone(phone, limit);
+      const session = await DbService.getSession(phone);
       const isPaused = BotOrchestrator.estaBotPausado(phone, session);
       res.json({
         success: true,
@@ -283,11 +283,11 @@ export class AdminController {
       // Si no especificaron targetInstance, buscar si este departamento está mapeado a una instancia
       let resolvedInstance = targetInstance;
       if (!resolvedInstance) {
-        const instRec = await TursoService.getInstanceByArea(department);
+        const instRec = await DbService.getInstanceByArea(department);
         if (instRec) resolvedInstance = instRec.instance_name;
       }
 
-      await TursoService.updateDepartment(phone, department, resolvedInstance);
+      await DbService.updateDepartment(phone, department, resolvedInstance);
 
       // Cancelar cualquier debounce pendiente de la IA y pausar bot en modo Human Takeover por defecto (240m)
       WebhookController.cancelPendingDebounce(phone);
@@ -302,7 +302,7 @@ export class AdminController {
       if (notifyClient) {
         const notifText = customMessage || `Tu conversación ha sido transferida al área de *${department}*. En un momento un asesor continuará con tu atención por este medio.`;
         await EvolutionService.enviarTexto(phone, notifText, { instanceName: resolvedInstance || undefined });
-        await TursoService.logMessage(phone, 'OUT', notifText, 'TRANSFERENCIA_AREA', `Transferido a ${department}`);
+        await DbService.logMessage(phone, 'OUT', notifText, 'TRANSFERENCIA_AREA', `Transferido a ${department}`);
       }
 
       AdminController.broadcastSSE('chat:department', {
@@ -361,11 +361,11 @@ export class AdminController {
       // Enviar el mensaje vía Evolution API en la instancia correspondiente al chat / área
       let instance = (req.body.instanceName || '').trim();
       if (!instance) {
-        const session = await TursoService.getSession(cleanPhone);
+        const session = await DbService.getSession(cleanPhone);
         if (session?.last_instance) {
           instance = session.last_instance;
         } else if (session?.department) {
-          const instRec = await TursoService.getInstanceByArea(session.department);
+          const instRec = await DbService.getInstanceByArea(session.department);
           if (instRec) instance = instRec.instance_name;
         }
         if (!instance) {
@@ -379,7 +379,7 @@ export class AdminController {
       }
 
       // Registrar en el historial de Turso
-      await TursoService.logMessage(cleanPhone, 'OUT', text, 'HUMAN_TAKEOVER', 'Mensaje enviado por operador humano');
+      await DbService.logMessage(cleanPhone, 'OUT', text, 'HUMAN_TAKEOVER', 'Mensaje enviado por operador humano');
 
       // Activar pausa automática del bot por defecto 240m (o especificado)
       const forzarHastaManana = mode === 'next_morning';
@@ -467,7 +467,7 @@ export class AdminController {
 
       await BotOrchestrator.finalizarIntervencionHumana(phone);
       if (removeSession) {
-        await TursoService.deleteSession(phone);
+        await DbService.deleteSession(phone);
       }
       AdminController.broadcastSSE('chat:status', { phone, is_paused: false, status: 'RESOLVED', removed: removeSession });
       res.json({
@@ -497,7 +497,7 @@ export class AdminController {
         return;
       }
 
-      await TursoService.deleteChatAndLogs(phone);
+      await DbService.deleteChatAndLogs(phone);
       await BotOrchestrator.reanudarBot(phone);
       AdminController.broadcastSSE('chat:deleted', { phone });
       res.json({
@@ -523,7 +523,7 @@ export class AdminController {
         return;
       }
 
-      const ok = await TursoService.assignTicketTechnician(folio, String(technicianName).trim());
+      const ok = await DbService.assignTicketTechnician(folio, String(technicianName).trim());
       if (ok) {
         AdminController.broadcastSSE('tickets:update', { folio, status: 'VISITA_TECNICA', technician: technicianName });
         res.json({ success: true, message: `Ticket ${folio} asignado a ${technicianName} en Visita Técnica.` });
@@ -595,7 +595,7 @@ export class AdminController {
     try {
       const limit = parseInt(req.query.limit as string, 10) || 60;
       const phone = req.query.phone as string | undefined;
-      const logs = await TursoService.getLogs(limit, phone);
+      const logs = await DbService.getLogs(limit, phone);
       res.json({ success: true, logs });
     } catch (error: any) {
       logger.error('Error al obtener logs:', error?.message || error);
@@ -608,7 +608,7 @@ export class AdminController {
    */
   static async clearAllSessions(req: Request, res: Response): Promise<void> {
     try {
-      const count = await TursoService.clearAllSessions();
+      const count = await DbService.clearAllSessions();
       res.json({ success: true, message: `Se eliminaron ${count} sesiones de la base de datos.` });
     } catch (error: any) {
       res.status(500).json({ success: false, error: error?.message || error });
@@ -624,7 +624,7 @@ export class AdminController {
       if (phone === 'clear-all') {
         return AdminController.clearAllSessions(req, res);
       }
-      await TursoService.deleteSession(phone);
+      await DbService.deleteSession(phone);
       res.json({ success: true, message: `Sesión de ${phone} eliminada exitosamente.` });
     } catch (error: any) {
       res.status(500).json({ success: false, error: error?.message || error });
@@ -636,7 +636,7 @@ export class AdminController {
    */
   static async clearAllLogs(req: Request, res: Response): Promise<void> {
     try {
-      const count = await TursoService.clearAllLogs();
+      const count = await DbService.clearAllLogs();
       res.json({ success: true, message: `Se vaciaron ${count} registros de historial.` });
     } catch (error: any) {
       res.status(500).json({ success: false, error: error?.message || error });
@@ -648,7 +648,7 @@ export class AdminController {
    */
   static async clearAllTickets(req: Request, res: Response): Promise<void> {
     try {
-      const count = await TursoService.clearAllTickets();
+      const count = await DbService.clearAllTickets();
       AdminController.broadcastSSE('tickets:update', { action: 'clear_all', count });
       res.json({ success: true, message: `Se eliminaron ${count} tickets de prueba.` });
     } catch (error: any) {
@@ -665,7 +665,7 @@ export class AdminController {
       if (folio === 'clear-all') {
         return AdminController.clearAllTickets(req, res);
       }
-      const ok = await TursoService.deleteTicket(folio);
+      const ok = await DbService.deleteTicket(folio);
       if (ok) {
         AdminController.broadcastSSE('tickets:update', { action: 'delete', folio });
         res.json({ success: true, message: `Ticket ${folio} eliminado exitosamente.` });
@@ -689,7 +689,7 @@ export class AdminController {
         sql: 'SELECT name, unique_external_id, sn, phone FROM smartolt_onus WHERE name LIKE ? LIMIT 20',
         args: [`%${q}%`]
       });
-      const fuzzy = await TursoService.searchOnusFuzzy(q, 10);
+      const fuzzy = await DbService.searchOnusFuzzy(q, 10);
       res.json({ success: true, query: q, rawCount: dbRows.rows.length, rawMatches: dbRows.rows, fuzzyMatches: fuzzy });
     } catch (e: any) {
       res.status(500).json({ success: false, error: e?.message || e });
@@ -947,7 +947,7 @@ export class AdminController {
     try {
       const [instances, dbRecords] = await Promise.all([
         EvolutionService.fetchAllInstances(),
-        TursoService.getWhatsAppInstancesFromDb(),
+        DbService.getWhatsAppInstancesFromDb(),
       ]);
 
       const dbMap = new Map<string, any>();
@@ -978,7 +978,7 @@ export class AdminController {
   static async getWhatsAppAreas(_req: Request, res: Response): Promise<void> {
     try {
       const [dbAreas, liveInstances] = await Promise.all([
-        TursoService.getAllDistinctAreas(),
+        DbService.getAllDistinctAreas(),
         EvolutionService.fetchAllInstances().catch(() => []),
       ]);
 
@@ -1054,7 +1054,7 @@ export class AdminController {
       if (result.success) {
         const cleanName = String(name || '').trim().replace(/[^a-zA-Z0-9_-]/g, '').toLowerCase();
         const finalArea = String(area_name || cleanName).trim();
-        await TursoService.upsertWhatsAppInstance({
+        await DbService.upsertWhatsAppInstance({
           instance_name: cleanName,
           area_name: finalArea,
           description: description ? String(description).trim() : null,
@@ -1080,7 +1080,7 @@ export class AdminController {
         res.status(400).json({ success: false, error: 'Instancia y nombre de área son requeridos' });
         return;
       }
-      await TursoService.upsertWhatsAppInstance({
+      await DbService.upsertWhatsAppInstance({
         instance_name: instance,
         area_name: String(area_name).trim(),
         phone_number: phone_number ? String(phone_number).trim() : undefined,
@@ -1151,7 +1151,7 @@ export class AdminController {
     try {
       const instance = String(req.params.instance || '').trim();
       const ok = await EvolutionService.deleteInstance(instance);
-      await TursoService.deleteWhatsAppInstanceRecord(instance);
+      await DbService.deleteWhatsAppInstanceRecord(instance);
       if (ok) {
         res.json({ success: true, message: `Instancia "${instance}" eliminada de Evolution API.` });
       } else {
@@ -1223,8 +1223,8 @@ export class AdminController {
    */
   static async getOfficeGroups(req: Request, res: Response): Promise<void> {
     try {
-      const groups = await TursoService.getAllOfficeGroups();
-      const currentActivationJid = await TursoService.getActivationsGroupJid();
+      const groups = await DbService.getAllOfficeGroups();
+      const currentActivationJid = await DbService.getActivationsGroupJid();
       res.json({ success: true, groups, currentActivationJid });
     } catch (error: any) {
       logger.error('Error al obtener grupos de oficinas:', error?.message || error);
@@ -1258,7 +1258,7 @@ export class AdminController {
         return;
       }
 
-      const id = await TursoService.saveOfficeGroup({
+      const id = await DbService.saveOfficeGroup({
         name: targetName || 'Grupo WhatsApp',
         jid: targetJid,
         invite_link: invite_link || null,
@@ -1291,7 +1291,7 @@ export class AdminController {
         res.status(400).json({ success: false, error: 'ID de grupo no válido' });
         return;
       }
-      const success = await TursoService.deleteOfficeGroup(id);
+      const success = await DbService.deleteOfficeGroup(id);
       res.json({ success, message: success ? 'Grupo eliminado' : 'No se pudo eliminar el grupo' });
     } catch (error: any) {
       logger.error('Error al eliminar grupo de oficina:', error?.message || error);
@@ -1306,7 +1306,7 @@ export class AdminController {
     try {
       const id = parseInt(req.params.id, 10);
       const isActive = req.body.is_active === true || req.body.is_active === 1;
-      const success = await TursoService.toggleOfficeGroupActive(id, isActive);
+      const success = await DbService.toggleOfficeGroupActive(id, isActive);
       res.json({ success, message: success ? 'Estado actualizado' : 'No se pudo actualizar el estado' });
     } catch (error: any) {
       logger.error('Error al alternar estado de grupo:', error?.message || error);
@@ -1347,7 +1347,7 @@ export class AdminController {
         return;
       }
 
-      const result = await TursoService.forwardTicketToOfficeGroup(folio, groupJid, customNotes);
+      const result = await DbService.forwardTicketToOfficeGroup(folio, groupJid, customNotes);
       if (result.success) {
         res.json({ success: true, message: result.message, groupName: result.groupName });
       } else {
@@ -1378,7 +1378,7 @@ export class AdminController {
    */
   static async getSmartOltStats(_req: Request, res: Response): Promise<void> {
     try {
-      const stats = await TursoService.getSmartOltSyncStats();
+      const stats = await DbService.getSmartOltSyncStats();
       res.json({ success: true, stats });
     } catch (error: any) {
       res.status(500).json({ success: false, error: error?.message || error });
@@ -1392,7 +1392,7 @@ export class AdminController {
     try {
       const status = req.query.status as string | undefined;
       const limit = parseInt(req.query.limit as string, 10) || 150;
-      const rawTickets = await TursoService.getAllTicketsDetailed(status, limit);
+      const rawTickets = await DbService.getAllTicketsDetailed(status, limit);
       const tickets = rawTickets.map((t: any) => ({
         ...t,
         bot_paused: BotOrchestrator.estaBotPausado(String(t.phone)),
@@ -1421,7 +1421,7 @@ export class AdminController {
         return;
       }
 
-      const ok = await TursoService.updateTicketStatus(folio, status.toUpperCase(), notes);
+      const ok = await DbService.updateTicketStatus(folio, status.toUpperCase(), notes);
       if (ok) {
         AdminController.broadcastSSE('tickets:update', { folio, status: status.toUpperCase(), notes });
         res.json({ success: true, message: `Ticket ${folio} actualizado a ${status.toUpperCase()}` });
@@ -1439,7 +1439,7 @@ export class AdminController {
    */
   static async getTicketStats(_req: Request, res: Response): Promise<void> {
     try {
-      const stats = await TursoService.getTicketStats();
+      const stats = await DbService.getTicketStats();
       res.json({ success: true, stats });
     } catch (error: any) {
       logger.error('Error al obtener stats de tickets:', error?.message || error);
@@ -1491,7 +1491,7 @@ export class AdminController {
    */
   static async getWisphubStats(_req: Request, res: Response): Promise<void> {
     try {
-      const stats = await TursoService.getWisphubSyncStats();
+      const stats = await DbService.getWisphubSyncStats();
       res.json({ success: true, stats });
     } catch (error: any) {
       logger.error('Error al obtener stats de WispHub:', error?.message || error);
@@ -1509,7 +1509,7 @@ export class AdminController {
       const page = parseInt(req.query.page as string, 10) || 1;
       const limit = parseInt(req.query.limit as string, 10) || 50;
 
-      const result = await TursoService.getAuditIpCross({ filter, search, page, limit });
+      const result = await DbService.getAuditIpCross({ filter, search, page, limit });
       res.json({ success: true, ...result });
     } catch (error: any) {
       logger.error('Error al auditar cruce de IPs:', error?.message || error);
@@ -1710,10 +1710,10 @@ export class AdminController {
       const limit = Math.min(parseInt(String(req.query.limit || '30'), 10), 100);
 
       if (search) {
-        const matches = await TursoService.searchOnusFuzzy(search, limit);
+        const matches = await DbService.searchOnusFuzzy(search, limit);
         res.json({ success: true, count: matches.length, onus: matches });
       } else {
-        const active = await TursoService.getAllSmartOltOnus();
+        const active = await DbService.getAllSmartOltOnus();
         res.json({ success: true, count: active.length, onus: active.slice(0, limit) });
       }
     } catch (error: any) {
@@ -1788,7 +1788,7 @@ export class AdminController {
   static async getModemSwapHistory(req: Request, res: Response): Promise<void> {
     try {
       const limit = Math.min(parseInt(String(req.query.limit || '50'), 10), 200);
-      const history = await TursoService.getModemSwaps(limit);
+      const history = await DbService.getModemSwaps(limit);
       res.json({ success: true, count: history.length, history });
     } catch (error: any) {
       logger.error('Error al obtener historial de cambios de módem:', error?.message || error);
@@ -1805,7 +1805,7 @@ export class AdminController {
    */
   static async getTechnicians(_req: Request, res: Response): Promise<void> {
     try {
-      const technicians = await TursoService.getTechnicians();
+      const technicians = await DbService.getTechnicians();
       res.json({ success: true, count: technicians.length, technicians });
     } catch (error: any) {
       logger.error('Error al listar técnicos:', error?.message || error);
@@ -1824,7 +1824,7 @@ export class AdminController {
         return;
       }
 
-      const tech = await TursoService.createTechnician({
+      const tech = await DbService.createTechnician({
         name,
         phone,
         pin,
@@ -1852,7 +1852,7 @@ export class AdminController {
       }
 
       const { name, phone, pin, role, notes, is_active } = req.body;
-      const ok = await TursoService.updateTechnician(id, {
+      const ok = await DbService.updateTechnician(id, {
         name,
         phone,
         pin,
@@ -1883,7 +1883,7 @@ export class AdminController {
         return;
       }
 
-      const ok = await TursoService.deleteTechnician(id);
+      const ok = await DbService.deleteTechnician(id);
       if (ok) {
         res.json({ success: true, message: 'Técnico eliminado del sistema.' });
       } else {
@@ -1906,7 +1906,7 @@ export class AdminController {
         return;
       }
 
-      const result = await TursoService.toggleTechnicianActive(id);
+      const result = await DbService.toggleTechnicianActive(id);
       if (result.success) {
         res.json({
           success: true,
@@ -1947,7 +1947,7 @@ export class AdminController {
       const search_direccion = req.query.search_direccion ? String(req.query.search_direccion) : undefined;
       const search_gps = req.query.search_gps ? String(req.query.search_gps) : undefined;
 
-      const data = await TursoService.getClientsDirectory({
+      const data = await DbService.getClientsDirectory({
         search,
         status,
         search_nombre,
@@ -1992,7 +1992,7 @@ export class AdminController {
         return;
       }
 
-      const client = await TursoService.getClientDetail(id);
+      const client = await DbService.getClientDetail(id);
       if (!client) {
         res.status(404).json({ success: false, error: 'Cliente no encontrado' });
         return;
@@ -2018,7 +2018,7 @@ export class AdminController {
         return;
       }
 
-      const ok = await TursoService.updateClientLocation(id, {
+      const ok = await DbService.updateClientLocation(id, {
         lat,
         lng,
         url,
@@ -2060,7 +2060,7 @@ export class AdminController {
         return;
       }
 
-      const ok = await TursoService.updateWisphubClientTelefonos(
+      const ok = await DbService.updateWisphubClientTelefonos(
         id,
         principal || '',
         Array.isArray(adicionales) ? adicionales : []
@@ -2102,7 +2102,7 @@ export class AdminController {
         return;
       }
 
-      const clientDetail = await TursoService.getClientDetail(clientId);
+      const clientDetail = await DbService.getClientDetail(clientId);
       if (!clientDetail) {
         res.status(404).json({ success: false, error: 'Cliente no encontrado en la base de datos' });
         return;
@@ -2132,7 +2132,7 @@ export class AdminController {
             const ok = await EvolutionService.enviarTexto(cleanPhone, dispatchMsg);
             if (ok) {
               sentCount++;
-              await TursoService.logMessage(cleanPhone, 'OUT', dispatchMsg, 'DESPACHO_TECNICO', 'ADMIN_PANEL');
+              await DbService.logMessage(cleanPhone, 'OUT', dispatchMsg, 'DESPACHO_TECNICO', 'ADMIN_PANEL');
             } else {
               errors.push(`No se pudo entregar a ${cleanPhone}`);
             }
@@ -2167,7 +2167,7 @@ export class AdminController {
 
   static async getActiveOutages(_req: Request, res: Response): Promise<void> {
     try {
-      const outages = await TursoService.getActiveOutages();
+      const outages = await DbService.getActiveOutages();
       res.json({ success: true, outages });
     } catch (error: any) {
       logger.error('Error al obtener caídas activas:', error?.message || error);
@@ -2178,7 +2178,7 @@ export class AdminController {
   static async getOutagesHistory(req: Request, res: Response): Promise<void> {
     try {
       const limit = parseInt(String(req.query.limit || '50'), 10);
-      const outages = await TursoService.getAllOutages(limit);
+      const outages = await DbService.getAllOutages(limit);
       res.json({ success: true, outages });
     } catch (error: any) {
       logger.error('Error al obtener historial de caídas:', error?.message || error);
@@ -2188,7 +2188,7 @@ export class AdminController {
 
   static async getOutageZones(_req: Request, res: Response): Promise<void> {
     try {
-      const zones = await TursoService.getDistinctZones();
+      const zones = await DbService.getDistinctZones();
       res.json({ success: true, zones });
     } catch (error: any) {
       logger.error('Error al obtener zonas:', error?.message || error);
@@ -2204,7 +2204,7 @@ export class AdminController {
         return;
       }
 
-      const outage = await TursoService.createOutage({
+      const outage = await DbService.createOutage({
         zone_name: String(zone_name).trim(),
         estimated_time: estimated_time ? String(estimated_time).trim() : undefined,
         notes: notes ? String(notes).trim() : undefined,
@@ -2235,7 +2235,7 @@ export class AdminController {
         return;
       }
 
-      const ok = await TursoService.resolveOutage(id);
+      const ok = await DbService.resolveOutage(id);
       if (ok) {
         // Broadcast SSE
         AdminController.broadcastSSE('outages:update', {

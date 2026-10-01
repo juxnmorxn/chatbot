@@ -1,4 +1,4 @@
-import { TursoService, Session, DbService } from '../services/db.service';
+import { DbService, Session } from '../services/db.service';
 import { GroqService, GroqClassificationResult, GroqImageAnalysisResult, ContratoInstalacionDatos, ActivacionModificacionesParsed } from '../services/groq.service';
 import { WispHubService, WispHubCliente } from '../services/wisphub.service';
 import { SmartOLTService, SmartOltStatusResult, getSmartOltSpeedProfiles, AuthorizeOnuPayload } from '../services/smartolt.service';
@@ -158,7 +158,7 @@ export class BotOrchestrator {
     });
 
     try {
-      await TursoService.setHumanTakeover(cleanPhone, calculo.untilIso, status);
+      await DbService.setHumanTakeover(cleanPhone, calculo.untilIso, status);
     } catch (err: any) {
       logger.warn(`Error al persistir human takeover para ${cleanPhone}:`, err?.message || err);
     }
@@ -178,7 +178,7 @@ export class BotOrchestrator {
     const cleanPhone = phone.replace(/\D/g, '');
     this.humanTakeoverMap.delete(cleanPhone);
     try {
-      await TursoService.clearHumanTakeover(cleanPhone);
+      await DbService.clearHumanTakeover(cleanPhone);
     } catch (err: any) {
       logger.warn(`Error al limpiar human takeover para ${cleanPhone}:`, err?.message || err);
     }
@@ -193,8 +193,8 @@ export class BotOrchestrator {
     const cleanPhone = phone.replace(/\D/g, '');
     this.humanTakeoverMap.delete(cleanPhone);
     try {
-      await TursoService.clearHumanTakeover(cleanPhone);
-      const session = await TursoService.getSession(cleanPhone);
+      await DbService.clearHumanTakeover(cleanPhone);
+      const session = await DbService.getSession(cleanPhone);
       let metaObj: any = {};
       try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
 
@@ -205,7 +205,7 @@ export class BotOrchestrator {
       metaObj.ticketFolio = null;
       metaObj.pendingServices = [];
 
-      await TursoService.upsertSession({
+      await DbService.upsertSession({
         phone: cleanPhone,
         step: 'CONSULTA_FINALIZADA',
         metadata: JSON.stringify(metaObj),
@@ -242,7 +242,7 @@ export class BotOrchestrator {
         };
       } else {
         this.humanTakeoverMap.delete(cleanPhone);
-        TursoService.clearHumanTakeover(cleanPhone).catch(() => {});
+        DbService.clearHumanTakeover(cleanPhone).catch(() => {});
       }
     }
 
@@ -266,7 +266,7 @@ export class BotOrchestrator {
         };
       } else {
         // Expiró en DB
-        TursoService.clearHumanTakeover(cleanPhone).catch(() => {});
+        DbService.clearHumanTakeover(cleanPhone).catch(() => {});
       }
     }
 
@@ -435,7 +435,7 @@ export class BotOrchestrator {
     } else {
       ok = await EvolutionService.enviarTexto(dest, textoFinal, { instant: esTecnico, instanceName: instance });
     }
-    await TursoService.logMessage(phone, 'OUT', textoFinal, intencion, accion);
+    await DbService.logMessage(phone, 'OUT', textoFinal, intencion, accion);
     try {
       const { AdminController } = require('../controllers/admin.controller');
       AdminController.broadcastSSE('chat:message', {
@@ -470,9 +470,9 @@ export class BotOrchestrator {
     }
 
     // 0. Obtener sesión de Turso DB
-    let session = await TursoService.getSession(phone);
+    let session = await DbService.getSession(phone);
     if (instance) {
-      TursoService.updateLastInstance(phone, instance).catch(() => {});
+      DbService.updateLastInstance(phone, instance).catch(() => {});
     }
     const inputContent = rawText || (buttonId ? `[Botón: ${buttonId}]` : (event.isMedia ? '[Foto/Comprobante]' : '[Desconocido]'));
     const lowerMsg = rawText.toLowerCase().trim();
@@ -505,7 +505,7 @@ export class BotOrchestrator {
 
     // Si el usuario envía un comando técnico explícito pero la sesión estaba en un paso residual residencial (ej. ESPERANDO_UBICACION_TECNICO), resetear inmediatamente a CONVERSACIONAL
     if (esComandoTecnicoExplicito && session && !esPasoTecnicoEnCurso) {
-      session = await TursoService.upsertSession({
+      session = await DbService.upsertSession({
         phone,
         step: 'CONVERSACIONAL',
       });
@@ -520,7 +520,7 @@ export class BotOrchestrator {
       if (estadoPausa.pausado) {
         logger.info(`[Human Takeover] Bot en pausa para ${phone} (${estadoPausa.minutosRestantes}m restantes). Intervención humana activa.`);
         // Registrar mensaje entrante en la auditoría
-        await TursoService.logMessage(phone, 'IN', inputContent, 'INTERVENCION_HUMANA', 'MENSAJE_CLIENTE_DURANTE_TAKEOVER');
+        await DbService.logMessage(phone, 'IN', inputContent, 'INTERVENCION_HUMANA', 'MENSAJE_CLIENTE_DURANTE_TAKEOVER');
 
         // Ventana deslizable: otorgar 60 minutos adicionales de gracia al operador para responder
         await this.activarPausaOperador(phone, 60, 'Ventana deslizable: respuesta del cliente durante atención humana', 'OPERATOR_WAITING_CLIENT');
@@ -547,7 +547,7 @@ export class BotOrchestrator {
       const diffHours = (Date.now() - new Date(session.last_interaction).getTime()) / (1000 * 60 * 60);
       if (diffHours >= 24) {
         logger.info(`[Auto-Reset] Sesión de ${phone} inactiva por ${Math.round(diffHours)}h (>24h). Reiniciando limpiamente a paso inicial.`);
-        await TursoService.clearHumanTakeover(phone);
+        await DbService.clearHumanTakeover(phone);
         let metaReset: any = {};
         try { metaReset = JSON.parse(session.metadata || '{}'); } catch {}
         metaReset.consultaFinalizada = false;
@@ -556,7 +556,7 @@ export class BotOrchestrator {
         metaReset.ticketFolio = null;
         metaReset.pendingServices = [];
 
-        session = await TursoService.upsertSession({
+        session = await DbService.upsertSession({
           phone,
           step: 'CONVERSACIONAL',
           metadata: JSON.stringify(metaReset),
@@ -567,10 +567,10 @@ export class BotOrchestrator {
     }
 
     // Registrar mensaje entrante en la auditoría de Turso
-    await TursoService.logMessage(phone, 'IN', inputContent, null, 'MENSAJE_ENTRANTE');
+    await DbService.logMessage(phone, 'IN', inputContent, null, 'MENSAJE_ENTRANTE');
 
     if (!session) {
-      session = await TursoService.upsertSession({
+      session = await DbService.upsertSession({
         phone,
         step: 'CONVERSACIONAL',
       });
@@ -595,7 +595,7 @@ export class BotOrchestrator {
 
     // 2. Control Anti-Spam (Opt-Out): si el usuario escribe cancelar o baja
     if (['CANCELAR', 'BAJA', 'NO ENVIAR', 'STOP'].includes(rawText.toUpperCase())) {
-      await TursoService.setOptOut(phone, true);
+      await DbService.setOptOut(phone, true);
       await this.enviarYLoguear(
         phone,
         `{Entendido|Listo}. Has cancelado la suscripción de avisos automáticos de *${this.getIspName()}*. Si en el futuro deseas volver a activarlos, escribe *ACTIVAR*.`,
@@ -607,7 +607,7 @@ export class BotOrchestrator {
     }
 
     if (rawText.toUpperCase() === 'ACTIVAR' && session?.opt_out === 1) {
-      await TursoService.setOptOut(phone, false);
+      await DbService.setOptOut(phone, false);
       await this.enviarYLoguear(
         phone,
         `¡Bienvenido de vuelta! 🎉 Has reactivado las notificaciones y soporte de *${this.getIspName()}*. ¿En qué podemos colaborarte el día de hoy?`,
@@ -821,7 +821,7 @@ export class BotOrchestrator {
 
     if (pasosTemporales.includes(session?.step || '') && minutosInactividad >= 15) {
       logger.info(`[Timeout] Paso temporal "${session?.step}" de ${phone} caducó (${Math.round(minutosInactividad)}m sin respuesta). Reiniciando a CONVERSACIONAL.`);
-      session = await TursoService.upsertSession({
+      session = await DbService.upsertSession({
         phone,
         step: 'CONVERSACIONAL',
       });
@@ -852,7 +852,7 @@ export class BotOrchestrator {
 
     if ((esSaludo || esConsultaPago || esConsultaWifi) && pasosTemporales.includes(session?.step || '')) {
       logger.info(`[Intent Override] Cliente ${phone} envió "${rawText}" mientras estaba en paso "${session?.step}". Cancelando espera técnica.`);
-      session = await TursoService.upsertSession({
+      session = await DbService.upsertSession({
         phone,
         step: 'CONVERSACIONAL',
       });
@@ -979,7 +979,7 @@ export class BotOrchestrator {
     // pero preservando la identidad del cliente (nombre, onu_id, client_id).
     if (minutosInactividad >= 1440) {
       logger.info(`Sesión de ${phone} superó las 24 horas de inactividad (${Math.round(minutosInactividad / 60)}h). Reiniciando contexto conversacional limpiamente.`);
-      session = await TursoService.upsertSession({
+      session = await DbService.upsertSession({
         phone,
         step: session?.client_name ? 'ESPERANDO_PROBLEMA' : 'INICIO',
         metadata: JSON.stringify({
@@ -1009,7 +1009,7 @@ export class BotOrchestrator {
       });
       textoOpciones += `Para tu consulta de hoy, ¿con cuál de tus servicios necesitas apoyo?\n👉 *Por favor responde con el número de la opción (ejemplo: 1 ó 2).*`;
 
-      await TursoService.upsertSession({
+      await DbService.upsertSession({
         phone,
         step: 'ESPERANDO_SELECCION_SERVICIO',
         metadata: JSON.stringify({
@@ -1033,7 +1033,7 @@ export class BotOrchestrator {
     // Si el cliente NO está identificado en absoluto (ni por SmartOLT ni por nombre en Turso)
     if (!session?.onu_id && !session?.client_name) {
       // 1. Intentar vinculación rápida automática si el teléfono coincide con alguna ONU en Turso
-      const onusPorTel = await TursoService.searchOnusFuzzy(phone, 5);
+      const onusPorTel = await DbService.searchOnusFuzzy(phone, 5);
       const coincidentesTel = onusPorTel.filter(o => o.matchScore >= 90);
 
       if (coincidentesTel.length > 1) {
@@ -1046,7 +1046,7 @@ export class BotOrchestrator {
         });
         textoOpciones += `¿Con cuál de tus servicios necesitas apoyo el día de hoy?\n👉 *Por favor responde con el número de tu opción (ejemplo: 1 ó 2).*`;
 
-        await TursoService.upsertSession({
+        await DbService.upsertSession({
           phone,
           client_name: coincidentesTel[0].name,
           step: 'ESPERANDO_SELECCION_SERVICIO',
@@ -1077,7 +1077,7 @@ export class BotOrchestrator {
         return;
       } else if (coincidentesTel.length === 1) {
         const o = coincidentesTel[0];
-        session = await TursoService.upsertSession({
+        session = await DbService.upsertSession({
           phone,
           client_id: o.unique_external_id,
           service_id: o.sn,
@@ -1108,7 +1108,7 @@ export class BotOrchestrator {
 
         if (clasif.nombre_mencionado) {
           // Preservar la queja o intención inicial para no preguntar doble tras identificarse
-          const sesionConMeta = await TursoService.upsertSession({
+          const sesionConMeta = await DbService.upsertSession({
             phone,
             metadata: JSON.stringify({
               ...metaObjPre,
@@ -1131,7 +1131,7 @@ export class BotOrchestrator {
             'SOLICITAR_IDENTIFICACION',
             targetJid
           );
-          await TursoService.upsertSession({
+          await DbService.upsertSession({
             phone,
             step: 'ESPERANDO_IDENTIFICACION',
             metadata: JSON.stringify({
@@ -1154,7 +1154,7 @@ export class BotOrchestrator {
           'SOLICITAR_NOMBRE_PARA_DIAGNOSTICO',
           targetJid
         );
-        await TursoService.upsertSession({
+        await DbService.upsertSession({
           phone,
           step: 'ESPERANDO_IDENTIFICACION',
           metadata: JSON.stringify({
@@ -1229,7 +1229,7 @@ export class BotOrchestrator {
             `📸 En cuanto realices tu transferencia, por favor envía la *foto o captura de tu comprobante* y escribe tu *Nombre completo* por este chat para reactivarte de inmediato.`;
 
           await this.enviarYLoguear(phone, mensajeMoroso, 'CONSULTAR_SALDO', 'AVISO_SUSPENSION_SALUDO', targetJid);
-          await TursoService.updateStep(phone, 'ESPERANDO_COMPROBANTE');
+          await DbService.updateStep(phone, 'ESPERANDO_COMPROBANTE');
           return;
         } else if (estadoFinanciero.suspendido && (estadoFinanciero.yaPagoPeroNoActivo || !tieneDeudaReal)) {
           logger.info(`Cliente ${phone} (${session.client_name}) está suspendido en WispHub pero SIN adeudos (pagos al corriente). Solicitando reactivación automática...`);
@@ -1249,7 +1249,7 @@ export class BotOrchestrator {
           }
 
           if (estadoFinanciero.cliente?.id) {
-            await TursoService.upsertSession({
+            await DbService.upsertSession({
               phone,
               service_id: String(estadoFinanciero.cliente.id),
               metadata: JSON.stringify({
@@ -1267,7 +1267,7 @@ export class BotOrchestrator {
     }
 
     // 5. Si es saludo o conversación general y no está suspendido, respondemos de forma inteligente con Groq enriquecido con los datos reales de su plan en la BD
-    const historial = await TursoService.getHistorialReciente(phone, 8);
+    const historial = await DbService.getHistorialReciente(phone, 8);
 
     // Contexto enriquecido de SmartOLT si tiene ONU
     let infoOltContext = '';
@@ -1298,7 +1298,7 @@ export class BotOrchestrator {
       targetJid
     );
 
-    await TursoService.updateStep(phone, 'CONVERSACIONAL');
+    await DbService.updateStep(phone, 'CONVERSACIONAL');
   }
 
   /**
@@ -1359,7 +1359,7 @@ export class BotOrchestrator {
             'SOLICITAR_IDENTIFICACION',
             targetJid
           );
-          await TursoService.upsertSession({
+          await DbService.upsertSession({
             phone,
             step: 'ESPERANDO_IDENTIFICACION',
             metadata: JSON.stringify({
@@ -1379,7 +1379,7 @@ export class BotOrchestrator {
             'SALUDO_PERSONALIZADO',
             targetJid
           );
-          await TursoService.updateStep(phone, 'ESPERANDO_PROBLEMA');
+          await DbService.updateStep(phone, 'ESPERANDO_PROBLEMA');
         }
         break;
 
@@ -1427,7 +1427,7 @@ export class BotOrchestrator {
 
       case 'CAMBIO_DOMICILIO': {
         const nombre = session?.client_name ? ` *${session.client_name}*` : '';
-        const ticket = await TursoService.createTicket({
+        const ticket = await DbService.createTicket({
           phone,
           client_name: session?.client_name,
           onu_id: session?.onu_id,
@@ -1449,7 +1449,7 @@ export class BotOrchestrator {
         let meta: any = {};
         try { meta = JSON.parse(session?.metadata || '{}'); } catch {}
 
-        await TursoService.upsertSession({
+        await DbService.upsertSession({
           phone,
           step: 'ESPERANDO_UBICACION_TECNICO',
           metadata: JSON.stringify({
@@ -1471,7 +1471,7 @@ export class BotOrchestrator {
 
       case 'ESTATUS_TECNICO_AGENDA': {
         const nombre = session?.client_name ? ` *${session.client_name}*` : '';
-        const ticket = await TursoService.createTicket({
+        const ticket = await DbService.createTicket({
           phone,
           client_name: session?.client_name,
           onu_id: session?.onu_id,
@@ -1501,7 +1501,7 @@ export class BotOrchestrator {
       }
 
       case 'CANCELAR_SUSCRIPCION':
-        await TursoService.setOptOut(phone, true);
+        await DbService.setOptOut(phone, true);
         await this.enviarYLoguear(
           phone,
           `Has sido dado de baja de nuestros avisos automáticos de *${this.getIspName()}*. Escribe *ACTIVAR* si deseas regresar en cualquier momento.`,
@@ -1525,7 +1525,7 @@ export class BotOrchestrator {
             'DESCONOCIDO',
             'SOLICITAR_IDENTIFICACION'
           );
-          await TursoService.upsertSession({
+          await DbService.upsertSession({
             phone,
             step: 'ESPERANDO_IDENTIFICACION',
             metadata: JSON.stringify({
@@ -1614,7 +1614,7 @@ export class BotOrchestrator {
         'SOLICITAR_NOMBRE_PARA_DIAGNOSTICO',
         targetJid
       );
-      await TursoService.upsertSession({
+      await DbService.upsertSession({
         phone,
         step: 'ESPERANDO_IDENTIFICACION',
         metadata: JSON.stringify({
@@ -1637,18 +1637,18 @@ export class BotOrchestrator {
     let zonaCliente = meta.zone || meta.zone_name || meta.address || '';
     if (!zonaCliente && session.onu_id) {
       try {
-        const onuInfo = await TursoService.getOnuById(session.onu_id);
+        const onuInfo = await DbService.getOnuById(session.onu_id);
         zonaCliente = onuInfo?.zone_name || onuInfo?.address || '';
       } catch {}
     }
     if (!zonaCliente && phone) {
       try {
-        const whClient = await TursoService.getWisphubClientByAny({ phone });
+        const whClient = await DbService.getWisphubClientByAny({ phone });
         zonaCliente = whClient?.direccion || whClient?.servicio || '';
       } catch {}
     }
 
-    const outage = await TursoService.checkActiveOutageForZone(zonaCliente);
+    const outage = await DbService.checkActiveOutageForZone(zonaCliente);
     if (outage) {
       logger.info(`[Contingencia] Cliente ${phone} en zona "${zonaCliente || 'N/A'}" contenido por caída masiva activa (ID: ${outage.id}, Zona: "${outage.zone_name}")`);
       const esGeneral = (outage.zone_name || '').toLowerCase() === 'general' || (outage.zone_name || '').toLowerCase() === 'todas';
@@ -1671,7 +1671,7 @@ export class BotOrchestrator {
         targetJid
       );
 
-      await TursoService.upsertSession({
+      await DbService.upsertSession({
         phone,
         step: 'CONVERSACIONAL',
         metadata: JSON.stringify({
@@ -1690,7 +1690,7 @@ export class BotOrchestrator {
     let onuId = session.onu_id || meta.sn || meta.onu_id;
     if (!onuId) {
       try {
-        const whMatch = await TursoService.getWisphubClientByAny({
+        const whMatch = await DbService.getWisphubClientByAny({
           id: session.client_id,
           name: session.client_name,
           phone,
@@ -1760,7 +1760,7 @@ export class BotOrchestrator {
           `📸 En cuanto realices tu transferencia, por favor envía la *foto o captura de tu comprobante* y escribe tu *Nombre completo* aquí en el chat para registrarlo y restablecer tu línea.`;
 
         await this.enviarYLoguear(phone, mensajeMoroso, 'CONSULTAR_SALDO', 'AVISO_MOROSIDAD_SILENCIOSA', targetJid);
-        await TursoService.updateStep(phone, 'ESPERANDO_COMPROBANTE');
+        await DbService.updateStep(phone, 'ESPERANDO_COMPROBANTE');
         return;
       } else if (estadoFinanciero.suspendido && (estadoFinanciero.yaPagoPeroNoActivo || !tieneDeudaReal)) {
         // CASO B: CLIENTE SUSPENDIDO PERO VERIFICADO 100% SIN ADEUDO (AL CORRIENTE) -> AUTO REACTIVAR Y CONTINUAR A TRIAGE TÉCNICO
@@ -1783,7 +1783,7 @@ export class BotOrchestrator {
         }
 
         if (estadoFinanciero.cliente?.id) {
-          await TursoService.upsertSession({
+          await DbService.upsertSession({
             phone,
             service_id: String(estadoFinanciero.cliente.id),
             metadata: JSON.stringify({
@@ -1799,7 +1799,7 @@ export class BotOrchestrator {
 
         // CRUCE CON SMARTOLT TRAS REACTIVACIÓN: SI HAY CORTE FÍSICO DE FIBRA (LOS)
         if (diag && diag.status === 'LOS') {
-          const ticket = await TursoService.createTicket({
+          const ticket = await DbService.createTicket({
             phone,
             client_name: session.client_name,
             onu_id: session.onu_id,
@@ -1824,7 +1824,7 @@ export class BotOrchestrator {
             `🛠️ Ya te generamos tu reporte con el folio *#${ticket.folio}* para canalizar una visita técnica a tu domicilio a reparar el cableado exterior.\n\n` +
             `📍 Por favor compártenos tu *ubicación por WhatsApp* o tu *dirección completa con referencias* para registrarla en la orden de visita.`;
 
-          await TursoService.upsertSession({
+          await DbService.upsertSession({
             phone,
             step: 'ESPERANDO_UBICACION_TECNICO',
             metadata: JSON.stringify({
@@ -1846,7 +1846,7 @@ export class BotOrchestrator {
           `¿Me confirmas si al reiniciar ya tienes navegación o si necesitas que revisemos las luces de tu módem?`;
 
         await this.enviarYLoguear(phone, msj, 'FALLA_INTERNET', 'REACTIVACION_SUSPENDIDO_AL_CORRIENTE', targetJid);
-        await TursoService.updateStep(phone, 'COMPROBACION_TURNO_1');
+        await DbService.updateStep(phone, 'COMPROBACION_TURNO_1');
         return;
       }
     } catch (err: any) {
@@ -1855,7 +1855,7 @@ export class BotOrchestrator {
 
     // CASO ESPECIAL: NO ABREN CIERTAS PÁGINAS O APLICACIONES ESPECÍFICAS (BLOQUEO / ENRUTAMIENTO / DNS)
     if (c.bloqueo_paginas_apps) {
-      const ticket = await TursoService.createTicket({
+      const ticket = await DbService.createTicket({
         phone,
         client_name: session.client_name,
         onu_id: session.onu_id,
@@ -1880,7 +1880,7 @@ export class BotOrchestrator {
         `🛠️ Ya te generé tu reporte *#${ticket.folio}* para que el equipo de ingeniería en sistemas revise las rutas de DNS y apertura de puertos de tu servicio.\n\n` +
         `👉 Por favor indícanos: ¿cuáles son las páginas o aplicaciones exactas que no te permiten entrar?`;
 
-      await TursoService.upsertSession({
+      await DbService.upsertSession({
         phone,
         step: 'COMPROBACION_EVIDENCIA',
         metadata: JSON.stringify({
@@ -1896,7 +1896,7 @@ export class BotOrchestrator {
 
     // CASO ESPECIAL: WI-FI / SSIDs NO VISIBLES EN DOMICILIO (WLAN APAGADO)
     if (c.red_wifi_no_visible) {
-      const ticket = await TursoService.createTicket({
+      const ticket = await DbService.createTicket({
         phone,
         client_name: session.client_name,
         onu_id: session.onu_id,
@@ -1919,7 +1919,7 @@ export class BotOrchestrator {
         `Hola${nombre}, revisé tu equipo en el sistema y detecté que el servicio de Wi-Fi de tu módem requiere una configuración interna.\n\n` +
         `🛠️ Ya te generé tu reporte *#${ticket.folio}*. Nuestro equipo técnico accederá a tu módem para activarlo a la brevedad y te avisamos por aquí en cuanto quede listo para que te conectes.`;
 
-      await TursoService.upsertSession({
+      await DbService.upsertSession({
         phone,
         step: 'CONSULTA_FINALIZADA',
         metadata: JSON.stringify({
@@ -1936,7 +1936,7 @@ export class BotOrchestrator {
 
     // CASO A1: CORTE FÍSICO DE CABLE / FIBRA (SmartOLT LOS)
     if (diag && diag.status === 'LOS') {
-      const ticket = await TursoService.createTicket({
+      const ticket = await DbService.createTicket({
         phone,
         client_name: session.client_name,
         onu_id: session.onu_id,
@@ -1961,7 +1961,7 @@ export class BotOrchestrator {
         `📞 Un compañero de nuestro equipo se comunicará contigo para coordinar qué día y horario pasan a revisarlo.\n\n` +
         `📍 Por favor compártenos tu *ubicación actual por WhatsApp* o tu *dirección completa con referencias* para registrarla en la orden de visita.`;
 
-      await TursoService.upsertSession({
+      await DbService.upsertSession({
         phone,
         step: 'ESPERANDO_UBICACION_TECNICO',
         metadata: JSON.stringify({
@@ -1979,7 +1979,7 @@ export class BotOrchestrator {
     const powerDbm = diag?.opticalPowerDbm;
     const tieneAtenuacionCritica = powerDbm != null && (powerDbm < -27.5 || powerDbm > -10);
     if (diag && diag.status === 'ONLINE' && tieneAtenuacionCritica) {
-      const ticket = await TursoService.createTicket({
+      const ticket = await DbService.createTicket({
         phone,
         client_name: session.client_name,
         onu_id: session.onu_id,
@@ -2005,7 +2005,7 @@ export class BotOrchestrator {
         `📞 Un compañero de nuestro equipo se comunicará contigo para coordinar el día y horario en que el técnico pasará a tu domicilio.\n\n` +
         `📍 Por favor compártenos tu *ubicación por WhatsApp* o tu *dirección completa con referencias* para registrarla en la orden de visita.`;
 
-      await TursoService.upsertSession({
+      await DbService.upsertSession({
         phone,
         step: 'ESPERANDO_UBICACION_TECNICO',
         metadata: JSON.stringify({
@@ -2026,7 +2026,7 @@ export class BotOrchestrator {
         `Por favor revisa que esté bien conectado a la toma de corriente y encendido. (Por favor *no muevas el cable delgado de internet*).\n\n` +
         `¿Las luces de tu módem logran encender?`;
 
-      await TursoService.upsertSession({
+      await DbService.upsertSession({
         phone,
         step: 'COMPROBACION_TURNO_1',
         metadata: JSON.stringify({
@@ -2081,7 +2081,7 @@ export class BotOrchestrator {
         `💡 *Recomendación:* La señal 5G ofrece mucha mayor velocidad y evita que los videos se queden cargando (siempre que tu equipo esté relativamente cerca del módem).\n\n` +
         `¿Podrías conectarte a la red 5G y confirmarme si ya cargan fluidos tus videos?`;
 
-      await TursoService.upsertSession({
+      await DbService.upsertSession({
         phone,
         step: 'COMPROBACION_STREAMING_TV',
         metadata: JSON.stringify({
@@ -2104,7 +2104,7 @@ export class BotOrchestrator {
         `2️⃣ Acércate a unos pasos del módem (o conéctate a la red 5G si está disponible) para comprobar si la señal mejora.\n\n` +
         `¿Notaste mejoría tras hacer la prueba?`;
 
-      await TursoService.upsertSession({
+      await DbService.upsertSession({
         phone,
         step: 'DIAGNOSTICO_COMPROBAR_UN_DISPOSITIVO',
         metadata: JSON.stringify({
@@ -2135,7 +2135,7 @@ export class BotOrchestrator {
         `2️⃣ Haz un test en https://www.speedtest.net\n` +
         `3️⃣ Mándame aquí la *captura de pantalla de tu Speedtest* para verificar tu velocidad.`;
 
-      await TursoService.upsertSession({
+      await DbService.upsertSession({
         phone,
         step: 'DIAGNOSTICO_POST_REINICIO',
         metadata: JSON.stringify({
@@ -2156,7 +2156,7 @@ export class BotOrchestrator {
       `Hola${nombre}, tu módem aparece conectado y con buena señal. 📶\n\n` +
       `¿El problema te ocurre en todos tus dispositivos o solo en uno en específico?`;
 
-    await TursoService.upsertSession({
+    await DbService.upsertSession({
       phone,
       step: 'DIAGNOSTICO_TRIAGE_DISPOSITIVOS',
       metadata: JSON.stringify({
@@ -2232,7 +2232,7 @@ export class BotOrchestrator {
     const esNegativo = lower.includes('sigue') || lower.includes('no mejoro') || lower.includes('no mejoró') || lower.includes('sigue mal') || lower.includes('sigue lento') || lower.includes('no sirvio') || lower.includes('no sirvió') || lower.includes('no funciona');
 
     if (esNegativo) {
-      const ticket = await TursoService.createTicket({
+      const ticket = await DbService.createTicket({
         phone,
         client_name: session?.client_name,
         onu_id: session?.onu_id,
@@ -2256,7 +2256,7 @@ export class BotOrchestrator {
         `📋 Tu reporte ha sido registrado con el folio *#${ticket.folio}*.\n\n` +
         `📍 Por favor compártenos tu *ubicación por WhatsApp* o tu *dirección completa con referencias* para registrarla en la orden de la cuadrilla.`;
 
-      await TursoService.upsertSession({
+      await DbService.upsertSession({
         phone,
         step: 'ESPERANDO_UBICACION_TECNICO',
         metadata: JSON.stringify({
@@ -2293,7 +2293,7 @@ export class BotOrchestrator {
     const esConsultaPago = /\b(pagar|pago|saldo|debo|cuanto\s*debo|cuando\s*me\s*toca|factura|recibo|cuenta|tarjeta|transferencia|clabe|banco|mensualidad|costo)\b/i.test(lower);
 
     if (esSaludo || esConsultaPago) {
-      const sesionReset = await TursoService.upsertSession({ phone, step: 'CONVERSACIONAL' });
+      const sesionReset = await DbService.upsertSession({ phone, step: 'CONVERSACIONAL' });
       if (esConsultaPago) {
         await this.flujoConsultarSaldo(phone, sesionReset, targetJid);
       } else {
@@ -2332,7 +2332,7 @@ export class BotOrchestrator {
           `2️⃣ Acércate a unos pasos del módem para comprobar si la señal mejora.\n\n` +
           `¿Notaste mejoría tras hacer la prueba? *(Responde Sí o No)*`;
 
-      await TursoService.upsertSession({
+      await DbService.upsertSession({
         phone,
         step: 'DIAGNOSTICO_COMPROBAR_UN_DISPOSITIVO',
         metadata: JSON.stringify({
@@ -2362,7 +2362,7 @@ export class BotOrchestrator {
       `2️⃣ Haz un test en https://www.speedtest.net\n` +
       `3️⃣ Mándame aquí la *captura de pantalla de tu Speedtest* para verificar tu velocidad.`;
 
-    await TursoService.upsertSession({
+    await DbService.upsertSession({
       phone,
       step: 'DIAGNOSTICO_POST_REINICIO',
       metadata: JSON.stringify({
@@ -2414,7 +2414,7 @@ export class BotOrchestrator {
         `Si deseas que un asesor de nuestro equipo te oriente sobre soluciones para optimizar la cobertura en esas áreas de tu domicilio, con gusto te comunico. 😊\n\n` +
         `¿Deseas que te canalice con un asesor? *(Responde Sí o No)*`;
 
-      await TursoService.upsertSession({
+      await DbService.upsertSession({
         phone,
         step: 'ESPERANDO_CANALIZACION_ASESOR',
         metadata: JSON.stringify({
@@ -2443,7 +2443,7 @@ export class BotOrchestrator {
       `2️⃣ Haz una prueba en https://www.speedtest.net\n` +
       `3️⃣ Mándame la *captura de tu Speedtest* para confirmar tu velocidad.`;
 
-    await TursoService.upsertSession({
+    await DbService.upsertSession({
       phone,
       step: 'DIAGNOSTICO_POST_REINICIO',
       metadata: JSON.stringify({
@@ -2522,7 +2522,7 @@ export class BotOrchestrator {
       const msjMonitoreo =
         `¡Muchas gracias${nombre}! Serías tan amable de monitorear tu servicio el resto de la tarde. Si notas cualquier detalle o no mejora, nos puedes notificar para que pasen a tu domicilio por favor. ¡Quedamos atentos! 😊`;
 
-      await TursoService.upsertSession({
+      await DbService.upsertSession({
         phone,
         step: 'MONITOREO_POST_REINICIO',
         metadata: JSON.stringify({
@@ -2538,7 +2538,7 @@ export class BotOrchestrator {
     const esPersistente = lower.includes('sigue fallando') || lower.includes('sigue igual') || lower.includes('no mejoro') || lower.includes('no mejoró') || lower.includes('sigue mal') || lower.includes('sigue lento') || lower.includes('no funciona') || lower.includes('no sirve') || lower.includes('falla');
 
     if (esPersistente) {
-      const ticket = await TursoService.createTicket({
+      const ticket = await DbService.createTicket({
         phone,
         client_name: session?.client_name,
         onu_id: session?.onu_id,
@@ -2562,7 +2562,7 @@ export class BotOrchestrator {
         `📋 Hemos generado tu orden de visita con el reporte *#${ticket.folio}*.\n\n` +
         `📍 Por favor compártenos tu *ubicación por WhatsApp* o tu *dirección completa con referencias* para registrarla en la orden de la cuadrilla.`;
 
-      await TursoService.upsertSession({
+      await DbService.upsertSession({
         phone,
         step: 'ESPERANDO_UBICACION_TECNICO',
         metadata: JSON.stringify({
@@ -2589,7 +2589,7 @@ export class BotOrchestrator {
       `Enterado${nombre}. Para poder determinar el origen exacto del detalle y canalizarlo con la solución adecuada:\n\n` +
       `${solicitudEvidencia}`;
 
-    await TursoService.upsertSession({
+    await DbService.upsertSession({
       phone,
       step: 'COMPROBACION_EVIDENCIA',
       metadata: JSON.stringify({
@@ -2621,7 +2621,7 @@ export class BotOrchestrator {
 
     // Si no estaban en metadata pero tenemos el nombre del cliente, buscar en Turso
     if (listaServicios.length <= 1 && session?.client_name) {
-      const onus = await TursoService.searchOnusFuzzy(session.client_name, 5);
+      const onus = await DbService.searchOnusFuzzy(session.client_name, 5);
       const coincidentes = onus.filter(o => o.matchScore >= 75);
       if (coincidentes.length > 1) {
         listaServicios = coincidentes.map(c => ({
@@ -2646,7 +2646,7 @@ export class BotOrchestrator {
       });
       texto += `¿A cuál de tus servicios deseas cambiarte o consultar?\n👉 *Por favor responde con el número de tu opción (ejemplo: 1 ó 2)*, o escribe el nombre completo de otro titular si deseas consultar una cuenta diferente.`;
 
-      await TursoService.upsertSession({
+      await DbService.upsertSession({
         phone,
         step: 'ESPERANDO_SELECCION_SERVICIO',
         metadata: JSON.stringify({
@@ -2662,7 +2662,7 @@ export class BotOrchestrator {
     }
 
     // Si solo tiene 1 servicio o no está registrado, le permitimos ingresar el nombre de la otra cuenta
-    await TursoService.upsertSession({
+    await DbService.upsertSession({
       phone,
       step: 'ESPERANDO_IDENTIFICACION',
       metadata: JSON.stringify({
@@ -2689,7 +2689,7 @@ export class BotOrchestrator {
     const lower = (rawText || '').toLowerCase().trim();
     const esComando = /^(?:cambio\s+de\s+m[oó]dem|reemplazar\s+m[oó]dem|activar|activaci[oó]n|alta|aprovisionar|cambiar\s+plan|cambiar\s+paquete|saldo|pago|factura|soporte|internet)\b/i.test(lower);
     if (esComando) {
-      await TursoService.upsertSession({ phone, step: 'CONVERSACIONAL' });
+      await DbService.upsertSession({ phone, step: 'CONVERSACIONAL' });
       await this.procesarMensaje(event);
       return;
     }
@@ -2703,14 +2703,14 @@ export class BotOrchestrator {
     const ubicacionTexto = rawText || (event.isMedia ? '[Foto o archivo de ubicación]' : 'Ubicación enviada');
 
     if (folio) {
-      await TursoService.updateTicketStatus(
+      await DbService.updateTicketStatus(
         folio,
         'ABIERTO',
         `📍 Domicilio / Ubicación indicada por cliente: "${ubicacionTexto}"`
       );
     }
 
-    await TursoService.updateClientLocation(phone, {
+    await DbService.updateClientLocation(phone, {
       direccion: ubicacionTexto,
       clientId: session?.client_id || undefined,
       clientName: session?.client_name || undefined,
@@ -2746,7 +2746,7 @@ export class BotOrchestrator {
 
     // Si el cliente no está respondiendo a la falla y saluda o pregunta por pagos:
     if (esSaludo || esConsultaPago) {
-      const sesionReset = await TursoService.upsertSession({ phone, step: 'CONVERSACIONAL' });
+      const sesionReset = await DbService.upsertSession({ phone, step: 'CONVERSACIONAL' });
       if (esConsultaPago) {
         await this.flujoConsultarSaldo(phone, sesionReset, targetJid);
       } else {
@@ -2771,7 +2771,7 @@ export class BotOrchestrator {
       `Enterado. Para determinar con exactitud el estado de tu enlace y darte la mejor solución:\n\n` +
       `${solicitudTurno2}`;
 
-    await TursoService.upsertSession({
+    await DbService.upsertSession({
       phone,
       step: 'COMPROBACION_EVIDENCIA',
       metadata: JSON.stringify({
@@ -2818,7 +2818,7 @@ export class BotOrchestrator {
 
     // Si NO es imagen ni archivo y el usuario pregunta otra cosa distinta a la evidencia:
     if (!event.isMedia && (esConsultaPago || esSaludo)) {
-      const sesionReset = await TursoService.upsertSession({ phone, step: 'CONVERSACIONAL' });
+      const sesionReset = await DbService.upsertSession({ phone, step: 'CONVERSACIONAL' });
       if (esConsultaPago) {
         await this.flujoConsultarSaldo(phone, sesionReset, targetJid);
       } else {
@@ -2838,7 +2838,7 @@ export class BotOrchestrator {
     const notaHorario = outOfHours ? '\n\n⏰ *Nota:* Tu reporte quedó registrado en el sistema y un técnico lo revisará a primera hora.' : '';
 
     if (folio) {
-      await TursoService.updateTicketStatus(
+      await DbService.updateTicketStatus(
         folio,
         'ABIERTO',
         `Evidencia recibida: "${evidencia}"`
@@ -2853,7 +2853,7 @@ export class BotOrchestrator {
       );
     } else {
       // Como el usuario confirmó persistencia o no pudo enviar imagen, creamos el ticket AHORA al final
-      const ticket = await TursoService.createTicket({
+      const ticket = await DbService.createTicket({
         phone,
         client_name: session?.client_name,
         onu_id: session?.onu_id,
@@ -2899,7 +2899,7 @@ export class BotOrchestrator {
 
     let clientWh: any = null;
     try {
-      clientWh = await TursoService.getWisphubClientByAny({
+      clientWh = await DbService.getWisphubClientByAny({
         id: session?.client_id || meta.id_servicio,
         name: session?.client_name,
         ip: meta.ip,
@@ -2911,7 +2911,7 @@ export class BotOrchestrator {
     let planInternet = clientWh?.plan_internet || meta.speed_profile || '';
     if (!planInternet && session?.onu_id) {
       try {
-        const onuInfo = await TursoService.getOnuById(session.onu_id);
+        const onuInfo = await DbService.getOnuById(session.onu_id);
         planInternet = onuInfo?.speed_profile || '';
       } catch {}
     }
@@ -2968,7 +2968,7 @@ export class BotOrchestrator {
       pendingEvidence.longitud_onda_nm = nm;
       meta.pendingActivationEvidence = pendingEvidence;
       
-      await TursoService.upsertSession({
+      await DbService.upsertSession({
         phone,
         metadata: JSON.stringify(meta),
       });
@@ -2997,7 +2997,7 @@ export class BotOrchestrator {
       if (wifiPass) pendingEvidence.wifi_password = wifiPass;
       meta.pendingActivationEvidence = pendingEvidence;
 
-      await TursoService.upsertSession({
+      await DbService.upsertSession({
         phone,
         metadata: JSON.stringify(meta),
       });
@@ -3058,7 +3058,7 @@ export class BotOrchestrator {
       if (esVelocidadOptima) {
         // CASO A: Velocidad entregando 100%+ del paquete contratado
         if (folio) {
-          await TursoService.updateTicketStatus(
+          await DbService.updateTicketStatus(
             folio,
             'RESUELTO',
             `✅ Speedtest óptimo: Bajada=${bajada}${subida ? `, Subida=${subida}` : ''}${ping ? `, Ping=${ping}` : ''} (vs ${planMegasNum || 'N/A'} Mbps contratados). Enlace entregando velocidad completa. Reporte resuelto automáticamente.`
@@ -3091,7 +3091,7 @@ export class BotOrchestrator {
 
       // CASO B: Velocidad por debajo de lo contratado (se mantiene/crea ticket de soporte)
       if (folio) {
-        await TursoService.updateTicketStatus(
+        await DbService.updateTicketStatus(
           folio,
           'ABIERTO',
           `⚠️ Speedtest con déficit: Bajada=${bajada}${subida ? `, Subida=${subida}` : ''}${ping ? `, Ping=${ping}` : ''}. Plan=${planContratado || 'N/A'} (${planMegasNum || 'N/A'} Mbps)`
@@ -3109,7 +3109,7 @@ export class BotOrchestrator {
       }
 
       // Si no había ticket previo y la velocidad es baja, creamos el reporte formal de velocidad
-      const ticket = await TursoService.createTicket({
+      const ticket = await DbService.createTicket({
         phone,
         client_name: session?.client_name,
         onu_id: session?.onu_id,
@@ -3144,7 +3144,7 @@ export class BotOrchestrator {
     // 2. CASO LUCES DE MÓDEM (Huawei EG8145V5 / HG8245H / OptiXstar / x6 / v5, etc.)
     if (analysis?.tipo === 'MODEM_LUCES') {
       if (analysis.foco_rojo) {
-        const ticket = await TursoService.createTicket({
+        const ticket = await DbService.createTicket({
           phone,
           client_name: session?.client_name,
           onu_id: session?.onu_id,
@@ -3170,7 +3170,7 @@ export class BotOrchestrator {
           `📞 Un compañero de nuestro equipo se comunicará contigo para coordinar qué día y horario pasan a revisarlo.\n\n` +
           `📍 Por favor compártenos tu *ubicación actual por WhatsApp* o tu *dirección completa con referencias* para registrarla en la orden de visita.`;
 
-        await TursoService.upsertSession({
+        await DbService.upsertSession({
           phone,
           step: 'ESPERANDO_UBICACION_TECNICO',
           metadata: JSON.stringify({
@@ -3190,7 +3190,7 @@ export class BotOrchestrator {
           `Por favor verifica que el cable de corriente esté bien conectado al enchufe y que el botón de encendido posterior esté presionado. (Por favor no muevas el cable delgado de internet).\n\n` +
           `¿Logra encender alguna luz?`;
 
-        await TursoService.upsertSession({
+        await DbService.upsertSession({
           phone,
           step: 'COMPROBACION_TURNO_1',
           metadata: JSON.stringify({
@@ -3209,7 +3209,7 @@ export class BotOrchestrator {
             `Hola${nombre}, revisé la foto de tu equipo y las luces se observan correctas. 👍\n\n` +
             `Serías tan amable de monitorear tu servicio el resto de la tarde. Si notas cualquier detalle o no mejora, nos puedes notificar para que pasen a tu domicilio por favor. ¡Quedamos atentos! 😊`;
 
-          await TursoService.upsertSession({
+          await DbService.upsertSession({
             phone,
             step: 'MONITOREO_POST_REINICIO',
             metadata: JSON.stringify({
@@ -3227,7 +3227,7 @@ export class BotOrchestrator {
           `Como la señal física llega bien a tu equipo:\n` +
           `¿La lentitud o problema te pasa en *todos tus aparatos (celulares, pantallas, computadoras)* o *solo en uno en específico*?`;
 
-        await TursoService.upsertSession({
+        await DbService.upsertSession({
           phone,
           step: 'DIAGNOSTICO_TRIAGE_DISPOSITIVOS',
           metadata: JSON.stringify({
@@ -3252,7 +3252,7 @@ export class BotOrchestrator {
       const destinatario = datos?.destinatario || '';
 
       // Reasignar departamento inmediatamente a ATENCION en Turso DB
-      await TursoService.updateDepartment(phone, 'ATENCION').catch(() => {});
+      await DbService.updateDepartment(phone, 'ATENCION').catch(() => {});
 
       // Buscar si el cliente ya está identificado o si podemos extraer su identidad
       let clienteIdentificado: any = null;
@@ -3260,7 +3260,7 @@ export class BotOrchestrator {
       // 1. Intentar por texto del pie de foto (caption, ej: "Le envio el comprobante de pago del sr. Israel Ponce Ortiz de Cañada Chica")
       if (rawText && rawText.length >= 4) {
         const textoLimpio = cleanPersonName(rawText);
-        const matchesCaption = await TursoService.searchOnusFuzzy(textoLimpio || rawText, 3);
+        const matchesCaption = await DbService.searchOnusFuzzy(textoLimpio || rawText, 3);
         if (matchesCaption.length > 0 && matchesCaption[0].matchScore >= 65) {
           clienteIdentificado = matchesCaption[0];
         }
@@ -3268,7 +3268,7 @@ export class BotOrchestrator {
 
       // 2. Si no se encontró por caption, buscar por el Concepto extraído de la foto (ej: "ISRAEL PONCE ORTIZ")
       if (!clienteIdentificado && conceptoImg && conceptoImg.length >= 4 && !/^(?:pago|internet|mensualidad|servicio|abono|wifi)\b/i.test(conceptoImg)) {
-        const matchesConcepto = await TursoService.searchOnusFuzzy(conceptoImg, 3);
+        const matchesConcepto = await DbService.searchOnusFuzzy(conceptoImg, 3);
         if (matchesConcepto.length > 0 && matchesConcepto[0].matchScore >= 65) {
           clienteIdentificado = matchesConcepto[0];
         }
@@ -3276,7 +3276,7 @@ export class BotOrchestrator {
 
       // 3. Si no se encontró, buscar por teléfono en SmartOLT / WispHub
       if (!clienteIdentificado) {
-        const matchesTel = await TursoService.searchOnusFuzzy(phone, 3);
+        const matchesTel = await DbService.searchOnusFuzzy(phone, 3);
         if (matchesTel.length > 0 && matchesTel[0].matchScore >= 85) {
           clienteIdentificado = matchesTel[0];
         }
@@ -3302,7 +3302,7 @@ export class BotOrchestrator {
         const ubicacion = clienteIdentificado.address || clienteIdentificado.zone_name ? ` (${clienteIdentificado.address || clienteIdentificado.zone_name})` : '';
 
         // Auto-vincular sesión y teléfono
-        await TursoService.upsertSession({
+        await DbService.upsertSession({
           phone,
           client_name: nombreTitular,
           client_id: clienteIdentificado.unique_external_id || clienteIdentificado.id || null,
@@ -3324,7 +3324,7 @@ export class BotOrchestrator {
         });
 
         if (clienteIdentificado.unique_external_id) {
-          await TursoService.updateWisphubClientPhone(clienteIdentificado.unique_external_id, phone).catch(() => {});
+          await DbService.updateWisphubClientPhone(clienteIdentificado.unique_external_id, phone).catch(() => {});
         }
 
         const msj =
@@ -3336,7 +3336,7 @@ export class BotOrchestrator {
         return;
       } else {
         // CLIENTE AÚN NO RECONOCIDO -> ENTRAR EN VENTANA DE ESPERA DE DATOS
-        await TursoService.upsertSession({
+        await DbService.upsertSession({
           phone,
           department: 'ATENCION',
           step: 'ESPERANDO_DATOS_PAGO',
@@ -3373,7 +3373,7 @@ export class BotOrchestrator {
       session?.step === 'PENDIENTE_CONFIRMACION_CAMBIO_MODEM' ||
       session?.step === 'TECNICO_ESPERANDO_CLIENTE_GPS';
 
-    const esTecnicoAuth = isTechStep || await TursoService.isAuthorizedTechnician(phone.replace(/\D/g, '')).catch(() => false);
+    const esTecnicoAuth = isTechStep || await DbService.isAuthorizedTechnician(phone.replace(/\D/g, '')).catch(() => false);
 
     if (esTecnicoAuth) {
       const pendingEvidence = meta.pendingActivationEvidence || {};
@@ -3384,7 +3384,7 @@ export class BotOrchestrator {
         timestamp: Date.now(),
       });
       meta.pendingActivationEvidence = pendingEvidence;
-      await TursoService.upsertSession({ phone, metadata: JSON.stringify(meta) });
+      await DbService.upsertSession({ phone, metadata: JSON.stringify(meta) });
       logger.info(`[Técnico Multimedia] Foto adicional guardada silenciosamente para ${phone}: ${analysis?.tipo || 'OTRO'}`);
       return;
     }
@@ -3442,9 +3442,9 @@ export class BotOrchestrator {
         const pendingEvidence = meta.pendingActivationEvidence || {};
         pendingEvidence.gps = { lat, lng, coordsStr, url, direccion };
         meta.pendingActivationEvidence = pendingEvidence;
-        await TursoService.upsertSession({ phone, metadata: JSON.stringify(meta) });
+        await DbService.upsertSession({ phone, metadata: JSON.stringify(meta) });
 
-        await TursoService.updateClientLocation(targetClientId, { lat, lng, url, direccion, notas: loc.name });
+        await DbService.updateClientLocation(targetClientId, { lat, lng, url, direccion, notas: loc.name });
 
         // Notificar vía SSE al panel de administración en tiempo real
         try {
@@ -3483,7 +3483,7 @@ export class BotOrchestrator {
         timestamp: Date.now(),
       };
 
-      await TursoService.upsertSession({
+      await DbService.upsertSession({
         phone,
         step: 'TECNICO_ESPERANDO_CLIENTE_GPS',
         metadata: JSON.stringify(meta),
@@ -3516,7 +3516,7 @@ export class BotOrchestrator {
       };
     } else {
       try {
-        const clientDir = await TursoService.getClientsDirectory({ search: phone, limit: 1 });
+        const clientDir = await DbService.getClientsDirectory({ search: phone, limit: 1 });
         if (clientDir && clientDir.clients && clientDir.clients.length > 0) {
           clientIdentified = clientDir.clients[0];
         }
@@ -3535,7 +3535,7 @@ export class BotOrchestrator {
         timestamp: Date.now(),
       };
 
-      await TursoService.upsertSession({
+      await DbService.upsertSession({
         phone,
         step: 'CLIENTE_ESPERANDO_IDENTIFICACION_GPS',
         metadata: JSON.stringify(meta),
@@ -3552,7 +3552,7 @@ export class BotOrchestrator {
     }
 
     // 1. Guardar en base de datos Turso DB (wisphub_clients, smartolt_onus, tickets) y sincronizar a WispHub
-    await TursoService.updateClientLocation(clientIdentified.id_servicio || phone, {
+    await DbService.updateClientLocation(clientIdentified.id_servicio || phone, {
       lat,
       lng,
       url,
@@ -3581,7 +3581,7 @@ export class BotOrchestrator {
     const saludo = primerNombre ? `¡Muchas gracias, *${primerNombre}*!` : `¡Muchas gracias!`;
 
     // 3. Resetear el step a CONVERSACIONAL
-    await TursoService.upsertSession({
+    await DbService.upsertSession({
       phone,
       client_id: clientIdentified.id_servicio ? String(clientIdentified.id_servicio) : undefined,
       client_name: clientIdentified.nombre,
@@ -3635,7 +3635,7 @@ export class BotOrchestrator {
     const pendingGps = meta.pendingGpsAssignment;
 
     if (!pendingGps || !pendingGps.coordsStr) {
-      await TursoService.updateStep(phone, 'CONVERSACIONAL');
+      await DbService.updateStep(phone, 'CONVERSACIONAL');
       await this.enviarYLoguear(
         phone,
         `⚠️ No hay ninguna ubicación GPS pendiente de asignación. Por favor envía primero el pin de ubicación de WhatsApp.`,
@@ -3680,7 +3680,7 @@ export class BotOrchestrator {
     // 2. Búsqueda inteligente difusa (ignora acentos, stopwords como 'del/de', mayúsculas y prefijos)
     if (!targetClient) {
       try {
-        const fuzzyList = await TursoService.searchWisphubClientsFuzzy(cleanInput, 5);
+        const fuzzyList = await DbService.searchWisphubClientsFuzzy(cleanInput, 5);
         if (fuzzyList && fuzzyList.length > 0) {
           if (fuzzyList.length === 1 || fuzzyList[0].matchScore >= 80) {
             targetClient = fuzzyList[0];
@@ -3725,7 +3725,7 @@ export class BotOrchestrator {
     }
 
     // Guardar en Turso DB y sincronizar con WispHub
-    await TursoService.updateClientLocation(targetClient.id_servicio, {
+    await DbService.updateClientLocation(targetClient.id_servicio, {
       lat: pendingGps.lat,
       lng: pendingGps.lng,
       url: pendingGps.url,
@@ -3737,7 +3737,7 @@ export class BotOrchestrator {
 
     // Limpiar pendiente y regresar step a CONVERSACIONAL
     delete meta.pendingGpsAssignment;
-    await TursoService.upsertSession({
+    await DbService.upsertSession({
       phone,
       step: 'CONVERSACIONAL',
       metadata: JSON.stringify(meta),
@@ -3802,7 +3802,7 @@ export class BotOrchestrator {
     // 2. Búsqueda difusa inteligente (ignora 'del', acentos, prefijos numéricos)
     if (!targetClient && cleanInput.length >= 2) {
       try {
-        const fuzzyList = await TursoService.searchWisphubClientsFuzzy(cleanInput, 3);
+        const fuzzyList = await DbService.searchWisphubClientsFuzzy(cleanInput, 3);
         if (fuzzyList && fuzzyList.length > 0) {
           targetClient = fuzzyList[0];
         }
@@ -3836,7 +3836,7 @@ export class BotOrchestrator {
 
     // Vincular cliente y ubicación
     if (pendingGps) {
-      await TursoService.updateClientLocation(targetClient.id_servicio, {
+      await DbService.updateClientLocation(targetClient.id_servicio, {
         lat: pendingGps.lat,
         lng: pendingGps.lng,
         url: pendingGps.url,
@@ -3848,7 +3848,7 @@ export class BotOrchestrator {
     }
 
     delete meta.pendingGpsAssignment;
-    await TursoService.upsertSession({
+    await DbService.upsertSession({
       phone,
       client_id: String(targetClient.id_servicio),
       client_name: targetClient.nombre,
@@ -3889,14 +3889,14 @@ export class BotOrchestrator {
     logger.info(`[Pago Complementario] Procesando datos para comprobante previo de ${phone}: "${rawText}" (Monto: ${monto})`);
 
     const textoLimpio = cleanPersonName(rawText);
-    const matches = await TursoService.searchOnusFuzzy(textoLimpio || rawText, 5);
+    const matches = await DbService.searchOnusFuzzy(textoLimpio || rawText, 5);
 
     if (matches.length > 0 && matches[0].matchScore >= 55) {
       const matched = matches[0];
       const nombreTitular = matched.name;
       const ubicacion = matched.address || matched.zone_name ? ` (${matched.address || matched.zone_name})` : '';
 
-      await TursoService.upsertSession({
+      await DbService.upsertSession({
         phone,
         client_name: nombreTitular,
         client_id: matched.unique_external_id || null,
@@ -3916,7 +3916,7 @@ export class BotOrchestrator {
       });
 
       if (matched.unique_external_id) {
-        await TursoService.updateWisphubClientPhone(matched.unique_external_id, phone).catch(() => {});
+        await DbService.updateWisphubClientPhone(matched.unique_external_id, phone).catch(() => {});
       }
 
       let detalle = `\n• *Monto:* ${monto}`;
@@ -3967,7 +3967,7 @@ export class BotOrchestrator {
         'SOLICITAR_IDENTIFICACION_NIVELES',
         targetJid
       );
-      await TursoService.updateStep(phone, 'ESPERANDO_IDENTIFICACION');
+      await DbService.updateStep(phone, 'ESPERANDO_IDENTIFICACION');
       return;
     }
 
@@ -3975,7 +3975,7 @@ export class BotOrchestrator {
     logger.info(`[NOC-DIAGNOSTICO-INTERNO] Línea para ${phone} (ONU: ${onuId}): Status=${estadoOnu.status}`);
 
     if (estadoOnu.status === 'LOS') {
-      const ticket = await TursoService.createTicket({
+      const ticket = await DbService.createTicket({
         phone,
         client_name: session?.client_name,
         onu_id: session?.onu_id,
@@ -3988,7 +3988,7 @@ export class BotOrchestrator {
       let meta: any = {};
       try { meta = JSON.parse(session?.metadata || '{}'); } catch {}
 
-      await TursoService.upsertSession({
+      await DbService.upsertSession({
         phone,
         step: 'ESPERANDO_UBICACION_TECNICO',
         metadata: JSON.stringify({
@@ -4015,7 +4015,7 @@ export class BotOrchestrator {
     const tieneAtenuacion = powerLevel != null && (powerLevel < -27.5 || powerLevel > -10);
 
     if (estadoOnu.status === 'ONLINE' && tieneAtenuacion) {
-      const ticket = await TursoService.createTicket({
+      const ticket = await DbService.createTicket({
         phone,
         client_name: session?.client_name,
         onu_id: session?.onu_id,
@@ -4117,7 +4117,7 @@ export class BotOrchestrator {
           `📸 En cuanto realices tu transferencia, por favor envía la *foto o captura de tu comprobante* y escribe tu *Nombre completo* en este chat para reactivar tu servicio.`;
 
         await this.enviarYLoguear(phone, msj, 'CONSULTAR_SALDO', 'REINICIO_BLOQUEADO_POR_ADEUDO', targetJid);
-        await TursoService.updateStep(phone, 'ESPERANDO_COMPROBANTE');
+        await DbService.updateStep(phone, 'ESPERANDO_COMPROBANTE');
         return;
       } else if (estadoFinanciero.suspendido && (estadoFinanciero.yaPagoPeroNoActivo || !tieneDeudaReal)) {
         logger.info(`Triage de soporte: Cliente ${phone} (${session?.client_name}) figura suspendido pero sin deuda (al corriente). Reactivando servicio...`);
@@ -4173,7 +4173,7 @@ export class BotOrchestrator {
         'SOLICITAR_CONTRATO_SALDO',
         targetJid
       );
-      await TursoService.updateStep(phone, 'ESPERANDO_IDENTIFICACION');
+      await DbService.updateStep(phone, 'ESPERANDO_IDENTIFICACION');
       return;
     }
 
@@ -4255,7 +4255,7 @@ export class BotOrchestrator {
         this.getFichaBancaria(session);
 
       await this.enviarYLoguear(phone, textoFacturas, 'CONSULTAR_SALDO', 'FACTURAS_PENDIENTES_ENVIADAS', targetJid);
-      await TursoService.updateStep(phone, 'ESPERANDO_COMPROBANTE');
+      await DbService.updateStep(phone, 'ESPERANDO_COMPROBANTE');
       return;
     }
 
@@ -4267,7 +4267,7 @@ export class BotOrchestrator {
       this.getFichaBancaria(session);
 
     await this.enviarYLoguear(phone, mensajeMoroso, 'CONSULTAR_SALDO', 'AVISO_SUSPENDIDO_SALDO', targetJid);
-    await TursoService.updateStep(phone, 'ESPERANDO_COMPROBANTE');
+    await DbService.updateStep(phone, 'ESPERANDO_COMPROBANTE');
   }
 
   /**
@@ -4282,7 +4282,7 @@ export class BotOrchestrator {
         'SOLICITAR_IDENTIFICACION_PLAN',
         targetJid
       );
-      await TursoService.updateStep(phone, 'ESPERANDO_IDENTIFICACION');
+      await DbService.updateStep(phone, 'ESPERANDO_IDENTIFICACION');
       return;
     }
 
@@ -4307,7 +4307,7 @@ export class BotOrchestrator {
       `💡 Si requieres realizar un cambio de paquete, aumento de velocidad o tienes dudas, con gusto te apoyamos. ¿En qué más podemos ayudarte hoy?`;
 
     await this.enviarYLoguear(phone, mensajePlan, 'CONSULTAR_PLAN', 'DETALLE_PLAN_ENVIADO', targetJid);
-    await TursoService.updateStep(phone, 'CONVERSACIONAL');
+    await DbService.updateStep(phone, 'CONVERSACIONAL');
   }
 
   /**
@@ -4318,7 +4318,7 @@ export class BotOrchestrator {
     const contactoAsesor = config.isp.soporteHumanoPhone ? ` o puedes comunicarte al: *${config.isp.soporteHumanoPhone}*` : '';
 
     if (outOfHours) {
-      const ticket = await TursoService.createTicket({
+      const ticket = await DbService.createTicket({
         phone,
         client_name: session?.client_name,
         onu_id: session?.onu_id,
@@ -4381,7 +4381,7 @@ export class BotOrchestrator {
     if (matchIp) {
       const ipBuscada = matchIp[1];
       logger.info(`[Identificación por IP] Entrada contiene IP "${ipBuscada}". Buscando directamente en Turso...`);
-      const whPorIp = await TursoService.getWisphubClientByAny({ ip: ipBuscada });
+      const whPorIp = await DbService.getWisphubClientByAny({ ip: ipBuscada });
       if (whPorIp) {
         logger.info(`[Identificación por IP] Cliente localizado en WispHub por IP: ID=${whPorIp.id_servicio}, Nombre="${whPorIp.nombre}"`);
         const meta = {
@@ -4394,7 +4394,7 @@ export class BotOrchestrator {
           sn: whPorIp.sn_onu,
         };
 
-        const sessionActualizada = await TursoService.upsertSession({
+        const sessionActualizada = await DbService.upsertSession({
           phone,
           client_id: whPorIp.sn_onu || `WH-${whPorIp.id_servicio}`,
           service_id: String(whPorIp.id_servicio),
@@ -4445,7 +4445,7 @@ export class BotOrchestrator {
           lastSearchTerm: null,
         };
 
-        const sessionActualizada = await TursoService.upsertSession({
+        const sessionActualizada = await DbService.upsertSession({
           phone,
           client_id: selected.unique_external_id || String(selected.id_servicio || selected.id || ''),
           service_id: selected.sn || String(selected.id_servicio || selected.id || ''),
@@ -4479,7 +4479,7 @@ export class BotOrchestrator {
           lastSearchTerm: null,
         };
 
-        const sessionActualizada = await TursoService.upsertSession({
+        const sessionActualizada = await DbService.upsertSession({
           phone,
           client_id: selected.unique_external_id || String(selected.id_servicio || selected.id || ''),
           service_id: selected.sn || String(selected.id_servicio || selected.id || ''),
@@ -4539,8 +4539,8 @@ export class BotOrchestrator {
     // 1. Intentar búsqueda flexible en Turso DB (Caché local de SmartOLT y WispHub)
     try {
       const [coincidenciasOlt, coincidenciasWh] = await Promise.all([
-        TursoService.searchOnusFuzzy(cleanSearchTerm, 6).catch(() => []),
-        TursoService.searchWisphubClientsFuzzy(cleanSearchTerm, 6).catch(() => []),
+        DbService.searchOnusFuzzy(cleanSearchTerm, 6).catch(() => []),
+        DbService.searchWisphubClientsFuzzy(cleanSearchTerm, 6).catch(() => []),
       ]);
 
       // Unificar candidatos deduplicando
@@ -4628,7 +4628,7 @@ export class BotOrchestrator {
             ip: (exacto as any).ip || (exacto as any).wisphub_ip || metaPre.ip,
           };
 
-          const sessionActualizada = await TursoService.upsertSession({
+          const sessionActualizada = await DbService.upsertSession({
             phone,
             client_id: exacto.unique_external_id || String(exacto.id_servicio || ''),
             service_id: exacto.id_servicio ? String(exacto.id_servicio) : (exacto.sn || String(exacto.unique_external_id || '')),
@@ -4664,7 +4664,7 @@ export class BotOrchestrator {
 
           logger.info(`Ambigüedad: se detectaron ${gruposPorPersona.length} personas distintas para "${rawInput}". Guardando candidatos y solicitando desempate.`);
 
-          await TursoService.upsertSession({
+          await DbService.upsertSession({
             phone,
             step: 'ESPERANDO_IDENTIFICACION',
             metadata: JSON.stringify({
@@ -4713,7 +4713,7 @@ export class BotOrchestrator {
 
           mensajeOpciones += `¿Con cuál de tus servicios necesitas apoyo el día de hoy?\n👉 *Por favor responde con el número de la opción (ejemplo: 1 ó 2).*`;
 
-          await TursoService.upsertSession({
+          await DbService.upsertSession({
             phone,
             client_name: primerNombre,
             step: 'ESPERANDO_SELECCION_SERVICIO',
@@ -4758,7 +4758,7 @@ export class BotOrchestrator {
             ip: (mejor as any).ip || (mejor as any).wisphub_ip || metaPre.ip,
           };
 
-          const sessionActualizada = await TursoService.upsertSession({
+          const sessionActualizada = await DbService.upsertSession({
             phone,
             client_id: mejor.unique_external_id || String(mejor.id_servicio || ''),
             service_id: mejor.id_servicio ? String(mejor.id_servicio) : (mejor.sn || String(mejor.unique_external_id || '')),
@@ -4782,7 +4782,7 @@ export class BotOrchestrator {
 
       if (coincidencias.length === 1) {
         const c = coincidencias[0];
-        const sessionActualizada = await TursoService.upsertSession({
+        const sessionActualizada = await DbService.upsertSession({
           phone,
           client_id: String(c.id),
           service_id: String(c.servicio_id || c.id),
@@ -4803,7 +4803,7 @@ export class BotOrchestrator {
         });
         opciones += `¿Cuál de ellos deseas consultar?\n👉 *Responde con el número de la opción (ejemplo: 1 ó 2).*`;
 
-        await TursoService.upsertSession({
+        await DbService.upsertSession({
           phone,
           client_name: coincidencias[0].nombre,
           step: 'ESPERANDO_SELECCION_SERVICIO',
@@ -4849,7 +4849,7 @@ export class BotOrchestrator {
         'SOLICITAR_NOMBRE_PARA_DIAGNOSTICO',
         targetJid
       );
-      await TursoService.upsertSession({
+      await DbService.upsertSession({
         phone,
         step: 'ESPERANDO_IDENTIFICACION',
         metadata: JSON.stringify(metaPre),
@@ -4874,7 +4874,7 @@ export class BotOrchestrator {
 
     // Si tiene un formato de nombre creíble (2 a 45 caracteres)
     if (nombreLimpio.length >= 2 && nombreLimpio.length <= 45) {
-      const sessionActualizada = await TursoService.upsertSession({
+      const sessionActualizada = await DbService.upsertSession({
         phone,
         client_name: nombreLimpio,
         metadata: JSON.stringify(metaPre),
@@ -4893,7 +4893,7 @@ export class BotOrchestrator {
       'CONTINUAR_SIN_NOMBRE',
       targetJid
     );
-    await TursoService.updateStep(phone, 'ESPERANDO_PROBLEMA');
+    await DbService.updateStep(phone, 'ESPERANDO_PROBLEMA');
   }
 
   /**
@@ -4917,7 +4917,7 @@ export class BotOrchestrator {
 
     if (pendingServices.length === 0) {
       // Si no hay lista guardada, pedimos que se identifique de nuevo
-      await TursoService.updateStep(phone, 'ESPERANDO_IDENTIFICACION');
+      await DbService.updateStep(phone, 'ESPERANDO_IDENTIFICACION');
       await this.procesarIdentificacion(phone, input, session, targetJid);
       return;
     }
@@ -4944,7 +4944,7 @@ export class BotOrchestrator {
       logger.info(`[SeleccionServicio] Cliente ${phone} corrigió su identidad: "${rawInput}" -> "${nombreCorregido}". Re-procesando identificación.`);
       
       // Limpiar pendingServices de la sesión anterior
-      const sesionReset = await TursoService.upsertSession({
+      const sesionReset = await DbService.upsertSession({
         phone,
         step: 'ESPERANDO_IDENTIFICACION',
         metadata: JSON.stringify({ ...meta, pendingServices: [], registeredServices: [] }),
@@ -5035,7 +5035,7 @@ export class BotOrchestrator {
       sn: elegido.sn,
     };
 
-    const sessionActualizada = await TursoService.upsertSession({
+    const sessionActualizada = await DbService.upsertSession({
       phone,
       client_id: elegido.unique_external_id,
       service_id: elegido.sn,
@@ -5158,7 +5158,7 @@ export class BotOrchestrator {
       'VINCULADO_ESPERANDO_PROBLEMA',
       targetJid
     );
-    await TursoService.updateStep(phone, 'ESPERANDO_PROBLEMA');
+    await DbService.updateStep(phone, 'ESPERANDO_PROBLEMA');
   }
 
   /**
@@ -5171,7 +5171,7 @@ export class BotOrchestrator {
       try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
       metaObj.consultaFinalizada = true;
       metaObj.consultaFinalizadaAt = new Date().toISOString();
-      await TursoService.upsertSession({
+      await DbService.upsertSession({
         phone,
         step: 'CONSULTA_FINALIZADA',
         metadata: JSON.stringify(metaObj),
@@ -5424,7 +5424,7 @@ export class BotOrchestrator {
    */
   private static async verificarAutorizacionTecnico(phone: string, rawText?: string): Promise<{ autorizado: boolean; tech: any | null }> {
     try {
-      const allTechs = await TursoService.getTechnicians();
+      const allTechs = await DbService.getTechnicians();
       // Si aún no se ha dado de alta ningún técnico en el panel, se permite acceso para configuración inicial
       if (allTechs.length === 0) {
         return { autorizado: true, tech: null };
@@ -5434,7 +5434,7 @@ export class BotOrchestrator {
       const pinMatch = (rawText || '').match(/\b(?:pin|clave|pass|c[oó]digo)\s*[:=\s]*(\d{4,8})\b/i);
       const pin = pinMatch ? pinMatch[1] : undefined;
 
-      const tech = await TursoService.isAuthorizedTechnician(phone, pin);
+      const tech = await DbService.isAuthorizedTechnician(phone, pin);
       return { autorizado: Boolean(tech), tech };
     } catch (err: any) {
       logger.error('Error al verificar técnico:', err?.message || err);
@@ -5509,22 +5509,22 @@ export class BotOrchestrator {
     );
 
     // 1. Buscar en Turso DB / SmartOLT
-    let onuRecord = await TursoService.getOnuById(target);
+    let onuRecord = await DbService.getOnuById(target);
 
     if (!onuRecord) {
       // Búsqueda por folio o prefijo numérico
       const folioMatch = target.match(/^(\d{1,6})/);
       if (folioMatch) {
-        const client = await TursoService.getWisphubClientByAny({ id: folioMatch[1] });
+        const client = await DbService.getWisphubClientByAny({ id: folioMatch[1] });
         if (client && client.sn_onu) {
-          onuRecord = await TursoService.getOnuById(client.sn_onu);
+          onuRecord = await DbService.getOnuById(client.sn_onu);
         }
       }
     }
 
     if (!onuRecord) {
       // Búsqueda difusa por nombre
-      const fuzzy = await TursoService.searchOnusFuzzy(target, 1);
+      const fuzzy = await DbService.searchOnusFuzzy(target, 1);
       if (fuzzy.length > 0 && fuzzy[0].matchScore >= 45) {
         onuRecord = fuzzy[0];
       }
@@ -5586,14 +5586,14 @@ ${techInfo}───────────────────────
     const query = targetQuery?.trim() || session?.onu_id || session?.client_name || phone;
 
     // Buscar la ONU en SmartOLT / Turso
-    let onuRecord = await TursoService.getOnuById(query);
+    let onuRecord = await DbService.getOnuById(query);
     if (!onuRecord) {
-      const matches = await TursoService.searchOnusFuzzy(query, 1);
+      const matches = await DbService.searchOnusFuzzy(query, 1);
       if (matches.length > 0) onuRecord = matches[0];
     }
 
     if (!onuRecord && session?.client_name) {
-      const matches = await TursoService.searchOnusFuzzy(session.client_name, 1);
+      const matches = await DbService.searchOnusFuzzy(session.client_name, 1);
       if (matches.length > 0) onuRecord = matches[0];
     }
 
@@ -5605,7 +5605,7 @@ ${techInfo}───────────────────────
         'CLIENTE_NO_ENCONTRADO_WIFI',
         targetJid
       );
-      await TursoService.updateStep(phone, 'ESPERANDO_IDENTIFICACION');
+      await DbService.updateStep(phone, 'ESPERANDO_IDENTIFICACION');
       return;
     }
 
@@ -5910,7 +5910,7 @@ Por favor reconecta tus dispositivos ingresando esta nueva clave.`;
       model: payload.onu_type || 'EG8041V5',
     };
 
-    await TursoService.upsertSession({
+    await DbService.upsertSession({
       phone,
       step: 'PENDIENTE_CONFIRMACION_ACTIVACION_ONU',
       metadata: JSON.stringify(metaObj),
@@ -5985,7 +5985,7 @@ Por favor reconecta tus dispositivos ingresando esta nueva clave.`;
       metaObj.pendingOnu = null;
       metaObj.pendingName = null;
       metaObj.pendingPlan = null;
-      await TursoService.upsertSession({
+      await DbService.upsertSession({
         phone,
         step: 'CONVERSACIONAL',
         metadata: JSON.stringify(metaObj),
@@ -6016,7 +6016,7 @@ Por favor reconecta tus dispositivos ingresando esta nueva clave.`;
     metaObj.pendingOnu = null;
     metaObj.pendingName = null;
     metaObj.pendingPlan = null;
-    await TursoService.upsertSession({
+    await DbService.upsertSession({
       phone,
       step: 'CONVERSACIONAL',
       metadata: JSON.stringify(metaObj),
@@ -6059,7 +6059,7 @@ Módem aprovisionado en la OLT con su VLAN y Perfil de Velocidad.`;
       if (extraTags.length > 0) {
         groupMsg += `\n${extraTags.join(' | ')}`;
       }
-      let configuredGroupJid = (await TursoService.getActivationsGroupJid()).trim();
+      let configuredGroupJid = (await DbService.getActivationsGroupJid()).trim();
 
       if (configuredGroupJid) {
         if (!configuredGroupJid.endsWith('@g.us')) {
@@ -6121,7 +6121,7 @@ Módem aprovisionado en la OLT con su VLAN y Perfil de Velocidad.`;
 
     if (!cleanParams) {
       // Si el técnico solo escribió "cambio de módem", le pedimos el cliente
-      await TursoService.upsertSession({
+      await DbService.upsertSession({
         phone,
         step: 'PENDIENTE_CLIENTE_CAMBIO_MODEM',
       });
@@ -6150,7 +6150,7 @@ Módem aprovisionado en la OLT con su VLAN y Perfil de Velocidad.`;
   ): Promise<void> {
     const lower = rawText.trim().toLowerCase();
     if (/^(no|cancelar|cancelo|abortar|0)\b/i.test(lower)) {
-      await TursoService.upsertSession({ phone, step: 'CONVERSACIONAL' });
+      await DbService.upsertSession({ phone, step: 'CONVERSACIONAL' });
       await this.enviarYLoguear(phone, `*Cambio de modem cancelado.*`, 'ACTIVACION_TECNICO', 'SWAP_CANCELADO', targetJid);
       return;
     }
@@ -6175,7 +6175,7 @@ Módem aprovisionado en la OLT con su VLAN y Perfil de Velocidad.`;
     if (isIp || isFullSn) {
       oldOnu = await SmartOLTService.getOnuDetails(query);
     } else {
-      const matches = await TursoService.searchOnusFuzzy(query, 8);
+      const matches = await DbService.searchOnusFuzzy(query, 8);
 
       const distinctMatches: typeof matches = [];
       const seenKeys = new Set<string>();
@@ -6200,7 +6200,7 @@ Módem aprovisionado en la OLT con su VLAN y Perfil de Velocidad.`;
         try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
         metaObj.pendingModemSwapChoice = { candidates: distinctMatches };
 
-        await TursoService.upsertSession({
+        await DbService.upsertSession({
           phone,
           step: 'PENDIENTE_SELECCION_IP_CAMBIO_MODEM',
           metadata: JSON.stringify(metaObj),
@@ -6262,7 +6262,7 @@ Módem aprovisionado en la OLT con su VLAN y Perfil de Velocidad.`;
       model: oldOnu.onu_type,
     };
 
-    await TursoService.upsertSession({
+    await DbService.upsertSession({
       phone,
       step: 'PENDIENTE_SN_CAMBIO_MODEM',
       metadata: JSON.stringify(metaObj),
@@ -6297,14 +6297,14 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
     const choiceData = metaObj.pendingModemSwapChoice;
 
     if (!choiceData || !Array.isArray(choiceData.candidates) || choiceData.candidates.length === 0) {
-      await TursoService.upsertSession({ phone, step: 'CONVERSACIONAL' });
+      await DbService.upsertSession({ phone, step: 'CONVERSACIONAL' });
       await this.enviarYLoguear(phone, 'No hay ninguna seleccion de cambio de modem pendiente. Puedes escribir `cambio de modem [Cliente]` para iniciar.', 'ACTIVACION_TECNICO', 'ERROR_SESION', targetJid);
       return;
     }
 
     if (/^(no|cancelar|cancelo|abortar|0)\b/i.test(lower)) {
       metaObj.pendingModemSwapChoice = null;
-      await TursoService.upsertSession({
+      await DbService.upsertSession({
         phone,
         step: 'CONVERSACIONAL',
         metadata: JSON.stringify(metaObj),
@@ -6374,7 +6374,7 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
       model: oldOnu.onu_type,
     };
 
-    await TursoService.upsertSession({
+    await DbService.upsertSession({
       phone,
       step: 'PENDIENTE_SN_CAMBIO_MODEM',
       metadata: JSON.stringify(metaObj),
@@ -6409,7 +6409,7 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
     const oldService = metaObj.pendingModemSwapService || metaObj.pendingModemSwap;
 
     if (!oldService) {
-      await TursoService.upsertSession({ phone, step: 'CONVERSACIONAL' });
+      await DbService.upsertSession({ phone, step: 'CONVERSACIONAL' });
       await this.enviarYLoguear(phone, 'No hay ningun servicio activo seleccionado para cambio de modem. Inicia nuevamente con `cambio de modem [Cliente]`.', 'ACTIVACION_TECNICO', 'ERROR_SESION', targetJid);
       return;
     }
@@ -6418,7 +6418,7 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
       this.cancelarPollingOnu(phone);
       metaObj.pendingModemSwapService = null;
       metaObj.pendingModemSwap = null;
-      await TursoService.upsertSession({
+      await DbService.upsertSession({
         phone,
         step: 'CONVERSACIONAL',
         metadata: JSON.stringify(metaObj),
@@ -6458,7 +6458,7 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
       metaObj.targetSwapSn = cleanSuffix;
       metaObj.pendingModemSwapService = oldService;
 
-      await TursoService.upsertSession({
+      await DbService.upsertSession({
         phone,
         step: 'PENDIENTE_SN_CAMBIO_MODEM',
         metadata: JSON.stringify(metaObj),
@@ -6488,7 +6488,7 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
 
     const poll = async () => {
       try {
-        const curSession = await TursoService.getSession(phone);
+        const curSession = await DbService.getSession(phone);
         let curMeta: any = {};
         try { curMeta = JSON.parse(curSession?.metadata || '{}'); } catch {}
 
@@ -6558,7 +6558,7 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
     };
     metaObj.targetSwapSn = null;
 
-    await TursoService.upsertSession({
+    await DbService.upsertSession({
       phone,
       step: 'PENDIENTE_CONFIRMACION_CAMBIO_MODEM',
       metadata: JSON.stringify(metaObj),
@@ -6610,7 +6610,7 @@ Responde *SI* para ejecutar el cambio o *NO* para cancelar.`;
       metaObj.pendingModemSwapService = null;
       metaObj.pendingModemSwapChoice = null;
       metaObj.targetSwapSn = null;
-      await TursoService.upsertSession({
+      await DbService.upsertSession({
         phone,
         step: 'CONVERSACIONAL',
         metadata: JSON.stringify(metaObj),
@@ -6649,7 +6649,7 @@ Responde *SI* para ejecutar el cambio o *NO* para cancelar.`;
     metaObj.pendingModemSwapService = null;
     metaObj.pendingModemSwapChoice = null;
     metaObj.targetSwapSn = null;
-    await TursoService.upsertSession({
+    await DbService.upsertSession({
       phone,
       step: 'CONVERSACIONAL',
       metadata: JSON.stringify(metaObj),
@@ -6706,7 +6706,7 @@ Notificacion enviada al grupo de WhatsApp de Activaciones.`;
 
     const poll = async () => {
       try {
-        const curSession = await TursoService.getSession(phone);
+        const curSession = await DbService.getSession(phone);
         let curMeta: any = {};
         try { curMeta = JSON.parse(curSession?.metadata || '{}'); } catch {}
 
@@ -6824,7 +6824,7 @@ Notificacion enviada al grupo de WhatsApp de Activaciones.`;
     metaObj.pendingContractDraft = draft;
     metaObj.targetSn = null;
 
-    await TursoService.upsertSession({
+    await DbService.upsertSession({
       phone,
       step: 'PENDIENTE_CONFIRMACION_ACTIVACION_ONU',
       metadata: JSON.stringify(metaObj),
@@ -6904,7 +6904,7 @@ Responde *SI* para autorizar o escribe los cambios que requieras (ej: 'cambiar n
 
     this.cancelarPollingOnu(phone);
 
-    await TursoService.upsertSession({
+    await DbService.upsertSession({
       phone,
       step: 'PENDIENTE_CONFIRMACION_ACTIVACION_ONU',
       metadata: JSON.stringify(metaObj),
@@ -6948,7 +6948,7 @@ _(O puedes corregir datos: 'cambiar nombre [nombre]', 'cambiar folio [folio]', '
     let draft = metaObj.pendingContractDraft || null;
 
     if (!payload && !draft) {
-      await TursoService.upsertSession({ phone, step: 'CONVERSACIONAL' });
+      await DbService.upsertSession({ phone, step: 'CONVERSACIONAL' });
       await this.enviarYLoguear(
         phone,
         `No tienes ninguna activacion en curso. Puedes enviar una foto de contrato o escribir *activar cliente [SN] [Folio-Nombre]* para iniciar.`,
@@ -6968,7 +6968,7 @@ _(O puedes corregir datos: 'cambiar nombre [nombre]', 'cambiar folio [folio]', '
       metaObj.pendingActivationDetails = null;
       metaObj.pendingContractDraft = null;
       metaObj.targetSn = null;
-      await TursoService.upsertSession({
+      await DbService.upsertSession({
         phone,
         step: 'CONVERSACIONAL',
         metadata: JSON.stringify(metaObj),
@@ -7085,7 +7085,7 @@ _(O puedes corregir datos: 'cambiar nombre [nombre]', 'cambiar folio [folio]', '
         metaObj.pendingContractDraft = activeDraft;
         metaObj.targetSn = cleanSuffix;
 
-        await TursoService.upsertSession({
+        await DbService.upsertSession({
           phone,
           step: 'PENDIENTE_CONFIRMACION_ACTIVACION_ONU',
           metadata: JSON.stringify(metaObj),
@@ -7226,7 +7226,7 @@ _(O puedes corregir datos: 'cambiar nombre [nombre]', 'cambiar folio [folio]', '
         metaObj.pendingActivationDetails = null;
         metaObj.pendingContractDraft = null;
         metaObj.targetSn = null;
-        await TursoService.upsertSession({ phone, step: 'CONVERSACIONAL', metadata: JSON.stringify(metaObj) });
+        await DbService.upsertSession({ phone, step: 'CONVERSACIONAL', metadata: JSON.stringify(metaObj) });
         await this.enviarYLoguear(phone, `*Activacion cancelada.*`, 'ACTIVACION_TECNICO', 'ACTIVACION_CANCELADA', targetJid);
         return;
       }
@@ -7291,7 +7291,7 @@ _(O puedes corregir datos: 'cambiar nombre [nombre]', 'cambiar folio [folio]', '
       metaObj.pendingActivationDetails = details;
       metaObj.pendingContractDraft = draft;
 
-      await TursoService.upsertSession({
+      await DbService.upsertSession({
         phone,
         step: 'PENDIENTE_CONFIRMACION_ACTIVACION_ONU',
         metadata: JSON.stringify(metaObj),
@@ -7367,6 +7367,6 @@ Escribe los ultimos digitos del SN del modem (ej: *474B4484* o *4484*) para vinc
     const texto = `${saludo} Bienvenido al centro de atención y soporte de *${this.getIspName()}*.\n\n¿En qué podemos ayudarte el día de hoy? Cuéntame tu duda o si presentas alguna falla con tu internet.`;
 
     await this.enviarYLoguear(phone, texto, 'SALUDO', 'SALUDO_ENVIADO');
-    await TursoService.updateStep(phone, 'ESPERANDO_PROBLEMA');
+    await DbService.updateStep(phone, 'ESPERANDO_PROBLEMA');
   }
 }

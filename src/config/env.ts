@@ -6,9 +6,13 @@ export const config = {
   nodeEnv: process.env.NODE_ENV || 'production',
   appUrl: (process.env.APP_URL || '').replace(/\/+$/, ''),
 
-  // Turso
+  // Database (SQLite Local)
+  db: {
+    url: process.env.DATABASE_URL || process.env.TURSO_DATABASE_URL || '',
+    authToken: process.env.TURSO_AUTH_TOKEN || '',
+  },
   turso: {
-    url: process.env.TURSO_DATABASE_URL || '',
+    url: process.env.DATABASE_URL || process.env.TURSO_DATABASE_URL || '',
     authToken: process.env.TURSO_AUTH_TOKEN || '',
   },
 

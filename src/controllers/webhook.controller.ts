@@ -4,7 +4,7 @@ import { config } from '../config/env';
 import { SettingsService } from '../services/settings.service';
 import { EvolutionService } from '../services/evolution.service';
 import { GroqService } from '../services/groq.service';
-import { TursoService, DbService } from '../services/db.service';
+import { DbService } from '../services/db.service';
 import { MercadoPagoService } from '../services/mercadopago.service';
 import { WispHubService } from '../services/wisphub.service';
 import { Logger } from '../utils/logger';
@@ -210,7 +210,7 @@ export class WebhookController {
 
         // Auditoría en Turso
         if (extracted.text) {
-          TursoService.logMessage(phone, 'OUT', extracted.text, null, 'INTERVENCION_HUMANA').catch(() => {});
+          DbService.logMessage(phone, 'OUT', extracted.text, null, 'INTERVENCION_HUMANA').catch(() => {});
         }
         return;
       }
@@ -277,7 +277,7 @@ export class WebhookController {
         imageAnalysis?.tipo_documento === 'CONTRATO_INSTALACION'
       );
 
-      const isTechnician = isTechAction || await TursoService.isAuthorizedTechnician(phone.replace(/\D/g, '')).catch(() => false);
+      const isTechnician = isTechAction || await DbService.isAuthorizedTechnician(phone.replace(/\D/g, '')).catch(() => false);
 
       // Comandos técnicos y fotos de contratos tienen prioridad absoluta y NUNCA son bloqueados por human takeover
       if (isTechAction || isTechnician) {
@@ -580,8 +580,8 @@ export class WebhookController {
               `¡Gracias por tu pago puntual con *${ispName}*! 🚀`;
 
             await EvolutionService.enviarTexto(targetJid, mensajeExito);
-            await TursoService.logMessage(cleanPhone, 'OUT', mensajeExito, 'REPORTAR_PAGO', 'PAGO_MERCADOPAGO_APROBADO');
-            await TursoService.updateStep(cleanPhone, 'INICIO');
+            await DbService.logMessage(cleanPhone, 'OUT', mensajeExito, 'REPORTAR_PAGO', 'PAGO_MERCADOPAGO_APROBADO');
+            await DbService.updateStep(cleanPhone, 'INICIO');
           }
         }
       }

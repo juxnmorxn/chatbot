@@ -46,7 +46,7 @@ export function phoneticNormalize(text: string): string {
 }
 
 /**
- * Genera fragmentos de búsqueda (trigramas y prefijos fonéticos) para consultas SQL en SQLite/Turso
+ * Genera fragmentos de búsqueda (trigramas y prefijos fonéticos) para consultas SQL en SQLite Local
  */
 export function generateSearchFragments(query: string): string[] {
   const norm = normalizeText(query);
