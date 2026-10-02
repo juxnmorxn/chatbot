@@ -9,3 +9,6 @@ yarn-error.log*
 evolution_instances/
 evolution_store/
 scratch/
+data/
+*.db
+*.db-journal
