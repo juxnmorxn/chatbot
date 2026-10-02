@@ -5923,14 +5923,16 @@ Por favor reconecta tus dispositivos ingresando esta nueva clave.`;
     const cardMsg = `📋 *RESUMEN DE ACTIVACIÓN*
 ──────────────────────────────
 • *Cliente / Folio:* *${parsed.name}*
-• *Zona:* *${targetZone}*
+• *Zona / Municipio:* *${targetZone}*
 • *Paquete:* *${planDisplay}*
-• *Serie (SN):* *${unconfigured.sn}*
+• *Serie (SN):* *${unconfigured.sn}* (${payload.onu_type})
 • *Nivel Óptico:* *${signalText}*
+• *IP asignada:* *${payload.ip_address}* (VLAN ${payload.vlan})
 ──────────────────────────────
 ⚠️ *¿Confirmas la activación de este módem en SmartOLT?*
 
-👉 Responde *SÍ* para activar o *NO* para cancelar.`;
+👉 Responde *SÍ* para autorizar o *NO* para cancelar.
+_(O indica un cambio, ej: cambiar paquete 60 megas)_`;
 
     await this.enviarYLoguear(
       phone,
@@ -7002,6 +7004,56 @@ _(O puedes corregir datos: 'cambiar nombre [nombre]', 'cambiar folio [folio]', '
       }
     }
 
+    // 0.2 Detección cuando el técnico pide cambiar un campo pero no especificó el valor todavía
+    const esPeticionPlanSinMegas = /^(?:cambiar|modificar|ajustar|actualizar|poner)?\s*(?:el\s+)?(?:paquete|plan|velocidad)(?:\s*(?:a|de|por))?$/i.test(lower) ||
+      /^(?:paquete|plan)$/i.test(lower);
+    if (esPeticionPlanSinMegas) {
+      await this.enviarYLoguear(
+        phone,
+        `📦 *¿A qué paquete o velocidad deseas cambiarlo?*\n\n_Opciones disponibles:_\n• *40 Megas*\n• *60 Megas*\n• *100 Megas*\n• *150 Megas*\n• *200 Megas*\n• *300 Megas*\n• *500 Megas*\n\n👉 Responde con los megas deseados, por ejemplo: \`60 megas\` o \`cambiar paquete 100\``,
+        'ACTIVACION_TECNICO',
+        'PREGUNTAR_NUEVO_PLAN',
+        targetJid
+      );
+      return;
+    }
+
+    const esPeticionNombreSinValor = /^(?:cambiar|modificar|ajustar|actualizar|corregir)?\s*(?:el\s+)?(?:nombre|cliente)$/i.test(lower);
+    if (esPeticionNombreSinValor) {
+      await this.enviarYLoguear(
+        phone,
+        `👤 *¿Cuál es el nuevo nombre del cliente?*\n\n👉 Escribe por ejemplo: \`cambiar nombre Juan Pérez Martínez\``,
+        'ACTIVACION_TECNICO',
+        'PREGUNTAR_NUEVO_NOMBRE',
+        targetJid
+      );
+      return;
+    }
+
+    const esPeticionFolioSinValor = /^(?:cambiar|modificar|ajustar|actualizar|corregir)?\s*(?:el\s+)?folio$/i.test(lower);
+    if (esPeticionFolioSinValor) {
+      await this.enviarYLoguear(
+        phone,
+        `🔢 *¿Cuál es el nuevo número de folio?*\n\n👉 Escribe por ejemplo: \`cambiar folio 3456\``,
+        'ACTIVACION_TECNICO',
+        'PREGUNTAR_NUEVO_FOLIO',
+        targetJid
+      );
+      return;
+    }
+
+    const esPeticionZonaSinValor = /^(?:cambiar|modificar|ajustar|actualizar|corregir)?\s*(?:la\s+)?(?:zona|municipio)$/i.test(lower);
+    if (esPeticionZonaSinValor) {
+      await this.enviarYLoguear(
+        phone,
+        `📍 *¿A qué zona o municipio deseas cambiarlo?*\n\n_Zonas disponibles:_\n• *Actopan*\n• *San Agustín Tlaxiaca*\n• *El Arenal*\n• *San José*\n\n👉 Escribe por ejemplo: \`cambiar zona San Agustín Tlaxiaca\``,
+        'ACTIVACION_TECNICO',
+        'PREGUNTAR_NUEVA_ZONA',
+        targetJid
+      );
+      return;
+    }
+
     // Extraer valores actuales de payload o draft
     let currentFolio = '';
     let currentCustomerName = '';
@@ -7197,8 +7249,10 @@ _(O puedes corregir datos: 'cambiar nombre [nombre]', 'cambiar folio [folio]', '
     }
 
     // 5. Modificar Plan / Paquete
-    const matchPlan = rawText.match(/(?:cambiar|modificar|poner|ajustar)?\s*(?:paquete|plan|velocidad|megas)\s*(?:a|en|es|:)?\s*(\d+)/i) ||
-      rawText.match(/^(\d+)\s*(?:megas|mb|m)\b/i);
+    const matchPlan = rawText.match(/(?:cambiar|modificar|poner|ajustar|subir|bajar|dejar|el)?\s*(?:el\s+)?(?:paquete|plan|velocidad|megas)\s*(?:a|en|es|de|por|:)?\s*(\d+)/i) ||
+      rawText.match(/^(?:poner|ponerle|dejar|dejarlo\s+en|a)?\s*(\d+)\s*(?:megas|mb|m)\b/i) ||
+      rawText.match(/(?:a|en|de)\s+(\d+)\s*(?:megas|mb|m)/i) ||
+      (/^(\d{2,3})$/.test(rawText.trim()) && [40, 50, 60, 80, 100, 150, 200, 300, 500, 600, 1000].includes(parseInt(rawText.trim(), 10)) ? [rawText.trim(), rawText.trim()] : null);
     if (matchPlan) {
       const numMegas = matchPlan[1];
       const profiles = getSmartOltSpeedProfiles(`${numMegas}MB`);
@@ -7350,7 +7404,7 @@ Escribe los ultimos digitos del SN del modem (ej: *474B4484* o *4484*) para vinc
     } else {
       await this.enviarYLoguear(
         phone,
-        `*Opciones de activacion:*\n\nPuedes escribir:\n• *[Digitos SN]* (ej: *474B4484* o *4484*)\n• *cambiar folio [Folio]* (ej: *cambiar folio 2980*)\n• *cambiar nombre [Nombre]* (ej: *cambiar nombre Pedro Gomez*)\n• *cambiar zona [Zona/Municipio]* (ej: *cambiar zona El Arenal*)\n• *cambiar plan [Megas]* (ej: *cambiar plan 60 megas*)\n\nO responde *SI* para activar o *CANCELAR*.`,
+        `⚠️ *Comando de modificación no reconocido*\n\nPara modificar algún dato de la activación, escribe por ejemplo:\n• *cambiar paquete 60 megas* (o *60 megas*)\n• *cambiar nombre [Nombre]* (ej: *cambiar nombre Pedro Gómez*)\n• *cambiar folio [Folio]* (ej: *cambiar folio 2980*)\n• *cambiar zona [Zona]* (ej: *cambiar zona El Arenal*)\n• *[Dígitos SN]* (ej: *C24B0* para reasignar módem)\n\n👉 O responde *SÍ* para autorizar la activación o *CANCELAR*.`,
         'ACTIVACION_TECNICO',
         'MODIFICACION_NO_RECONOCIDA',
         targetJid
