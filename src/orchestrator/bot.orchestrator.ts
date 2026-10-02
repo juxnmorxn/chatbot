@@ -593,12 +593,23 @@ export class BotOrchestrator {
       return;
     }
 
-    // 2. Control Anti-Spam (Opt-Out): si el usuario escribe cancelar o baja
-    if (['CANCELAR', 'BAJA', 'NO ENVIAR', 'STOP'].includes(rawText.toUpperCase())) {
+    // 2. Control Anti-Spam (Opt-Out):
+    const isStepActivo = Boolean(
+      session?.step &&
+      session.step !== 'INICIO' &&
+      session.step !== 'CONVERSACIONAL' &&
+      session.step !== 'CONSULTA_FINALIZADA'
+    );
+
+    const upperText = rawText.toUpperCase().trim();
+    const esOptOutExplicito = ['BAJA', 'NO ENVIAR', 'STOP', 'CANCELAR SUSCRIPCION', 'CANCELAR AVISOS', 'CANCELAR NOTIFICACIONES'].includes(upperText);
+    const esCancelarEnFrio = upperText === 'CANCELAR' && !isStepActivo;
+
+    if (esOptOutExplicito || esCancelarEnFrio) {
       await DbService.setOptOut(phone, true);
       await this.enviarYLoguear(
         phone,
-        `{Entendido|Listo}. Has cancelado la suscripción de avisos automáticos de *${this.getIspName()}*. Si en el futuro deseas volver a activarlos, escribe *ACTIVAR*.`,
+        `{Entendido|Listo}. Has cancelado la suscripción de avisos automáticos de *${this.getIspName()}*. Si en el futuro deseas volver a activarlos o necesitas soporte, solo escribe *ACTIVAR* o *HOLA*.`,
         'CANCELAR_SUSCRIPCION',
         'OPTOUT_CONFIRMADO',
         targetJid
@@ -606,22 +617,29 @@ export class BotOrchestrator {
       return;
     }
 
-    if (rawText.toUpperCase() === 'ACTIVAR' && session?.opt_out === 1) {
-      await DbService.setOptOut(phone, false);
-      await this.enviarYLoguear(
-        phone,
-        `¡Bienvenido de vuelta! 🎉 Has reactivado las notificaciones y soporte de *${this.getIspName()}*. ¿En qué podemos colaborarte el día de hoy?`,
-        'ACTIVAR',
-        'OPTIN_CONFIRMADO',
-        targetJid
-      );
-      return;
-    }
-
-    // Si está en lista de exclusión y no envió 'ACTIVAR', no molestamos
     if (session?.opt_out === 1) {
-      logger.info(`El usuario ${phone} tiene opt_out activo. Ignorando mensaje saliente.`);
-      return;
+      // Si el usuario escribe una intención clara de saludo o soporte técnico, reactivamos automáticamente
+      const esReactivacion = upperText === 'ACTIVAR' ||
+        /^(hola|buen\s*(dia|día)|buenas|ayuda|soporte|menu|menú|falla|lento|internet|saldo|reporte)\b/i.test(lowerMsg);
+
+      if (esReactivacion) {
+        await DbService.setOptOut(phone, false);
+        if (session) session.opt_out = 0;
+        logger.info(`[Opt-In Automático] Usuario ${phone} reactivó la comunicación enviando "${rawText}".`);
+        if (upperText === 'ACTIVAR') {
+          await this.enviarYLoguear(
+            phone,
+            `¡Bienvenido de vuelta! 🎉 Has reactivado las notificaciones y soporte de *${this.getIspName()}*. ¿En qué podemos colaborarte el día de hoy?`,
+            'ACTIVAR',
+            'OPTIN_CONFIRMADO',
+            targetJid
+          );
+          return;
+        }
+      } else {
+        logger.info(`El usuario ${phone} tiene opt_out activo y envió "${rawText}". Ignorando mensaje.`);
+        return;
+      }
     }
 
     // 2.0 RECEPCIÓN DE UBICACIÓN GPS / GOOGLE MAPS COMPARTIDO (Mapeo automático de clientes)
@@ -731,6 +749,15 @@ export class BotOrchestrator {
     const authTecnico = await this.verificarAutorizacionTecnico(phone, rawText);
 
     if (authTecnico.autorizado) {
+      // Caso 0: El técnico solicita el menú de comandos técnicos o saluda identificándose
+      const esPeticionMenuTecnico = /^(menu\s*t[eé]cnico|men[uú]|comandos|soy\s*t[eé]cnico|panel\s*t[eé]cnico|ayuda\s*t[eé]cnico)\b/i.test(lowerMsg) ||
+        (authTecnico.tech && /^(hola|buenos?\s*d[ií]as?|buenas?\s*tardes?|saludos?)\b/i.test(lowerMsg) && (!session?.step || session.step === 'INICIO' || session.step === 'CONVERSACIONAL'));
+
+      if (esPeticionMenuTecnico) {
+        await this.enviarMenuTecnicoCampo(phone, authTecnico.tech, targetJid);
+        return;
+      }
+
       // Caso 1: El técnico pregunta por TR-069, SmartOLT o comandos aislados ("activar tr069", "activar smart", "activar ya que se trata")
       if (this.esConsultaTr069OSmartOLT(rawText)) {
         await this.enviarGuiaTr069Tecnico(phone, targetJid);
@@ -5717,6 +5744,34 @@ Por favor reconecta tus dispositivos ingresando esta nueva clave.`;
       'GUIA_TR069_TODO_EN_UNO',
       targetJid
     );
+  }
+
+  /**
+   * Envía el menú operativo interactivo para técnicos de campo autorizados
+   */
+  private static async enviarMenuTecnicoCampo(phone: string, tech: any | null, targetJid?: string): Promise<void> {
+    const nombreTec = tech?.name ? ` *${tech.name}*` : '';
+    const rolTec = tech?.role ? ` (${tech.role})` : '';
+    const menu = `🛠️ *Panel Operativo de Técnicos - ${this.getIspName()}*\n` +
+      `Bienvenido${nombreTec}${rolTec}.\n\n` +
+      `*Comandos directos en campo:*\n\n` +
+      `1️⃣ *Activar Módem / Cliente:* (Un solo mensaje)\n` +
+      `👉 \`activar cliente [SN] [Folio-Nombre] [Plan] [Zona]\`\n` +
+      `_Ej: \`activar cliente 4317B5 3456-Juan Perez 40M Actopan\`_\n\n` +
+      `2️⃣ *Cambio de Módem (Swap):*\n` +
+      `👉 \`cambio de modem [Folio, Nombre o IP]\`\n` +
+      `_Ej: \`cambio de modem 3456\`_\n\n` +
+      `3️⃣ *Cambiar Paquete / Velocidad:*\n` +
+      `👉 \`cambiar plan [Folio/Nombre/SN] a [Velocidad]\`\n` +
+      `_Ej: \`cambiar plan 3456 a 60 megas\`_\n\n` +
+      `4️⃣ *Cambiar Contraseña Wi-Fi:*\n` +
+      `👉 \`cambiar wifi [SN] [NuevoSSID] [NuevaClave]\`\n` +
+      `_Ej: \`cambiar wifi 4317B5 MiRed2.4G Clave2026*\`_\n\n` +
+      `5️⃣ *Guía Didáctica TR-069 & OLT:*\n` +
+      `👉 Escribe: \`guia tr069\`\n\n` +
+      `💡 _Para cualquier comando puedes escribirlo directamente en este chat en cualquier momento._`;
+
+    await this.enviarYLoguear(phone, menu, 'ACTIVACION_TECNICO', 'PANEL_TECNICO_ENVIADO', targetJid);
   }
 
   /**
