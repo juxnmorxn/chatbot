@@ -475,7 +475,10 @@ export class SmartOLTService {
   /**
    * Obtiene la lista de ONUs sin autorizar / sin configurar en SmartOLT
    */
-  static async getUnconfiguredOnus(oltId?: string): Promise<UnconfiguredOnu[]> {
+  /**
+   * Obtiene la lista de ONUs sin autorizar / sin configurar en SmartOLT
+   */
+  static async getUnconfiguredOnus(oltId?: string | number): Promise<UnconfiguredOnu[]> {
     const apiKey = this.getApiKey();
     if (!apiKey || apiKey.includes('tu_token')) {
       logger.warn('Modo DEV / Sin API Key: Retornando lista vacía o simulada de unconfigured ONUs.');
@@ -484,21 +487,41 @@ export class SmartOLTService {
 
     try {
       const api = this.getApi();
-      const params = oltId ? { olt_id: oltId } : undefined;
+      const params = oltId ? { olt_id: String(oltId) } : undefined;
       const response = await api.get('/onu/unconfigured_onus', { params });
       const data = response.data;
 
-      const rawOnus = Array.isArray(data)
-        ? data
-        : data?.onus || data?.response || data?.unconfigured_onus || [];
+      let rawOnus: any[] = [];
+      if (Array.isArray(data)) {
+        rawOnus = data;
+      } else if (Array.isArray(data?.onus)) {
+        rawOnus = data.onus;
+      } else if (Array.isArray(data?.response)) {
+        rawOnus = data.response;
+      } else if (Array.isArray(data?.unconfigured_onus)) {
+        rawOnus = data.unconfigured_onus;
+      } else if (data && typeof data === 'object') {
+        // En caso de que SmartOLT devuelva un objeto agrupado por OLT (ej: { "2": [...], "3": [...] })
+        for (const key of Object.keys(data)) {
+          if (['status', 'response_code', 'error', 'message'].includes(key)) continue;
+          const val = data[key];
+          if (Array.isArray(val)) {
+            rawOnus.push(...val);
+          } else if (val && typeof val === 'object' && Array.isArray(val.onus)) {
+            rawOnus.push(...val.onus);
+          } else if (val && typeof val === 'object' && Array.isArray(val.unconfigured_onus)) {
+            rawOnus.push(...val.unconfigured_onus);
+          }
+        }
+      }
 
       return rawOnus.map((item: any) => {
         const sn = String(item.sn || item.serial_number || item.onu_sn || '').trim().toUpperCase();
         const rawModel = item.onu_type_name || item.onu_type || item.model || '';
         const normModel = this.normalizeOnuType(rawModel, sn);
         return {
-          olt_id: item.olt_id || item.olt || '',
-          olt_name: item.olt_name || (String(item.olt_id) === '2' ? 'OLT-SanAgustin' : 'OLT5800-Actopan'),
+          olt_id: item.olt_id || item.olt || (oltId ? String(oltId) : ''),
+          olt_name: item.olt_name || (String(item.olt_id || oltId) === '2' ? 'OLT-SanAgustin' : 'OLT5800-Actopan'),
           pon_type: item.pon_type || 'gpon',
           board: item.board || item.slot || '0',
           port: item.port || item.pon || '0',
@@ -520,7 +543,7 @@ export class SmartOLTService {
    * Regla estricta: Los últimos dígitos proporcionados deben coincidir EXACTAMENTE con la terminación del SN de la ONU.
    * NO realiza aproximaciones ni sustituciones de caracteres para evitar autorizar un módem equivocado.
    */
-  static async findUnconfiguredOnuBySnSuffix(suffix: string): Promise<UnconfiguredOnu | null> {
+  static async findUnconfiguredOnuBySnSuffix(suffix: string, oltId?: string | number): Promise<UnconfiguredOnu | null> {
     let clean = (suffix || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
     if (clean.startsWith('48575443')) {
       clean = 'HWTC' + clean.substring(8);
@@ -534,7 +557,7 @@ export class SmartOLTService {
     }
 
     try {
-      const unconfiguredList = await this.getUnconfiguredOnus();
+      const unconfiguredList = await this.getUnconfiguredOnus(oltId);
       logger.info(`Buscando ONU con terminación exacta '${clean}' entre ${unconfiguredList.length} ONUs sin autorizar en SmartOLT.`);
 
       if (unconfiguredList.length === 0) {
