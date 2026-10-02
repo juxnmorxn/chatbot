@@ -3396,7 +3396,7 @@ export class BotOrchestrator {
       }
     }
 
-    // 4. SI EL REMITENTE ES UN TÉCNICO O ESTÁ EN FLUJO DE ACTIVACIÓN, ABSORBER FOTOS SECUNDARIAS SIN SPAMEAR
+    // 4. SI EL REMITENTE ES UN TÉCNICO EN MEDIO DE UN FLUJO DE ACTIVACIÓN, ABSORBER FOTOS SECUNDARIAS DE EVIDENCIA
     const isTechStep = session?.step?.startsWith('ACTIVACION_') ||
       session?.step === 'PENDIENTE_CONFIRMACION_ACTIVACION_ONU' ||
       session?.step === 'PENDIENTE_SN_ACTIVACION' ||
@@ -3406,9 +3406,7 @@ export class BotOrchestrator {
       session?.step === 'PENDIENTE_CONFIRMACION_CAMBIO_MODEM' ||
       session?.step === 'TECNICO_ESPERANDO_CLIENTE_GPS';
 
-    const esTecnicoAuth = isTechStep || await DbService.isAuthorizedTechnician(phone.replace(/\D/g, '')).catch(() => false);
-
-    if (esTecnicoAuth) {
+    if (isTechStep) {
       const pendingEvidence = meta.pendingActivationEvidence || {};
       pendingEvidence.fotos_adicionales = pendingEvidence.fotos_adicionales || [];
       pendingEvidence.fotos_adicionales.push({
@@ -3418,7 +3416,21 @@ export class BotOrchestrator {
       });
       meta.pendingActivationEvidence = pendingEvidence;
       await DbService.upsertSession({ phone, metadata: JSON.stringify(meta) });
-      logger.info(`[Técnico Multimedia] Foto adicional guardada silenciosamente para ${phone}: ${analysis?.tipo || 'OTRO'}`);
+      logger.info(`[Técnico Multimedia] Foto adicional guardada en evidencia para ${phone}: ${analysis?.tipo || 'OTRO'}`);
+      return;
+    }
+
+    const esTecnicoAuth = await DbService.isAuthorizedTechnician(phone.replace(/\D/g, '')).catch(() => false);
+    if (esTecnicoAuth) {
+      const desc = analysis?.descripcion ? `_${analysis.descripcion}_\n\n` : '';
+      const msj = `📸 *Imagen Recibida (Técnico de Campo)*\n\n${desc}` +
+        `Si deseas activar o aprovisionar un equipo con esta imagen, puedes:\n` +
+        `• Enviar una foto clara del *Contrato de Instalación* (con folio y nombre legibles).\n` +
+        `• Enviar una foto de la *Etiqueta del Módem* o *Medición de Potencia Óptica*.\n` +
+        `• O escribir el comando: \`activar cliente [SN] [Folio-Nombre] [Plan] [Zona]\`\n\n` +
+        `💡 Escribe *menu tecnico* para ver todos los comandos disponibles.`;
+
+      await this.enviarYLoguear(phone, msj, 'ACTIVACION_TECNICO', 'FOTO_TECNICO_STANDBY', targetJid);
       return;
     }
 
