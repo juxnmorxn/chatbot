@@ -2865,15 +2865,23 @@ export class DbService {
   }
 
   /**
-   * Alterna el estado activo/inactivo de un técnico
+   * Alterna o establece el estado activo/inactivo de un técnico
    */
-  static async toggleTechnicianActive(id: number): Promise<{ success: boolean; is_active: number }> {
+  static async toggleTechnicianActive(id: number, explicitActive?: boolean | number): Promise<{ success: boolean; is_active: number }> {
     try {
       const client = getDbClient();
-      await client.execute({
-        sql: `UPDATE technicians SET is_active = CASE WHEN is_active = 1 THEN 0 ELSE 1 END, updated_at = ? WHERE id = ?`,
-        args: [new Date().toISOString(), id],
-      });
+      if (explicitActive !== undefined) {
+        const val = (explicitActive === true || explicitActive === 1) ? 1 : 0;
+        await client.execute({
+          sql: `UPDATE technicians SET is_active = ?, updated_at = ? WHERE id = ?`,
+          args: [val, new Date().toISOString(), id],
+        });
+      } else {
+        await client.execute({
+          sql: `UPDATE technicians SET is_active = CASE WHEN is_active = 1 THEN 0 ELSE 1 END, updated_at = ? WHERE id = ?`,
+          args: [new Date().toISOString(), id],
+        });
+      }
       const check = await client.execute({ sql: 'SELECT is_active FROM technicians WHERE id = ?', args: [id] });
       const current = check.rows.length > 0 ? Number(check.rows[0].is_active) : 0;
       return { success: check.rows.length > 0, is_active: current };

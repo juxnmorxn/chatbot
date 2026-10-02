@@ -1905,7 +1905,8 @@ export class AdminController {
         return;
       }
 
-      const result = await DbService.toggleTechnicianActive(id);
+      const explicitActive = req.body?.is_active ?? req.body?.isActive;
+      const result = await DbService.toggleTechnicianActive(id, explicitActive);
       if (result.success) {
         res.json({
           success: true,

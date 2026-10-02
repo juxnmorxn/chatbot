@@ -7324,29 +7324,36 @@ export function getAdminDashboardHtml(): string {
         return;
       }
 
-      tbody.innerHTML = techs.map(t => \`
+      tbody.innerHTML = techs.map(t => {
+        const isActive = t.is_active === 1;
+        return \`
         <tr>
           <td style="font-weight: 600;">\${escapeHtml(t.name)}</td>
-          <td style="font-family: var(--font-mono);">\${t.phone}</td>
-          <td style="font-family: var(--font-mono); font-weight: 700; color: var(--accent-amber);">\${t.pin}</td>
+          <td style="font-family: var(--font-mono);">\${escapeHtml(t.phone)}</td>
+          <td style="font-family: var(--font-mono); font-weight: 700; color: var(--accent-amber);">\${escapeHtml(t.pin)}</td>
           <td><span class="badge badge-info">\${escapeHtml(t.role || 'Tecnico')}</span></td>
-          <td>
-            <span class="badge \${t.is_active === 1 ? 'badge-success' : 'badge-danger'}">
-              \${t.is_active === 1 ? 'Activo' : 'Inactivo'}
-            </span>
+          <td style="vertical-align: middle;">
+            <div style="display: inline-flex; align-items: center; gap: 8px;">
+              <label class="switch" title="\${isActive ? 'Desactivar técnico' : 'Activar técnico'}" style="margin: 0; vertical-align: middle;">
+                <input type="checkbox" \${isActive ? 'checked' : ''} onchange="toggleTechnicianActive(\${t.id}, this.checked)">
+                <span class="slider"></span>
+              </label>
+              <span class="badge \${isActive ? 'badge-success' : 'badge-danger'}" style="font-size: 11px; padding: 2px 7px;">
+                \${isActive ? 'Activo' : 'Inactivo'}
+              </span>
+            </div>
           </td>
           <td style="text-align: right;">
             <div style="display: flex; gap: 8px; justify-content: flex-end;">
-              <button class="btn btn-secondary btn-sm" onclick="toggleTechnicianActive(\${t.id})">
-                \${t.is_active === 1 ? 'Desactivar' : 'Activar'}
-              </button>
-              <button class="btn btn-danger btn-sm" onclick="deleteTechnicianItem(\${t.id}, '\${escapeHtml(t.name)}')">
-                Eliminar
+              <button class="btn btn-danger btn-sm" onclick="deleteTechnicianItem(\${t.id}, '\${escapeHtml(t.name)}')" title="Eliminar técnico">
+                <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                <span>Eliminar</span>
               </button>
             </div>
           </td>
         </tr>
-      \`).join('');
+      \`;
+      }).join('');
     }
 
     function filterTechniciansTable() {
@@ -7459,15 +7466,27 @@ export function getAdminDashboardHtml(): string {
       }, 'Crear Técnico');
     }
 
-    async function toggleTechnicianActive(id) {
+    async function toggleTechnicianActive(id, isActive) {
       try {
-        const res = await apiFetch(\`/api/technicians/\${id}/toggle\`, { method: 'POST' });
+        const body = typeof isActive === 'boolean' ? JSON.stringify({ is_active: isActive ? 1 : 0 }) : undefined;
+        const res = await apiFetch(\`/api/technicians/\${id}/toggle\`, {
+          method: 'POST',
+          ...(body ? { body } : {})
+        });
         if (res.success) {
           showToast('Estado Modificado', res.message, 'info');
+          const tech = (state.technicians || []).find(t => t.id === id);
+          if (tech) {
+            tech.is_active = res.is_active !== undefined ? res.is_active : (isActive ? 1 : 0);
+          }
+          filterTechniciansTable();
+        } else {
+          showToast('Error', res.error || 'No se pudo cambiar el estado', 'error');
           loadTechniciansData();
         }
       } catch (err) {
         showToast('Error', err.message, 'error');
+        loadTechniciansData();
       }
     }
 
