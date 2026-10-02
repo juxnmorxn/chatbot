@@ -138,8 +138,7 @@ export class IpamService {
         WHERE vlan LIKE 'VLAN-%' 
            OR vlan IN ('1010', '1020') 
            OR segment LIKE '172.17.%' 
-           OR segment LIKE '192.168.%' 
-           OR segment LIKE '172.19.5%'
+           OR segment LIKE '192.168.%'
       `);
 
       const res = await client.execute(`SELECT * FROM ipam_vlan_pools`);
