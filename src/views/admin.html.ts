@@ -3753,13 +3753,13 @@ export function getAdminDashboardHtml(): string {
                 </div>
 
                 <!-- Botón de migración 1-clic -->
-                <button class="btn btn-primary btn-sm" id="btn-auto-migrate-local_db" onclick="executeAutoMigrationFromBase de Datos Local()" style="width: 100%; margin-bottom: 16px; justify-content: center;">
+                <button class="btn btn-primary btn-sm" id="btn-auto-migrate-local_db" onclick="executeAutoMigration()" style="width: 100%; margin-bottom: 16px; justify-content: center;">
                   <span>🚀 Re-clonar / Importar Todo de Base de Datos Local a Local</span>
                 </button>
 
                 <!-- Acordeón / toggle para cambiar a Base de Datos Local si se desea -->
                 <div style="border-top: 1px solid var(--card-border); padding-top: 12px;">
-                  <button type="button" class="btn btn-secondary btn-xs" onclick="toggleBase de Datos LocalConfigCollapse()" style="font-size: 11px;">
+                  <button type="button" class="btn btn-secondary btn-xs" onclick="toggleLocalDbConfigCollapse()" style="font-size: 11px;">
                     ⚙️ Cambiar a Base de Datos Local (Avanzado)
                   </button>
 
@@ -3773,7 +3773,7 @@ export function getAdminDashboardHtml(): string {
                       <input type="password" id="db-config-local_db-token" class="form-input" placeholder="eyJhbGciOiJ...">
                     </div>
                     <div style="display: flex; gap: 8px; margin-top: 4px;">
-                      <button type="button" class="btn btn-warning btn-xs" onclick="switchDbToBase de Datos LocalRemote()">
+                      <button type="button" class="btn btn-warning btn-xs" onclick="switchDbToRemote()">
                         Conectar a Base de Datos Local
                       </button>
                       <button type="button" class="btn btn-secondary btn-xs" onclick="switchDbToLocal()">
@@ -9957,14 +9957,14 @@ export function getAdminDashboardHtml(): string {
       });
     }
 
-    function toggleBase de Datos LocalConfigCollapse() {
+    function toggleLocalDbConfigCollapse() {
       const fields = document.getElementById('db-local_db-credentials-fields');
       if (fields) {
         fields.style.display = fields.style.display === 'none' ? 'flex' : 'none';
       }
     }
 
-    async function switchDbToBase de Datos LocalRemote() {
+    async function switchDbToRemote() {
       const dbUrl = document.getElementById('db-config-local_db-url')?.value?.trim();
       const dbToken = document.getElementById('db-config-local_db-token')?.value?.trim();
 
@@ -10034,7 +10034,7 @@ export function getAdminDashboardHtml(): string {
       }
     }
 
-    async function executeAutoMigrationFromBase de Datos Local() {
+    async function executeAutoMigration() {
       const btn = document.getElementById('btn-auto-migrate-local_db');
       showConfirmDialog(
         '🚀 Iniciar Migración Automática a Local',
