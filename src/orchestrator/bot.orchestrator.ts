@@ -790,16 +790,22 @@ export class BotOrchestrator {
     } else {
       // Remitente NO es técnico registrado:
       // ¿Es un intento EXPLÍCITO de comando de instalación técnica de campo?
-      // Solo restringir si explícitamente usa botones técnicos, PIN o sintaxis de OLT ("activar cliente SN...")
       const esIntentoTecnicoExplicito = buttonId === 'BTN_ACTIVAR_MODEM' ||
+        buttonId === 'BTN_CONFIRMAR_ACTIVACION' ||
+        buttonId === 'BTN_CONFIRMAR_CAMBIO_MODEM' ||
+        esComandoActivacion ||
+        esComandoCambioModem ||
+        esComandoCambioWifi ||
         /\b(?:pin|clave)\s*[:=\s]*\d{4,8}\b/i.test(rawText) ||
         /^(?:activar|alta|aprovisionar)\s+(?:cliente|modem|onu|equipo|serie)\b/i.test(rawText) ||
-        /^(?:activar|alta)\s+[A-Fa-f0-9]{5,16}\b/i.test(rawText);
+        /^(?:activar|alta)\s+[A-Fa-f0-9]{5,16}\b/i.test(rawText) ||
+        /^(?:cambio\s+de\s+modem|reemplazo\s+de\s+modem)\b/i.test(rawText) ||
+        /^(?:menu\s*t[eé]cnico|panel\s*t[eé]cnico|soy\s*t[eé]cnico)\b/i.test(lowerMsg);
 
       if (esIntentoTecnicoExplicito) {
         await this.enviarYLoguear(
           phone,
-          `⚠️ *Acceso Restringido - Área Técnica*\n\nTu número (*${phone}*) no está registrado como técnico autorizado para activar equipos en SmartOLT.\n\n👉 Si eres instalador o técnico en campo, solicita tu alta o proporciona tu *PIN de seguridad* al administrador en el panel.`,
+          `⛔ *Acceso Restringido - Área Técnica Exclusiva*\n\nTu número (*${phone}*) no está registrado como técnico autorizado para activar, reemplazar o modificar equipos en SmartOLT.\n\n🔒 *Seguridad:* Esta función está reservada exclusivamente a personal de campo dado de alta en el panel administrativo de CloudWareMx.`,
           'ACTIVACION_TECNICO',
           'NO_AUTORIZADO',
           targetJid
@@ -5446,17 +5452,11 @@ export class BotOrchestrator {
   }
 
   /**
-   * Verifica si el remitente es un técnico autorizado.
-   * Si no hay ningún técnico registrado en la BD aún, permite la operación para pruebas iniciales.
+   * Verifica si el remitente es un técnico autorizado estrictamente registrado en la BD.
+   * Valida coincidencia por número de WhatsApp (últimos 10 dígitos) o por PIN numérico de seguridad.
    */
   private static async verificarAutorizacionTecnico(phone: string, rawText?: string): Promise<{ autorizado: boolean; tech: any | null }> {
     try {
-      const allTechs = await DbService.getTechnicians();
-      // Si aún no se ha dado de alta ningún técnico en el panel, se permite acceso para configuración inicial
-      if (allTechs.length === 0) {
-        return { autorizado: true, tech: null };
-      }
-
       // Buscar si incluyeron un PIN numérico en el texto (4 a 8 dígitos) precedido por pin, clave o pass
       const pinMatch = (rawText || '').match(/\b(?:pin|clave|pass|c[oó]digo)\s*[:=\s]*(\d{4,8})\b/i);
       const pin = pinMatch ? pinMatch[1] : undefined;
@@ -6035,6 +6035,20 @@ _(O indica un cambio, ej: cambiar paquete 60 megas)_`;
     let metaObj: any = {};
     try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
     const payload: AuthorizeOnuPayload = metaObj.pendingActivation;
+
+    if (confirmar) {
+      const auth = await this.verificarAutorizacionTecnico(phone);
+      if (!auth.autorizado) {
+        await this.enviarYLoguear(
+          phone,
+          `⛔ *Acceso Restringido - Área Técnica*\n\nTu número (*${phone}*) no está registrado como técnico autorizado para confirmar activaciones en SmartOLT.`,
+          'ACTIVACION_TECNICO',
+          'NO_AUTORIZADO',
+          targetJid
+        );
+        return;
+      }
+    }
 
     if (!confirmar || !payload) {
       metaObj.pendingActivation = null;
@@ -7000,6 +7014,18 @@ _(O puedes corregir datos: 'cambiar nombre [nombre]', 'cambiar folio [folio]', '
   ): Promise<void> {
     let metaObj: any = {};
     try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
+
+    const auth = await this.verificarAutorizacionTecnico(phone, rawText);
+    if (!auth.autorizado) {
+      await this.enviarYLoguear(
+        phone,
+        `⛔ *Acceso Restringido - Área Técnica*\n\nTu número (*${phone}*) no está registrado como técnico autorizado para modificar datos de aprovisionamiento en SmartOLT.`,
+        'ACTIVACION_TECNICO',
+        'NO_AUTORIZADO',
+        targetJid
+      );
+      return;
+    }
     let payload: AuthorizeOnuPayload | null = metaObj.pendingActivation || null;
     let details = metaObj.pendingActivationDetails || {};
     let draft = metaObj.pendingContractDraft || null;
