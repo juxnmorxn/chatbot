@@ -84,6 +84,114 @@ export class BotOrchestrator {
   }>();
 
   /**
+   * Determina automáticamente la tecnología del cliente (Antena Inalámbrica, FTTH SmartOLT o Fibra Manual)
+   * analizando su router MikroTik/zona, IP, y presencia de número de serie de ONU en Base de Datos Local.
+   */
+  static determinarTecnologiaCliente(params: {
+    sn_onu?: string | null;
+    router?: string | null;
+    ip?: string | null;
+    zona?: string | null;
+  }): {
+    tipo: 'ANTENA_WIRELESS' | 'FTTH_SMARTOLT' | 'FIBRA_MANUAL';
+    esAntena: boolean;
+    esFibraSmartOlt: boolean;
+    esFibraManual: boolean;
+    nombreTecnologia: string;
+    equipoNombre: string;
+    guiaReinicio: string;
+    routerNombre: string;
+  } {
+    const routerLow = (params.router || params.zona || '').toLowerCase();
+    const sn = (params.sn_onu || '').trim();
+    const ip = (params.ip || '').trim();
+
+    // 1. Zonas de Antenas Inalámbricas (Magdalena, Paraje, etc.)
+    const esZonaAntena =
+      routerLow.includes('antena') ||
+      routerLow.includes('magdalena') ||
+      routerLow.includes('paraje') ||
+      routerLow.includes('mimosa') ||
+      routerLow.includes('ubiquiti') ||
+      routerLow.includes('ubnt') ||
+      routerLow.includes('airmax') ||
+      routerLow.includes('torre') ||
+      routerLow.includes('wisp') ||
+      routerLow.startsWith('rb-') ||
+      ip.startsWith('172.17.') ||
+      ip.startsWith('10.');
+
+    const tieneSnOnuValido = sn.length >= 8 && (
+      sn.startsWith('HWTC') || sn.startsWith('ZTEG') || sn.startsWith('FHTT') || sn.startsWith('VSOL') || sn.startsWith('ALCL') || sn.startsWith('GPON')
+    );
+
+    if (esZonaAntena && !tieneSnOnuValido) {
+      return {
+        tipo: 'ANTENA_WIRELESS',
+        esAntena: true,
+        esFibraSmartOlt: false,
+        esFibraManual: false,
+        nombreTecnologia: 'Antena Inalámbrica',
+        equipoNombre: 'antena y router',
+        guiaReinicio: 'la fuente de poder de tu antena (la cajita negra con luz LED/PoE) y tu router de Wi-Fi',
+        routerNombre: params.router || params.zona || 'Nodo Inalámbrico',
+      };
+    }
+
+    if (tieneSnOnuValido) {
+      return {
+        tipo: 'FTTH_SMARTOLT',
+        esAntena: false,
+        esFibraSmartOlt: true,
+        esFibraManual: false,
+        nombreTecnologia: 'Fibra Óptica (SmartOLT)',
+        equipoNombre: 'módem',
+        guiaReinicio: 'tu módem de fibra óptica',
+        routerNombre: params.router || params.zona || 'Central FTTH',
+      };
+    }
+
+    // Fibras manuales sin SmartOLT (Fray, etc.)
+    if (routerLow.includes('fray') || routerLow.includes('fibra')) {
+      return {
+        tipo: 'FIBRA_MANUAL',
+        esAntena: false,
+        esFibraSmartOlt: false,
+        esFibraManual: true,
+        nombreTecnologia: 'Fibra Óptica',
+        equipoNombre: 'módem / convertidor óptico',
+        guiaReinicio: 'tu módem y convertidor óptico de la corriente',
+        routerNombre: params.router || params.zona || 'Fibra Fray',
+      };
+    }
+
+    // Si no tiene ONU, por descarte es antena/inalámbrico
+    if (!sn) {
+      return {
+        tipo: 'ANTENA_WIRELESS',
+        esAntena: true,
+        esFibraSmartOlt: false,
+        esFibraManual: false,
+        nombreTecnologia: 'Antena Inalámbrica',
+        equipoNombre: 'antena y router',
+        guiaReinicio: 'la fuente de poder de tu antena (cajita PoE) y tu router',
+        routerNombre: params.router || params.zona || 'Nodo Inalámbrico',
+      };
+    }
+
+    return {
+      tipo: 'FTTH_SMARTOLT',
+      esAntena: false,
+      esFibraSmartOlt: true,
+      esFibraManual: false,
+      nombreTecnologia: 'Fibra Óptica (SmartOLT)',
+      equipoNombre: 'módem',
+      guiaReinicio: 'tu módem',
+      routerNombre: params.router || params.zona || 'Central FTTH',
+    };
+  }
+
+  /**
    * Calcula el tiempo de pausa adaptado al horario de atención de oficina (hora Hidalgo, México)
    * Si la pausa ocurre fuera de horario o cerca de la salida (después de 18:00), se extiende hasta las 10:00 AM del siguiente día hábil.
    */
@@ -1719,31 +1827,39 @@ export class BotOrchestrator {
 
     logger.info(`Iniciando diagnóstico interno silencioso para cliente ${phone} (${session.client_name || 'N/A'})...`);
 
-    // --- 1. RESOLVER ONU Y VERIFICACIÓN SILENCIOSA EN SMARTOLT ---
-    let onuId = session.onu_id || meta.sn || meta.onu_id;
-    if (!onuId) {
-      try {
-        const whMatch = await DbService.getWisphubClientByAny({
-          id: session.client_id,
-          name: session.client_name,
-          phone,
-          ip: meta.ip,
-        });
-        if (whMatch?.sn_onu) onuId = whMatch.sn_onu;
-      } catch {}
-    }
-    if (!onuId && session.client_id) {
+    // --- 1. RESOLVER TECNOLOGÍA (ANTENA / FTTH / FIBRA MANUAL) Y VERIFICACIÓN SILENCIOSA EN SMARTOLT ---
+    let whMatch: any = null;
+    try {
+      whMatch = await DbService.getWisphubClientByAny({
+        id: session.client_id,
+        name: session.client_name,
+        phone,
+        ip: meta.ip,
+      });
+    } catch {}
+
+    const techInfo = this.determinarTecnologiaCliente({
+      sn_onu: whMatch?.sn_onu || meta.sn || session.onu_id,
+      router: whMatch?.router || meta.zone || meta.router,
+      ip: whMatch?.ip || meta.ip,
+      zona: zonaCliente || meta.zone_name,
+    });
+
+    let onuId = session.onu_id || meta.sn || meta.onu_id || whMatch?.sn_onu;
+    if (!onuId && session.client_id && techInfo.esFibraSmartOlt) {
       onuId = `ONU-${session.client_id}`;
     }
 
     let diag: SmartOltStatusResult | null = null;
-    if (onuId) {
+    if (onuId && techInfo.esFibraSmartOlt) {
       try {
         diag = await SmartOLTService.obtenerEstadoONU(onuId);
         logger.info(`Diagnóstico silencioso SmartOLT para ${phone} (ONU: ${onuId}): status=${diag.status}, potencia=${diag.opticalPowerDbm || 'N/A'} dBm`);
       } catch (err: any) {
         logger.warn(`Error en diagnóstico silencioso SmartOLT para ${phone}:`, err?.message || err);
       }
+    } else {
+      logger.info(`[Diagnóstico Silencioso] Cliente ${phone} (${session.client_name}) es ${techInfo.nombreTecnologia} en router/nodo "${techInfo.routerNombre}" (Plan: ${whMatch?.plan_internet || meta.speed_profile || 'N/A'}, IP: ${whMatch?.ip || meta.ip || 'N/A'}).`);
     }
 
     // --- 2. VERIFICACIÓN SILENCIOSA DE ESTADO FINANCIERO EN WISPHUB ---
@@ -1753,7 +1869,7 @@ export class BotOrchestrator {
         nombre: session.client_name,
         phone,
         sn: meta.sn || onuId,
-        ip: meta.ip,
+        ip: meta.ip || whMatch?.ip,
       });
 
       const tieneDeudaReal = estadoFinanciero.tieneDeudaReal || estadoFinanciero.totalDeuda > 0 || (estadoFinanciero.facturas && estadoFinanciero.facturas.length > 0);
@@ -2153,7 +2269,7 @@ export class BotOrchestrator {
 
     // CASO C3: EL CLIENTE YA ESPECIFICÓ DIRECTAMENTE QUE ES EN TODOS SUS APARATOS
     if (c.alcance_dispositivos === 'TODOS') {
-      if (onuId) {
+      if (onuId && techInfo.esFibraSmartOlt) {
         SmartOLTService.rebootONU(onuId).then(res => {
           logger.info(`Reinicio de ONU ${onuId} ordenado automáticamente para ${phone}: ${res.message}`);
         }).catch(err => {
@@ -2161,12 +2277,24 @@ export class BotOrchestrator {
         });
       }
 
-      const mensajeReinicioDirecto =
-        `Listo${nombre}, acabo de enviar una señal para *reiniciar tu módem remotamente*.\n\n` +
-        `⏳ Tardará aprox. 1 a 2 minutos en estabilizarse. En cuanto vuelvan a encender sus luces:\n` +
-        `1️⃣ Conéctate a tu red Wi-Fi *5G* cerca del módem.\n` +
-        `2️⃣ Haz un test en https://www.speedtest.net\n` +
-        `3️⃣ Mándame aquí la *captura de pantalla de tu Speedtest* para verificar tu velocidad.`;
+      const planContratado = whMatch?.plan_internet || meta.speed_profile || 'tu paquete contratado';
+      let mensajeReinicioDirecto = '';
+
+      if (techInfo.esAntena) {
+        mensajeReinicioDirecto =
+          `Listo${nombre}, para restablecer y estabilizar la conexión de tu antena y router en el nodo *${techInfo.routerNombre}*:\n\n` +
+          `1️⃣ Desconecta de la corriente la *fuente de poder de tu antena (la cajita negra con luz LED/PoE)* y tu router durante 30 segundos.\n` +
+          `2️⃣ Vuelve a conectarlos y espera 1 minuto a que el foquito de la antena quede encendido fijo.\n` +
+          `3️⃣ Realiza una prueba en https://www.speedtest.net y mándame aquí la *captura de pantalla de tu Speedtest* para verificar que te lleguen tus *${planContratado}*.\n\n` +
+          `¿Me confirmas si al reiniciar ya sincronizó tu navegación?`;
+      } else {
+        mensajeReinicioDirecto =
+          `Listo${nombre}, acabo de enviar una señal para *reiniciar tu módem remotamente*.\n\n` +
+          `⏳ Tardará aprox. 1 a 2 minutos en estabilizarse. En cuanto vuelvan a encender sus luces:\n` +
+          `1️⃣ Conéctate a tu red Wi-Fi *5G* cerca del módem.\n` +
+          `2️⃣ Haz un test en https://www.speedtest.net\n` +
+          `3️⃣ Mándame aquí la *captura de pantalla de tu Speedtest* para verificar tu velocidad.`;
+      }
 
       await DbService.upsertSession({
         phone,
@@ -2176,6 +2304,8 @@ export class BotOrchestrator {
           resumenFalla: detalleQueja,
           onuIdParaReinicio: onuId,
           triageAlcance: 'TODOS_DISPOSITIVOS',
+          tecnologia: techInfo.tipo,
+          router: techInfo.routerNombre,
           rebootTriggeredAt: new Date().toISOString(),
         }),
       });
@@ -2185,8 +2315,9 @@ export class BotOrchestrator {
     }
 
     // CASO C4: CASO INDETERMINADO O PRIMER CONTACTO ("No tengo internet", "Lento", etc.)
+    const nombreEquipo = techInfo.esAntena ? `antena y router en el nodo *${techInfo.routerNombre}*` : 'módem';
     const mensajeTriage =
-      `Hola${nombre}, tu módem aparece conectado y con buena señal. 📶\n\n` +
+      `Hola${nombre}, tu ${nombreEquipo} aparece conectado y con buena señal. 📶\n\n` +
       `¿El problema te ocurre en todos tus dispositivos o solo en uno en específico?`;
 
     await DbService.upsertSession({
@@ -2199,6 +2330,8 @@ export class BotOrchestrator {
         tipoFalla: esSinInternet ? 'SIN_INTERNET' : 'LENTITUD',
         sinInternetTotal: esSinInternet,
         reportaLentitud: c.reporta_lentitud,
+        tecnologia: techInfo.tipo,
+        router: techInfo.routerNombre,
       }),
     });
 
@@ -4003,6 +4136,42 @@ export class BotOrchestrator {
   private static async flujoConsultarNiveles(phone: string, session: Session | null, targetJid?: string): Promise<void> {
     const onuId = session?.onu_id || (session?.client_id ? `ONU-${session.client_id}` : null);
     const nombre = session?.client_name ? ` ${session.client_name}` : '';
+    let meta: any = {};
+    try { meta = JSON.parse(session?.metadata || '{}'); } catch {}
+
+    let whMatch: any = null;
+    try {
+      whMatch = await DbService.getWisphubClientByAny({
+        id: session?.client_id,
+        name: session?.client_name,
+        phone,
+        ip: meta.ip,
+      });
+    } catch {}
+
+    const techInfo = this.determinarTecnologiaCliente({
+      sn_onu: whMatch?.sn_onu || meta.sn || session?.onu_id,
+      router: whMatch?.router || meta.zone || meta.router,
+      ip: whMatch?.ip || meta.ip,
+      zona: meta.zone_name || meta.address,
+    });
+
+    if (techInfo.esAntena || techInfo.esFibraManual) {
+      await this.enviarYLoguear(
+        phone,
+        `Hola${nombre}, revisé tu servicio en nuestra base de datos:\n\n` +
+        `📡 *Tecnología:* ${techInfo.nombreTecnologia}\n` +
+        `🌐 *Nodo / Repetidor:* ${techInfo.routerNombre}\n` +
+        `🚀 *Paquete Contratado:* ${whMatch?.plan_internet || meta.speed_profile || 'Internet Residencial'}\n` +
+        `📶 *Estado de Línea:* Conectada y en servicio ✅\n\n` +
+        `Si presentas lentitud o fallas, avísame por aquí para realizar una prueba de velocidad y asistirte.`,
+        'CONSULTAR_NIVELES',
+        'NIVELES_ANTENA_INFORMADOS',
+        targetJid
+      );
+      await this.marcarConsultaFinalizada(phone, session);
+      return;
+    }
 
     if (!onuId) {
       await this.enviarYLoguear(
@@ -4029,9 +4198,6 @@ export class BotOrchestrator {
         status: 'ABIERTO',
         is_out_of_hours: this.isFueraDeHorario() ? 1 : 0,
       });
-
-      let meta: any = {};
-      try { meta = JSON.parse(session?.metadata || '{}'); } catch {}
 
       await DbService.upsertSession({
         phone,
@@ -4134,6 +4300,23 @@ export class BotOrchestrator {
     let meta: any = {};
     try { meta = JSON.parse(session?.metadata || '{}'); } catch {}
 
+    let whMatch: any = null;
+    try {
+      whMatch = await DbService.getWisphubClientByAny({
+        id: session?.client_id,
+        name: session?.client_name,
+        phone,
+        ip: meta.ip,
+      });
+    } catch {}
+
+    const techInfo = this.determinarTecnologiaCliente({
+      sn_onu: whMatch?.sn_onu || meta.sn || session?.onu_id,
+      router: whMatch?.router || meta.zone || meta.router,
+      ip: whMatch?.ip || meta.ip,
+      zona: meta.zone_name || meta.address,
+    });
+
     // 1. Verificación previa en WispHub (¿está activo o suspendido/moroso?)
     try {
       const estadoFinanciero = await WispHubService.verificarEstadoFinanciero({
@@ -4141,7 +4324,7 @@ export class BotOrchestrator {
         nombre: session?.client_name,
         phone,
         sn: meta.sn,
-        ip: meta.ip,
+        ip: meta.ip || whMatch?.ip,
       });
 
       const tieneDeudaReal = estadoFinanciero.tieneDeudaReal || estadoFinanciero.totalDeuda > 0 || (estadoFinanciero.facturas && estadoFinanciero.facturas.length > 0);
@@ -4169,7 +4352,7 @@ export class BotOrchestrator {
         const idWispHub = estadoFinanciero.cliente?.id ||
           (session?.service_id && !String(session.service_id).startsWith('HWTC') && !String(session.service_id).startsWith('ONU-') && !String(session.service_id).startsWith('ZTEG') ? session.service_id : null) ||
           (session?.client_id && !String(session.client_id).startsWith('HWTC') && !String(session.client_id).startsWith('ONU-') && !String(session.client_id).startsWith('ZTEG') ? session.client_id : null);
-        const ipCliente = estadoFinanciero.cliente?.ip;
+        const ipCliente = estadoFinanciero.cliente?.ip || whMatch?.ip;
         const nombreClienteActivar = session?.client_name || estadoFinanciero.cliente?.nombre;
 
         if (idWispHub || ipCliente || nombreClienteActivar) {
@@ -4183,6 +4366,21 @@ export class BotOrchestrator {
       }
     } catch (err: any) {
       logger.warn(`Error al verificar estado de pago en WispHub antes de reiniciar:`, err?.message || err);
+    }
+
+    if (techInfo.esAntena) {
+      await this.enviarYLoguear(
+        phone,
+        `Listo${nombre}, para reiniciar tu equipo en el nodo *${techInfo.routerNombre}*:\n\n` +
+        `🔌 Desconecta de la corriente la *fuente de poder de tu antena (la cajita negra con luz LED/PoE)* y tu router de Wi-Fi durante 30 segundos.\n` +
+        `⏳ Vuelve a conectarlos y espera 1 minuto a que el foquito de la antena quede encendido fijo.\n\n` +
+        `¿Me confirmas si al encender ya sincronizó tu navegación?`,
+        'REINICIAR_MODEM',
+        'REINICIO_ANTENA_MANUAL',
+        targetJid
+      );
+      await DbService.updateStep(phone, 'COMPROBACION_TURNO_1');
+      return;
     }
 
     const resultado = await SmartOLTService.rebootONU(onuId);
