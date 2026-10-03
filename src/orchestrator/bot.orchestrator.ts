@@ -85,13 +85,19 @@ export class BotOrchestrator {
 
   /**
    * Determina automáticamente la tecnología del cliente (Antena Inalámbrica, FTTH SmartOLT o Fibra Manual)
-   * analizando su router MikroTik/zona, IP, y presencia de número de serie de ONU en Base de Datos Local.
+   * utilizando los filtros cruciales:
+   * 1. Paquete contratado (si indica antena/radio/inalámbrico/wisp).
+   * 2. Presencia de número de serie de ONU válido registrado en SmartOLT.
+   * 3. Si no es de antena y no está en SmartOLT, se categoriza como Fibra Manual (como en Magdalena, Fray o futuros RBs mixtos).
+   * 4. Detección por Router/Nodo/Zona.
    */
   static determinarTecnologiaCliente(params: {
     sn_onu?: string | null;
     router?: string | null;
     ip?: string | null;
     zona?: string | null;
+    plan_internet?: string | null;
+    paquete?: string | null;
   }): {
     tipo: 'ANTENA_WIRELESS' | 'FTTH_SMARTOLT' | 'FIBRA_MANUAL';
     esAntena: boolean;
@@ -103,29 +109,52 @@ export class BotOrchestrator {
     routerNombre: string;
   } {
     const routerLow = (params.router || params.zona || '').toLowerCase();
+    const planLow = (params.plan_internet || params.paquete || '').toLowerCase();
     const sn = (params.sn_onu || '').trim();
     const ip = (params.ip || '').trim();
 
-    // 1. Zonas de Antenas Inalámbricas (Magdalena, Paraje, etc.)
-    const esZonaAntena =
-      routerLow.includes('antena') ||
-      routerLow.includes('magdalena') ||
-      routerLow.includes('paraje') ||
-      routerLow.includes('mimosa') ||
-      routerLow.includes('ubiquiti') ||
-      routerLow.includes('ubnt') ||
-      routerLow.includes('airmax') ||
-      routerLow.includes('torre') ||
-      routerLow.includes('wisp') ||
-      routerLow.startsWith('rb-') ||
-      ip.startsWith('172.17.') ||
-      ip.startsWith('10.');
+    // FILTRO CRUCIAL 1: El nombre del paquete contratado (plan_internet)
+    const esPaqueteAntena =
+      planLow.includes('antena') ||
+      planLow.includes('inalambrico') ||
+      planLow.includes('inalámbrico') ||
+      planLow.includes('wisp') ||
+      planLow.includes('radio') ||
+      planLow.includes('airmax') ||
+      planLow.includes('mimosa') ||
+      planLow.includes('litebeam') ||
+      planLow.includes('powerbeam') ||
+      planLow.includes('nanostation') ||
+      planLow.includes('cambium') ||
+      planLow.includes('ptp') ||
+      planLow.includes('pmp') ||
+      planLow.includes('5ghz') ||
+      planLow.includes('2.4ghz');
 
+    const esPaqueteFibra =
+      planLow.includes('fibra') ||
+      planLow.includes('ftth') ||
+      planLow.includes('gpon') ||
+      planLow.includes('optica') ||
+      planLow.includes('óptica');
+
+    // FILTRO CRUCIAL 2: Validación de ONU en SmartOLT
     const tieneSnOnuValido = sn.length >= 8 && (
-      sn.startsWith('HWTC') || sn.startsWith('ZTEG') || sn.startsWith('FHTT') || sn.startsWith('VSOL') || sn.startsWith('ALCL') || sn.startsWith('GPON')
+      sn.startsWith('HWTC') ||
+      sn.startsWith('ZTEG') ||
+      sn.startsWith('FHTT') ||
+      sn.startsWith('VSOL') ||
+      sn.startsWith('ALCL') ||
+      sn.startsWith('GPON') ||
+      sn.startsWith('ISKR') ||
+      sn.startsWith('CIEN') ||
+      /^[A-Z0-9]{12,16}$/i.test(sn)
     );
 
-    if (esZonaAntena && !tieneSnOnuValido) {
+    const routerNombre = params.router || params.zona || 'Nodo de Servicio';
+
+    // REGLA 1: Si el paquete dice explícitamente antena/inalámbrico -> 100% ANTENA
+    if (esPaqueteAntena) {
       return {
         tipo: 'ANTENA_WIRELESS',
         esAntena: true,
@@ -134,10 +163,11 @@ export class BotOrchestrator {
         nombreTecnologia: 'Antena Inalámbrica',
         equipoNombre: 'antena y router',
         guiaReinicio: 'la fuente de poder de tu antena (la cajita negra con luz LED/PoE) y tu router de Wi-Fi',
-        routerNombre: params.router || params.zona || 'Nodo Inalámbrico',
+        routerNombre,
       };
     }
 
+    // REGLA 2: Si tiene ONU válida y NO es paquete de antena -> FTTH SmartOLT
     if (tieneSnOnuValido) {
       return {
         tipo: 'FTTH_SMARTOLT',
@@ -147,26 +177,22 @@ export class BotOrchestrator {
         nombreTecnologia: 'Fibra Óptica (SmartOLT)',
         equipoNombre: 'módem',
         guiaReinicio: 'tu módem de fibra óptica',
-        routerNombre: params.router || params.zona || 'Central FTTH',
+        routerNombre,
       };
     }
 
-    // Fibras manuales sin SmartOLT (Fray, etc.)
-    if (routerLow.includes('fray') || routerLow.includes('fibra')) {
-      return {
-        tipo: 'FIBRA_MANUAL',
-        esAntena: false,
-        esFibraSmartOlt: false,
-        esFibraManual: true,
-        nombreTecnologia: 'Fibra Óptica',
-        equipoNombre: 'módem / convertidor óptico',
-        guiaReinicio: 'tu módem y convertidor óptico de la corriente',
-        routerNombre: params.router || params.zona || 'Fibra Fray',
-      };
-    }
+    // REGLA 3: Si el router o nodo indica exclusivamente antena (ej. Paraje, Torres, etc.) y NO es paquete de fibra
+    const esRouterAntenaExclusivo =
+      routerLow.includes('antena') ||
+      routerLow.includes('paraje') ||
+      routerLow.includes('mimosa') ||
+      routerLow.includes('ubiquiti') ||
+      routerLow.includes('ubnt') ||
+      routerLow.includes('airmax') ||
+      routerLow.includes('torre') ||
+      routerLow.includes('wisp');
 
-    // Si no tiene ONU, por descarte es antena/inalámbrico
-    if (!sn) {
+    if (esRouterAntenaExclusivo && !esPaqueteFibra) {
       return {
         tipo: 'ANTENA_WIRELESS',
         esAntena: true,
@@ -174,20 +200,22 @@ export class BotOrchestrator {
         esFibraManual: false,
         nombreTecnologia: 'Antena Inalámbrica',
         equipoNombre: 'antena y router',
-        guiaReinicio: 'la fuente de poder de tu antena (cajita PoE) y tu router',
-        routerNombre: params.router || params.zona || 'Nodo Inalámbrico',
+        guiaReinicio: 'la fuente de poder de tu antena (la cajita negra con luz LED/PoE) y tu router de Wi-Fi',
+        routerNombre,
       };
     }
 
+    // REGLA 4: Si no es antena por paquete ni por router exclusivo, y no está en SmartOLT
+    // Es FIBRA MANUAL (RBs mixtos como Magdalena, Fray, o nuevas zonas que crezcan a futuro)
     return {
-      tipo: 'FTTH_SMARTOLT',
+      tipo: 'FIBRA_MANUAL',
       esAntena: false,
-      esFibraSmartOlt: true,
-      esFibraManual: false,
-      nombreTecnologia: 'Fibra Óptica (SmartOLT)',
-      equipoNombre: 'módem',
-      guiaReinicio: 'tu módem',
-      routerNombre: params.router || params.zona || 'Central FTTH',
+      esFibraSmartOlt: false,
+      esFibraManual: true,
+      nombreTecnologia: 'Fibra Óptica (Administración por Router)',
+      equipoNombre: 'módem / convertidor óptico',
+      guiaReinicio: 'tu módem y convertidor óptico/ONT de la corriente',
+      routerNombre,
     };
   }
 
@@ -1843,6 +1871,7 @@ export class BotOrchestrator {
       router: whMatch?.router || meta.zone || meta.router,
       ip: whMatch?.ip || meta.ip,
       zona: zonaCliente || meta.zone_name,
+      plan_internet: whMatch?.plan_internet || meta.speed_profile || meta.plan,
     });
 
     let onuId = session.onu_id || meta.sn || meta.onu_id || whMatch?.sn_onu;
@@ -2287,6 +2316,13 @@ export class BotOrchestrator {
           `2️⃣ Vuelve a conectarlos y espera 1 minuto a que el foquito de la antena quede encendido fijo.\n` +
           `3️⃣ Realiza una prueba en https://www.speedtest.net y mándame aquí la *captura de pantalla de tu Speedtest* para verificar que te lleguen tus *${planContratado}*.\n\n` +
           `¿Me confirmas si al reiniciar ya sincronizó tu navegación?`;
+      } else if (techInfo.esFibraManual) {
+        mensajeReinicioDirecto =
+          `Listo${nombre}, para restablecer y estabilizar tu conexión de fibra óptica en el nodo *${techInfo.routerNombre}*:\n\n` +
+          `1️⃣ Desconecta de la toma de corriente tu *módem y convertidor óptico/ONT* durante 30 segundos.\n` +
+          `2️⃣ Vuelve a conectarlos y espera 1 a 2 minutos a que sus luces queden estables.\n` +
+          `3️⃣ Realiza una prueba en https://www.speedtest.net y mándame aquí la *captura de pantalla de tu Speedtest* para verificar que te lleguen tus *${planContratado}*.\n\n` +
+          `¿Me confirmas si al reiniciar ya sincronizó tu navegación?`;
       } else {
         mensajeReinicioDirecto =
           `Listo${nombre}, acabo de enviar una señal para *reiniciar tu módem remotamente*.\n\n` +
@@ -2315,7 +2351,9 @@ export class BotOrchestrator {
     }
 
     // CASO C4: CASO INDETERMINADO O PRIMER CONTACTO ("No tengo internet", "Lento", etc.)
-    const nombreEquipo = techInfo.esAntena ? `antena y router en el nodo *${techInfo.routerNombre}*` : 'módem';
+    const nombreEquipo = techInfo.esAntena
+      ? `antena y router en el nodo *${techInfo.routerNombre}*`
+      : (techInfo.esFibraManual ? `módem de fibra en el nodo *${techInfo.routerNombre}*` : 'módem');
     const mensajeTriage =
       `Hola${nombre}, tu ${nombreEquipo} aparece conectado y con buena señal. 📶\n\n` +
       `¿El problema te ocurre en todos tus dispositivos o solo en uno en específico?`;
@@ -4154,6 +4192,7 @@ export class BotOrchestrator {
       router: whMatch?.router || meta.zone || meta.router,
       ip: whMatch?.ip || meta.ip,
       zona: meta.zone_name || meta.address,
+      plan_internet: whMatch?.plan_internet || meta.speed_profile || meta.plan,
     });
 
     if (techInfo.esAntena || techInfo.esFibraManual) {
@@ -4315,6 +4354,7 @@ export class BotOrchestrator {
       router: whMatch?.router || meta.zone || meta.router,
       ip: whMatch?.ip || meta.ip,
       zona: meta.zone_name || meta.address,
+      plan_internet: whMatch?.plan_internet || meta.speed_profile || meta.plan,
     });
 
     // 1. Verificación previa en WispHub (¿está activo o suspendido/moroso?)
@@ -4377,6 +4417,21 @@ export class BotOrchestrator {
         `¿Me confirmas si al encender ya sincronizó tu navegación?`,
         'REINICIAR_MODEM',
         'REINICIO_ANTENA_MANUAL',
+        targetJid
+      );
+      await DbService.updateStep(phone, 'COMPROBACION_TURNO_1');
+      return;
+    }
+
+    if (techInfo.esFibraManual) {
+      await this.enviarYLoguear(
+        phone,
+        `Listo${nombre}, para reiniciar tu equipo de fibra óptica en el nodo *${techInfo.routerNombre}*:\n\n` +
+        `🔌 Desconecta de la corriente tu *módem y convertidor óptico/ONT* durante 30 segundos.\n` +
+        `⏳ Vuelve a conectarlos y espera 1 a 2 minutos a que terminen de encender todas sus luces verdes.\n\n` +
+        `¿Me confirmas si al encender ya sincronizó tu navegación?`,
+        'REINICIAR_MODEM',
+        'REINICIO_FIBRA_MANUAL',
         targetJid
       );
       await DbService.updateStep(phone, 'COMPROBACION_TURNO_1');
