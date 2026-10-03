@@ -10238,10 +10238,15 @@ export function getAdminDashboardHtml(): string {
               </code>
             </td>
             <td style="text-align: center;">
-              <button class="btn \${isActive ? 'btn-success' : 'btn-secondary'} btn-xs" style="padding: 3px 8px; font-size: 11px; display: inline-flex; align-items: center; gap: 5px;" onclick="handleToggleOfficeGroup(\${g.id}, \${!isActive})">
-                <span class="status-dot \${isActive ? 'online' : 'offline'}" style="width: 7px; height: 7px;"></span>
-                <span>\${isActive ? 'Activo' : 'Inactivo'}</span>
-              </button>
+              <div style="display: inline-flex; align-items: center; justify-content: center; gap: 8px;">
+                <label class="switch" style="margin-bottom: 0;" title="\${isActive ? 'Desactivar grupo' : 'Activar grupo'}">
+                  <input type="checkbox" \${isActive ? 'checked' : ''} onchange="handleToggleOfficeGroup(\${g.id}, this.checked)">
+                  <span class="slider"></span>
+                </label>
+                <span style="font-size: 11.5px; font-weight: 700; color: \${isActive ? '#34d399' : 'var(--text-dim)'}; min-width: 48px; text-align: left;">
+                  \${isActive ? 'Activo' : 'Inactivo'}
+                </span>
+              </div>
             </td>
             <td style="text-align: right;">
               <div style="display: inline-flex; gap: 6px; justify-content: flex-end; align-items: center;">
@@ -10470,17 +10475,19 @@ export function getAdminDashboardHtml(): string {
     async function handleToggleOfficeGroup(id, isActive) {
       try {
         const res = await apiFetch(\`/api/office-groups/\${id}/toggle\`, {
-          method: 'PUT',
-          body: JSON.stringify({ isActive }),
+          method: 'POST',
+          body: JSON.stringify({ isActive, is_active: isActive }),
         });
         if (res && res.success) {
-          showToast('Estado Actualizado', isActive ? 'Grupo activado.' : 'Grupo desactivado.', 'info', 2000);
+          showToast('Estado Actualizado', isActive ? 'Grupo activado exitosamente.' : 'Grupo pausado/desactivado.', 'info', 2000);
           loadOfficeGroupsData();
         } else {
           showToast('Error', res?.error || 'No se pudo cambiar el estado.', 'error');
+          loadOfficeGroupsData();
         }
       } catch (err) {
         showToast('Error', 'Fallo al comunicar cambio de estado.', 'error');
+        loadOfficeGroupsData();
       }
     }
 

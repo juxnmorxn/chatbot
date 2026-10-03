@@ -1304,9 +1304,10 @@ export class AdminController {
   static async toggleOfficeGroupActive(req: Request, res: Response): Promise<void> {
     try {
       const id = parseInt(req.params.id, 10);
-      const isActive = req.body.is_active === true || req.body.is_active === 1;
+      const rawActive = req.body.isActive !== undefined ? req.body.isActive : req.body.is_active;
+      const isActive = rawActive === true || rawActive === 1 || rawActive === '1' || rawActive === 'true';
       const success = await DbService.toggleOfficeGroupActive(id, isActive);
-      res.json({ success, message: success ? 'Estado actualizado' : 'No se pudo actualizar el estado' });
+      res.json({ success, is_active: isActive, message: success ? (isActive ? 'Grupo activado' : 'Grupo desactivado') : 'No se pudo actualizar el estado' });
     } catch (error: any) {
       logger.error('Error al alternar estado de grupo:', error?.message || error);
       res.status(500).json({ success: false, error: error?.message || error });
