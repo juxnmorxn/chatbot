@@ -896,6 +896,15 @@ export function getAdminDashboardHtml(): string {
       border-radius: 6px;
     }
 
+    .btn-xs {
+      padding: 4px 9px;
+      font-size: 11px;
+      border-radius: 5px;
+      font-weight: 600;
+      white-space: nowrap;
+      line-height: 1.2;
+    }
+
     .form-control {
       width: 100%;
       background: rgba(0, 0, 0, 0.35);
@@ -965,14 +974,16 @@ export function getAdminDashboardHtml(): string {
       border-radius: var(--radius-sm);
     }
 
-    table.data-table {
+    table.data-table,
+    table.datatable {
       width: 100%;
       border-collapse: collapse;
       text-align: left;
       font-size: 13px;
     }
 
-    table.data-table th {
+    table.data-table th,
+    table.datatable th {
       padding: 12px 14px;
       background: rgba(0, 0, 0, 0.3);
       color: var(--text-muted);
@@ -984,14 +995,16 @@ export function getAdminDashboardHtml(): string {
       white-space: nowrap;
     }
 
-    table.data-table td {
+    table.data-table td,
+    table.datatable td {
       padding: 12px 14px;
       border-bottom: 1px solid rgba(255, 255, 255, 0.04);
       color: var(--text-main);
       vertical-align: middle;
     }
 
-    table.data-table tbody tr:hover {
+    table.data-table tbody tr:hover,
+    table.datatable tbody tr:hover {
       background: rgba(255, 255, 255, 0.03);
     }
 
@@ -4144,15 +4157,15 @@ export function getAdminDashboardHtml(): string {
           </div>
 
           <div class="table-responsive">
-            <table class="datatable">
+            <table class="data-table">
               <thead>
                 <tr>
-                  <th>Grupo & Sucursal</th>
-                  <th>Rol / Propósito</th>
-                  <th>Zonas Asignadas</th>
-                  <th>WhatsApp JID / Enlace</th>
-                  <th style="text-align: center;">Estado</th>
-                  <th style="text-align: right;">Acciones</th>
+                  <th style="min-width: 190px;">Grupo & Sucursal</th>
+                  <th style="min-width: 170px;">Rol / Propósito</th>
+                  <th style="min-width: 150px;">Zonas Asignadas</th>
+                  <th style="min-width: 230px;">WhatsApp JID / Enlace</th>
+                  <th style="text-align: center; min-width: 110px;">Estado</th>
+                  <th style="text-align: right; min-width: 200px;">Acciones</th>
                 </tr>
               </thead>
               <tbody id="table-office-groups-body">
@@ -10197,16 +10210,16 @@ export function getAdminDashboardHtml(): string {
       }
 
       tbody.innerHTML = groups.map(g => {
-        let roleBadge = '<span class="badge badge-info" style="font-size: 11px;">TICKETS OFICINA</span>';
+        let roleBadge = '<span class="badge badge-info" style="font-size: 11px; padding: 4px 8px;">TICKETS OFICINA</span>';
         if (g.role === 'ACTIVACIONES') {
-          roleBadge = '<span class="badge badge-success" style="font-size: 11px; background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4);">ACTIVACIONES & SWAP</span>';
+          roleBadge = '<span class="badge badge-success" style="font-size: 11px; padding: 4px 8px; background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4);">ACTIVACIONES & SWAP</span>';
         } else if (g.role === 'SOPORTE_GENERAL') {
-          roleBadge = '<span class="badge badge-purple" style="font-size: 11px;">SOPORTE GENERAL</span>';
+          roleBadge = '<span class="badge badge-purple" style="font-size: 11px; padding: 4px 8px;">SOPORTE GENERAL</span>';
         }
 
         const isActive = g.is_active === 1 || g.is_active === true;
         const officeBadge = g.office ? \`<span class="badge badge-secondary" style="font-size: 10px; margin-left: 6px;">\${escapeHtml(g.office)}</span>\` : '';
-        const zonesStr = g.zones ? \`<div style="font-size: 11.5px; color: var(--text-muted); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="\${escapeHtml(g.zones)}">Zonas: \${escapeHtml(g.zones)}</div>\` : '<span style="color: var(--text-dim); font-size: 11px;">Todas las zonas</span>';
+        const zonesStr = g.zones ? \`<div style="font-size: 11.5px; color: var(--text-muted); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="\${escapeHtml(g.zones)}">Zonas: \${escapeHtml(g.zones)}</div>\` : '<span style="color: var(--text-dim); font-size: 11px;">Todas las zonas</span>';
 
         return \`
           <tr>
@@ -10220,18 +10233,18 @@ export function getAdminDashboardHtml(): string {
             <td>\${roleBadge}</td>
             <td>\${zonesStr}</td>
             <td>
-              <code style="font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px; display: inline-block; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                \${escapeHtml(g.jid || '')}
+              <code style="font-family: var(--font-mono); font-size: 11.5px; color: #38bdf8; background: rgba(0,0,0,0.35); padding: 4px 8px; border-radius: 4px; display: inline-block; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="\${escapeHtml(g.jid || '')}">
+                \${escapeHtml(g.jid || '--')}
               </code>
             </td>
             <td style="text-align: center;">
-              <button class="btn \${isActive ? 'btn-success' : 'btn-secondary'} btn-xs" style="padding: 2px 8px; font-size: 11px; display: inline-flex; align-items: center; gap: 5px;" onclick="handleToggleOfficeGroup(\${g.id}, \${!isActive})">
+              <button class="btn \${isActive ? 'btn-success' : 'btn-secondary'} btn-xs" style="padding: 3px 8px; font-size: 11px; display: inline-flex; align-items: center; gap: 5px;" onclick="handleToggleOfficeGroup(\${g.id}, \${!isActive})">
                 <span class="status-dot \${isActive ? 'online' : 'offline'}" style="width: 7px; height: 7px;"></span>
                 <span>\${isActive ? 'Activo' : 'Inactivo'}</span>
               </button>
             </td>
             <td style="text-align: right;">
-              <div style="display: flex; gap: 6px; justify-content: flex-end;">
+              <div style="display: inline-flex; gap: 6px; justify-content: flex-end; align-items: center;">
                 <button class="btn btn-secondary btn-xs" onclick="handleTestOfficeGroup('\${escapeHtml(g.jid)}', '\${escapeHtml(g.name || '')}')" title="Enviar mensaje de prueba de WhatsApp al grupo">
                   Probar
                 </button>
