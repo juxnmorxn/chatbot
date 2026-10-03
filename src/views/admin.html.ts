@@ -905,6 +905,44 @@ export function getAdminDashboardHtml(): string {
       line-height: 1.2;
     }
 
+    /* Password Input with Eye Toggle */
+    .password-input-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+      width: 100%;
+    }
+
+    .password-input-wrap .form-control,
+    .password-input-wrap .form-input,
+    .password-input-wrap input {
+      padding-right: 42px !important;
+    }
+
+    .btn-toggle-password {
+      position: absolute;
+      right: 6px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: transparent;
+      border: none;
+      color: var(--text-dim);
+      cursor: pointer;
+      padding: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
+      transition: color 0.15s, background 0.15s;
+      outline: none;
+      z-index: 2;
+    }
+
+    .btn-toggle-password:hover {
+      color: var(--accent-cyan);
+      background: rgba(255, 255, 255, 0.08);
+    }
+
     .form-control {
       width: 100%;
       background: rgba(0, 0, 0, 0.35);
@@ -2395,7 +2433,12 @@ export function getAdminDashboardHtml(): string {
         </div>
         <div class="form-group">
           <label class="form-label">Contraseña</label>
-          <input type="password" id="login-password" class="form-control" placeholder="••••••••" required autocomplete="current-password">
+          <div class="password-input-wrap">
+            <input type="password" id="login-password" class="form-control" placeholder="••••••••" required autocomplete="current-password">
+            <button type="button" class="btn-toggle-password" onclick="togglePasswordVisibility('login-password', this)" title="Mostrar / Ocultar Contraseña">
+              <svg class="svg-icon" viewBox="0 0 24 24" style="width: 17px; height: 17px;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+            </button>
+          </div>
         </div>
         <button type="submit" id="login-btn-submit" class="btn btn-primary" style="width: 100%; margin-top: 8px; padding: 11px;">
           Ingresar al Panel
@@ -3783,7 +3826,12 @@ export function getAdminDashboardHtml(): string {
                     </div>
                     <div>
                       <label class="form-label">Auth Token de Base de Datos Local</label>
-                      <input type="password" id="db-config-local_db-token" class="form-input" placeholder="eyJhbGciOiJ...">
+                      <div class="password-input-wrap">
+                        <input type="password" id="db-config-local_db-token" class="form-input form-control" placeholder="eyJhbGciOiJ...">
+                        <button type="button" class="btn-toggle-password" onclick="togglePasswordVisibility('db-config-local_db-token', this)" title="Mostrar / Ocultar Token">
+                          <svg class="svg-icon" viewBox="0 0 24 24" style="width: 17px; height: 17px;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                        </button>
+                      </div>
                     </div>
                     <div style="display: flex; gap: 8px; margin-top: 4px;">
                       <button type="button" class="btn btn-warning btn-xs" onclick="switchDbToRemote()">
@@ -3854,14 +3902,24 @@ export function getAdminDashboardHtml(): string {
               </div>
               <div class="form-group">
                 <label class="form-label">Evolution API Key (Master)</label>
-                <input type="password" id="setting-EVOLUTION_API_KEY" class="form-control credential-field" placeholder="••••••••" autocomplete="new-password" disabled>
+                <div class="password-input-wrap">
+                  <input type="password" id="setting-EVOLUTION_API_KEY" class="form-control credential-field" placeholder="••••••••" autocomplete="new-password" disabled>
+                  <button type="button" class="btn-toggle-password" onclick="togglePasswordVisibility('setting-EVOLUTION_API_KEY', this)" title="Mostrar / Ocultar Clave">
+                    <svg class="svg-icon" viewBox="0 0 24 24" style="width: 17px; height: 17px;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                  </button>
+                </div>
               </div>
             </div>
 
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
               <div class="form-group">
                 <label class="form-label">Groq API Key (IA)</label>
-                <input type="password" id="setting-GROQ_API_KEY" class="form-control credential-field" placeholder="gsk_••••••••" autocomplete="new-password" disabled>
+                <div class="password-input-wrap">
+                  <input type="password" id="setting-GROQ_API_KEY" class="form-control credential-field" placeholder="gsk_••••••••" autocomplete="new-password" disabled>
+                  <button type="button" class="btn-toggle-password" onclick="togglePasswordVisibility('setting-GROQ_API_KEY', this)" title="Mostrar / Ocultar Clave">
+                    <svg class="svg-icon" viewBox="0 0 24 24" style="width: 17px; height: 17px;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                  </button>
+                </div>
               </div>
               <div class="form-group">
                 <label class="form-label">Modelo Groq</label>
@@ -3876,7 +3934,12 @@ export function getAdminDashboardHtml(): string {
               </div>
               <div class="form-group">
                 <label class="form-label">WispHub API Key</label>
-                <input type="password" id="setting-WISPHUB_API_KEY" class="form-control credential-field" placeholder="••••••••" autocomplete="new-password" disabled>
+                <div class="password-input-wrap">
+                  <input type="password" id="setting-WISPHUB_API_KEY" class="form-control credential-field" placeholder="••••••••" autocomplete="new-password" disabled>
+                  <button type="button" class="btn-toggle-password" onclick="togglePasswordVisibility('setting-WISPHUB_API_KEY', this)" title="Mostrar / Ocultar Clave">
+                    <svg class="svg-icon" viewBox="0 0 24 24" style="width: 17px; height: 17px;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -3887,7 +3950,12 @@ export function getAdminDashboardHtml(): string {
               </div>
               <div class="form-group">
                 <label class="form-label">SmartOLT API Key (X-Token)</label>
-                <input type="password" id="setting-SMARTOLT_API_KEY" class="form-control credential-field" placeholder="••••••••" autocomplete="new-password" disabled>
+                <div class="password-input-wrap">
+                  <input type="password" id="setting-SMARTOLT_API_KEY" class="form-control credential-field" placeholder="••••••••" autocomplete="new-password" disabled>
+                  <button type="button" class="btn-toggle-password" onclick="togglePasswordVisibility('setting-SMARTOLT_API_KEY', this)" title="Mostrar / Ocultar Clave">
+                    <svg class="svg-icon" viewBox="0 0 24 24" style="width: 17px; height: 17px;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -4235,6 +4303,24 @@ export function getAdminDashboardHtml(): string {
         lastSqlResult: null,
       },
     };
+
+    // Password Visibility Toggle Engine
+    function togglePasswordVisibility(inputId, btn) {
+      const input = typeof inputId === 'string' ? document.getElementById(inputId) : inputId;
+      if (!input) return;
+      const isPass = input.type === 'password';
+      input.type = isPass ? 'text' : 'password';
+
+      if (btn) {
+        if (isPass) {
+          btn.innerHTML = '<svg class="svg-icon" viewBox="0 0 24 24" style="width: 17px; height: 17px; color: var(--accent-cyan);"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>';
+          btn.title = 'Ocultar contraseña';
+        } else {
+          btn.innerHTML = '<svg class="svg-icon" viewBox="0 0 24 24" style="width: 17px; height: 17px; color: var(--text-dim);"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>';
+          btn.title = 'Mostrar contraseña';
+        }
+      }
+    }
 
     // Toast Engine
     function showToast(title, message, type = 'info', duration = 3500) {
@@ -8318,7 +8404,12 @@ export function getAdminDashboardHtml(): string {
           </div>
           <div class="form-group">
             <label class="form-label">Contraseña</label>
-            <input type="password" id="user-new-password" class="form-control" placeholder="••••••••" required>
+            <div class="password-input-wrap">
+              <input type="password" id="user-new-password" class="form-control" placeholder="••••••••" required>
+              <button type="button" class="btn-toggle-password" onclick="togglePasswordVisibility('user-new-password', this)" title="Mostrar / Ocultar Contraseña">
+                <svg class="svg-icon" viewBox="0 0 24 24" style="width: 17px; height: 17px;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+              </button>
+            </div>
           </div>
           <div class="form-group">
             <label class="form-label">Rol de Acceso</label>
