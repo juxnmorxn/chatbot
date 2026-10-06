@@ -1629,10 +1629,8 @@ export class BotOrchestrator {
         });
 
         const msjCambio =
-          `¡Hola${nombre}! 📍 Con gusto te apoyamos para reubicar tu servicio a tu nueva casa.\n\n` +
-          `Para validar la cobertura de fibra óptica y los postes disponibles:\n` +
-          `👉 *Por favor compártenos tu ubicación actual por WhatsApp* o tu *dirección completa con referencias (calle, número, colonia y entrecalles)*.\n\n` +
-          `Ya te generé tu reporte *#${ticket.folio}* para que el equipo de campo confirme la factibilidad de tu nuevo domicilio.`;
+          `¡Hola${nombre}! Se ha generado tu reporte *#${ticket.folio}* y en breve nos comunicaremos contigo.\n\n` +
+          `📍 Por favor compártenos la *ubicación actual de tu domicilio* (o tu dirección por mensaje).`;
 
         await this.enviarYLoguear(phone, msjCambio, 'CAMBIO_DOMICILIO', `CAMBIO_DOMICILIO_${ticket.folio}`, targetJid);
         break;
@@ -1997,10 +1995,8 @@ export class BotOrchestrator {
           }
 
           const msjLos =
-            `Hola *${nombreCliente}*, revisé tu cuenta y *tus pagos se encuentran al corriente* (no registras recibos pendientes). ✅ Ya enviamos la reactivación administrativa a tu línea.\n\n` +
-            `⚠️ Sin embargo, en nuestra central detectamos un inconveniente con la señal física: *Pérdida de Señal Óptica (LOS / cable de fibra sin señal)* que llega a tu domicilio.\n\n` +
-            `🛠️ Ya te generamos tu reporte con el folio *#${ticket.folio}* para canalizar una visita técnica a tu domicilio a reparar el cableado exterior.\n\n` +
-            `📍 Por favor compártenos tu *ubicación por WhatsApp* o tu *dirección completa con referencias* para registrarla en la orden de visita.`;
+            `Hola *${nombreCliente}*, se ha generado tu reporte *#${ticket.folio}* y en breve nos comunicaremos contigo.\n\n` +
+            `📍 Por favor compártenos la *ubicación actual de tu domicilio* (o tu dirección por mensaje).`;
 
           await DbService.upsertSession({
             phone,
@@ -2134,10 +2130,8 @@ export class BotOrchestrator {
       }
 
       const mensajeCorte =
-        `Hola${nombre}, revisamos tu servicio en nuestro sistema y detectamos un inconveniente con la señal física del cable que llega a tu domicilio.\n\n` +
-        `🛠️ Hemos registrado tu reporte con el folio *#${ticket.folio}* para canalizar una visita técnica a tu domicilio lo más pronto posible.\n\n` +
-        `📞 Un compañero de nuestro equipo se comunicará contigo para coordinar qué día y horario pasan a revisarlo.\n\n` +
-        `📍 Por favor compártenos tu *ubicación actual por WhatsApp* o tu *dirección completa con referencias* para registrarla en la orden de visita.`;
+        `Hola${nombre}, se ha generado tu reporte *#${ticket.folio}* y en breve nos comunicaremos contigo.\n\n` +
+        `📍 Por favor compártenos la *ubicación actual de tu domicilio* (o tu dirección por mensaje).`;
 
       await DbService.upsertSession({
         phone,
@@ -2178,10 +2172,8 @@ export class BotOrchestrator {
 
       // Al cliente no se le mencionan tecnicismos (regla estricta)
       const mensajeAtenuacion =
-        `Hola${nombre}, revisamos tu servicio en nuestro sistema y detectamos una variación en la señal física que llega a tu domicilio.\n\n` +
-        `🛠️ Hemos registrado tu reporte con el folio *#${ticket.folio}* para canalizar una visita técnica a tu domicilio lo más pronto posible.\n\n` +
-        `📞 Un compañero de nuestro equipo se comunicará contigo para coordinar el día y horario en que el técnico pasará a tu domicilio.\n\n` +
-        `📍 Por favor compártenos tu *ubicación por WhatsApp* o tu *dirección completa con referencias* para registrarla en la orden de visita.`;
+        `Hola${nombre}, se ha generado tu reporte *#${ticket.folio}* y en breve nos comunicaremos contigo.\n\n` +
+        `📍 Por favor compártenos la *ubicación actual de tu domicilio* (o tu dirección por mensaje).`;
 
       await DbService.upsertSession({
         phone,
@@ -2456,9 +2448,8 @@ export class BotOrchestrator {
       }
 
       const msjEscalar =
-        `Enterado${nombre}. Como el detalle persiste, con gusto programaremos una visita técnica para revisar tu equipo y calibrar tu señal en sitio. 🛠️\n\n` +
-        `📋 Tu reporte ha sido registrado con el folio *#${ticket.folio}*.\n\n` +
-        `📍 Por favor compártenos tu *ubicación por WhatsApp* o tu *dirección completa con referencias* para registrarla en la orden de la cuadrilla.`;
+        `Hola${nombre}, se ha generado tu reporte *#${ticket.folio}* y en breve nos comunicaremos contigo.\n\n` +
+        `📍 Por favor compártenos la *ubicación actual de tu domicilio* (o tu dirección por mensaje).`;
 
       await DbService.upsertSession({
         phone,
@@ -2762,9 +2753,8 @@ export class BotOrchestrator {
       }
 
       const msjVisita =
-        `¡Buen día${nombre}! Queremos que tu internet funcione al 100%, así que programaremos una visita y renovaremos tu módem para asegurar que no tenga más fallas. 🛠️\n\n` +
-        `📋 Hemos generado tu orden de visita con el reporte *#${ticket.folio}*.\n\n` +
-        `📍 Por favor compártenos tu *ubicación por WhatsApp* o tu *dirección completa con referencias* para registrarla en la orden de la cuadrilla.`;
+        `Hola${nombre}, se ha generado tu reporte *#${ticket.folio}* y en breve nos comunicaremos contigo.\n\n` +
+        `📍 Por favor compártenos la *ubicación actual de tu domicilio* (o tu dirección por mensaje).`;
 
       await DbService.upsertSession({
         phone,
@@ -2929,6 +2919,15 @@ export class BotOrchestrator {
       `UBICACION_CONFIRMADA_${folio}`,
       targetJid
     );
+
+    await BotOrchestrator.notificarGrupoSoporte({
+      phone,
+      clientName: session?.client_name,
+      locationStr: ubicacionTexto,
+      issueSummary: meta.resumenFalla || meta.initialQuery || meta.issueSummary || 'Dirección / Referencia compartida por el cliente',
+      folio,
+      zone: meta.zone || meta.zone_name || meta.address,
+    }).catch(() => {});
 
     await this.marcarConsultaFinalizada(phone, session);
   }
@@ -3369,10 +3368,8 @@ export class BotOrchestrator {
         }
 
         const msj =
-          `Hola${nombre}, he revisado la foto de tu módem y observo que tiene un *foco rojo* encendido (indica una interrupción en la señal física de la fibra óptica).\n\n` +
-          `🛠️ Hemos registrado tu reporte con el folio *#${ticket.folio}* para canalizar una visita técnica a tu domicilio lo más pronto posible.\n\n` +
-          `📞 Un compañero de nuestro equipo se comunicará contigo para coordinar qué día y horario pasan a revisarlo.\n\n` +
-          `📍 Por favor compártenos tu *ubicación actual por WhatsApp* o tu *dirección completa con referencias* para registrarla en la orden de visita.`;
+          `Hola${nombre}, se ha generado tu reporte *#${ticket.folio}* y en breve nos comunicaremos contigo.\n\n` +
+          `📍 Por favor compártenos la *ubicación actual de tu domicilio* (o tu dirección por mensaje).`;
 
         await DbService.upsertSession({
           phone,
@@ -3835,6 +3832,17 @@ export class BotOrchestrator {
       `UBICACION_GPS_GUARDADA_${ticketFolio || 'OK'}`,
       targetJid
     );
+
+    const ubicacionTexto = url || coordsStr || direccion || 'Ubicación GPS por WhatsApp';
+    const resumenQueja = meta.resumenFalla || meta.initialQuery || meta.issueSummary || 'Actualización de ubicación / Reporte técnico de cliente';
+    await BotOrchestrator.notificarGrupoSoporte({
+      phone,
+      clientName: clientIdentified.nombre || session?.client_name,
+      locationStr: ubicacionTexto,
+      issueSummary: resumenQueja,
+      folio: ticketFolio,
+      zone: meta.zone || meta.zone_name || meta.address,
+    }).catch(() => {});
   }
 
   /**
@@ -4249,10 +4257,8 @@ export class BotOrchestrator {
 
       await this.enviarYLoguear(
         phone,
-        `Hola${nombre}, revisamos tu servicio en nuestro sistema y detectamos un inconveniente con la señal física del cable que llega a tu domicilio.\n\n` +
-        `🛠️ Hemos registrado tu reporte con el folio *#${ticket.folio}* para canalizar una visita técnica a tu domicilio lo más pronto posible.\n\n` +
-        `📞 Un compañero de nuestro equipo se comunicará contigo para coordinar qué día y horario pasan a revisarlo.\n\n` +
-        `📍 Por favor compártenos tu ubicación por aquí o tu dirección completa con referencias para registrarla en la orden de visita.`,
+        `Hola${nombre}, se ha generado tu reporte *#${ticket.folio}* y en breve nos comunicaremos contigo.\n\n` +
+        `📍 Por favor compártenos la *ubicación actual de tu domicilio* (o tu dirección por mensaje).`,
         'CONSULTAR_NIVELES',
         `TICKET_FIBRA_CORTADA_${ticket.folio}`,
         targetJid
@@ -4609,11 +4615,57 @@ export class BotOrchestrator {
   }
 
   /**
+   * Envía una notificación al grupo de WhatsApp de Soporte / Oficina con los datos completos del reporte:
+   * Nombre del cliente, Número celular, Ubicación (Maps / Coordenadas / Dirección) y Breve descripción del problema.
+   */
+  public static async notificarGrupoSoporte(params: {
+    phone: string;
+    clientName?: string | null;
+    locationStr?: string | null;
+    issueSummary: string;
+    folio?: string | null;
+    zone?: string | null;
+  }): Promise<boolean> {
+    try {
+      const groupJid = await DbService.getSupportGroupJid(params.zone || undefined);
+      if (!groupJid) {
+        logger.warn(`[Notificación Grupo] No se encontró un JID de grupo de soporte para ${params.phone}`);
+        return false;
+      }
+
+      const nombre = params.clientName || 'Cliente sin registrar';
+      const cel = params.phone.replace(/@c\.us|@s\.whatsapp\.net/, '');
+      const ubicacion = params.locationStr || 'Pendiente de ubicación por el cliente';
+      const folioStr = params.folio ? ` (#${params.folio})` : '';
+
+      const msg =
+        `🚨 *NUEVO REPORTE DE SOPORTE*${folioStr}\n` +
+        `──────────────────────────────\n` +
+        `👤 *Cliente:* *${nombre}*\n` +
+        `📱 *Celular:* ${cel}\n` +
+        `📍 *Ubicación:* ${ubicacion}\n` +
+        `📝 *Descripción del Problema:* ${params.issueSummary}\n` +
+        `──────────────────────────────\n` +
+        `_Favor de dar seguimiento a este reporte._`;
+
+      await EvolutionService.enviarTexto(groupJid, msg, { instant: true });
+      logger.info(`[Notificación Grupo] Reporte enviado exitosamente al grupo de soporte (${groupJid}) para ${params.phone}`);
+      return true;
+    } catch (err: any) {
+      logger.error(`Error al notificar al grupo de soporte para ${params.phone}:`, err?.message || err);
+      return false;
+    }
+  }
+
+  /**
    * Transferencia a atención con asesor humano
    */
   private static async flujoHablarAsesor(phone: string, session: Session | null, targetJid?: string): Promise<void> {
     const outOfHours = this.isFueraDeHorario();
     const contactoAsesor = config.isp.soporteHumanoPhone ? ` o puedes comunicarte al: *${config.isp.soporteHumanoPhone}*` : '';
+
+    let metaHablar: any = {};
+    try { metaHablar = JSON.parse(session?.metadata || '{}'); } catch {}
 
     if (outOfHours) {
       const ticket = await DbService.createTicket({
@@ -4642,6 +4694,15 @@ export class BotOrchestrator {
         `SOLICITUD_ASESOR_REGISTRADA_${ticket.folio}`,
         targetJid
       );
+
+      await BotOrchestrator.notificarGrupoSoporte({
+        phone,
+        clientName: session?.client_name,
+        locationStr: metaHablar.address || metaHablar.zone || 'Pendiente de compartir por el cliente',
+        issueSummary: 'Solicitud de atención con asesor humano (Fuera de horario)',
+        folio: ticket.folio,
+        zone: metaHablar.zone || metaHablar.zone_name || metaHablar.address,
+      }).catch(() => {});
     } else {
       await this.enviarYLoguear(
         phone,
@@ -4650,6 +4711,14 @@ export class BotOrchestrator {
         'TRANSFERENCIA_ASESOR',
         targetJid
       );
+
+      await BotOrchestrator.notificarGrupoSoporte({
+        phone,
+        clientName: session?.client_name,
+        locationStr: metaHablar.address || metaHablar.zone || 'Pendiente de compartir por el cliente',
+        issueSummary: metaHablar.resumenFalla || metaHablar.initialQuery || 'Cliente solicita atención personalizada con un asesor humano',
+        zone: metaHablar.zone || metaHablar.zone_name || metaHablar.address,
+      }).catch(() => {});
     }
 
     await this.marcarConsultaFinalizada(phone, session);
@@ -5393,7 +5462,20 @@ export class BotOrchestrator {
         qLower.includes('rojo') ||
         qLower.includes('los') ||
         qLower.includes('desconectado') ||
-        qLower.includes('apago')
+        qLower.includes('apago') ||
+        qLower.includes('intermitent') ||
+        qLower.includes('se va') ||
+        qLower.includes('se cae') ||
+        qLower.includes('se traba') ||
+        qLower.includes('pesimo') ||
+        qLower.includes('problema') ||
+        qLower.includes('ayuda') ||
+        qLower.includes('tecnico') ||
+        qLower.includes('técnico') ||
+        qLower.includes('soporte') ||
+        qLower.includes('revision') ||
+        qLower.includes('revisión') ||
+        qLower.includes('señal')
       ) {
         initialIntent = 'FALLA_INTERNET';
       } else if (
@@ -5420,6 +5502,8 @@ export class BotOrchestrator {
         qLower.includes('paquete')
       ) {
         initialIntent = 'CONSULTAR_PLAN';
+      } else if (quejaTexto && quejaTexto.trim().length > 3 && !['hola', 'buenas', 'buen dia', 'saludos'].includes(qLower)) {
+        initialIntent = 'FALLA_INTERNET';
       }
     }
 

@@ -3740,6 +3740,45 @@ export class DbService {
   }
 
   /**
+   * Obtiene el JID del grupo de soporte / tickets de forma infalible (primero de BD grupos, luego settings)
+   */
+  static async getSupportGroupJid(zone?: string): Promise<string> {
+    try {
+      const client = getDbClient();
+      if (zone) {
+        const resZone = await client.execute({
+          sql: `
+            SELECT jid FROM whatsapp_office_groups 
+            WHERE is_active = 1 AND (role = 'TICKETS_OFICINA' OR role = 'SOPORTE_GENERAL')
+              AND (office LIKE ? OR zones LIKE ? OR name LIKE ?)
+            ORDER BY id DESC LIMIT 1
+          `,
+          args: [`%${zone}%`, `%${zone}%`, `%${zone}%`],
+        });
+        if (resZone.rows.length > 0 && resZone.rows[0].jid) {
+          return String(resZone.rows[0].jid).trim();
+        }
+      }
+
+      const res = await client.execute(`
+        SELECT jid FROM whatsapp_office_groups 
+        WHERE is_active = 1 AND (role = 'TICKETS_OFICINA' OR role = 'SOPORTE_GENERAL')
+        ORDER BY id DESC LIMIT 1
+      `);
+      if (res.rows.length > 0 && res.rows[0].jid) {
+        return String(res.rows[0].jid).trim();
+      }
+    } catch (_) {}
+
+    const { SettingsService } = await import('./settings.service');
+    return SettingsService.get(
+      'SUPPORT_GROUP_JID',
+      'SUPPORT_GROUP_JID',
+      SettingsService.get('GRUPO_SOPORTE', 'GRUPO_SOPORTE', '')
+    ).trim();
+  }
+
+  /**
    * Deriva/transfiere un ticket a un grupo de WhatsApp de oficina específico
    */
   static async forwardTicketToOfficeGroup(
