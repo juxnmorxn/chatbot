@@ -7444,6 +7444,10 @@ export function getAdminDashboardHtml(): string {
           </td>
           <td style="text-align: right;">
             <div style="display: flex; gap: 8px; justify-content: flex-end;">
+              <button class="btn btn-secondary btn-sm" onclick="openEditTechnicianModal(\${t.id})" title="Editar técnico">
+                <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                <span>Editar</span>
+              </button>
               <button class="btn btn-danger btn-sm" onclick="deleteTechnicianItem(\${t.id}, '\${escapeHtml(t.name)}')" title="Eliminar técnico">
                 <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                 <span>Eliminar</span>
@@ -7522,8 +7526,8 @@ export function getAdminDashboardHtml(): string {
             <input type="text" id="tech-new-name" class="form-control" placeholder="Ej: Carlos Ramírez" required>
           </div>
           <div class="form-group">
-            <label class="form-label">Número de WhatsApp (10 o 12 dígitos)</label>
-            <input type="text" id="tech-new-phone" class="form-control" placeholder="521..." required>
+            <label class="form-label">Número de WhatsApp (10 o 12 dígitos, ej. 7711234567 o 5217711234567)</label>
+            <input type="text" id="tech-new-phone" class="form-control" placeholder="Ej: 7711234567" required>
           </div>
           <div class="form-group">
             <label class="form-label">PIN de Autorización (5 Dígitos)</label>
@@ -7535,57 +7539,139 @@ export function getAdminDashboardHtml(): string {
               <option value="instalador">Instalador de Campo</option>
               <option value="soporte">Soporte Nivel 2</option>
               <option value="supervisor">Supervisor de Red</option>
+              <option value="tecnico">Técnico General</option>
             </select>
           </div>
         </div>
       \`;
 
       openModal('Registrar Nuevo Técnico', content, async () => {
-        const name = document.getElementById('tech-new-name').value.trim();
-        const phone = document.getElementById('tech-new-phone').value.trim();
-        const pin = document.getElementById('tech-new-pin').value.trim();
-        const role = document.getElementById('tech-new-role').value;
+        const name = (document.getElementById('tech-new-name')?.value || '').trim();
+        const rawPhone = (document.getElementById('tech-new-phone')?.value || '').trim();
+        const rawPin = (document.getElementById('tech-new-pin')?.value || '').trim();
+        const role = document.getElementById('tech-new-role')?.value || 'instalador';
 
-        if (!name || !phone || !pin || pin.length !== 5) {
-          showToast('Validación', 'Complete todos los campos. El PIN debe tener 5 dígitos.', 'warning');
+        const cleanPhone = rawPhone.replace(/\\D/g, '');
+        const cleanPin = rawPin.replace(/\\D/g, '');
+
+        if (!name) {
+          showToast('Validación', 'El nombre del técnico es obligatorio.', 'warning');
+          return false;
+        }
+        if (cleanPhone.length < 10) {
+          showToast('Validación', 'El número de WhatsApp debe tener al menos 10 dígitos numéricos (ej. 7711234567 o 5217711234567).', 'warning');
+          return false;
+        }
+        if (cleanPin.length !== 5) {
+          showToast('Validación', 'El PIN de autorización debe tener exactamente 5 dígitos numéricos.', 'warning');
           return false;
         }
 
         const res = await apiFetch('/api/technicians', {
           method: 'POST',
-          body: JSON.stringify({ name, phone, pin, role }),
+          body: JSON.stringify({ name, phone: cleanPhone, pin: cleanPin, role }),
         });
 
-        if (res.success) {
-          showToast('Técnico Creado', \`\${name} ha sido autorizado con PIN \${pin}.\`, 'success');
-          loadTechniciansData();
+        if (res && res.success) {
+          showToast('Técnico Creado', \`\${name} ha sido autorizado con PIN \${cleanPin}.\`, 'success');
+          await loadTechniciansData();
+          return true;
         } else {
-          showToast('Error', res.error, 'error');
+          showToast('Error', res?.error || 'No se pudo crear el técnico.', 'error');
+          return false;
         }
       }, 'Crear Técnico');
     }
 
+    function openEditTechnicianModal(id) {
+      const tech = (state.technicians || []).find(t => t.id === id);
+      if (!tech) return;
+
+      const content = \`
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <div class="form-group">
+            <label class="form-label">Nombre del Técnico</label>
+            <input type="text" id="tech-edit-name" class="form-control" value="\${escapeHtml(tech.name)}" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Número de WhatsApp (10 o 12 dígitos)</label>
+            <input type="text" id="tech-edit-phone" class="form-control" value="\${escapeHtml(tech.phone)}" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">PIN de Autorización (5 Dígitos)</label>
+            <input type="text" id="tech-edit-pin" class="form-control" maxlength="5" value="\${escapeHtml(tech.pin)}" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Rol</label>
+            <select id="tech-edit-role" class="form-control">
+              <option value="instalador" \${tech.role === 'instalador' ? 'selected' : ''}>Instalador de Campo</option>
+              <option value="soporte" \${tech.role === 'soporte' ? 'selected' : ''}>Soporte Nivel 2</option>
+              <option value="supervisor" \${tech.role === 'supervisor' ? 'selected' : ''}>Supervisor de Red</option>
+              <option value="tecnico" \${tech.role === 'tecnico' || tech.role === 'TECNICO' ? 'selected' : ''}>Técnico General</option>
+            </select>
+          </div>
+        </div>
+      \`;
+
+      openModal('Editar Técnico', content, async () => {
+        const name = (document.getElementById('tech-edit-name')?.value || '').trim();
+        const rawPhone = (document.getElementById('tech-edit-phone')?.value || '').trim();
+        const rawPin = (document.getElementById('tech-edit-pin')?.value || '').trim();
+        const role = document.getElementById('tech-edit-role')?.value || 'tecnico';
+
+        const cleanPhone = rawPhone.replace(/\\D/g, '');
+        const cleanPin = rawPin.replace(/\\D/g, '');
+
+        if (!name) {
+          showToast('Validación', 'El nombre es obligatorio.', 'warning');
+          return false;
+        }
+        if (cleanPhone.length < 10) {
+          showToast('Validación', 'El número de WhatsApp debe tener al menos 10 dígitos numéricos.', 'warning');
+          return false;
+        }
+        if (cleanPin.length !== 5) {
+          showToast('Validación', 'El PIN debe tener exactamente 5 dígitos numéricos.', 'warning');
+          return false;
+        }
+
+        const res = await apiFetch(\`/api/technicians/\${id}\`, {
+          method: 'PUT',
+          body: JSON.stringify({ name, phone: cleanPhone, pin: cleanPin, role }),
+        });
+
+        if (res && res.success) {
+          showToast('Técnico Actualizado', \`\${name} ha sido actualizado correctamente.\`, 'success');
+          await loadTechniciansData();
+          return true;
+        } else {
+          showToast('Error', res?.error || 'No se pudo actualizar el técnico.', 'error');
+          return false;
+        }
+      }, 'Guardar Cambios');
+    }
+
     async function toggleTechnicianActive(id, isActive) {
       try {
-        const body = typeof isActive === 'boolean' ? JSON.stringify({ is_active: isActive ? 1 : 0 }) : undefined;
+        const body = JSON.stringify({ is_active: isActive ? 1 : 0, isActive: Boolean(isActive) });
         const res = await apiFetch(\`/api/technicians/\${id}/toggle\`, {
           method: 'POST',
-          ...(body ? { body } : {})
+          body
         });
         if (res.success) {
           showToast('Estado Modificado', res.message, 'info');
           const tech = (state.technicians || []).find(t => t.id === id);
           if (tech) {
-            tech.is_active = res.is_active !== undefined ? res.is_active : (isActive ? 1 : 0);
+            tech.is_active = res.is_active !== undefined ? Number(res.is_active) : (isActive ? 1 : 0);
           }
           filterTechniciansTable();
         } else {
           showToast('Error', res.error || 'No se pudo cambiar el estado', 'error');
-          loadTechniciansData();
+          await loadTechniciansData();
         }
       } catch (err) {
         showToast('Error', err.message, 'error');
-        loadTechniciansData();
+        await loadTechniciansData();
       }
     }
 

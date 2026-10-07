@@ -2687,7 +2687,7 @@ export class DbService {
         name: String(r.name || ''),
         phone: String(r.phone || ''),
         pin: String(r.pin || ''),
-        is_active: Number(r.is_active || 1),
+        is_active: Number(r.is_active ?? 1),
         role: String(r.role || 'TECNICO'),
         notes: r.notes ? String(r.notes) : null,
         created_at: String(r.created_at || ''),
@@ -2716,7 +2716,7 @@ export class DbService {
         name: String(r.name || ''),
         phone: String(r.phone || ''),
         pin: String(r.pin || ''),
-        is_active: Number(r.is_active || 1),
+        is_active: Number(r.is_active ?? 1),
         role: String(r.role || 'TECNICO'),
         notes: r.notes ? String(r.notes) : null,
         created_at: String(r.created_at || ''),
@@ -2867,11 +2867,12 @@ export class DbService {
   /**
    * Alterna o establece el estado activo/inactivo de un técnico
    */
-  static async toggleTechnicianActive(id: number, explicitActive?: boolean | number): Promise<{ success: boolean; is_active: number }> {
+  static async toggleTechnicianActive(id: number, explicitActive?: boolean | number | string): Promise<{ success: boolean; is_active: number }> {
     try {
       const client = getDbClient();
-      if (explicitActive !== undefined) {
-        const val = (explicitActive === true || explicitActive === 1) ? 1 : 0;
+      if (explicitActive !== undefined && explicitActive !== null) {
+        const isTrue = explicitActive === true || explicitActive === 1 || explicitActive === '1' || explicitActive === 'true';
+        const val = isTrue ? 1 : 0;
         await client.execute({
           sql: `UPDATE technicians SET is_active = ?, updated_at = ? WHERE id = ?`,
           args: [val, new Date().toISOString(), id],
@@ -2883,7 +2884,7 @@ export class DbService {
         });
       }
       const check = await client.execute({ sql: 'SELECT is_active FROM technicians WHERE id = ?', args: [id] });
-      const current = check.rows.length > 0 ? Number(check.rows[0].is_active) : 0;
+      const current = check.rows.length > 0 ? Number(check.rows[0].is_active ?? 0) : 0;
       return { success: check.rows.length > 0, is_active: current };
     } catch (error: any) {
       logger.error(`Error al cambiar estado de técnico ${id}:`, error?.message || error);
@@ -2915,7 +2916,7 @@ export class DbService {
               name: String(r.name || ''),
               phone: String(r.phone || ''),
               pin: String(r.pin || ''),
-              is_active: Number(r.is_active || 1),
+              is_active: Number(r.is_active ?? 1),
               role: String(r.role || 'TECNICO'),
               notes: r.notes ? String(r.notes) : null,
               created_at: String(r.created_at || ''),
@@ -2935,16 +2936,21 @@ export class DbService {
         const r: any = row;
         const dbPhoneClean = String(r.phone || '').replace(/\D/g, '');
         const dbLast10 = dbPhoneClean.length >= 10 ? dbPhoneClean.slice(-10) : dbPhoneClean;
-        if (
+        const matchPhone =
           dbPhoneClean === cleanPhone ||
-          (last10 && dbLast10 && (last10 === dbLast10 || cleanPhone.endsWith(dbLast10) || dbPhoneClean.endsWith(last10)))
-        ) {
+          (last10 && dbLast10 && last10 === dbLast10) ||
+          (dbLast10 && cleanPhone.endsWith(dbLast10)) ||
+          (last10 && dbPhoneClean.endsWith(last10)) ||
+          (dbPhoneClean.length >= 8 && cleanPhone.endsWith(dbPhoneClean)) ||
+          (cleanPhone.length >= 8 && dbPhoneClean.endsWith(cleanPhone));
+
+        if (matchPhone) {
           return {
             id: Number(r.id),
             name: String(r.name || ''),
             phone: String(r.phone || ''),
             pin: String(r.pin || ''),
-            is_active: Number(r.is_active || 1),
+            is_active: Number(r.is_active ?? 1),
             role: String(r.role || 'TECNICO'),
             notes: r.notes ? String(r.notes) : null,
             created_at: String(r.created_at || ''),
@@ -2979,7 +2985,7 @@ export class DbService {
         password_hash: String(r.password_hash),
         name: String(r.name),
         role: r.role as any,
-        is_active: Number(r.is_active || 1),
+        is_active: Number(r.is_active ?? 1),
         created_at: String(r.created_at),
         last_login: r.last_login ? String(r.last_login) : null,
       };
@@ -3003,7 +3009,7 @@ export class DbService {
         username: String(r.username),
         name: String(r.name),
         role: r.role as any,
-        is_active: Number(r.is_active || 1),
+        is_active: Number(r.is_active ?? 1),
         created_at: String(r.created_at),
         last_login: r.last_login ? String(r.last_login) : null,
       };
@@ -3022,7 +3028,7 @@ export class DbService {
         username: String(r.username),
         name: String(r.name),
         role: r.role as any,
-        is_active: Number(r.is_active || 1),
+        is_active: Number(r.is_active ?? 1),
         created_at: String(r.created_at),
         last_login: r.last_login ? String(r.last_login) : null,
       }));

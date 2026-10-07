@@ -12,7 +12,6 @@ import {
   resetDatabaseConnection,
   initDatabase
 } from '../database/db';
-import { GroqService } from '../services/groq.service';
 import fs from 'fs';
 import path from 'path';
 import { WispHubService } from '../services/wisphub.service';
@@ -175,9 +174,9 @@ export class AdminController {
         return;
       }
 
-      const validRoles = ['superadmin', 'soporte', 'tecnico', 'facturacion'];
+      const validRoles = ['superadmin', 'soporte', 'tecnico', 'facturacion', 'atencion'];
       if (!validRoles.includes(role)) {
-        res.status(400).json({ success: false, error: 'Rol inválido. Permitidos: superadmin, soporte, tecnico, facturacion' });
+        res.status(400).json({ success: false, error: 'Rol inválido. Permitidos: superadmin, soporte, tecnico, facturacion, atencion' });
         return;
       }
 
@@ -1285,7 +1284,7 @@ export class AdminController {
    */
   static async deleteOfficeGroup(req: Request, res: Response): Promise<void> {
     try {
-      const id = parseInt(req.params.id, 10);
+      const id = parseInt(req.params.id as string, 10);
       if (isNaN(id)) {
         res.status(400).json({ success: false, error: 'ID de grupo no válido' });
         return;
@@ -1303,7 +1302,7 @@ export class AdminController {
    */
   static async toggleOfficeGroupActive(req: Request, res: Response): Promise<void> {
     try {
-      const id = parseInt(req.params.id, 10);
+      const id = parseInt(req.params.id as string, 10);
       const rawActive = req.body.isActive !== undefined ? req.body.isActive : req.body.is_active;
       const isActive = rawActive === true || rawActive === 1 || rawActive === '1' || rawActive === 'true';
       const success = await DbService.toggleOfficeGroupActive(id, isActive);
@@ -1339,7 +1338,7 @@ export class AdminController {
    */
   static async forwardTicketToOffice(req: Request, res: Response): Promise<void> {
     try {
-      const folio = req.params.folio;
+      const folio = String(req.params.folio || '');
       const { groupJid, customNotes } = req.body;
 
       if (!folio || !groupJid) {
@@ -1453,15 +1452,18 @@ export class AdminController {
   static async toggleBotPause(req: Request, res: Response): Promise<void> {
     try {
       const phone = String(req.params.phone || '');
-      const { pause, minutes } = req.body;
+      const { pause, minutes } = req.body || {};
 
       if (pause === false) {
-        BotOrchestrator.reanudarBot(phone);
+        await BotOrchestrator.reanudarBot(phone);
+        AdminController.broadcastSSE('chat:status', { phone, is_paused: false, status: 'BOT' });
         res.json({ success: true, message: `Bot reactivado para ${phone}`, paused: false });
       } else {
         const mins = parseInt(minutes, 10) || 60;
-        BotOrchestrator.activarPausaOperador(phone, mins, 'Pausado manualmente desde panel web');
-        res.json({ success: true, message: `Bot silenciado para ${phone} por ${mins} minutos`, paused: true, minutes: mins });
+        WebhookController.cancelPendingDebounce(phone);
+        const takeoverRes = await BotOrchestrator.activarPausaOperador(phone, mins, 'Pausado manualmente desde panel web');
+        AdminController.broadcastSSE('chat:status', { phone, is_paused: true, takeover: takeoverRes });
+        res.json({ success: true, message: `Bot silenciado para ${phone} por ${mins} minutos`, paused: true, minutes: mins, takeover: takeoverRes });
       }
     } catch (error: any) {
       res.status(500).json({ success: false, error: error?.message || error });
@@ -1757,8 +1759,8 @@ export class AdminController {
         return;
       }
 
-      const user = (req as any).user;
-      const techName = technician_name || user?.name || user?.username || 'Administrador Web';
+      const authUser = (req as AuthenticatedRequest).adminUser;
+      const techName = technician_name || authUser?.name || authUser?.username || (req as any).user?.name || 'Administrador Web';
 
       const result = await SmartOLTService.executeModemSwap({
         oldOnuIdOrSn: old_onu_id,
@@ -2122,7 +2124,6 @@ export class AdminController {
         dispatchMsg += `*Descripcion:* ${String(custom_notes).trim()}\n`;
       }
 
-      const { EvolutionService } = await import('../services/evolution.service');
       let sentCount = 0;
       const errors: string[] = [];
 
@@ -2399,8 +2400,8 @@ export class AdminController {
    */
   static async autoMigrateFromRemoteDb(req: Request, res: Response): Promise<void> {
     try {
-      const dbUrl = req.body?.dbUrl || (await SettingsService.get('DATABASE_URL')) || config.db.url;
-      const dbToken = req.body?.dbToken || (await SettingsService.get('DB_AUTH_TOKEN')) || config.db.authToken;
+      const dbUrl = req.body?.dbUrl || SettingsService.get('DATABASE_URL') || config.db.url;
+      const dbToken = req.body?.dbToken || SettingsService.get('DB_AUTH_TOKEN') || config.db.authToken;
 
       if (!dbUrl || dbUrl.startsWith('file:')) {
         res.status(400).json({ success: false, error: 'No se especificó una URL de Base de Datos Local válida para clonar.' });

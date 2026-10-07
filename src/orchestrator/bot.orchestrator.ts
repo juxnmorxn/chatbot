@@ -637,18 +637,19 @@ export class BotOrchestrator {
       session?.step === 'TECNICO_ESPERANDO_CLIENTE_GPS';
 
     const esComandoTecnicoExplicito = esComandoActivacion || esComandoCambioPaquete || esComandoCambioModem || esComandoCambioWifi;
-    const esAccionTecnica = esComandoTecnicoExplicito || esPasoTecnicoEnCurso;
+    const esTecnicoAutorizado = Boolean(await DbService.isAuthorizedTechnician(phone).catch(() => null));
+    const esAccionTecnica = esComandoTecnicoExplicito || esPasoTecnicoEnCurso || esTecnicoAutorizado;
 
-    // Si el usuario envía un comando técnico explícito pero la sesión estaba en un paso residual residencial (ej. ESPERANDO_UBICACION_TECNICO), resetear inmediatamente a CONVERSACIONAL
-    if (esComandoTecnicoExplicito && session && !esPasoTecnicoEnCurso) {
+    // Si el usuario envía un comando técnico explícito o es técnico autorizado y la sesión estaba en un paso residual residencial, resetear inmediatamente
+    if ((esComandoTecnicoExplicito || esTecnicoAutorizado) && session && !esPasoTecnicoEnCurso && session.step !== 'TECNICO_STANDBY') {
       session = await DbService.upsertSession({
         phone,
-        step: 'CONVERSACIONAL',
+        step: esTecnicoAutorizado ? 'TECNICO_STANDBY' : 'CONVERSACIONAL',
       });
     }
 
     // 1. Verificar si hay Intervención Humana activa (Memoria o Base de Datos Local)
-    // EXCEPCIÓN: Comandos técnicos, fotos de contratos y activaciones NUNCA son bloqueados por human takeover
+    // EXCEPCIÓN: Técnicos autorizados, comandos técnicos, fotos de contratos y activaciones NUNCA son bloqueados por human takeover
     if (esAccionTecnica) {
       await this.reanudarBot(phone);
     } else {
@@ -886,11 +887,25 @@ export class BotOrchestrator {
 
     if (authTecnico.autorizado) {
       // Caso 0: El técnico solicita el menú de comandos técnicos o saluda identificándose
-      const esPeticionMenuTecnico = /^(menu\s*t[eé]cnico|men[uú]|comandos|soy\s*t[eé]cnico|panel\s*t[eé]cnico|ayuda\s*t[eé]cnico)\b/i.test(lowerMsg) ||
-        (authTecnico.tech && /^(hola|buenos?\s*d[ií]as?|buenas?\s*tardes?|saludos?)\b/i.test(lowerMsg) && (!session?.step || session.step === 'INICIO' || session.step === 'CONVERSACIONAL'));
+      const esPeticionMenuTecnico = /^(menu\s*t[eé]cnico|men[uú]\s*operativo|comandos|soy\s*t[eé]cnico|panel\s*t[eé]cnico|ayuda\s*t[eé]cnico|men[uú]|ayuda|guia)\b/i.test(lowerMsg) ||
+        (authTecnico.tech && /^(hola|buenos?\s*d[ií]as?|buenas?\s*tardes?|buenas?\s*noches?|buenas|saludos?|que\s*onda|inicio|hey|start)\b/i.test(lowerMsg));
 
       if (esPeticionMenuTecnico) {
+        await DbService.upsertSession({ phone, step: 'TECNICO_STANDBY' });
         await this.enviarMenuTecnicoCampo(phone, authTecnico.tech, targetJid);
+        return;
+      }
+
+      // Caso 0.1: Cancelar operación en curso
+      if (/^(cancelar|cancelo|cancel|salir|abortar|reset)\b/i.test(lowerMsg)) {
+        await DbService.upsertSession({ phone, step: 'TECNICO_STANDBY' });
+        await this.enviarYLoguear(
+          phone,
+          `Operación cancelada. Sesión de técnico restablecida.\n\nEscribe *menu tecnico* para ver los comandos disponibles.`,
+          'ACTIVACION_TECNICO',
+          'CANCELADO_STANDBY',
+          targetJid
+        );
         return;
       }
 
@@ -921,6 +936,19 @@ export class BotOrchestrator {
       // Caso 5: El técnico envía comando de cambio de contraseña Wi-Fi
       if (esComandoCambioWifi) {
         await this.procesarCambioWifiTecnico(phone, rawText, session, targetJid);
+        return;
+      }
+
+      // Caso 6: Si el técnico está en modo standby o envió un texto desconocido que no coincide con comandos
+      if (!session?.step || session.step === 'TECNICO_STANDBY' || session.step === 'INICIO' || session.step === 'CONVERSACIONAL') {
+        const nombreTec = authTecnico.tech?.name ? ` *${authTecnico.tech.name}*` : '';
+        await this.enviarYLoguear(
+          phone,
+          `🛠️ *Panel Operativo de Técnicos*\n\nHola${nombreTec}, no reconocí ese comando.\n\n👉 Escribe *menu tecnico* para ver las opciones disponibles o ejecuta directamente:\n\n• \`activar cliente [SN] [Folio-Nombre] [Plan] [Zona]\`\n• \`cambio de modem [Folio o Nombre]\`\n• \`cambiar plan [Folio] a [Megas]\`\n• \`cambiar wifi [SN] [NuevoSSID] [NuevaClave]\``,
+          'ACTIVACION_TECNICO',
+          'AYUDA_COMANDO_TECNICO',
+          targetJid
+        );
         return;
       }
     } else {
