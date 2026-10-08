@@ -12,3 +12,5 @@ scratch/
 data/
 *.db
 *.db-journal
+deploy.config.json
+src/scripts/test-ssh.js

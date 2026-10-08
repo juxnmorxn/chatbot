@@ -7,6 +7,7 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
+    "deploy": "node scripts/deploy-hostinger.js",
     "test:local_db": "tsx src/scripts/test-db.ts",
     "test:groq": "tsx src/scripts/test-groq.ts",
     "test:tickets": "tsx src/scripts/test-tickets.ts"
