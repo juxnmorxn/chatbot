@@ -6256,7 +6256,7 @@ Por favor reconecta tus dispositivos ingresando esta nueva clave.`;
     if (!auth.autorizado) {
       await this.enviarYLoguear(
         phone,
-        `⚠️ *Acceso Restringido - Área Técnica*\n\nTu número (*${phone}*) no está registrado como técnico autorizado para activar equipos en SmartOLT.\n\n👉 Solicita tu alta o proporciona tu *PIN de seguridad* al administrador en el panel de control.`,
+        `*Acceso Restringido - Área Técnica*\n\nTu número (*${phone}*) no está registrado como técnico autorizado para activar equipos en SmartOLT.\n\nSolicita tu alta o proporciona tu *PIN de seguridad* al administrador en el panel de control.`,
         'ACTIVACION_TECNICO',
         'NO_AUTORIZADO',
         targetJid
@@ -6270,7 +6270,7 @@ Por favor reconecta tus dispositivos ingresando esta nueva clave.`;
     if (!parsed.snSuffix || !parsed.hasAllData) {
       await this.enviarYLoguear(
         phone,
-        `🛠️ *Activación de Cliente en SmartOLT (Un Solo Mensaje)*\n\nPara activar el módem, envía el comando *activar cliente* con los datos básicos:\n\n👉 *activar cliente [6 dígitos SN] [Folio-Nombre] [Plan] [Zona]*\n\n_Ejemplos para copiar y rellenar:_\n• \`activar cliente 4317B5 3456-Juan Perez Martinez 40M Actopan\`\n• \`activar cliente c24b0 3000-Juan de Dios Morán Pérez 600 megas cerritos\`\n• \`activar cliente 4317B5 3456-Juan Perez Martinez\` _(Plan 40M y Zona Actopan por defecto)_`,
+        `*ACTIVACIÓN DE CLIENTE EN SMARTOLT*\n\nPara activar el módem, envía el comando *activar cliente* con los datos básicos:\n\n*activar cliente [6 dígitos SN] [Folio-Nombre] [Plan] [Zona]*\n\n_Ejemplos:_\n• \`activar cliente 4317B5 3456-Juan Perez Martinez 40M Actopan\`\n• \`activar cliente c24b0 3000-Juan de Dios Morán Pérez 600 megas cerritos\`\n• \`activar cliente 4317B5 3456-Juan Perez Martinez\` _(Plan 40M y Zona Actopan por defecto)_`,
         'ACTIVACION_TECNICO',
         'AYUDA_ACTIVACION_UN_MENSAJE',
         targetJid
@@ -6280,7 +6280,7 @@ Por favor reconecta tus dispositivos ingresando esta nueva clave.`;
 
     await this.enviarYLoguear(
       phone,
-      `🔍 Buscando módem con terminación *${parsed.snSuffix}* en SmartOLT...`,
+      `*Buscando módem con terminación ${parsed.snSuffix} en SmartOLT...*`,
       'ACTIVACION_TECNICO',
       'BUSCANDO_ONU',
       targetJid
@@ -6292,7 +6292,7 @@ Por favor reconecta tus dispositivos ingresando esta nueva clave.`;
     if (!unconfigured) {
       await this.enviarYLoguear(
         phone,
-        `❌ *Módem no encontrado en SmartOLT*\n\nNo se localizó ninguna ONU sin configurar con terminación *${parsed.snSuffix}*.\n\n💡 *Por favor verifica:*\n1. Que la fibra óptica esté conectada y la luz PON del módem esté encendida/sincronizando.\n2. Que el equipo haya sincronizado en la OLT.\n3. Que los dígitos del SN sean correctos (ej: *${parsed.snSuffix}*).`,
+        `*Módem no encontrado en SmartOLT*\n\nNo se localizó ninguna ONU sin configurar con terminación *${parsed.snSuffix}*.\n\n*Por favor verifica:*\n1. Que la fibra óptica esté conectada y la luz PON del módem esté encendida/sincronizando.\n2. Que el equipo haya sincronizado en la OLT.\n3. Que los dígitos del SN sean correctos (ej: *${parsed.snSuffix}*).`,
         'ACTIVACION_TECNICO',
         'ONU_NO_ENCONTRADA',
         targetJid
@@ -6323,7 +6323,7 @@ Por favor reconecta tus dispositivos ingresando esta nueva clave.`;
     if (!nextIp) {
       await this.enviarYLoguear(
         phone,
-        `⚠️ *Atención:* No se encontraron direcciones IP libres disponibles en el pool de la OLT *${targetOltName}*. Por favor contacta al administrador de red.`,
+        `*Atención:* No se encontraron direcciones IP libres disponibles en el pool de la OLT *${targetOltName}*. Por favor contacta al administrador de red.`,
         'ACTIVACION_TECNICO',
         'SIN_IPS_DISPONIBLES',
         targetJid
@@ -6373,7 +6373,7 @@ Por favor reconecta tus dispositivos ingresando esta nueva clave.`;
     const planDisplay = parsed.plan.replace(/MB|M/i, ' Megas');
 
     // Ficha simple y directa para el técnico (solo lo básico esencial)
-    const cardMsg = `📋 *RESUMEN DE ACTIVACIÓN*
+    const cardMsg = `*RESUMEN DE ACTIVACIÓN*
 ──────────────────────────────
 • *Cliente / Folio:* *${parsed.name}*
 • *Zona / Municipio:* *${targetZone}*
@@ -6382,9 +6382,9 @@ Por favor reconecta tus dispositivos ingresando esta nueva clave.`;
 • *Nivel Óptico:* *${signalText}*
 • *IP asignada:* *${payload.ip_address}* (VLAN ${payload.vlan})
 ──────────────────────────────
-⚠️ *¿Confirmas la activación de este módem en SmartOLT?*
+*¿Confirmas la activación de este módem en SmartOLT?*
 
-👉 Responde *SÍ* para autorizar o *NO* para cancelar.
+Responde *SÍ* para autorizar o *NO* para cancelar.
 _(O indica un cambio, ej: cambiar paquete 60 megas)_`;
 
     await this.enviarYLoguear(
@@ -6472,7 +6472,7 @@ _(O indica un cambio, ej: cambiar paquete 60 megas)_`;
 
     await this.enviarYLoguear(
       phone,
-      '⏳ *Aprovisionando módem en SmartOLT, un momento...*',
+      '*Aprovisionando módem en SmartOLT, un momento...*',
       'ACTIVACION_TECNICO',
       'EJECUTANDO_AUTORIZACION',
       targetJid
@@ -6502,7 +6502,7 @@ _(O indica un cambio, ej: cambiar paquete 60 megas)_`;
 
     if (result.success) {
       const planDisplay = (payload.download_speed_profile_name || '40MB').replace(/MB-DOWN|MB/i, ' Megas');
-      const successMsg = `✅ *¡Activación exitosa!*\n👤 *${payload.name}*\n📶 Módem \`${payload.sn}\` (${payload.onu_type}) activo con IP \`${payload.ip_address}\` (${planDisplay}).\n📢 Notificado al grupo de Activaciones.`;
+      const successMsg = `*¡Activación exitosa!*\n• *Cliente:* *${payload.name}*\n• *Zona:* ${payload.zone || 'Actopan'}\n• *Módem:* \`${payload.sn}\` (${payload.onu_type}) activo con IP \`${payload.ip_address}\` (${planDisplay}).\nNotificado al grupo de Activaciones.`;
 
       await this.enviarYLoguear(
         phone,
@@ -6544,7 +6544,7 @@ _(O indica un cambio, ej: cambiar paquete 60 megas)_`;
     } else {
       await this.enviarYLoguear(
         phone,
-        `❌ *Error al autorizar en SmartOLT:*\n\n${result.message}\n\nPor favor verifica el estado de la OLT o intenta nuevamente.`,
+        `*Error al autorizar en SmartOLT:*\n\n${result.message}\n\nPor favor verifica el estado de la OLT o intenta nuevamente.`,
         'ACTIVACION_TECNICO',
         'ERROR_AUTORIZACION',
         targetJid
@@ -6788,7 +6788,7 @@ _(O indica un cambio, ej: cambiar paquete 60 megas)_`;
         metadata: JSON.stringify(metaObj),
       });
 
-      const waitMsg = `⏳ *Buscando módem \`${oldSn}\` en SmartOLT...*\n👤 *${oldOnu.name}* (\`${oldOnu.ip_address}\`)\nAún no detecta señal óptica en el nuevo puerto. Búsqueda activa durante *10 min* mientras conectas la fibra.`;
+      const waitMsg = `*Buscando módem \`${oldSn}\` en SmartOLT...*\n• *Cliente:* *${oldOnu.name}*\n• *Zona:* ${oldOnu.zone || 'Actopan'}\n• *IP:* \`${oldOnu.ip_address}\`\nAún no detecta señal óptica en el nuevo puerto. Búsqueda activa durante *10 min* mientras conectas la fibra.`;
 
       await this.enviarYLoguear(
         phone,
@@ -7034,7 +7034,7 @@ _(O indica un cambio, ej: cambiar paquete 60 megas)_`;
     });
 
     const planDisplay = (oldOnu.download_speed_profile_name || '40MB').replace(/MB-DOWN|MB/i, ' Megas');
-    const msg = `🔄 *Cambio de Módem*\n👤 *${oldOnu.name}*\n🌐 \`${oldOnu.ip_address}\` (${planDisplay}) | Actual: \`${oldOnu.sn}\`\n\n✍️ Escribe los dígitos del *nuevo módem*:`;
+    const msg = `*Cambio de Módem*\n• *Cliente:* *${oldOnu.name}*\n• *Zona:* ${oldOnu.zone || 'Actopan'}\n• *IP:* \`${oldOnu.ip_address}\` (${planDisplay})\n• *Módem actual:* \`${oldOnu.sn}\`\n\nEscribe los dígitos del *nuevo módem* (o indica cambios de zona/paquete):`;
 
     await this.enviarYLoguear(phone, msg, 'ACTIVACION_TECNICO', 'SOLICITUD_SN_NUEVO_SWAP', targetJid);
   }
@@ -7212,7 +7212,7 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
       return;
     }
 
-    // Comprobar si el técnico envió un cambio de paquete en caliente (ej: "60 megas", "paquete 100", "plan 80M")
+    // 1. Comprobar si el técnico envió un cambio de paquete en caliente (ej: "60 megas", "paquete 100", "plan 80M")
     const matchPlan = rawText.match(/(?:cambiar|modificar|poner|ajustar|subir|bajar|dejar|el)?\s*(?:el\s+)?(?:paquete|plan|velocidad|megas)\s*(?:a|en|es|de|por|:)?\s*(\d+)/i) ||
       rawText.match(/^(?:poner|ponerle|dejar|dejarlo\s+en|a)?\s*(\d+)\s*(?:megas|mb|m)\b/i) ||
       rawText.match(/(?:a|en|de)\s+(\d+)\s*(?:megas|mb|m)/i) ||
@@ -7249,7 +7249,7 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
       } else {
         await this.enviarYLoguear(
           phone,
-          `📦 *Paquete actualizado a ${numMegas} Megas* (${profiles.down}).\n\n✍️ Ahora escribe los dígitos del *módem (SN)*:`,
+          `*Paquete actualizado a ${numMegas} Megas* (${profiles.down}).\n\nEscribe los dígitos del *nuevo módem*:`,
           'ACTIVACION_TECNICO',
           'PLAN_SWAP_ACTUALIZADO',
           targetJid
@@ -7258,10 +7258,70 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
       return;
     }
 
-    let detectedSn = rawText.trim();
+    // 2. Comprobar si el técnico envió un cambio de zona en caliente (ej: "cambiar zona estancia", "zona san agustin", "zona actopan")
+    const matchZona = rawText.match(/(?:cambiar|modificar|poner|ajustar|en|es\s+en)?\s*zona\s*(?:a|en|es|:)?\s*(.+)/i) ||
+      (lower.includes('san jose') || lower.includes('san agustin') || lower.includes('actopan') || lower.includes('arenal') || lower.includes('estancia') ? [rawText, rawText] : null);
+
+    if (matchZona && !/(?:serie|sn|modem|módem|hwtc|zteg)/i.test(rawText) && !/^\d{2,3}\s*(?:megas|mb|m)?$/i.test(rawText.trim())) {
+      const textoZona = matchZona[1] ? matchZona[1].trim() : rawText.trim();
+      const nuevaZona = this.resolverZonaOMunicipio(textoZona);
+      oldService.zone = nuevaZona;
+      metaObj.pendingModemSwapService = oldService;
+      if (metaObj.pendingModemSwap) {
+        metaObj.pendingModemSwap.zone = nuevaZona;
+      }
+      await DbService.upsertSession({
+        phone,
+        step: session?.step || 'PENDIENTE_SN_CAMBIO_MODEM',
+        metadata: JSON.stringify(metaObj),
+      });
+
+      if (metaObj.pendingModemSwap) {
+        await this.construirYEnviarConfirmacionSwap(
+          phone,
+          {
+            sn: metaObj.pendingModemSwap.newSn,
+            onu_type: metaObj.pendingModemSwap.model,
+            olt_id: metaObj.pendingModemSwap.oltId,
+            board: metaObj.pendingModemSwap.board,
+            port: metaObj.pendingModemSwap.port,
+          },
+          oldService,
+          metaObj,
+          targetJid
+        );
+      } else {
+        await this.enviarYLoguear(
+          phone,
+          `*Zona actualizada:* ${nuevaZona}\n\nEscribe los dígitos del *nuevo módem*:`,
+          'ACTIVACION_TECNICO',
+          'ZONA_SWAP_ACTUALIZADA',
+          targetJid
+        );
+      }
+      return;
+    }
+
+    // 3. Extracción estricta de Serie / SN del módem
+    let detectedSn = '';
     const matchSnExplicit = rawText.match(/(?:serie|sn|sufijo|modem|módem|onu|equipo|nuevo|el)\s*(?:a|en|es|:)?\s*([A-Za-z0-9]+)/i);
-    if (matchSnExplicit) {
+    const matchHexDirect = rawText.trim().match(/^(?:(?:es\s+(?:el\s+)?|el\s+)?(?:HWTC|ZTEG|48575443|5A544547)?|HWTC|ZTEG|48575443|5A544547)?([A-Fa-f0-9]{4,16})$/i);
+
+    if (matchSnExplicit && !/(?:nombre|folio|zona|plan|paquete|estancia|actopan|arenal|tlaxiaca)/i.test(matchSnExplicit[1])) {
       detectedSn = matchSnExplicit[1].trim();
+    } else if (matchHexDirect && !/^(?:si|no|ok|plan|zona|mega|megas|mb|estancia|actopan|arenal)$/i.test(rawText.trim())) {
+      detectedSn = matchHexDirect[1].trim();
+    }
+
+    if (!detectedSn) {
+      await this.enviarYLoguear(
+        phone,
+        `*Comando no reconocido*\n\nEscribe los dígitos del nuevo módem (ej: \`4484\` o \`HWTC4484\`), o indica un cambio:\n• *60 megas* (o *cambiar plan 100*)\n• *cambiar zona [Zona]* (ej: *cambiar zona La Estancia*)\n• *cancelar* para salir.`,
+        'ACTIVACION_TECNICO',
+        'COMANDO_SWAP_NO_RECONOCIDO',
+        targetJid
+      );
+      return;
     }
 
     let cleanSuffix = detectedSn.toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -7272,7 +7332,7 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
     }
 
     if (cleanSuffix.length < 4) {
-      await this.enviarYLoguear(phone, 'Por favor escribe al menos 4 digitos del SN del nuevo modem (ej: *474B4484* o *4484*).', 'ACTIVACION_TECNICO', 'SN_CORTO', targetJid);
+      await this.enviarYLoguear(phone, 'Por favor escribe al menos 4 dígitos del SN del nuevo módem (ej: *474B4484* o *4484*).', 'ACTIVACION_TECNICO', 'SN_CORTO', targetJid);
       return;
     }
 
@@ -7305,8 +7365,8 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
       });
 
       const waitMsg = metaObj.isRelocation
-        ? `⏳ *Buscando módem \`${cleanSuffix}\` en SmartOLT...*\n👤 *${oldService.clientName}* (\`${oldService.ip}\`)\nAún no detecta señal óptica en el nuevo puerto. Búsqueda activa durante *10 min* mientras conectas la fibra.`
-        : `⏳ *Buscando nuevo módem \`${cleanSuffix}\` en SmartOLT...*\n👤 *${oldService.clientName}* (\`${oldService.ip}\`)\nAún no sincroniza en la central. Búsqueda activa durante *10 min* mientras conectas la fibra.`;
+        ? `*Buscando módem \`${cleanSuffix}\` en SmartOLT...*\n• *Cliente:* *${oldService.clientName}*\n• *Zona:* ${oldService.zone || 'Actopan'}\n• *IP:* \`${oldService.ip}\`\nAún no detecta señal óptica en el nuevo puerto. Búsqueda activa durante *10 min* mientras conectas la fibra.`
+        : `*Buscando nuevo módem \`${cleanSuffix}\` en SmartOLT...*\n• *Cliente:* *${oldService.clientName}*\n• *Zona:* ${oldService.zone || 'Actopan'}\n• *IP:* \`${oldService.ip}\`\nAún no sincroniza en la central. Búsqueda activa durante *10 min* mientras conectas la fibra.`;
 
       await this.enviarYLoguear(
         phone,
@@ -7399,7 +7459,7 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
       clientName: oldService.clientName,
       ip: oldService.ip,
       vlan: finalVlan,
-      zone: oldService.zone,
+      zone: oldService.zone || 'Actopan',
       speedProfile: oldService.speedProfile,
       oltId: unconfigured.olt_id || oldService.oltId,
       board: unconfigured.board,
@@ -7420,9 +7480,9 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
 
     let cardMsg = '';
     if (isRelocation) {
-      cardMsg = `📋 *Confirmar Cambio de Domicilio*\n• *Cliente:* *${oldService.clientName}*\n• *Módem:* \`${unconfigured.sn}\` (${onuModel})\n• *IP:* \`${oldService.ip}\` (${planDisplay})\n• *Posición:* OLT ${unconfigured.olt_id || oldService.oltId} (B:${unconfigured.board} P:${unconfigured.port})\n• *Nivel Óptico:* ${signalText}\n\n¿Proceder con la reubicación? Responde *SI* o *NO*.`;
+      cardMsg = `*Confirmar Cambio de Domicilio*\n• *Cliente:* *${oldService.clientName}*\n• *Zona:* ${oldService.zone || 'Actopan'}\n• *Módem:* \`${unconfigured.sn}\` (${onuModel})\n• *IP:* \`${oldService.ip}\` (${planDisplay})\n• *Posición:* OLT ${unconfigured.olt_id || oldService.oltId} (B:${unconfigured.board} P:${unconfigured.port})\n• *Nivel óptico:* ${signalText}\n\n¿Proceder con la reubicación? Responde *SI* o *NO*.`;
     } else {
-      cardMsg = `📋 *Confirmar Cambio de Módem*\n• *Cliente:* *${oldService.clientName}*\n• *Anterior:* \`${oldService.oldSn}\` ➔ *Nuevo:* \`${unconfigured.sn}\` (${onuModel})\n• *IP:* \`${oldService.ip}\` (${planDisplay})\n• *Nivel Óptico:* ${signalText}\n\n¿Proceder con el cambio? Responde *SI* o *NO*.`;
+      cardMsg = `*Confirmar Cambio de Módem*\n• *Cliente:* *${oldService.clientName}*\n• *Zona:* ${oldService.zone || 'Actopan'}\n• *Anterior:* \`${oldService.oldSn}\` ➔ *Nuevo:* \`${unconfigured.sn}\` (${onuModel})\n• *IP:* \`${oldService.ip}\` (${planDisplay})\n• *Nivel óptico:* ${signalText}\n\n¿Proceder con el cambio? Responde *SI* o *NO*.`;
     }
 
     await this.enviarYLoguear(
@@ -7469,8 +7529,8 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
       await this.enviarYLoguear(
         phone,
         isRelocation
-          ? `*Cambio de domicilio cancelado.* No se realizo ninguna modificacion en SmartOLT.`
-          : `*Cambio de modem cancelado.* No se realizo ninguna modificacion en SmartOLT.`,
+          ? `*Cambio de domicilio cancelado.* No se realizó ninguna modificación en SmartOLT.`
+          : `*Cambio de módem cancelado.* No se realizó ninguna modificación en SmartOLT.`,
         'ACTIVACION_TECNICO',
         'SWAP_CANCELADO',
         targetJid
@@ -7480,7 +7540,7 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
 
     await this.enviarYLoguear(
       phone,
-      '⏳ *Aplicando cambio en SmartOLT, un momento...*',
+      '*Aplicando cambio en SmartOLT, un momento...*',
       'ACTIVACION_TECNICO',
       'EJECUTANDO_SWAP',
       targetJid
@@ -7521,8 +7581,8 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
     if (result.success) {
       const planDisplay = (swapData.speedProfile || '40MB').replace(/MB-DOWN|MB/i, ' Megas');
       const successMsg = isRelocation
-        ? `✅ *¡Cambio de domicilio exitoso!*\n👤 *${swapData.clientName}*\n📶 Módem \`${swapData.newSn}\` (${swapData.model}) activo en nuevo puerto con IP \`${swapData.ip}\` (${planDisplay}).\n📢 Notificado al grupo de Activaciones.`
-        : `✅ *¡Cambio de módem exitoso!*\n👤 *${swapData.clientName}*\n📶 Nuevo módem \`${swapData.newSn}\` (${swapData.model}) activo con IP \`${swapData.ip}\` (${planDisplay}).\n📢 Notificado al grupo de Activaciones.`;
+        ? `*¡Cambio de domicilio exitoso!*\n• *Cliente:* *${swapData.clientName}*\n• *Zona:* ${swapData.zone || 'Actopan'}\n• *Módem:* \`${swapData.newSn}\` (${swapData.model}) activo en nuevo puerto con IP \`${swapData.ip}\` (${planDisplay}).\nNotificado al grupo de Activaciones.`
+        : `*¡Cambio de módem exitoso!*\n• *Cliente:* *${swapData.clientName}*\n• *Zona:* ${swapData.zone || 'Actopan'}\n• *Módem:* \`${swapData.newSn}\` (${swapData.model}) activo con IP \`${swapData.ip}\` (${planDisplay}).\nNotificado al grupo de Activaciones.` ;
 
       await this.enviarYLoguear(
         phone,
@@ -7534,7 +7594,7 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
     } else {
       await this.enviarYLoguear(
         phone,
-        `*Atencion durante el proceso:*\n\n${result.message}`,
+        `*Atención durante el proceso:*\n\n${result.message}`,
         'ACTIVACION_TECNICO',
         'SWAP_ERROR',
         targetJid
@@ -7688,7 +7748,7 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
     });
 
     const planDisplay = currentPlan.replace(/MB-DOWN|MB|M/i, ' Megas');
-    const cardMsg = `📋 *Confirmar Activación*\n• *Cliente:* *${payload.name}*\n• *Zona:* ${payload.zone}\n• *Paquete:* ${planDisplay}\n• *Módem:* \`${payload.sn}\` (${onuModel})\n• *IP:* \`${payload.ip_address}\` (VLAN ${payload.vlan})\n• *Nivel Óptico:* ${signalText}\n\n¿Autorizar en SmartOLT? Responde *SI* o indica cambios (ej: *60 megas*).`;
+    const cardMsg = `*Confirmar Activación*\n• *Cliente:* *${payload.name}*\n• *Zona:* ${payload.zone}\n• *Paquete:* ${planDisplay}\n• *Módem:* \`${payload.sn}\` (${onuModel})\n• *IP:* \`${payload.ip_address}\` (VLAN ${payload.vlan})\n• *Nivel óptico:* ${signalText}\n\n¿Autorizar en SmartOLT? Responde *SI* o indica cambios (ej: *60 megas*, *cambiar zona*).`;
 
     await this.enviarYLoguear(
       phone,
@@ -7756,7 +7816,7 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
       metadata: JSON.stringify(metaObj),
     });
 
-    const cardDraftMsg = `📋 *Contrato Detectado por IA*\n• *Folio:* *${folio || 'S/F'}*\n• *Cliente:* *${clientName}*\n• *Zona:* ${targetZone}\n• *Paquete:* ${planDisplay}\n• *Dirección:* ${datos.direccion || 'Registrada en contrato'}\n\n✍️ Escribe los dígitos del *módem (SN)* para vincularlo (ej: \`4484\`):`;
+    const cardDraftMsg = `*Contrato Detectado por IA*\n• *Folio:* *${folio || 'S/F'}*\n• *Cliente:* *${clientName}*\n• *Zona:* ${targetZone}\n• *Paquete:* ${planDisplay}\n• *Dirección:* ${datos.direccion || 'Registrada en contrato'}\n\nEscribe los dígitos del *módem (SN)* para vincularlo (ej: \`4484\`):`;
 
     await this.enviarYLoguear(
       phone,
@@ -7784,7 +7844,7 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
     if (!auth.autorizado) {
       await this.enviarYLoguear(
         phone,
-        `⛔ *Acceso Restringido - Área Técnica*\n\nTu número (*${phone}*) no está registrado como técnico autorizado para modificar datos de aprovisionamiento en SmartOLT.`,
+        `*Acceso Restringido - Área Técnica*\n\nTu número (*${phone}*) no está registrado como técnico autorizado para modificar datos de aprovisionamiento en SmartOLT.`,
         'ACTIVACION_TECNICO',
         'NO_AUTORIZADO',
         targetJid
@@ -7799,7 +7859,7 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
       await DbService.upsertSession({ phone, step: 'CONVERSACIONAL' });
       await this.enviarYLoguear(
         phone,
-        `No tienes ninguna activacion en curso. Puedes enviar una foto de contrato o escribir *activar cliente [SN] [Folio-Nombre]* para iniciar.`,
+        `No tienes ninguna activación en curso. Puedes enviar una foto de contrato o escribir *activar cliente [SN] [Folio-Nombre]* para iniciar.`,
         'ACTIVACION_TECNICO',
         'SIN_ACTIVACION_PENDIENTE',
         targetJid
@@ -7824,7 +7884,7 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
 
       await this.enviarYLoguear(
         phone,
-        `*Activacion cancelada.* No se realizaron modificaciones en la OLT.`,
+        `*Activación cancelada.* No se realizaron modificaciones en la OLT.`,
         'ACTIVACION_TECNICO',
         'ACTIVACION_CANCELADA',
         targetJid
@@ -7841,7 +7901,7 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
       } else {
         await this.enviarYLoguear(
           phone,
-          `*Falta vincular el modem.*\n\nPor favor escribe los ultimos digitos del SN del equipo (ej: *474B4484* o *4484*) para autorizarlo.`,
+          `*Falta vincular el módem.*\n\nPor favor escribe los últimos dígitos del SN del equipo (ej: *474B4484* o *4484*) para autorizarlo.`,
           'ACTIVACION_TECNICO',
           'FALTA_SN_CONFIRMACION',
           targetJid
@@ -7856,7 +7916,7 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
     if (esPeticionPlanSinMegas) {
       await this.enviarYLoguear(
         phone,
-        `📦 *¿A qué paquete o velocidad deseas cambiarlo?*\n\n_Opciones disponibles:_\n• *40 Megas*\n• *60 Megas*\n• *100 Megas*\n• *150 Megas*\n• *200 Megas*\n• *300 Megas*\n• *500 Megas*\n\n👉 Responde con los megas deseados, por ejemplo: \`60 megas\` o \`cambiar paquete 100\``,
+        `*¿A qué paquete o velocidad deseas cambiarlo?*\n\n_Opciones disponibles:_\n• *40 Megas*\n• *60 Megas*\n• *100 Megas*\n• *150 Megas*\n• *200 Megas*\n• *300 Megas*\n• *500 Megas*\n\nResponde con los megas deseados, por ejemplo: \`60 megas\` o \`cambiar paquete 100\``,
         'ACTIVACION_TECNICO',
         'PREGUNTAR_NUEVO_PLAN',
         targetJid
@@ -7868,7 +7928,7 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
     if (esPeticionNombreSinValor) {
       await this.enviarYLoguear(
         phone,
-        `👤 *¿Cuál es el nuevo nombre del cliente?*\n\n👉 Escribe por ejemplo: \`cambiar nombre Juan Pérez Martínez\``,
+        `*¿Cuál es el nuevo nombre del cliente?*\n\nEscribe por ejemplo: \`cambiar nombre Juan Pérez Martínez\``,
         'ACTIVACION_TECNICO',
         'PREGUNTAR_NUEVO_NOMBRE',
         targetJid
@@ -7880,7 +7940,7 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
     if (esPeticionFolioSinValor) {
       await this.enviarYLoguear(
         phone,
-        `🔢 *¿Cuál es el nuevo número de folio?*\n\n👉 Escribe por ejemplo: \`cambiar folio 3456\``,
+        `*¿Cuál es el nuevo número de folio?*\n\nEscribe por ejemplo: \`cambiar folio 3456\``,
         'ACTIVACION_TECNICO',
         'PREGUNTAR_NUEVO_FOLIO',
         targetJid
@@ -7892,7 +7952,7 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
     if (esPeticionZonaSinValor) {
       await this.enviarYLoguear(
         phone,
-        `📍 *¿A qué zona o municipio deseas cambiarlo?*\n\n_Zonas disponibles:_\n• *Actopan*\n• *San Agustín Tlaxiaca*\n• *El Arenal*\n• *San José*\n\n👉 Escribe por ejemplo: \`cambiar zona San Agustín Tlaxiaca\``,
+        `*¿A qué zona o municipio deseas cambiarlo?*\n\n_Zonas disponibles:_\n• *Actopan*\n• *San Agustín Tlaxiaca*\n• *El Arenal*\n• *San José*\n\nEscribe por ejemplo: \`cambiar zona San Agustín Tlaxiaca\``,
         'ACTIVACION_TECNICO',
         'PREGUNTAR_NUEVA_ZONA',
         targetJid
@@ -7940,9 +8000,9 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
     const matchSnExplicit = rawText.match(/(?:cambiar|modificar|poner|ajustar|es\s+el|es|el|la)?\s*(?:serie|sn|sufijo|modem|módem|onu|equipo)\s*(?:a|en|es|:)?\s*([A-Za-z0-9]+)/i);
     const matchHexDirect = rawText.trim().match(/^(?:(?:es\s+(?:el\s+)?|el\s+)?(?:HWTC|ZTEG|48575443|5A544547)?|HWTC|ZTEG|48575443|5A544547)?([A-Fa-f0-9]{4,16})$/i);
 
-    if (matchSnExplicit && !/(?:nombre|folio|zona|plan|paquete)/i.test(matchSnExplicit[1])) {
+    if (matchSnExplicit && !/(?:nombre|folio|zona|plan|paquete|estancia|actopan|arenal|tlaxiaca)/i.test(matchSnExplicit[1])) {
       detectedSn = matchSnExplicit[1].trim();
-    } else if (matchHexDirect && !/^(?:si|no|ok|plan|zona|mega|megas|mb)$/i.test(rawText.trim())) {
+    } else if (matchHexDirect && !/^(?:si|no|ok|plan|zona|mega|megas|mb|estancia|actopan|arenal)$/i.test(rawText.trim())) {
       detectedSn = matchHexDirect[1].trim();
     }
 
@@ -7991,7 +8051,7 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
 
         await this.enviarYLoguear(
           phone,
-          `⏳ *Buscando módem \`${cleanSuffix}\` en SmartOLT...*\nAún no sincroniza en la central. Búsqueda activa durante *10 min* mientras conectas la fibra.`,
+          `*Buscando módem \`${cleanSuffix}\` en SmartOLT...*\nAún no sincroniza en la central. Búsqueda activa durante *10 min* mientras conectas la fibra.`,
           'ACTIVACION_TECNICO',
           'INICIANDO_POLLING_ONU',
           targetJid
@@ -8059,7 +8119,7 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
 
     // 4. Modificar Zona o Municipio
     const matchZona = rawText.match(/(?:cambiar|modificar|poner|ajustar|en|es\s+en)?\s*zona\s*(?:a|en|es|:)?\s*(.+)/i) ||
-      (lower.includes('san jose') || lower.includes('san agustin') || lower.includes('actopan') || lower.includes('arenal') ? [rawText, rawText] : null);
+      (lower.includes('san jose') || lower.includes('san agustin') || lower.includes('actopan') || lower.includes('arenal') || lower.includes('estancia') ? [rawText, rawText] : null);
 
     if (matchZona && !matchNombre && !matchFolio && !detectedSn) {
       const nuevaZona = this.resolverZonaOMunicipio(matchZona[1].trim());
@@ -8202,7 +8262,7 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
       if (payload) {
         // Módem vinculado listo para autorizar
         const signalText = details.signal || 'Detectada';
-        const cardMsg = `📋 *Confirmar Activación (Modificada)*\n${mensajeCambio}• *Cliente:* *${payload.name}*\n• *Zona:* ${payload.zone}\n• *Paquete:* ${planDisplay}\n• *Módem:* \`${payload.sn}\` (${payload.onu_type || 'EG8041V5'})\n• *IP:* \`${payload.ip_address}\` (VLAN ${payload.vlan})\n• *Nivel Óptico:* ${signalText}\n\n¿Autorizar en SmartOLT? Responde *SI* o *NO*.`;
+        const cardMsg = `*Confirmar Activación (Modificada)*\n${mensajeCambio}• *Cliente:* *${payload.name}*\n• *Zona:* ${payload.zone}\n• *Paquete:* ${planDisplay}\n• *Módem:* \`${payload.sn}\` (${payload.onu_type || 'EG8041V5'})\n• *IP:* \`${payload.ip_address}\` (VLAN ${payload.vlan})\n• *Nivel óptico:* ${signalText}\n\n¿Autorizar en SmartOLT? Responde *SI* o *NO*.`;
 
         await this.enviarYLoguear(
           phone,
@@ -8213,7 +8273,7 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
         );
       } else if (draft) {
         // Borrador pendiente de serie (SN)
-        const cardDraftMsg = `📋 *Borrador Actualizado*\n${mensajeCambio}• *Folio:* *${draft.folio || 'S/F'}*\n• *Cliente:* *${draft.cliente || 'Cliente'}*\n• *Zona:* ${draft.zona || 'Actopan'}\n• *Paquete:* ${planDisplay}\n\n✍️ Escribe los dígitos del *módem (SN)* para vincularlo (ej: \`4484\`):`;
+        const cardDraftMsg = `*Borrador Actualizado*\n${mensajeCambio}• *Folio:* *${draft.folio || 'S/F'}*\n• *Cliente:* *${draft.cliente || 'Cliente'}*\n• *Zona:* ${draft.zona || 'Actopan'}\n• *Paquete:* ${planDisplay}\n\nEscribe los dígitos del *módem (SN)* para vincularlo (ej: \`4484\`):`;
 
         await this.enviarYLoguear(
           phone,
@@ -8226,7 +8286,7 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
     } else {
       await this.enviarYLoguear(
         phone,
-        `⚠️ *Comando no reconocido*\n\nPuedes modificar datos escribiendo:\n• *60 megas* (o *cambiar paquete 100*)\n• *cambiar nombre [Nombre]*\n• *cambiar folio [Folio]*\n• *cambiar zona [Zona]*\n• *[Dígitos SN]* (ej: \`4484\`)\n\n👉 O responde *SI* para autorizar o *CANCELAR*.`,
+        `*Comando no reconocido*\n\nPuedes modificar datos escribiendo:\n• *60 megas* (o *cambiar paquete 100*)\n• *cambiar nombre [Nombre]*\n• *cambiar folio [Folio]*\n• *cambiar zona [Zona]*\n• *[Dígitos SN]* (ej: \`4484\`)\n\nO responde *SI* para autorizar o *CANCELAR*.`,
         'ACTIVACION_TECNICO',
         'MODIFICACION_NO_RECONOCIDA',
         targetJid
