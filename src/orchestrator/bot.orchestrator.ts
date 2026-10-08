@@ -617,6 +617,9 @@ export class BotOrchestrator {
     const esComandoCambioPaquete = /(?:cambiar|modificar|actualizar|subir|bajar)\s+(?:de\s+)?(?:paquete|plan|velocidad|megas)\b/i.test(rawText) ||
       /^cambiar\s+(?:paquete|plan)\b/i.test(lowerMsg);
 
+    const esComandoCambioDomicilio = /^(?:realizar|hacer|ejecutar|solicitar)?\s*(?:un\s+)?(?:cambio\s+de\s+domicilio|cambiar\s+domicilio|reubicaci[oó]n|reubicar|mover\s+modem|mover\s+m[oó]dem|mover\s+caja|cambio\s+de\s+caja|cambio\s+de\s+puerto)\b/i.test(lowerMsg) ||
+      /^(?:cambio\s+de\s+domicilio|reubicaci[oó]n|reubicar)\b/i.test(lowerMsg);
+
     const esComandoCambioModem = /^(?:realizar|hacer|ejecutar|solicitar)?\s*(?:un\s+)?(?:cambio|reemplazar|reemplazo|cambiar|swap)(?:\s+(?:de|del))?\s*(?:m[oó]dems?|m[oó]dens?|odems?|modns?|onus?|equipos?|routers?|cpe)\b/i.test(lowerMsg) ||
       /^(?:cambio|reemplazo|swap)\s+(?:m[oó]dems?|m[oó]dens?|odems?|modns?|onus?|equipos?|routers?|cpe)\b/i.test(lowerMsg);
 
@@ -631,12 +634,13 @@ export class BotOrchestrator {
       session?.step === 'PENDIENTE_CONFIRMACION_ACTIVACION_ONU' ||
       session?.step === 'PENDIENTE_SN_ACTIVACION' ||
       session?.step === 'PENDIENTE_CLIENTE_CAMBIO_MODEM' ||
+      session?.step === 'PENDIENTE_CLIENTE_CAMBIO_DOMICILIO' ||
       session?.step === 'PENDIENTE_SELECCION_IP_CAMBIO_MODEM' ||
       session?.step === 'PENDIENTE_SN_CAMBIO_MODEM' ||
       session?.step === 'PENDIENTE_CONFIRMACION_CAMBIO_MODEM' ||
       session?.step === 'TECNICO_ESPERANDO_CLIENTE_GPS';
 
-    const esComandoTecnicoExplicito = esComandoActivacion || esComandoCambioPaquete || esComandoCambioModem || esComandoCambioWifi;
+    const esComandoTecnicoExplicito = esComandoActivacion || esComandoCambioPaquete || esComandoCambioModem || esComandoCambioDomicilio || esComandoCambioWifi;
     const esTecnicoAutorizado = Boolean(await DbService.isAuthorizedTechnician(phone).catch(() => null));
     const esAccionTecnica = esComandoTecnicoExplicito || esPasoTecnicoEnCurso || esTecnicoAutorizado;
 
@@ -837,7 +841,13 @@ export class BotOrchestrator {
       return;
     }
 
-    // D.2 Selección de IP / Servicio en Cambio de Módem cuando hay múltiples servicios
+    // D.1.1 Solicitud de cliente o folio para Cambio de Domicilio
+    if (session?.step === 'PENDIENTE_CLIENTE_CAMBIO_DOMICILIO') {
+      await this.procesarIdentificacionClienteCambioDomicilio(phone, rawText, session, targetJid);
+      return;
+    }
+
+    // D.2 Selección de IP / Servicio en Cambio de Módem / Domicilio cuando hay múltiples servicios
     if (session?.step === 'PENDIENTE_SELECCION_IP_CAMBIO_MODEM') {
       await this.procesarSeleccionIpCambioModem(phone, rawText, session, targetJid);
       return;
@@ -849,10 +859,10 @@ export class BotOrchestrator {
       return;
     }
 
-    // D.4 Confirmación de cambio de módem pendiente (SÍ / NO)
+    // D.4 Confirmación de cambio de módem / domicilio pendiente (SÍ / NO)
     if (session?.step === 'PENDIENTE_CONFIRMACION_CAMBIO_MODEM') {
       const esConfirmacion = buttonId === 'BTN_CONFIRMAR_CAMBIO_MODEM' ||
-        /^(si|sí|confirmar|confirmo|adelante|autorizar|dale|ok|1|cambiar|ejecutar|reemplazar)\b/i.test(lowerMsg);
+        /^(si|sí|confirmar|confirmo|adelante|autorizar|dale|ok|1|cambiar|ejecutar|reemplazar|reubicar|mover)\b/i.test(lowerMsg);
       const esCancelacion = buttonId === 'BTN_CANCELAR_CAMBIO_MODEM' ||
         /^(no|cancelar|cancelo|rechazar|abortar|0)\b/i.test(lowerMsg);
 
@@ -930,6 +940,12 @@ export class BotOrchestrator {
       // Caso 4: El técnico envía comando de cambio / reemplazo de módem
       if (esComandoCambioModem) {
         await this.procesarSolicitudCambioModemTecnico(phone, rawText, session, targetJid);
+        return;
+      }
+
+      // Caso 4.1: El técnico envía comando de cambio de domicilio / reubicación
+      if (esComandoCambioDomicilio) {
+        await this.procesarSolicitudCambioDomicilioTecnico(phone, rawText, session, targetJid);
         return;
       }
 
@@ -6135,16 +6151,19 @@ Por favor reconecta tus dispositivos ingresando esta nueva clave.`;
       `1️⃣ *Activar Módem / Cliente:* (Un solo mensaje)\n` +
       `👉 \`activar cliente [SN] [Folio-Nombre] [Plan] [Zona]\`\n` +
       `_Ej: \`activar cliente 4317B5 3456-Juan Perez 40M Actopan\`_\n\n` +
-      `2️⃣ *Cambio de Módem (Swap):*\n` +
+      `2️⃣ *Cambio de Domicilio / Reubicación:*\n` +
+      `👉 \`cambio de domicilio [Folio, Nombre o IP]\`\n` +
+      `_Ej: \`cambio de domicilio 3456\`_\n\n` +
+      `3️⃣ *Cambio de Módem (Swap):*\n` +
       `👉 \`cambio de modem [Folio, Nombre o IP]\`\n` +
       `_Ej: \`cambio de modem 3456\`_\n\n` +
-      `3️⃣ *Cambiar Paquete / Velocidad:*\n` +
+      `4️⃣ *Cambiar Paquete / Velocidad:*\n` +
       `👉 \`cambiar plan [Folio/Nombre/SN] a [Velocidad]\`\n` +
       `_Ej: \`cambiar plan 3456 a 60 megas\`_\n\n` +
-      `4️⃣ *Cambiar Contraseña Wi-Fi:*\n` +
+      `5️⃣ *Cambiar Contraseña Wi-Fi:*\n` +
       `👉 \`cambiar wifi [SN] [NuevoSSID] [NuevaClave]\`\n` +
       `_Ej: \`cambiar wifi 4317B5 MiRed2.4G Clave2026*\`_\n\n` +
-      `5️⃣ *Guía Didáctica TR-069 & OLT:*\n` +
+      `6️⃣ *Guía Didáctica TR-069 & OLT:*\n` +
       `👉 Escribe: \`guia tr069\`\n\n` +
       `💡 _Para cualquier comando puedes escribirlo directamente en este chat en cualquier momento._`;
 
@@ -6537,6 +6556,258 @@ Módem aprovisionado en la OLT con su VLAN y Perfil de Velocidad.`;
   }
 
   /**
+   * Procesa la solicitud de Cambio de Domicilio / Reubicación de Caja (Mismo Módem) solicitada por un técnico en campo
+   * Flujo conversacional:
+   * 1. Técnico escribe "cambio de domicilio [Cliente/Folio/IP]" (o solo "cambio de domicilio").
+   * 2. El bot localiza el servicio (o lista los servicios si tiene más de uno).
+   * 3. El bot detecta automáticamente el SN actual del cliente y busca si ya sincronizó en el nuevo puerto de SmartOLT.
+   * 4. Si aún no sincroniza, activa un polling inteligente de 5 minutos esperando la conexión de fibra.
+   * 5. Al confirmar ("SÍ"), se reubica el módem conservando exactamente IP, VLAN y Paquete.
+   */
+  private static async procesarSolicitudCambioDomicilioTecnico(
+    phone: string,
+    rawText: string,
+    session: Session | null,
+    targetJid?: string
+  ): Promise<void> {
+    const auth = await this.verificarAutorizacionTecnico(phone, rawText);
+    if (!auth.autorizado) {
+      await this.enviarYLoguear(
+        phone,
+        `*Acceso Restringido - Area Tecnica*\n\nTu numero (*${phone}*) no esta registrado como tecnico autorizado para realizar cambios de domicilio en SmartOLT.\n\nSolicita tu alta al administrador en el panel de control.`,
+        'ACTIVACION_TECNICO',
+        'NO_AUTORIZADO',
+        targetJid
+      );
+      return;
+    }
+
+    const cleanParams = rawText
+      .replace(/^(?:realizar|hacer|ejecutar|solicitar)?\s*(?:un\s+)?(?:cambio\s+de\s+domicilio|cambiar\s+domicilio|reubicaci[oó]n|reubicar|mover\s+modem|mover\s+m[oó]dem|mover\s+caja|cambio\s+de\s+caja|cambio\s+de\s+puerto)[:\s]*/i, '')
+      .trim();
+
+    if (!cleanParams) {
+      await DbService.upsertSession({
+        phone,
+        step: 'PENDIENTE_CLIENTE_CAMBIO_DOMICILIO',
+      });
+
+      await this.enviarYLoguear(
+        phone,
+        `*CAMBIO DE DOMICILIO / REUBICACIÓN EN SMARTOLT*\n──────────────────────────────\nPor favor escribe el *nombre, folio o IP* del cliente cuyo módem vas a reubicar:\n\n_(Ej: 2022 o Osbaldo Tovar o 172.19.2.182)_`,
+        'ACTIVACION_TECNICO',
+        'SOLICITUD_CLIENTE_DOMICILIO',
+        targetJid
+      );
+      return;
+    }
+
+    await this.buscarYProcesarServicioParaDomicilio(phone, cleanParams, session, targetJid);
+  }
+
+  /**
+   * Atiende la respuesta con el nombre o folio del cliente para Cambio de Domicilio
+   */
+  private static async procesarIdentificacionClienteCambioDomicilio(
+    phone: string,
+    rawText: string,
+    session: Session | null,
+    targetJid?: string
+  ): Promise<void> {
+    const lower = rawText.trim().toLowerCase();
+    if (/^(no|cancelar|cancelo|abortar|0)\b/i.test(lower)) {
+      await DbService.upsertSession({ phone, step: 'CONVERSACIONAL' });
+      await this.enviarYLoguear(phone, `*Cambio de domicilio cancelado.*`, 'ACTIVACION_TECNICO', 'DOMICILIO_CANCELADO', targetJid);
+      return;
+    }
+
+    await this.buscarYProcesarServicioParaDomicilio(phone, rawText.trim(), session, targetJid);
+  }
+
+  /**
+   * Busca el cliente/servicio para Cambio de Domicilio y busca el mismo módem en unconfigured_onus (o inicia polling)
+   */
+  private static async buscarYProcesarServicioParaDomicilio(
+    phone: string,
+    query: string,
+    session: Session | null,
+    targetJid?: string
+  ): Promise<void> {
+    const isIp = /^172\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(query) || /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(query);
+    const isFullSn = query.length >= 12;
+
+    let oldOnu: any = null;
+
+    if (isIp || isFullSn) {
+      oldOnu = await SmartOLTService.getOnuDetails(query);
+    } else {
+      const matches = await DbService.searchOnusFuzzy(query, 8);
+
+      const distinctMatches: typeof matches = [];
+      const seenKeys = new Set<string>();
+      for (const m of matches) {
+        const key = `${m.unique_external_id || ''}-${m.ip_address || ''}-${m.sn || ''}`;
+        if (!seenKeys.has(key)) {
+          seenKeys.add(key);
+          distinctMatches.push(m);
+        }
+      }
+
+      if (distinctMatches.length > 1) {
+        for (const m of distinctMatches) {
+          if (!m.speed_profile || m.speed_profile === '40MB-DOWN' || m.speed_profile === '40MB') {
+            try {
+              const whClient = await DbService.findWisphubClient({
+                ip: m.ip_address,
+                name: m.name,
+                sn: m.sn,
+              });
+              if (whClient && (whClient.plan_internet || whClient.servicio)) {
+                const sp = getSmartOltSpeedProfiles(whClient.plan_internet || whClient.servicio);
+                m.speed_profile = sp.down;
+              }
+            } catch {}
+          }
+        }
+
+        let msg = `*SE ENCONTRARON ${distinctMatches.length} SERVICIOS REGISTRADOS PARA "${query}":*\n──────────────────────────────\n`;
+        distinctMatches.forEach((m, idx) => {
+          const plan = (m.speed_profile || '40MB').replace(/MB-DOWN|MB/i, ' Megas');
+          msg += `*${idx + 1}.* IP: \`${m.ip_address || 'Sin IP'}\` | SN: \`${m.sn}\` | Zona: ${m.zone_name || 'Actopan'} | Plan: ${plan}\n   • Titular: ${m.name}\n`;
+        });
+        msg += `──────────────────────────────\n¿A cuál de los servicios corresponde este cambio de domicilio?\nResponde con el número de opción (ej: *1* o *2*) o la *IP*.`;
+
+        let metaObj: any = {};
+        try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
+        metaObj.pendingModemSwapChoice = { candidates: distinctMatches, isRelocation: true };
+
+        await DbService.upsertSession({
+          phone,
+          step: 'PENDIENTE_SELECCION_IP_CAMBIO_MODEM',
+          metadata: JSON.stringify(metaObj),
+        });
+
+        await this.enviarYLoguear(phone, msg, 'ACTIVACION_TECNICO', 'SELECCION_IP_MULTISERVICIO_DOMICILIO', targetJid);
+        return;
+      } else if (distinctMatches.length === 1) {
+        const cand = distinctMatches[0];
+        oldOnu = await SmartOLTService.getOnuDetails(cand.unique_external_id || cand.sn);
+        if (!oldOnu) {
+          const candSubnet = cand.ip_address ? IpamService.getSubnetConfigFromIp(cand.ip_address) : null;
+          oldOnu = {
+            unique_external_id: cand.unique_external_id,
+            sn: cand.sn,
+            name: cand.name,
+            ip_address: cand.ip_address,
+            vlan: (cand as any).vlan || candSubnet?.vlan || IpamService.getVlanFromIp(cand.ip_address),
+            zone: cand.zone_name || (candSubnet?.oltId === '2' ? 'San Agustin Tlaxiaca' : 'Actopan'),
+            download_speed_profile_name: cand.speed_profile || '40MB-DOWN',
+            olt_id: candSubnet?.oltId || (cand.zone_name?.toLowerCase().includes('san agustin') ? '2' : '3'),
+            board: '0',
+            port: '0',
+            onu_type: 'EG8041V5',
+          };
+        }
+      } else {
+        oldOnu = await SmartOLTService.getOnuDetails(query);
+        if (!oldOnu) {
+          try {
+            const whMatches = await DbService.searchWisphubClientsFuzzy(query, 3);
+            if (whMatches.length > 0) {
+              const firstWh = whMatches[0];
+              if (firstWh.ip || firstWh.sn_onu) {
+                oldOnu = await SmartOLTService.getOnuDetails(firstWh.ip || firstWh.sn_onu || String(firstWh.id_servicio));
+              }
+              if (!oldOnu && firstWh.ip) {
+                const candSubnet = IpamService.getSubnetConfigFromIp(firstWh.ip);
+                const speedInfo = getSmartOltSpeedProfiles(firstWh.plan_internet || firstWh.servicio || '40 Megas');
+                oldOnu = {
+                  unique_external_id: firstWh.sn_onu || `WH-${firstWh.id_servicio}`,
+                  sn: firstWh.sn_onu || 'N/A',
+                  name: firstWh.nombre,
+                  ip_address: firstWh.ip,
+                  vlan: candSubnet?.vlan || IpamService.getVlanFromIp(firstWh.ip) || '510',
+                  zone: candSubnet?.oltId === '2' ? 'San Agustin Tlaxiaca' : 'Actopan',
+                  download_speed_profile_name: speedInfo.down,
+                  upload_speed_profile_name: speedInfo.up,
+                  olt_id: candSubnet?.oltId || '3',
+                  board: '0',
+                  port: '0',
+                  onu_type: 'EG8041V5',
+                };
+              }
+            }
+          } catch (whSearchErr: any) {
+            logger.warn('Error en búsqueda de fallback WispHub para cambio de domicilio:', whSearchErr?.message);
+          }
+        }
+      }
+    }
+
+    if (!oldOnu) {
+      await this.enviarYLoguear(
+        phone,
+        `*Servicio no encontrado*\n\nNo se localizo ningun servicio activo con el identificador o cliente: *"${query}"* en SmartOLT ni en la base de datos.\n\nPor favor verifica que el nombre, folio, IP o serie sean correctos y reintenta.`,
+        'ACTIVACION_TECNICO',
+        'VIEJA_ONU_NO_ENCONTRADA',
+        targetJid
+      );
+      return;
+    }
+
+    const calculatedVlan = IpamService.getVlanFromIp(oldOnu.ip_address) || oldOnu.vlan || '510';
+    const oldSn = oldOnu.sn || oldOnu.unique_external_id;
+
+    let metaObj: any = {};
+    try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
+    metaObj.isRelocation = true;
+    metaObj.pendingModemSwapService = {
+      oldOnuId: oldOnu.unique_external_id,
+      oldSn: oldSn,
+      clientName: oldOnu.name,
+      ip: oldOnu.ip_address,
+      vlan: calculatedVlan,
+      zone: oldOnu.zone,
+      speedProfile: oldOnu.download_speed_profile_name,
+      oltId: oldOnu.olt_id,
+      board: oldOnu.board,
+      port: oldOnu.port,
+      model: oldOnu.onu_type,
+      isRelocation: true,
+    };
+
+    // Buscar si la misma ONU ya está visible en unconfigured_onus en el nuevo puerto
+    this.cancelarPollingOnu(phone);
+    const unconfigured = await SmartOLTService.findUnconfiguredOnuBySnSuffix(oldSn);
+
+    if (unconfigured) {
+      await this.construirYEnviarConfirmacionSwap(phone, unconfigured, metaObj.pendingModemSwapService, metaObj, targetJid);
+      return;
+    } else {
+      metaObj.targetSwapSn = oldSn;
+      await DbService.upsertSession({
+        phone,
+        step: 'PENDIENTE_SN_CAMBIO_MODEM',
+        metadata: JSON.stringify(metaObj),
+      });
+
+      const planDisplay = (oldOnu.download_speed_profile_name || '40MB').replace(/MB-DOWN|MB/i, ' Megas');
+      const waitMsg = `*CAMBIO DE DOMICILIO / REUBICACIÓN*\n──────────────────────────────\n• *Cliente / Folio:* *${oldOnu.name}*\n• *Módem a Reubicar:* \`${oldSn}\` (${oldOnu.onu_type || 'Huawei'})\n• *IP a Conservar:* \`${oldOnu.ip_address}\` (VLAN ${calculatedVlan})\n• *Paquete:* *${planDisplay}*\n• *Zona:* *${oldOnu.zone || 'Actopan'}*\n──────────────────────────────\nBuscando el módem en su nueva caja/puerto en SmartOLT...\nEl equipo aún no sincroniza con la central. Esperando conexión de fibra óptica en la nueva ubicación (búsqueda activa durante 5 minutos)...\n\n💡 _En cuanto conectes la fibra al nuevo puerto, el bot lo detectará y te enviará la confirmación._`;
+
+      await this.enviarYLoguear(
+        phone,
+        waitMsg,
+        'ACTIVACION_TECNICO',
+        'INICIANDO_POLLING_DOMICILIO',
+        targetJid
+      );
+
+      this.iniciarPollingSwapSmartOlt(phone, oldSn, targetJid);
+      return;
+    }
+  }
+
+  /**
    * Procesa la solicitud de Cambio de Módem (Reemplazo de ONU) solicitada por un técnico en campo
    * Flujo conversacional:
    * 1. Técnico escribe "cambio de modem [Cliente/Folio/IP]" (o solo "cambio de modem").
@@ -6855,12 +7126,15 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
       return;
     }
 
+    const isRelocation = Boolean(choiceData.isRelocation);
     const calculatedVlan = IpamService.getVlanFromIp(oldOnu.ip_address) || oldOnu.vlan || '510';
+    const oldSn = oldOnu.sn || oldOnu.unique_external_id;
 
     metaObj.pendingModemSwapChoice = null;
+    metaObj.isRelocation = isRelocation;
     metaObj.pendingModemSwapService = {
       oldOnuId: oldOnu.unique_external_id,
-      oldSn: oldOnu.sn,
+      oldSn: oldSn,
       clientName: oldOnu.name,
       ip: oldOnu.ip_address,
       vlan: calculatedVlan,
@@ -6870,7 +7144,31 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
       board: oldOnu.board,
       port: oldOnu.port,
       model: oldOnu.onu_type,
+      isRelocation,
     };
+
+    if (isRelocation) {
+      this.cancelarPollingOnu(phone);
+      const unconfigured = await SmartOLTService.findUnconfiguredOnuBySnSuffix(oldSn);
+      if (unconfigured) {
+        await this.construirYEnviarConfirmacionSwap(phone, unconfigured, metaObj.pendingModemSwapService, metaObj, targetJid);
+        return;
+      } else {
+        metaObj.targetSwapSn = oldSn;
+        await DbService.upsertSession({
+          phone,
+          step: 'PENDIENTE_SN_CAMBIO_MODEM',
+          metadata: JSON.stringify(metaObj),
+        });
+
+        const planDisplay = (oldOnu.download_speed_profile_name || '40MB').replace(/MB-DOWN|MB/i, ' Megas');
+        const waitMsg = `*CAMBIO DE DOMICILIO / REUBICACIÓN*\n──────────────────────────────\n• *Cliente / Folio:* *${oldOnu.name}*\n• *Módem a Reubicar:* \`${oldSn}\` (${oldOnu.onu_type || 'Huawei'})\n• *IP a Conservar:* \`${oldOnu.ip_address}\` (VLAN ${calculatedVlan})\n• *Paquete:* *${planDisplay}*\n• *Zona:* *${oldOnu.zone || 'Actopan'}*\n──────────────────────────────\nBuscando el módem en su nueva caja/puerto en SmartOLT...\nEl equipo aún no sincroniza con la central. Esperando conexión de fibra óptica en la nueva ubicación (búsqueda activa durante 5 minutos)...\n\n💡 _En cuanto conectes la fibra al nuevo puerto, el bot lo detectará y te enviará la confirmación._`;
+
+        await this.enviarYLoguear(phone, waitMsg, 'ACTIVACION_TECNICO', 'INICIANDO_POLLING_DOMICILIO', targetJid);
+        this.iniciarPollingSwapSmartOlt(phone, oldSn, targetJid);
+        return;
+      }
+    }
 
     await DbService.upsertSession({
       phone,
@@ -6908,7 +7206,7 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
 
     if (!oldService) {
       await DbService.upsertSession({ phone, step: 'CONVERSACIONAL' });
-      await this.enviarYLoguear(phone, 'No hay ningun servicio activo seleccionado para cambio de modem. Inicia nuevamente con `cambio de modem [Cliente]`.', 'ACTIVACION_TECNICO', 'ERROR_SESION', targetJid);
+      await this.enviarYLoguear(phone, 'No hay ningun servicio activo seleccionado para cambio de modem. Inicia nuevamente con `cambio de modem [Cliente]` o `cambio de domicilio [Cliente]`.', 'ACTIVACION_TECNICO', 'ERROR_SESION', targetJid);
       return;
     }
 
@@ -6916,12 +7214,13 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
       this.cancelarPollingOnu(phone);
       metaObj.pendingModemSwapService = null;
       metaObj.pendingModemSwap = null;
+      metaObj.isRelocation = false;
       await DbService.upsertSession({
         phone,
         step: 'CONVERSACIONAL',
         metadata: JSON.stringify(metaObj),
       });
-      await this.enviarYLoguear(phone, '*Cambio de modem cancelado.*', 'ACTIVACION_TECNICO', 'SWAP_CANCELADO', targetJid);
+      await this.enviarYLoguear(phone, '*Operación cancelada.*', 'ACTIVACION_TECNICO', 'SWAP_CANCELADO', targetJid);
       return;
     }
 
@@ -6943,6 +7242,15 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
       return;
     }
 
+    const isSameSn = oldService.oldSn && (
+      oldService.oldSn.toUpperCase().includes(cleanSuffix) ||
+      cleanSuffix.includes(oldService.oldSn.toUpperCase())
+    );
+    if (isSameSn) {
+      oldService.isRelocation = true;
+      metaObj.isRelocation = true;
+    }
+
     this.cancelarPollingOnu(phone);
 
     const unconfigured = await SmartOLTService.findUnconfiguredOnuBySnSuffix(cleanSuffix);
@@ -6962,9 +7270,13 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
         metadata: JSON.stringify(metaObj),
       });
 
+      const waitMsg = metaObj.isRelocation
+        ? `Buscando módem con serie *${cleanSuffix}* en su nueva caja/puerto en SmartOLT...\nEl equipo aún no sincroniza con la central. Esperando conexión de fibra óptica en la nueva ubicación (búsqueda activa durante 5 minutos)...`
+        : `Buscando nuevo modem con serie *${cleanSuffix}* en SmartOLT...\nEl equipo aun no sincroniza con la central. Esperando conexion de fibra optica (busqueda activa durante 5 minutos)...`;
+
       await this.enviarYLoguear(
         phone,
-        `Buscando nuevo modem con serie *${cleanSuffix}* en SmartOLT...\nEl equipo aun no sincroniza con la central. Esperando conexion de fibra optica (busqueda activa durante 5 minutos)...`,
+        waitMsg,
         'ACTIVACION_TECNICO',
         'INICIANDO_POLLING_SWAP',
         targetJid
@@ -7027,7 +7339,7 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
   }
 
   /**
-   * Prepara y envía la ficha de confirmación final para el cambio de módem
+   * Prepara y envía la ficha de confirmación final para el cambio de módem o cambio de domicilio
    */
   private static async construirYEnviarConfirmacionSwap(
     phone: string,
@@ -7038,8 +7350,14 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
   ): Promise<void> {
     const onuModel = SmartOLTService.normalizeOnuType(unconfigured.onu_type_name || unconfigured.onu_type, unconfigured.sn);
     const finalVlan = IpamService.getVlanFromIp(oldService.ip) || oldService.vlan || '510';
+    const isRelocation = Boolean(
+      oldService.isRelocation ||
+      metaObj.isRelocation ||
+      (oldService.oldSn && unconfigured.sn && oldService.oldSn.toUpperCase() === unconfigured.sn.toUpperCase())
+    );
 
     metaObj.pendingModemSwapChoice = null;
+    metaObj.isRelocation = isRelocation;
     metaObj.pendingModemSwap = {
       oldOnuId: oldService.oldOnuId || oldService.oldSn,
       oldSn: oldService.oldSn,
@@ -7053,6 +7371,7 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
       board: unconfigured.board,
       port: unconfigured.port,
       model: onuModel,
+      isRelocation,
     };
     metaObj.targetSwapSn = null;
 
@@ -7065,7 +7384,23 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
     const signalText = unconfigured.onu_signal_1490 || unconfigured.onu_signal || 'Detectado';
     const planDisplay = (oldService.speedProfile || '40MB').replace(/MB-DOWN|MB/i, ' Megas');
 
-    const cardMsg = `*RESUMEN DE CAMBIO DE MODEM*
+    let cardMsg = '';
+    if (isRelocation) {
+      cardMsg = `*RESUMEN DE CAMBIO DE DOMICILIO / REUBICACIÓN*
+──────────────────────────────
+• *Cliente / Folio:* *${oldService.clientName}*
+• *Zona:* *${oldService.zone || 'Actopan'}*
+• *IP a Conservar:* \`${oldService.ip}\` (VLAN ${finalVlan})
+• *Paquete:* *${planDisplay}*
+• *Módem a Reubicar:* \`${unconfigured.sn}\` (${onuModel})
+• *Nueva Posición:* OLT ${unconfigured.olt_id || oldService.oltId} | Board ${unconfigured.board} | Port ${unconfigured.port}
+• *Nivel Óptico Detectado:* *${signalText}*
+──────────────────────────────
+Al confirmar, se reubicará el módem en el nuevo puerto/caja de SmartOLT conservando exactamente la misma IP, VLAN y Paquete.
+
+Responde *SI* para ejecutar el cambio o *NO* para cancelar.`;
+    } else {
+      cardMsg = `*RESUMEN DE CAMBIO DE MODEM*
 ──────────────────────────────
 • *Cliente / Folio:* *${oldService.clientName}*
 • *Zona:* *${oldService.zone || 'Actopan'}*
@@ -7078,6 +7413,7 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
 Al confirmar, se eliminara el modem anterior de SmartOLT y se activara el nuevo conservando exactamente la misma IP, VLAN y Paquete.
 
 Responde *SI* para ejecutar el cambio o *NO* para cancelar.`;
+    }
 
     await this.enviarYLoguear(
       phone,
@@ -7089,7 +7425,7 @@ Responde *SI* para ejecutar el cambio o *NO* para cancelar.`;
   }
 
   /**
-   * Procesa la confirmación explícita (SÍ / NO) del cambio de módem solicitado por el técnico
+   * Procesa la confirmación explícita (SÍ / NO) del cambio de módem / domicilio solicitado por el técnico
    */
   private static async procesarConfirmacionCambioModemTecnico(
     phone: string,
@@ -7100,6 +7436,11 @@ Responde *SI* para ejecutar el cambio o *NO* para cancelar.`;
     let metaObj: any = {};
     try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
     const swapData = metaObj.pendingModemSwap;
+    const isRelocation = Boolean(
+      metaObj.isRelocation ||
+      swapData?.isRelocation ||
+      (swapData?.oldSn && swapData?.newSn && swapData.oldSn.toUpperCase() === swapData.newSn.toUpperCase())
+    );
 
     this.cancelarPollingOnu(phone);
 
@@ -7108,6 +7449,7 @@ Responde *SI* para ejecutar el cambio o *NO* para cancelar.`;
       metaObj.pendingModemSwapService = null;
       metaObj.pendingModemSwapChoice = null;
       metaObj.targetSwapSn = null;
+      metaObj.isRelocation = false;
       await DbService.upsertSession({
         phone,
         step: 'CONVERSACIONAL',
@@ -7116,7 +7458,9 @@ Responde *SI* para ejecutar el cambio o *NO* para cancelar.`;
 
       await this.enviarYLoguear(
         phone,
-        `*Cambio de modem cancelado.* No se realizo ninguna modificacion en SmartOLT.`,
+        isRelocation
+          ? `*Cambio de domicilio cancelado.* No se realizo ninguna modificacion en SmartOLT.`
+          : `*Cambio de modem cancelado.* No se realizo ninguna modificacion en SmartOLT.`,
         'ACTIVACION_TECNICO',
         'SWAP_CANCELADO',
         targetJid
@@ -7126,7 +7470,9 @@ Responde *SI* para ejecutar el cambio o *NO* para cancelar.`;
 
     await this.enviarYLoguear(
       phone,
-      `Ejecutando cambio de modem en SmartOLT (eliminando equipo anterior y autorizando nuevo equipo *${swapData.newSn}*)... Por favor espera un momento.`,
+      isRelocation
+        ? `Ejecutando cambio de domicilio en SmartOLT (reubicando equipo *${swapData.newSn}* al nuevo puerto)... Por favor espera un momento.`
+        : `Ejecutando cambio de modem en SmartOLT (eliminando equipo anterior y autorizando nuevo equipo *${swapData.newSn}*)... Por favor espera un momento.`,
       'ACTIVACION_TECNICO',
       'EJECUTANDO_SWAP',
       targetJid
@@ -7140,6 +7486,7 @@ Responde *SI* para ejecutar el cambio o *NO* para cancelar.`;
       overrideOltId: swapData.oltId,
       overrideBoard: swapData.board,
       overridePort: swapData.port,
+      isRelocation,
       notifyGroup: true,
     });
 
@@ -7147,6 +7494,7 @@ Responde *SI* para ejecutar el cambio o *NO* para cancelar.`;
     metaObj.pendingModemSwapService = null;
     metaObj.pendingModemSwapChoice = null;
     metaObj.targetSwapSn = null;
+    metaObj.isRelocation = false;
     await DbService.upsertSession({
       phone,
       step: 'CONVERSACIONAL',
@@ -7154,7 +7502,18 @@ Responde *SI* para ejecutar el cambio o *NO* para cancelar.`;
     });
 
     if (result.success) {
-      const successMsg = `*CAMBIO DE MODEM COMPLETADO CON EXITO*
+      const successMsg = isRelocation
+        ? `*CAMBIO DE DOMICILIO COMPLETADO CON EXITO*
+──────────────────────────────
+• *Cliente:* *${swapData.clientName}*
+• *Zona:* *${swapData.zone || 'Actopan'}*
+• *IP Conservada:* \`${swapData.ip}\` (VLAN ${swapData.vlan})
+• *Módem Reubicado:* \`${swapData.newSn}\` (${swapData.model})
+• *Nuevo Puerto:* OLT ${swapData.oltId} | Board ${swapData.board} | Port ${swapData.port}
+──────────────────────────────
+Módem reubicado y aprovisionado exitosamente en SmartOLT.
+Notificación enviada al grupo de WhatsApp de Activaciones.`
+        : `*CAMBIO DE MODEM COMPLETADO CON EXITO*
 ──────────────────────────────
 • *Cliente:* *${swapData.clientName}*
 • *Zona:* *${swapData.zone || 'Actopan'}*
@@ -7169,13 +7528,13 @@ Notificacion enviada al grupo de WhatsApp de Activaciones.`;
         phone,
         successMsg,
         'ACTIVACION_TECNICO',
-        'SWAP_EXITOSO',
+        isRelocation ? 'CAMBIO_DOMICILIO_EXITOSO' : 'SWAP_EXITOSO',
         targetJid
       );
     } else {
       await this.enviarYLoguear(
         phone,
-        `*Atencion durante el cambio de modem:*\n\n${result.message}`,
+        `*Atencion durante el proceso:*\n\n${result.message}`,
         'ACTIVACION_TECNICO',
         'SWAP_ERROR',
         targetJid

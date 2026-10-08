@@ -80,6 +80,7 @@ export interface ModemSwapParams {
   overrideBoard?: string | number;
   overridePort?: string | number;
   notifyGroup?: boolean;
+  isRelocation?: boolean;
 }
 
 export interface ModemSwapResult {
@@ -1527,25 +1528,25 @@ export class SmartOLTService {
     const cleanOld = String(params.oldOnuIdOrSn || '').trim();
     const cleanNewSn = String(params.newSn || '').trim().toUpperCase();
 
-    logger.info(`[Cambio de Módem] Iniciando reemplazo: Anterior="${cleanOld}" -> Nuevo="${cleanNewSn}"`);
+    const isRelocation = Boolean(params.isRelocation || cleanOld.toUpperCase() === cleanNewSn);
+    const actionTag = isRelocation ? 'CAMBIO DE DOMICILIO' : 'CAMBIO DE MODEM';
+    const actionLabel = isRelocation ? 'Cambio de Domicilio / Reubicación' : 'Cambio de Módem';
+
+    logger.info(`[${actionLabel}] Iniciando operación: Anterior="${cleanOld}" -> ${isRelocation ? `Reubicando mismo módem (${cleanNewSn})` : `Nuevo="${cleanNewSn}"`}`);
 
     if (!cleanOld || !cleanNewSn) {
       return { success: false, message: 'Se requiere el identificador del módem actual y el SN del nuevo módem.' };
     }
 
-    if (cleanOld.toUpperCase() === cleanNewSn) {
-      return { success: false, message: 'El nuevo número de serie (SN) no puede ser igual al módem anterior.' };
-    }
-
     // 1. Obtener datos de la ONU actual
     const oldOnu = await this.getOnuDetails(cleanOld);
     if (!oldOnu) {
-      return { success: false, message: `No se encontraron datos del módem anterior (${cleanOld}) en SmartOLT ni en la base de datos.` };
+      return { success: false, message: `No se encontraron datos del módem (${cleanOld}) en SmartOLT ni en la base de datos.` };
     }
 
-    logger.info(`[Cambio de Módem] Datos de ONU anterior localizados: Cliente="${oldOnu.name}", IP="${oldOnu.ip_address}", VLAN="${oldOnu.vlan}", Zona="${oldOnu.zone}", SN="${oldOnu.sn}"`);
+    logger.info(`[${actionLabel}] Datos de ONU localizados: Cliente="${oldOnu.name}", IP="${oldOnu.ip_address}", VLAN="${oldOnu.vlan}", Zona="${oldOnu.zone}", SN="${oldOnu.sn}"`);
 
-    // 2. Respaldar en Base de Datos Local (Crear registro de swap)
+    // 2. Respaldar en Base de Datos Local (Crear registro de swap/relocation)
     const swapId = await DbService.saveModemSwap({
       client_name: oldOnu.name,
       old_sn: oldOnu.sn || cleanOld,
@@ -1561,7 +1562,7 @@ export class SmartOLTService {
       status: 'EN_PROCESO',
     });
 
-    // 3. Buscar si el nuevo módem ya fue detectado en SmartOLT unconfigured_onus
+    // 3. Buscar si el módem ya fue detectado en SmartOLT unconfigured_onus en su nueva posición
     let unconfiguredMatch: UnconfiguredOnu | null = null;
     try {
       unconfiguredMatch = await this.findUnconfiguredOnuBySnSuffix(cleanNewSn);
@@ -1586,17 +1587,17 @@ export class SmartOLTService {
     }
     let ulProfile = oldOnu.upload_speed_profile_name || (dlProfile ? dlProfile.replace(/-DOWN$/i, '-UP') : '40MB-UP');
 
-    // 4. Eliminar el módem anterior de SmartOLT
-    logger.info(`[Cambio de Módem] Eliminando módem anterior (${oldOnu.unique_external_id})...`);
+    // 4. Eliminar el registro anterior de SmartOLT
+    logger.info(`[${actionLabel}] Desvinculando posición anterior (${oldOnu.unique_external_id})...`);
     const deleteRes = await this.deleteOnu(oldOnu.unique_external_id);
     if (!deleteRes.success) {
-      logger.warn(`[Cambio de Módem] Advertencia al eliminar ONU anterior: ${deleteRes.message}. Continuando con la autorización del nuevo equipo.`);
+      logger.warn(`[${actionLabel}] Advertencia al eliminar ONU anterior: ${deleteRes.message}. Continuando con la autorización.`);
     }
 
     // Pequeña pausa para asegurar que SmartOLT libere el slot/IP
     await new Promise(r => setTimeout(r, 1200));
 
-    // 5. Autorizar el nuevo módem con los MISMOS datos
+    // 5. Autorizar el módem en la nueva posición con los MISMOS datos
     const payload: AuthorizeOnuPayload = {
       olt_id: targetOltId,
       pon_type: targetPonType,
@@ -1615,14 +1616,16 @@ export class SmartOLTService {
       upload_speed_profile_name: ulProfile,
       zone: oldOnu.zone || 'Actopan',
       address: oldOnu.address,
-      comment: `Cambio de módem (reemplazo de ${oldOnu.sn || oldOnu.unique_external_id})`,
+      comment: isRelocation
+        ? `Cambio de domicilio / Reubicación de caja (mismo equipo ${cleanNewSn})`
+        : `Cambio de módem (reemplazo de ${oldOnu.sn || oldOnu.unique_external_id})`,
     };
 
-    logger.info(`[Cambio de Módem] Autorizando nuevo módem ${cleanNewSn} con IP ${payload.ip_address}...`);
+    logger.info(`[${actionLabel}] Autorizando módem ${cleanNewSn} en OLT ${targetOltId} (Board ${targetBoard}, Port ${targetPort}) con IP ${payload.ip_address}...`);
     const authResult = await this.authorizeOnu(payload);
 
     if (!authResult.success) {
-      logger.error(`[Cambio de Módem] Falló la autorización del nuevo módem: ${authResult.message}`);
+      logger.error(`[${actionLabel}] Falló la autorización del módem: ${authResult.message}`);
       if (swapId > 0) {
         await DbService.updateModemSwap(swapId, {
           status: 'ERROR',
@@ -1631,7 +1634,7 @@ export class SmartOLTService {
       }
       return {
         success: false,
-        message: `El módem anterior fue desvinculado, pero falló la activación del nuevo módem: ${authResult.message}`,
+        message: `La posición anterior fue desvinculada, pero falló la activación en el nuevo puerto: ${authResult.message}`,
         swapId,
         oldOnu,
         authorizationResult: authResult,
@@ -1650,14 +1653,14 @@ export class SmartOLTService {
     await DbService.updateClientOnuReferences(oldOnu.sn, cleanNewSn, newOnuId);
 
     // 7. Enviar notificación al grupo de WhatsApp de Activaciones
-    // Formato exacto solicitado: "[Nombre] [IP] [Zona] CAMBIO DE MODEM"
+    // Formato exacto: "[Nombre] [IP] [Zona] CAMBIO DE DOMICILIO" o "CAMBIO DE MODEM"
     let waNotified = false;
     const shouldNotify = params.notifyGroup !== false;
 
     if (shouldNotify) {
       try {
         const { EvolutionService } = await import('./evolution.service');
-        const groupMsg = `${payload.name}\n${payload.ip_address}\n${payload.zone || 'Actopan'}\nCAMBIO DE MODEM`;
+        const groupMsg = `${payload.name}\n${payload.ip_address}\n${payload.zone || 'Actopan'}\n${actionTag}`;
 
         let configuredGroupJid = (await DbService.getActivationsGroupJid()).trim();
 
@@ -1673,17 +1676,19 @@ export class SmartOLTService {
           if (configuredGroupJid.endsWith('@g.us')) {
             await EvolutionService.enviarTexto(configuredGroupJid, groupMsg, { instant: true });
             waNotified = true;
-            logger.info(`[Cambio de Módem] Notificación enviada al grupo WhatsApp (${configuredGroupJid}): "${groupMsg.replace(/\n/g, ' ')}"`);
+            logger.info(`[${actionLabel}] Notificación enviada al grupo WhatsApp (${configuredGroupJid}): "${groupMsg.replace(/\n/g, ' ')}"`);
           }
         }
       } catch (waErr: any) {
-        logger.warn('[Cambio de Módem] No se pudo enviar notificación a WhatsApp:', waErr?.message || waErr);
+        logger.warn(`[${actionLabel}] No se pudo enviar notificación a WhatsApp:`, waErr?.message || waErr);
       }
     }
 
     return {
       success: true,
-      message: `¡Cambio de módem exitoso! Módem anterior (${oldOnu.sn}) reemplazado por ${cleanNewSn} con IP ${payload.ip_address}.`,
+      message: isRelocation
+        ? `Módem reubicado exitosamente en su nueva caja/puerto (${targetOltId} B:${targetBoard}/P:${targetPort}).`
+        : `Módem anterior (${oldOnu.sn || oldOnu.unique_external_id}) reemplazado exitosamente por el nuevo módem (${cleanNewSn}).`,
       swapId,
       oldOnu,
       newOnu: { ...payload, onu_id: newOnuId },
