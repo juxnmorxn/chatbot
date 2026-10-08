@@ -1335,47 +1335,58 @@ export class SmartOLTService {
           const dynamicSubnet = ipAddr ? IpamService.getSubnetConfigFromIp(ipAddr) : null;
           const isSanAgustin = String(det.olt_id) === '2' || (det.zone || det.zone_name || '').toLowerCase().includes('san agustin') || (dynamicSubnet?.oltId === '2');
 
-          const speedFromProfiles = (Array.isArray(det.speed_profiles) && det.speed_profiles.length > 0)
-            ? (det.speed_profiles[0].download_speed_profile_name || det.speed_profiles[0].name || det.speed_profiles[0].download_speed_profile)
-            : ((Array.isArray(det.service_ports) && det.service_ports.length > 0)
-              ? (det.service_ports[0].download_speed_profile_name || det.service_ports[0].speed_profile)
+          const speedFromProfiles = (Array.isArray(det.service_ports) && det.service_ports.length > 0)
+            ? (det.service_ports[0].download_speed || det.service_ports[0].download_speed_profile_name || det.service_ports[0].speed_profile)
+            : ((Array.isArray(det.speed_profiles) && det.speed_profiles.length > 0)
+              ? (det.speed_profiles[0].download_speed || det.speed_profiles[0].download_speed_profile_name || det.speed_profiles[0].name || det.speed_profiles[0].download_speed_profile)
               : null);
 
-          const rawSpeed = det.download_speed_profile_name || speedFromProfiles || det.speed_profile || det.download_speed || det.speed_profile_name || det.plan || '';
-          let dlProfile = rawSpeed ? String(rawSpeed).trim() : '';
+          const ulSpeedFromProfiles = (Array.isArray(det.service_ports) && det.service_ports.length > 0)
+            ? (det.service_ports[0].upload_speed || det.service_ports[0].upload_speed_profile_name || det.service_ports[0].upload_speed_profile)
+            : ((Array.isArray(det.speed_profiles) && det.speed_profiles.length > 0)
+              ? (det.speed_profiles[0].upload_speed || det.speed_profiles[0].upload_speed_profile_name || det.speed_profiles[0].name || det.speed_profiles[0].upload_speed_profile)
+              : null);
 
-          // Consultar el plan real contratado en WispHub / Base de Datos Local
-          let wisphubPlan = '';
-          try {
-            const whClient = await DbService.findWisphubClient({
-              ip: ipAddr,
-              name: det.name || '',
-              sn: String(det.sn || cleanId),
-            });
-            if (whClient && (whClient.plan_internet || whClient.servicio)) {
-              wisphubPlan = whClient.plan_internet || whClient.servicio || '';
+          const rawSpeed = speedFromProfiles || det.download_speed || det.download_speed_profile_name || det.speed_profile || det.speed_profile_name || det.plan || '';
+          let dlProfile = rawSpeed ? String(rawSpeed).trim() : '';
+          let ulProfile = ulSpeedFromProfiles || det.upload_speed || det.upload_speed_profile_name || '';
+
+          // Si SmartOLT no traía perfil configurado, consultar en WispHub / Base de Datos Local
+          if (!dlProfile) {
+            let wisphubPlan = '';
+            try {
+              const whClient = await DbService.findWisphubClient({
+                ip: ipAddr,
+                name: det.name || '',
+                sn: String(det.sn || cleanId),
+              });
+              if (whClient && (whClient.plan_internet || whClient.servicio)) {
+                wisphubPlan = whClient.plan_internet || whClient.servicio || '';
+              }
+            } catch (whErr: any) {
+              logger.warn(`Error al consultar plan en wisphub_clients para ${cleanId}:`, whErr?.message);
             }
-          } catch (whErr: any) {
-            logger.warn(`Error al consultar plan en wisphub_clients para ${cleanId}:`, whErr?.message);
+
+            if (wisphubPlan) {
+              const speedInfo = getSmartOltSpeedProfiles(wisphubPlan);
+              dlProfile = speedInfo.down;
+              if (!ulProfile) ulProfile = speedInfo.up;
+            }
           }
 
-          if (wisphubPlan && (!dlProfile || dlProfile === '40MB-DOWN' || dlProfile === '40MB')) {
-            const speedInfo = getSmartOltSpeedProfiles(wisphubPlan);
-            dlProfile = speedInfo.down;
-          } else if (dlProfile && !dlProfile.toUpperCase().includes('-DOWN')) {
+          if (dlProfile && !dlProfile.toUpperCase().includes('-DOWN')) {
             const mb = dlProfile.match(/(\d+)\s*(?:MB|MEGAS?|M)?/i);
             if (mb) dlProfile = `${mb[1]}MB-DOWN`;
           } else if (!dlProfile) {
             dlProfile = '40MB-DOWN';
           }
 
-          const ulSpeedFromProfiles = (Array.isArray(det.speed_profiles) && det.speed_profiles.length > 0)
-            ? det.speed_profiles[0].upload_speed_profile_name
-            : ((Array.isArray(det.service_ports) && det.service_ports.length > 0)
-              ? det.service_ports[0].upload_speed_profile_name
-              : null);
-
-          let ulProfile = det.upload_speed_profile_name || ulSpeedFromProfiles || (dlProfile ? dlProfile.replace(/-DOWN$/i, '-UP') : '40MB-UP');
+          if (!ulProfile) {
+            ulProfile = dlProfile.replace(/-DOWN$/i, '-UP');
+          } else if (!ulProfile.toUpperCase().includes('-UP')) {
+            const mb = ulProfile.match(/(\d+)\s*(?:MB|MEGAS?|M)?/i);
+            if (mb) ulProfile = `${mb[1]}MB-UP`;
+          }
 
           const vlanVal = det.vlan || dynamicSubnet?.vlan || (isSanAgustin ? '800' : '510');
           const gatewayVal = det.default_gateway || det.gateway || dynamicSubnet?.gateway || (isSanAgustin ? '172.16.80.254' : '172.19.2.254');
@@ -1421,47 +1432,58 @@ export class SmartOLTService {
       const dynamicSubnet = ipAddr ? IpamService.getSubnetConfigFromIp(ipAddr) : null;
       const isSanAgustin = (onu.zone_name || '').toLowerCase().includes('san agustin') || (onu.olt_name || '').toLowerCase().includes('san agustin') || (dynamicSubnet?.oltId === '2');
 
-      const speedFromProfiles = (Array.isArray(rawObj.speed_profiles) && rawObj.speed_profiles.length > 0)
-        ? (rawObj.speed_profiles[0].download_speed_profile_name || rawObj.speed_profiles[0].name)
-        : ((Array.isArray(rawObj.service_ports) && rawObj.service_ports.length > 0)
-          ? (rawObj.service_ports[0].download_speed_profile_name || rawObj.service_ports[0].speed_profile)
+      const speedFromProfiles = (Array.isArray(rawObj.service_ports) && rawObj.service_ports.length > 0)
+        ? (rawObj.service_ports[0].download_speed || rawObj.service_ports[0].download_speed_profile_name || rawObj.service_ports[0].speed_profile)
+        : ((Array.isArray(rawObj.speed_profiles) && rawObj.speed_profiles.length > 0)
+          ? (rawObj.speed_profiles[0].download_speed || rawObj.speed_profiles[0].download_speed_profile_name || rawObj.speed_profiles[0].name)
           : null);
 
-      const rawSpeed = onu.speed_profile || rawObj.download_speed_profile_name || speedFromProfiles || rawObj.speed_profile || '';
-      let dlProfile = rawSpeed ? String(rawSpeed).trim() : '';
+      const ulSpeedFromProfiles = (Array.isArray(rawObj.service_ports) && rawObj.service_ports.length > 0)
+        ? (rawObj.service_ports[0].upload_speed || rawObj.service_ports[0].upload_speed_profile_name || rawObj.service_ports[0].upload_speed_profile)
+        : ((Array.isArray(rawObj.speed_profiles) && rawObj.speed_profiles.length > 0)
+          ? (rawObj.speed_profiles[0].upload_speed || rawObj.speed_profiles[0].upload_speed_profile_name || rawObj.speed_profiles[0].name)
+          : null);
 
-      // Consultar plan en WispHub / Base de Datos Local para el fallback de DB
-      let wisphubPlan = '';
-      try {
-        const whClient = await DbService.findWisphubClient({
-          ip: ipAddr,
-          name: onu.name || rawObj.name || '',
-          sn: onu.sn || cleanId,
-        });
-        if (whClient && (whClient.plan_internet || whClient.servicio)) {
-          wisphubPlan = whClient.plan_internet || whClient.servicio || '';
+      const rawSpeed = speedFromProfiles || onu.speed_profile || rawObj.download_speed || rawObj.download_speed_profile_name || rawObj.speed_profile || '';
+      let dlProfile = rawSpeed ? String(rawSpeed).trim() : '';
+      let ulProfile = ulSpeedFromProfiles || rawObj.upload_speed || rawObj.upload_speed_profile_name || '';
+
+      // Consultar plan en WispHub / Base de Datos Local para el fallback de DB si no hay perfil
+      if (!dlProfile) {
+        let wisphubPlan = '';
+        try {
+          const whClient = await DbService.findWisphubClient({
+            ip: ipAddr,
+            name: onu.name || rawObj.name || '',
+            sn: onu.sn || cleanId,
+          });
+          if (whClient && (whClient.plan_internet || whClient.servicio)) {
+            wisphubPlan = whClient.plan_internet || whClient.servicio || '';
+          }
+        } catch (whErr: any) {
+          logger.warn(`Error al consultar plan en wisphub_clients (DB fallback) para ${cleanId}:`, whErr?.message);
         }
-      } catch (whErr: any) {
-        logger.warn(`Error al consultar plan en wisphub_clients (DB fallback) para ${cleanId}:`, whErr?.message);
+
+        if (wisphubPlan) {
+          const speedInfo = getSmartOltSpeedProfiles(wisphubPlan);
+          dlProfile = speedInfo.down;
+          if (!ulProfile) ulProfile = speedInfo.up;
+        }
       }
 
-      if (wisphubPlan && (!dlProfile || dlProfile === '40MB-DOWN' || dlProfile === '40MB')) {
-        const speedInfo = getSmartOltSpeedProfiles(wisphubPlan);
-        dlProfile = speedInfo.down;
-      } else if (dlProfile && !dlProfile.toUpperCase().includes('-DOWN')) {
+      if (dlProfile && !dlProfile.toUpperCase().includes('-DOWN')) {
         const mb = dlProfile.match(/(\d+)\s*(?:MB|MEGAS?|M)?/i);
         if (mb) dlProfile = `${mb[1]}MB-DOWN`;
       } else if (!dlProfile) {
         dlProfile = '40MB-DOWN';
       }
 
-      const ulSpeedFromProfiles = (Array.isArray(rawObj.speed_profiles) && rawObj.speed_profiles.length > 0)
-        ? rawObj.speed_profiles[0].upload_speed_profile_name
-        : ((Array.isArray(rawObj.service_ports) && rawObj.service_ports.length > 0)
-          ? rawObj.service_ports[0].upload_speed_profile_name
-          : null);
-
-      let ulProfile = rawObj.upload_speed_profile_name || ulSpeedFromProfiles || (dlProfile ? dlProfile.replace(/-DOWN$/i, '-UP') : '40MB-UP');
+      if (!ulProfile) {
+        ulProfile = dlProfile.replace(/-DOWN$/i, '-UP');
+      } else if (!ulProfile.toUpperCase().includes('-UP')) {
+        const mb = ulProfile.match(/(\d+)\s*(?:MB|MEGAS?|M)?/i);
+        if (mb) ulProfile = `${mb[1]}MB-UP`;
+      }
 
       const vlanVal = rawObj.vlan || dynamicSubnet?.vlan || (isSanAgustin ? '800' : '510');
       const gatewayVal = rawObj.gateway || rawObj.default_gateway || dynamicSubnet?.gateway || (isSanAgustin ? '172.16.80.254' : '172.19.2.254');
