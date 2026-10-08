@@ -1901,6 +1901,19 @@ export class DbService {
   }
 
   /**
+   * Busca un cliente en WispHub por cualquier identificador disponible (Alias findWisphubClient)
+   */
+  static async findWisphubClient(params: {
+    id?: string | number | null;
+    phone?: string | null;
+    sn?: string | null;
+    name?: string | null;
+    ip?: string | null;
+  }): Promise<WisphubClientRecord | null> {
+    return this.getWisphubClientByAny(params);
+  }
+
+  /**
    * Busca un cliente en WispHub por cualquier identificador disponible
    */
   static async getWisphubClientByAny(params: {

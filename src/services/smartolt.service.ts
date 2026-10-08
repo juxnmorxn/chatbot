@@ -1342,10 +1342,31 @@ export class SmartOLTService {
               : null);
 
           const rawSpeed = det.download_speed_profile_name || speedFromProfiles || det.speed_profile || det.download_speed || det.speed_profile_name || det.plan || '';
-          let dlProfile = rawSpeed ? String(rawSpeed).trim() : '40MB-DOWN';
-          if (dlProfile && !dlProfile.toUpperCase().includes('-DOWN')) {
+          let dlProfile = rawSpeed ? String(rawSpeed).trim() : '';
+
+          // Consultar el plan real contratado en WispHub / Base de Datos Local
+          let wisphubPlan = '';
+          try {
+            const whClient = await DbService.findWisphubClient({
+              ip: ipAddr,
+              name: det.name || '',
+              sn: String(det.sn || cleanId),
+            });
+            if (whClient && (whClient.plan_internet || whClient.servicio)) {
+              wisphubPlan = whClient.plan_internet || whClient.servicio || '';
+            }
+          } catch (whErr: any) {
+            logger.warn(`Error al consultar plan en wisphub_clients para ${cleanId}:`, whErr?.message);
+          }
+
+          if (wisphubPlan && (!dlProfile || dlProfile === '40MB-DOWN' || dlProfile === '40MB')) {
+            const speedInfo = getSmartOltSpeedProfiles(wisphubPlan);
+            dlProfile = speedInfo.down;
+          } else if (dlProfile && !dlProfile.toUpperCase().includes('-DOWN')) {
             const mb = dlProfile.match(/(\d+)\s*(?:MB|MEGAS?|M)?/i);
             if (mb) dlProfile = `${mb[1]}MB-DOWN`;
+          } else if (!dlProfile) {
+            dlProfile = '40MB-DOWN';
           }
 
           const ulSpeedFromProfiles = (Array.isArray(det.speed_profiles) && det.speed_profiles.length > 0)
@@ -1407,11 +1428,33 @@ export class SmartOLTService {
           : null);
 
       const rawSpeed = onu.speed_profile || rawObj.download_speed_profile_name || speedFromProfiles || rawObj.speed_profile || '';
-      let dlProfile = rawSpeed ? String(rawSpeed).trim() : '40MB-DOWN';
-      if (dlProfile && !dlProfile.toUpperCase().includes('-DOWN')) {
+      let dlProfile = rawSpeed ? String(rawSpeed).trim() : '';
+
+      // Consultar plan en WispHub / Base de Datos Local para el fallback de DB
+      let wisphubPlan = '';
+      try {
+        const whClient = await DbService.findWisphubClient({
+          ip: ipAddr,
+          name: onu.name || rawObj.name || '',
+          sn: onu.sn || cleanId,
+        });
+        if (whClient && (whClient.plan_internet || whClient.servicio)) {
+          wisphubPlan = whClient.plan_internet || whClient.servicio || '';
+        }
+      } catch (whErr: any) {
+        logger.warn(`Error al consultar plan en wisphub_clients (DB fallback) para ${cleanId}:`, whErr?.message);
+      }
+
+      if (wisphubPlan && (!dlProfile || dlProfile === '40MB-DOWN' || dlProfile === '40MB')) {
+        const speedInfo = getSmartOltSpeedProfiles(wisphubPlan);
+        dlProfile = speedInfo.down;
+      } else if (dlProfile && !dlProfile.toUpperCase().includes('-DOWN')) {
         const mb = dlProfile.match(/(\d+)\s*(?:MB|MEGAS?|M)?/i);
         if (mb) dlProfile = `${mb[1]}MB-DOWN`;
+      } else if (!dlProfile) {
+        dlProfile = '40MB-DOWN';
       }
+
       const ulSpeedFromProfiles = (Array.isArray(rawObj.speed_profiles) && rawObj.speed_profiles.length > 0)
         ? rawObj.speed_profiles[0].upload_speed_profile_name
         : ((Array.isArray(rawObj.service_ports) && rawObj.service_ports.length > 0)

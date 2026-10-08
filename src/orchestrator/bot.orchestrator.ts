@@ -6636,6 +6636,23 @@ Módem aprovisionado en la OLT con su VLAN y Perfil de Velocidad.`;
       }
 
       if (distinctMatches.length > 1) {
+        // Enriquecer candidatos con planes reales de WispHub si es necesario
+        for (const m of distinctMatches) {
+          if (!m.speed_profile || m.speed_profile === '40MB-DOWN' || m.speed_profile === '40MB') {
+            try {
+              const whClient = await DbService.findWisphubClient({
+                ip: m.ip_address,
+                name: m.name,
+                sn: m.sn,
+              });
+              if (whClient && (whClient.plan_internet || whClient.servicio)) {
+                const sp = getSmartOltSpeedProfiles(whClient.plan_internet || whClient.servicio);
+                m.speed_profile = sp.down;
+              }
+            } catch {}
+          }
+        }
+
         // MULTISERVICIO: El cliente tiene 2 o más servicios registrados
         let msg = `*SE ENCONTRARON ${distinctMatches.length} SERVICIOS REGISTRADOS PARA "${query}":*\n──────────────────────────────\n`;
         distinctMatches.forEach((m, idx) => {
@@ -6677,6 +6694,39 @@ Módem aprovisionado en la OLT con su VLAN y Perfil de Velocidad.`;
         }
       } else {
         oldOnu = await SmartOLTService.getOnuDetails(query);
+        
+        // Si no se encontró en SmartOLT, buscar en WispHub por nombre/folio
+        if (!oldOnu) {
+          try {
+            const whMatches = await DbService.searchWisphubClientsFuzzy(query, 3);
+            if (whMatches.length > 0) {
+              const firstWh = whMatches[0];
+              if (firstWh.ip || firstWh.sn_onu) {
+                oldOnu = await SmartOLTService.getOnuDetails(firstWh.ip || firstWh.sn_onu || String(firstWh.id_servicio));
+              }
+              if (!oldOnu && firstWh.ip) {
+                const candSubnet = IpamService.getSubnetConfigFromIp(firstWh.ip);
+                const speedInfo = getSmartOltSpeedProfiles(firstWh.plan_internet || firstWh.servicio || '40 Megas');
+                oldOnu = {
+                  unique_external_id: firstWh.sn_onu || `WH-${firstWh.id_servicio}`,
+                  sn: firstWh.sn_onu || 'N/A',
+                  name: firstWh.nombre,
+                  ip_address: firstWh.ip,
+                  vlan: candSubnet?.vlan || IpamService.getVlanFromIp(firstWh.ip) || '510',
+                  zone: candSubnet?.oltId === '2' ? 'San Agustin Tlaxiaca' : 'Actopan',
+                  download_speed_profile_name: speedInfo.down,
+                  upload_speed_profile_name: speedInfo.up,
+                  olt_id: candSubnet?.oltId || '3',
+                  board: '0',
+                  port: '0',
+                  onu_type: 'EG8041V5',
+                };
+              }
+            }
+          } catch (whSearchErr: any) {
+            logger.warn('Error en búsqueda de fallback WispHub para cambio de módem:', whSearchErr?.message);
+          }
+        }
       }
     }
 
