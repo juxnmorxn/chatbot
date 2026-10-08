@@ -3634,13 +3634,8 @@ export class BotOrchestrator {
 
     const esTecnicoAuth = await DbService.isAuthorizedTechnician(phone.replace(/\D/g, '')).catch(() => false);
     if (esTecnicoAuth) {
-      const desc = analysis?.descripcion ? `_${analysis.descripcion}_\n\n` : '';
-      const msj = `📸 *Imagen Recibida (Técnico de Campo)*\n\n${desc}` +
-        `Si deseas activar o aprovisionar un equipo con esta imagen, puedes:\n` +
-        `• Enviar una foto clara del *Contrato de Instalación* (con folio y nombre legibles).\n` +
-        `• Enviar una foto de la *Etiqueta del Módem* o *Medición de Potencia Óptica*.\n` +
-        `• O escribir el comando: \`activar cliente [SN] [Folio-Nombre] [Plan] [Zona]\`\n\n` +
-        `💡 Escribe *menu tecnico* para ver todos los comandos disponibles.`;
+      const msj = `*Imagen recibida.*\n\n` +
+        `Para activar un equipo puedes enviar el comando:\n\`activar cliente [SN] [Folio-Nombre] [Plan] [Zona]\``;
 
       await this.enviarYLoguear(phone, msj, 'ACTIVACION_TECNICO', 'FOTO_TECNICO_STANDBY', targetJid);
       return;
@@ -3719,13 +3714,7 @@ export class BotOrchestrator {
           });
         } catch {}
 
-        const mensajeTecnico =
-          `📍 *Ubicación GPS Asignada*\n` +
-          `• *Cliente:* *${targetClientId}*\n` +
-          `• *Coordenadas:* \`${coordsStr || 'GPS'}\`\n` +
-          `• *Maps:* ${url || 'https://maps.google.com'}\n` +
-          (direccion ? `• *Referencia:* ${direccion}\n` : '') +
-          `✅ Ubicación guardada exitosamente en el sistema.`;
+        const mensajeTecnico = `*Ubicación GPS guardada para ${targetClientId}*`;
 
         await this.enviarYLoguear(phone, mensajeTecnico, 'ACTIVACION_TECNICO', 'GPS_TECNICO_GUARDADO', targetJid);
         return;
@@ -3748,13 +3737,7 @@ export class BotOrchestrator {
         metadata: JSON.stringify(meta),
       });
 
-      const mensajePregunta =
-        `📍 *Ubicación GPS Recibida:*\n` +
-        `• *Coordenadas:* \`${coordsStr || 'GPS'}\`\n` +
-        `• *Maps:* ${url || 'https://maps.google.com'}\n` +
-        (direccion ? `• *Referencia:* ${direccion}\n` : '') +
-        `\n¿A qué cliente o número de contrato deseas asignarla?\n` +
-        `✍️ Por favor escribe el *Nombre del cliente* o *ID de servicio / contrato* (ej: *715* o *0696*):`;
+      const mensajePregunta = `*Ubicación GPS recibida.* Por favor escribe el *nombre* o *folio* del cliente para asignarla:`;
 
       await this.enviarYLoguear(phone, mensajePregunta, 'ACTIVACION_TECNICO', 'GPS_TECNICO_ESPERANDO_CLIENTE', targetJid);
       return;
@@ -4026,14 +4009,7 @@ export class BotOrchestrator {
       });
     } catch {}
 
-    const mensajeExito =
-      `📍 *Ubicación GPS Asignada Exitosamente* ✅\n\n` +
-      `• *Cliente:* *${targetClient.nombre}* (#${targetClient.id_servicio})\n` +
-      `• *IP:* \`${targetClient.ip || 'N/A'}\`\n` +
-      `• *Coordenadas:* \`${pendingGps.coordsStr}\`\n` +
-      `• *Maps:* ${pendingGps.url}\n` +
-      (targetClient.direccion ? `• *Dirección:* ${targetClient.direccion}\n` : '') +
-      `\n✅ Coordenadas guardadas en base de datos local y sincronizadas con el expediente en WispHub.`;
+    const mensajeExito = `*Ubicación GPS asignada a ${targetClient.nombre} (#${targetClient.id_servicio})*`;
 
     await this.enviarYLoguear(phone, mensajeExito, 'ACTIVACION_TECNICO', 'GPS_TECNICO_ASIGNADO_OK', targetJid);
   }
