@@ -3,6 +3,7 @@ import { SettingsService } from '../services/settings.service';
 
 /**
  * Genera el HTML completo para el Portal Web / PWA de Clientes
+ * Soporta búsqueda por Nombre (con selector de múltiples servicios), Teléfono o Folio.
  * Diseñado con estética Glassmorphic Dark Mode, mobile-first, 100% responsivo y rápido.
  */
 export function getClientPortalHtml(): string {
@@ -11,7 +12,6 @@ export function getClientPortalHtml(): string {
   const bankName = SettingsService.get('PAYMENT_BANK_NAME', 'PAYMENT_BANK_NAME', 'BBVA Bancomer');
   const bankClabe = SettingsService.get('PAYMENT_BANK_CLABE', 'PAYMENT_BANK_CLABE', '012320001234567890');
   const bankAccount = SettingsService.get('PAYMENT_BANK_ACCOUNT', 'PAYMENT_BANK_ACCOUNT', '0123456789');
-  const oxxoConvenio = SettingsService.get('PAYMENT_OXXO_CONVENIO', 'PAYMENT_OXXO_CONVENIO', '123456');
 
   return `<!DOCTYPE html>
 <html lang="es" class="dark">
@@ -25,7 +25,7 @@ export function getClientPortalHtml(): string {
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="${ispName}">
-  <meta name="description" content="Consulta tu estado de conexión, potencia óptica, contraseña Wi-Fi, facturas y reporta fallas en tiempo real.">
+  <meta name="description" content="Consulta tu conexión de fibra óptica, potencia, Wi-Fi, facturas y reporta fallas en tiempo real.">
   <link rel="manifest" href="/manifest.json">
   <link rel="icon" type="image/svg+xml" href="/portal-icon.svg">
   <link rel="apple-touch-icon" href="/portal-icon.svg">
@@ -43,9 +43,9 @@ export function getClientPortalHtml(): string {
       --bg-base: #090d16;
       --bg-surface: #0f172a;
       --bg-card: rgba(30, 41, 59, 0.7);
-      --bg-card-hover: rgba(51, 65, 85, 0.7);
+      --bg-card-hover: rgba(51, 65, 85, 0.75);
       --border-subtle: rgba(148, 163, 184, 0.12);
-      --border-glow: rgba(56, 189, 248, 0.25);
+      --border-glow: rgba(56, 189, 248, 0.3);
       --text-main: #f8fafc;
       --text-muted: #94a3b8;
       --text-faint: #64748b;
@@ -200,8 +200,8 @@ export function getClientPortalHtml(): string {
     
     /* Login Screen */
     .login-container {
-      max-width: 440px;
-      margin: 40px auto 0 auto;
+      max-width: 460px;
+      margin: 30px auto 0 auto;
       text-align: center;
       display: flex;
       flex-direction: column;
@@ -253,8 +253,8 @@ export function getClientPortalHtml(): string {
       background: rgba(15, 23, 42, 0.8);
       border: 1px solid var(--border-subtle);
       color: var(--text-main);
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 16px;
+      font-family: 'Outfit', sans-serif;
+      font-size: 15px;
       padding: 14px 16px;
       border-radius: var(--radius-md);
       outline: none;
@@ -291,6 +291,76 @@ export function getClientPortalHtml(): string {
     
     .btn-primary:active {
       transform: translateY(1px);
+    }
+
+    /* Multiple Services Selection Screen */
+    .services-selection-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-radius: var(--radius-xl);
+      padding: 24px 20px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      text-align: left;
+    }
+
+    .services-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .service-item-card {
+      background: rgba(15, 23, 42, 0.75);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 14px 16px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .service-item-card:hover {
+      background: rgba(30, 41, 59, 0.9);
+      border-color: var(--accent-cyan);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+    }
+
+    .service-item-info {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .service-item-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .service-item-address {
+      font-size: 12px;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: flex;
+      align-items: center;
+      gap: 5px;
     }
     
     /* Cards */
@@ -364,7 +434,7 @@ export function getClientPortalHtml(): string {
       font-size: 18px;
       font-weight: 700;
       letter-spacing: -0.3px;
-      margin-bottom: 2px;
+      margin-bottom: 4px;
     }
     
     .profile-meta {
@@ -373,6 +443,7 @@ export function getClientPortalHtml(): string {
       gap: 8px;
       font-size: 12px;
       color: var(--text-muted);
+      align-items: center;
     }
     
     .chip {
@@ -407,6 +478,26 @@ export function getClientPortalHtml(): string {
       background: rgba(244, 63, 94, 0.15);
       color: var(--accent-rose);
       border: 1px solid rgba(244, 63, 94, 0.3);
+    }
+
+    .btn-switch-service {
+      background: rgba(6, 182, 212, 0.15);
+      color: var(--accent-cyan);
+      border: 1px solid rgba(6, 182, 212, 0.35);
+      padding: 4px 10px;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.2s;
+    }
+
+    .btn-switch-service:hover {
+      background: var(--accent-cyan);
+      color: #090d16;
     }
     
     /* Connection Pulse & Meter */
@@ -616,7 +707,7 @@ export function getClientPortalHtml(): string {
       background: var(--bg-surface);
       border: 1px solid var(--border-subtle);
       border-radius: var(--radius-xl);
-      max-width: 460px;
+      max-width: 480px;
       width: 100%;
       padding: 24px;
       box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
@@ -661,19 +752,6 @@ export function getClientPortalHtml(): string {
       align-items: center;
       justify-content: space-between;
     }
-    
-    /* Skeleton Loading */
-    .skeleton {
-      background: linear-gradient(90deg, rgba(255, 255, 255, 0.03) 25%, rgba(255, 255, 255, 0.08) 50%, rgba(255, 255, 255, 0.03) 75%);
-      background-size: 200% 100%;
-      animation: skeleton-loading 1.5s infinite;
-      border-radius: 6px;
-    }
-    
-    @keyframes skeleton-loading {
-      0% { background-position: 200% 0; }
-      100% { background-position: -200% 0; }
-    }
   </style>
 </head>
 <body>
@@ -699,7 +777,7 @@ export function getClientPortalHtml(): string {
     </div>
   </header>
 
-  <!-- Login Section -->
+  <!-- 1. Login Section -->
   <div id="login-view" class="container login-container" style="display:none;">
     <div class="login-card">
       <div class="login-header">
@@ -707,15 +785,15 @@ export function getClientPortalHtml(): string {
           <i class="fa-solid fa-shield-halved"></i>
         </div>
         <h2>Acceso a tu Servicio</h2>
-        <p>Ingresa tu número de teléfono registrado o tu ID de cliente para consultar tu conexión y pagos.</p>
+        <p>Ingresa tu <b>Nombre completo</b>, <b>Teléfono</b> o <b>ID de contrato</b> para consultar tu conexión y pagos.</p>
       </div>
       <form onsubmit="handleLoginSubmit(event)">
         <div class="form-group">
-          <label class="form-label" for="login-identifier">Teléfono o Folio</label>
-          <input type="text" id="login-identifier" class="form-input" placeholder="Ej: 7711234567 o 3017" required autofocus autocomplete="tel">
+          <label class="form-label" for="login-identifier">Nombre, Teléfono o Folio</label>
+          <input type="text" id="login-identifier" class="form-input" placeholder="Ej: Gabriela Moo, 7711234567 o 3017" required autofocus autocomplete="name">
         </div>
         <button type="submit" id="btn-login-submit" class="btn-primary" style="margin-top: 16px; width: 100%;">
-          <span>Ingresar a mi Portal</span>
+          <span>Consultar mi Servicio</span>
           <i class="fa-solid fa-arrow-right"></i>
         </button>
       </form>
@@ -725,7 +803,29 @@ export function getClientPortalHtml(): string {
     </div>
   </div>
 
-  <!-- Dashboard Section -->
+  <!-- 2. Multiple Services Selection Section -->
+  <div id="services-selection-view" class="container login-container" style="display:none;">
+    <div class="services-selection-card">
+      <div style="display: flex; align-items: center; justify-content: space-between;">
+        <h3 style="font-size: 18px; font-weight: 700; color: var(--text-main);">
+          <i class="fa-solid fa-layer-group" style="color: var(--accent-cyan); margin-right: 6px;"></i>
+          Selecciona tu Servicio
+        </h3>
+        <button class="btn-copy" onclick="showLoginView()">
+          <i class="fa-solid fa-arrow-left"></i> Cambiar búsqueda
+        </button>
+      </div>
+      <p style="font-size: 13px; color: var(--text-muted);">
+        Encontramos <b id="multiple-count" style="color: var(--text-main);">0</b> contratos activos a nombre de <b id="multiple-client-name" style="color: var(--accent-cyan);">Cliente</b>. Elige cuál deseas gestionar:
+      </p>
+
+      <div id="services-list-container" class="services-list">
+        <!-- Rendered dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. Main Dashboard Section -->
   <main id="dashboard-view" class="container" style="display:none;">
     
     <!-- Outage Alert Banner (Conditional) -->
@@ -748,8 +848,15 @@ export function getClientPortalHtml(): string {
           <div class="profile-meta">
             <span class="chip chip-cyan" id="client-folio"><i class="fa-solid fa-hashtag"></i> ID --</span>
             <span class="chip" id="client-zone"><i class="fa-solid fa-location-dot"></i> --</span>
+            <button id="btn-switch-service" class="btn-switch-service" style="display:none;" onclick="openServicesModal()">
+              <i class="fa-solid fa-repeat"></i> <span id="btn-switch-label">Cambiar Servicio</span>
+            </button>
           </div>
         </div>
+      </div>
+      <div id="client-address" style="margin-top: 10px; font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 6px;">
+        <i class="fa-solid fa-house" style="color: var(--accent-cyan);"></i>
+        <span id="client-address-text">--</span>
       </div>
     </div>
 
@@ -927,6 +1034,27 @@ export function getClientPortalHtml(): string {
 
   </main>
 
+  <!-- Modal: Selector de Servicios Relacionados -->
+  <div id="modal-services" class="modal-backdrop">
+    <div class="modal-box">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h3 style="font-size: 18px; font-weight: 700; color: var(--text-main);">
+          <i class="fa-solid fa-layer-group" style="color: var(--accent-cyan); margin-right: 6px;"></i>
+          Tus Servicios Activos
+        </h3>
+        <button class="btn-icon" onclick="closeServicesModal()">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <p style="font-size: 12px; color: var(--text-muted);">
+        Selecciona cuál de tus contratos deseas visualizar o gestionar:
+      </p>
+      <div id="modal-services-list" class="services-list">
+        <!-- Rendered dynamically -->
+      </div>
+    </div>
+  </div>
+
   <!-- Modal: Cambiar Contraseña Wi-Fi -->
   <div id="modal-wifi" class="modal-backdrop">
     <div class="modal-box">
@@ -978,6 +1106,7 @@ export function getClientPortalHtml(): string {
   <!-- Client Application Script -->
   <script>
     let currentClient = null;
+    let allRelatedServices = [];
     let realWifiPassword = '';
     let isPassVisible = false;
     let deferredPrompt = null;
@@ -1018,9 +1147,9 @@ export function getClientPortalHtml(): string {
     document.addEventListener('DOMContentLoaded', async () => {
       const urlParams = new URLSearchParams(window.location.search);
       const urlPhone = urlParams.get('p') || urlParams.get('phone') || urlParams.get('t') || urlParams.get('id');
-      const savedPhone = localStorage.getItem('client_portal_identifier');
+      const savedIdentifier = localStorage.getItem('client_portal_identifier');
 
-      const targetIdentifier = urlPhone || savedPhone;
+      const targetIdentifier = urlPhone || savedIdentifier;
 
       if (targetIdentifier) {
         await loadClientDashboard(targetIdentifier);
@@ -1031,12 +1160,21 @@ export function getClientPortalHtml(): string {
 
     function showLoginView() {
       document.getElementById('login-view').style.display = 'flex';
+      document.getElementById('services-selection-view').style.display = 'none';
+      document.getElementById('dashboard-view').style.display = 'none';
+      document.getElementById('btn-logout').style.display = 'none';
+    }
+
+    function showServicesSelectionView() {
+      document.getElementById('login-view').style.display = 'none';
+      document.getElementById('services-selection-view').style.display = 'flex';
       document.getElementById('dashboard-view').style.display = 'none';
       document.getElementById('btn-logout').style.display = 'none';
     }
 
     function showDashboardView() {
       document.getElementById('login-view').style.display = 'none';
+      document.getElementById('services-selection-view').style.display = 'none';
       document.getElementById('dashboard-view').style.display = 'flex';
       document.getElementById('btn-logout').style.display = 'flex';
     }
@@ -1048,7 +1186,7 @@ export function getClientPortalHtml(): string {
 
       const btn = document.getElementById('btn-login-submit');
       btn.disabled = true;
-      btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Validando...';
+      btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Buscando servicios...';
 
       try {
         const res = await fetch('/api/portal/auth/login', {
@@ -1058,24 +1196,79 @@ export function getClientPortalHtml(): string {
         });
         const data = await res.json();
 
-        if (data.success && data.client) {
-          localStorage.setItem('client_portal_identifier', input);
-          await loadClientDashboard(input);
-          showToast('¡Bienvenido, ' + (data.client.nombre || 'Cliente') + '!');
+        if (data.success) {
+          if (data.multiple && Array.isArray(data.services) && data.services.length > 1) {
+            // Múltiples servicios encontrados para este nombre o teléfono
+            renderServicesSelectionList(data.services, data.clientName);
+            showServicesSelectionView();
+            showToast('Se encontraron ' + data.services.length + ' contratos activos.');
+          } else if (data.client) {
+            // Un solo servicio
+            localStorage.setItem('client_portal_identifier', String(data.client.id_servicio || input));
+            await loadClientDashboard(data.client.id_servicio || input);
+            showToast('¡Bienvenido, ' + (data.client.nombre || 'Cliente') + '!');
+          }
         } else {
-          showToast(data.message || 'No se encontró un servicio con ese número o folio.');
+          showToast(data.message || 'No encontramos un servicio con ese nombre o número.');
         }
       } catch (err) {
         showToast('Error de conexión al verificar servicio.');
       } finally {
         btn.disabled = false;
-        btn.innerHTML = '<span>Ingresar a mi Portal</span> <i class="fa-solid fa-arrow-right"></i>';
+        btn.innerHTML = '<span>Consultar mi Servicio</span> <i class="fa-solid fa-arrow-right"></i>';
       }
+    }
+
+    function renderServicesSelectionList(services, clientName) {
+      document.getElementById('multiple-count').textContent = services.length;
+      document.getElementById('multiple-client-name').textContent = clientName || 'Titular';
+      const container = document.getElementById('services-list-container');
+      container.innerHTML = '';
+
+      services.forEach((s) => {
+        const card = document.createElement('div');
+        card.className = 'service-item-card';
+        card.onclick = () => selectService(s.id_servicio);
+
+        const isOk = (s.estado || '').toLowerCase() === 'activo';
+        const balance = Number(s.saldo || 0);
+
+        card.innerHTML = \`
+          <div class="service-item-info">
+            <div class="service-item-title">
+              <span class="chip chip-cyan"><i class="fa-solid fa-hashtag"></i> Folio \${s.id_servicio}</span>
+              <span>\${s.plan_internet || 'Internet Fibra'}</span>
+            </div>
+            <div class="service-item-address">
+              <i class="fa-solid fa-location-dot" style="color: var(--accent-cyan);"></i>
+              <span>\${s.direccion || s.router || 'Domicilio registrado'}</span>
+            </div>
+            <div style="font-size: 11px; color: var(--text-faint); margin-top: 2px;">
+              IP: \` + (s.ip || 'Asignada') + \` • Zona: \` + (s.router || 'Actopan') + \`
+            </div>
+          </div>
+          <div style="text-align: right; flex-shrink: 0;">
+            <span class="chip \${isOk ? 'chip-green' : 'chip-rose'}">\${s.estado || 'Activo'}</span>
+            <div style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">
+              \${balance <= 0 ? 'Al corriente' : '$' + balance.toFixed(2)}
+            </div>
+          </div>
+        \`;
+        container.appendChild(card);
+      });
+    }
+
+    async function selectService(idServicio) {
+      localStorage.setItem('client_portal_identifier', String(idServicio));
+      closeServicesModal();
+      await loadClientDashboard(idServicio);
+      showToast('Cargando servicio #' + idServicio + '...');
     }
 
     function logoutClient() {
       localStorage.removeItem('client_portal_identifier');
       currentClient = null;
+      allRelatedServices = [];
       showLoginView();
       showToast('Sesión finalizada.');
     }
@@ -1092,6 +1285,7 @@ export function getClientPortalHtml(): string {
         }
 
         currentClient = data.client;
+        allRelatedServices = data.relatedServices || [];
         showDashboardView();
         renderClientData(data);
       } catch (err) {
@@ -1103,19 +1297,30 @@ export function getClientPortalHtml(): string {
       const c = data.client;
       const onu = data.onu || {};
       const signal = data.signal || {};
-      const billing = data.billing || {};
       const outage = data.outage;
+      const related = data.relatedServices || [];
 
       // Profile
       document.getElementById('client-name').textContent = c.nombre || 'Cliente';
       document.getElementById('client-folio').innerHTML = '<i class="fa-solid fa-hashtag"></i> Folio ' + (c.id_servicio || c.id || 'N/A');
       document.getElementById('client-zone').innerHTML = '<i class="fa-solid fa-location-dot"></i> ' + (c.router || onu.zone_name || 'Actopan');
+      document.getElementById('client-address-text').textContent = c.direccion || onu.zone_name || 'Domicilio registrado en sistema';
+
+      // Multiple services switcher button
+      const btnSwitch = document.getElementById('btn-switch-service');
+      if (related.length > 1) {
+        btnSwitch.style.display = 'inline-flex';
+        document.getElementById('btn-switch-label').textContent = 'Mis ' + related.length + ' servicios';
+        renderModalServicesList(related);
+      } else {
+        btnSwitch.style.display = 'none';
+      }
 
       // Outage
       if (outage && outage.active) {
         document.getElementById('outage-banner').style.display = 'flex';
-        document.getElementById('outage-title').textContent = outage.title || 'Mantenimiento de Red en Curso';
-        document.getElementById('outage-desc').textContent = outage.description || 'Cuadrillas de fibra óptica trabajando en tu zona.';
+        document.getElementById('outage-title').textContent = outage.title || 'Mantenimiento de Red en Zona';
+        document.getElementById('outage-desc').textContent = outage.description || 'Cuadrillas de fibra trabajando en tu zona.';
       } else {
         document.getElementById('outage-banner').style.display = 'none';
       }
@@ -1149,6 +1354,48 @@ export function getClientPortalHtml(): string {
       }
     }
 
+    function renderModalServicesList(services) {
+      const container = document.getElementById('modal-services-list');
+      container.innerHTML = '';
+
+      services.forEach((s) => {
+        const isCurrent = currentClient && String(currentClient.id_servicio) === String(s.id_servicio);
+        const card = document.createElement('div');
+        card.className = 'service-item-card' + (isCurrent ? ' selected' : '');
+        if (isCurrent) {
+          card.style.borderColor = 'var(--accent-green)';
+          card.style.background = 'rgba(16, 185, 129, 0.15)';
+        }
+        card.onclick = () => selectService(s.id_servicio);
+
+        card.innerHTML = \`
+          <div class="service-item-info">
+            <div class="service-item-title">
+              <span class="chip chip-cyan"><i class="fa-solid fa-hashtag"></i> Folio \${s.id_servicio}</span>
+              <span>\${s.plan_internet || 'Internet Fibra'}</span>
+              \${isCurrent ? '<span class="chip chip-green" style="font-size:10px;">Actual</span>' : ''}
+            </div>
+            <div class="service-item-address">
+              <i class="fa-solid fa-location-dot" style="color: var(--accent-cyan);"></i>
+              <span>\${s.direccion || s.router || 'Domicilio registrado'}</span>
+            </div>
+          </div>
+          <div style="text-align: right; flex-shrink: 0;">
+            <span class="chip chip-green">\${s.estado || 'Activo'}</span>
+          </div>
+        \`;
+        container.appendChild(card);
+      });
+    }
+
+    function openServicesModal() {
+      document.getElementById('modal-services').style.display = 'flex';
+    }
+
+    function closeServicesModal() {
+      document.getElementById('modal-services').style.display = 'none';
+    }
+
     function updateSignalUi(signal) {
       const isOnline = signal.status === 'ONLINE' || signal.status === 'Online';
       const statusText = document.getElementById('status-text');
@@ -1171,7 +1418,6 @@ export function getClientPortalHtml(): string {
       if (dbm !== null && dbm !== undefined && !isNaN(dbm)) {
         opticalText.textContent = dbm.toFixed(1) + ' dBm';
         
-        // Quality evaluation (-15 to -27 is optimal)
         if (dbm >= -24 && dbm <= -14) {
           qualityLabel.textContent = 'Excelente (Óptima)';
           qualityLabel.style.color = 'var(--accent-green)';

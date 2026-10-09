@@ -141,7 +141,8 @@ self.addEventListener('fetch', (event) => {
   }
 
   /**
-   * Autenticación de cliente (por Teléfono, ID de Servicio o SN de Módem)
+   * Autenticación de cliente (por Nombre, Teléfono, ID de Servicio o SN de Módem)
+   * Si el nombre o teléfono tiene múltiples servicios, devuelve la lista de todos ellos
    */
   static async login(req: Request, res: Response): Promise<void> {
     try {
@@ -151,18 +152,40 @@ self.addEventListener('fetch', (event) => {
         return;
       }
 
-      const client = await ClientPortalController.findClientByIdentifier(identifier);
-      if (!client) {
-        res.status(404).json({ success: false, message: 'No encontramos un servicio activo con los datos proporcionados.' });
+      const services = await ClientPortalController.findClientsByIdentifier(identifier);
+      if (!services || services.length === 0) {
+        res.status(404).json({ success: false, message: 'No encontramos ningún servicio activo con ese nombre, teléfono o ID.' });
         return;
       }
 
+      if (services.length > 1) {
+        res.json({
+          success: true,
+          multiple: true,
+          clientName: services[0].nombre,
+          services: services.map((s: any) => ({
+            id_servicio: s.id_servicio,
+            nombre: s.nombre,
+            direccion: s.direccion || s.router || 'Domicilio registrado',
+            ip: s.ip,
+            router: s.router,
+            plan_internet: s.plan_internet,
+            estado: s.estado,
+            saldo: s.saldo,
+          })),
+        });
+        return;
+      }
+
+      const client = services[0];
       res.json({
         success: true,
+        multiple: false,
         client: {
           id_servicio: client.id_servicio,
           nombre: client.nombre,
           telefono: client.telefono,
+          direccion: client.direccion,
           ip: client.ip,
           router: client.router,
           plan_internet: client.plan_internet,
@@ -175,7 +198,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   /**
-   * Obtiene todos los datos del cliente, estado del módem y facturación
+   * Obtiene todos los datos del cliente, estado del módem, facturación y servicios relacionados
    */
   static async getClientData(req: Request, res: Response): Promise<void> {
     try {
@@ -185,11 +208,29 @@ self.addEventListener('fetch', (event) => {
         return;
       }
 
-      const client = await ClientPortalController.findClientByIdentifier(rawId);
-      if (!client) {
+      const services = await ClientPortalController.findClientsByIdentifier(rawId);
+      if (!services || services.length === 0) {
         res.status(404).json({ success: false, message: 'Cliente no localizado en el sistema.' });
         return;
       }
+
+      // Si se especificó un ID numérico exacto, seleccionar ese servicio
+      let client = services[0];
+      if (/^\d+$/.test(rawId.trim())) {
+        const exact = services.find((s: any) => String(s.id_servicio) === rawId.trim());
+        if (exact) client = exact;
+      }
+
+      const relatedServices = services.map((s: any) => ({
+        id_servicio: s.id_servicio,
+        nombre: s.nombre,
+        direccion: s.direccion || s.router || 'Domicilio registrado',
+        ip: s.ip,
+        router: s.router,
+        plan_internet: s.plan_internet,
+        estado: s.estado,
+        saldo: s.saldo,
+      }));
 
       const db = getDbClient();
 
@@ -274,6 +315,7 @@ self.addEventListener('fetch', (event) => {
           zone_name: onuRecord.zone_name,
           speed_profile: onuRecord.speed_profile,
         } : null,
+        relatedServices: relatedServices.length > 1 ? relatedServices : [],
         signal,
         wifi,
         outage: activeOutage,
@@ -295,11 +337,12 @@ self.addEventListener('fetch', (event) => {
         return;
       }
 
-      const client = await ClientPortalController.findClientByIdentifier(rawId);
-      if (!client) {
+      const services = await ClientPortalController.findClientsByIdentifier(rawId);
+      if (!services || services.length === 0) {
         res.status(404).json({ success: false, message: 'Cliente no encontrado' });
         return;
       }
+      const client = services[0];
 
       const db = getDbClient();
       let onuId = client.sn_onu;
@@ -341,11 +384,12 @@ self.addEventListener('fetch', (event) => {
         return;
       }
 
-      const client = await ClientPortalController.findClientByIdentifier(String(clientId));
-      if (!client) {
+      const services = await ClientPortalController.findClientsByIdentifier(String(clientId));
+      if (!services || services.length === 0) {
         res.status(404).json({ success: false, message: 'Cliente no encontrado.' });
         return;
       }
+      const client = services[0];
 
       const key = String(client.id_servicio || client.telefono);
       const lastChange = wifiChangeCooldowns.get(key) || 0;
@@ -394,11 +438,12 @@ self.addEventListener('fetch', (event) => {
         return;
       }
 
-      const client = await ClientPortalController.findClientByIdentifier(String(clientId));
-      if (!client) {
+      const services = await ClientPortalController.findClientsByIdentifier(String(clientId));
+      if (!services || services.length === 0) {
         res.status(404).json({ success: false, message: 'Cliente no encontrado.' });
         return;
       }
+      const client = services[0];
 
       const key = String(client.id_servicio || client.telefono);
       const lastReboot = rebootCooldowns.get(key) || 0;
@@ -464,50 +509,153 @@ self.addEventListener('fetch', (event) => {
   }
 
   /**
-   * Helper: Localiza un cliente en wisphub_clients o smartolt_onus por teléfono, folio o SN
+   * Helper: Localiza TODOS los servicios vinculados a un cliente por Nombre, Teléfono, Folio o SN
+   * Si un titular tiene múltiples servicios/contratos, devuelve todos ellos.
    */
-  private static async findClientByIdentifier(rawId: string): Promise<any> {
-    const clean = rawId.trim();
-    const cleanDigits = clean.replace(/\D/g, '');
-    const last10 = cleanDigits.length >= 10 ? cleanDigits.slice(-10) : cleanDigits;
+  public static async findClientsByIdentifier(rawId: string): Promise<any[]> {
+    const clean = (rawId || '').trim();
+    if (!clean) return [];
     const db = getDbClient();
 
-    // 1. Por ID numérico de servicio (Folio)
+    // 1. Por ID numérico de servicio (Folio exacto)
     if (/^\d{1,6}$/.test(clean)) {
       const res = await db.execute({
         sql: `SELECT * FROM wisphub_clients WHERE id_servicio = ? LIMIT 1`,
         args: [Number(clean)],
       });
-      if (res.rows.length > 0) return res.rows[0];
+      if (res.rows.length > 0) {
+        const main = res.rows[0];
+        // Buscar si este mismo cliente tiene más servicios bajo su nombre o teléfono
+        const allClientServices = await db.execute({
+          sql: `SELECT * FROM wisphub_clients WHERE (nombre = ? OR nombre_normalized = ?) OR (telefono IS NOT NULL AND telefono != '' AND telefono = ?) ORDER BY id_servicio ASC LIMIT 20`,
+          args: [main.nombre, main.nombre_normalized, main.telefono],
+        });
+        if (allClientServices.rows.length > 0) {
+          // Poner el servicio seleccionado en primer lugar
+          const otherServices = (allClientServices.rows as any[]).filter(s => String(s.id_servicio) !== String(main.id_servicio));
+          return [main, ...otherServices];
+        }
+        return [main];
+      }
     }
 
-    // 2. Por Teléfono (últimos 10 dígitos o completo)
+    // 2. Por Teléfono (últimos 10 dígitos o número completo)
+    const cleanDigits = clean.replace(/\D/g, '');
+    const last10 = cleanDigits.length >= 10 ? cleanDigits.slice(-10) : cleanDigits;
     if (last10 && last10.length >= 7) {
       const res = await db.execute({
-        sql: `SELECT * FROM wisphub_clients WHERE telefono LIKE ? OR telefonos_adicionales LIKE ? LIMIT 1`,
+        sql: `SELECT * FROM wisphub_clients WHERE telefono LIKE ? OR telefonos_adicionales LIKE ? ORDER BY id_servicio ASC LIMIT 20`,
         args: [`%${last10}%`, `%${last10}%`],
       });
-      if (res.rows.length > 0) return res.rows[0];
+      if (res.rows.length > 0) return res.rows as any[];
     }
 
     // 3. Por Número de Serie (SN)
     if (clean.length >= 6) {
       const res = await db.execute({
-        sql: `SELECT * FROM wisphub_clients WHERE sn_onu LIKE ? OR sn_onu LIKE ? LIMIT 1`,
-        args: [clean.toUpperCase(), `%${clean}%`],
+        sql: `SELECT * FROM wisphub_clients WHERE sn_onu LIKE ? OR sn_onu_normalized LIKE ? LIMIT 10`,
+        args: [`%${clean.toUpperCase()}%`, `%${clean.toUpperCase()}%`],
       });
-      if (res.rows.length > 0) return res.rows[0];
+      if (res.rows.length > 0) {
+        const main = res.rows[0];
+        const allClientServices = await db.execute({
+          sql: `SELECT * FROM wisphub_clients WHERE (nombre = ? OR nombre_normalized = ?) OR (telefono IS NOT NULL AND telefono != '' AND telefono = ?) ORDER BY id_servicio ASC LIMIT 20`,
+          args: [main.nombre, main.nombre_normalized, main.telefono],
+        });
+        if (allClientServices.rows.length > 0) return allClientServices.rows as any[];
+        return res.rows as any[];
+      }
     }
 
-    // 4. Por Nombre difuso
-    if (clean.length >= 4) {
+    // 4. Por Nombre con Búsqueda por Palabras / Tokens Normalizados
+    const { cleanPersonName, normalizeText, computeNameMatchScore } = await import('../utils/fuzzy-matcher');
+    const cleanedQuery = cleanPersonName(clean) || clean;
+    const normalizedQuery = normalizeText(cleanedQuery);
+
+    const stopwords = new Set(['de', 'del', 'la', 'las', 'los', 'el', 'y', 'en', 'san', 'santa', 'sr', 'sra']);
+    const words = normalizedQuery.split(/\s+/).filter(w => w.length >= 2 && !stopwords.has(w));
+
+    if (words.length > 0) {
+      // Coincidencia donde TODAS las palabras significativas estén presentes en el nombre
+      const whereClauses = words.map(() => `(nombre_normalized LIKE ? OR nombre LIKE ?)`).join(' AND ');
+      const sqlArgs: any[] = [];
+      for (const w of words) {
+        sqlArgs.push(`%${w}%`, `%${w}%`);
+      }
+
       const res = await db.execute({
-        sql: `SELECT * FROM wisphub_clients WHERE nombre LIKE ? OR nombre_normalized LIKE ? LIMIT 1`,
-        args: [`%${clean}%`, `%${clean.toLowerCase()}%`],
+        sql: `SELECT * FROM wisphub_clients WHERE ${whereClauses} ORDER BY nombre ASC, id_servicio ASC LIMIT 25`,
+        args: sqlArgs,
       });
-      if (res.rows.length > 0) return res.rows[0];
+
+      if (res.rows.length > 0) {
+        return res.rows as any[];
+      }
+
+      // Si eran varias palabras y no hubo coincidencia estricta de todas, probar con CUALQUIERA de las palabras
+      if (words.length > 1) {
+        const anyWhere = words.map(() => `(nombre_normalized LIKE ? OR nombre LIKE ?)`).join(' OR ');
+        const anyArgs: any[] = [];
+        for (const w of words) {
+          anyArgs.push(`%${w}%`, `%${w}%`);
+        }
+
+        const anyRes = await db.execute({
+          sql: `SELECT * FROM wisphub_clients WHERE ${anyWhere} ORDER BY nombre ASC, id_servicio ASC LIMIT 25`,
+          args: anyArgs,
+        });
+
+        if (anyRes.rows.length > 0) {
+          // Filtrar con computeNameMatchScore para mantener solo coincidencias relevantes
+          const scored = (anyRes.rows as any[])
+            .map(row => ({ row, score: computeNameMatchScore(cleanedQuery, row.nombre) }))
+            .filter(item => item.score >= 50)
+            .sort((a, b) => b.score - a.score);
+
+          if (scored.length > 0) {
+            return scored.map(s => s.row);
+          }
+        }
+      }
     }
 
-    return null;
+    // 5. Búsqueda Difusa en memoria sobre registros locales
+    try {
+      const allRowsRes = await db.execute({
+        sql: `SELECT * FROM wisphub_clients WHERE nombre IS NOT NULL LIMIT 500`,
+      });
+      if (allRowsRes.rows.length > 0) {
+        const scored = (allRowsRes.rows as any[])
+          .map(row => ({ row, score: computeNameMatchScore(cleanedQuery, row.nombre) }))
+          .filter(item => item.score >= 65)
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 20);
+
+        if (scored.length > 0) {
+          return scored.map(s => s.row);
+        }
+      }
+    } catch (_) {}
+
+    // 6. Consulta en tiempo real a la API de WispHub si no está en caché local
+    try {
+      const { WispHubService } = await import('../services/wisphub.service');
+      const whResults = await WispHubService.buscarClientePorNombre(cleanedQuery);
+      if (whResults && whResults.length > 0) {
+        return whResults.map((wh: any) => ({
+          id_servicio: wh.id_servicio || wh.id,
+          nombre: wh.nombre || wh.name,
+          telefono: wh.telefono || wh.phone,
+          direccion: wh.direccion || wh.address,
+          ip: wh.ip,
+          router: wh.router || wh.zone,
+          plan_internet: wh.plan_internet || wh.plan,
+          estado: wh.estado || 'Activo',
+          saldo: wh.saldo || 0,
+        }));
+      }
+    } catch (_) {}
+
+    return [];
   }
 }
