@@ -623,6 +623,8 @@ export class BotOrchestrator {
     const esComandoCambioModem = /^(?:realizar|hacer|ejecutar|solicitar)?\s*(?:un\s+)?(?:cambio|reemplazar|reemplazo|cambiar|swap)(?:\s+(?:de|del))?\s*(?:m[oó]dems?|m[oó]dens?|odems?|modns?|onus?|equipos?|routers?|cpe)\b/i.test(lowerMsg) ||
       /^(?:cambio|reemplazo|swap)\s+(?:m[oó]dems?|m[oó]dens?|odems?|modns?|onus?|equipos?|routers?|cpe)\b/i.test(lowerMsg);
 
+    const esComandoConsultaUbicacion = /^(?:consultar\s+)?(?:ubicaci[oó]n|donde\s+est[aá]|donde\s+queda|como\s+llegar|gps|ubicar|localizar|mapa|guardar\s+ubicaci[oó]n|cargar\s+ubicaci[oó]n|subir\s+ubicaci[oó]n)\b/i.test(lowerMsg);
+
     const esComandoCambioWifi = /^(?:cambiar\s+wifi|cambio\s+de\s+wifi|cambiar\s+contrase[ñn]a\s+wifi|cambiar\s+password|nueva\s+contrase[ñn]a\s+wifi|actualizar\s+wifi)\b/i.test(lowerMsg);
 
     const esComandoActivacion = buttonId === 'BTN_ACTIVAR_MODEM' ||
@@ -635,12 +637,13 @@ export class BotOrchestrator {
       session?.step === 'PENDIENTE_SN_ACTIVACION' ||
       session?.step === 'PENDIENTE_CLIENTE_CAMBIO_MODEM' ||
       session?.step === 'PENDIENTE_CLIENTE_CAMBIO_DOMICILIO' ||
+      session?.step === 'PENDIENTE_CLIENTE_CONSULTA_UBICACION' ||
       session?.step === 'PENDIENTE_SELECCION_IP_CAMBIO_MODEM' ||
       session?.step === 'PENDIENTE_SN_CAMBIO_MODEM' ||
       session?.step === 'PENDIENTE_CONFIRMACION_CAMBIO_MODEM' ||
       session?.step === 'TECNICO_ESPERANDO_CLIENTE_GPS';
 
-    const esComandoTecnicoExplicito = esComandoActivacion || esComandoCambioPaquete || esComandoCambioModem || esComandoCambioDomicilio || esComandoCambioWifi;
+    const esComandoTecnicoExplicito = esComandoActivacion || esComandoCambioPaquete || esComandoCambioModem || esComandoCambioDomicilio || esComandoConsultaUbicacion || esComandoCambioWifi;
     const esTecnicoAutorizado = Boolean(await DbService.isAuthorizedTechnician(phone).catch(() => null));
     const esAccionTecnica = esComandoTecnicoExplicito || esPasoTecnicoEnCurso || esTecnicoAutorizado;
 
@@ -847,6 +850,12 @@ export class BotOrchestrator {
       return;
     }
 
+    // D.1.2 Solicitud de cliente o folio para Consulta / Carga de Ubicación GPS
+    if (session?.step === 'PENDIENTE_CLIENTE_CONSULTA_UBICACION') {
+      await this.procesarIdentificacionClienteConsultaUbicacion(phone, rawText, session, targetJid);
+      return;
+    }
+
     // D.2 Selección de IP / Servicio en Cambio de Módem / Domicilio cuando hay múltiples servicios
     if (session?.step === 'PENDIENTE_SELECCION_IP_CAMBIO_MODEM') {
       await this.procesarSeleccionIpCambioModem(phone, rawText, session, targetJid);
@@ -949,6 +958,12 @@ export class BotOrchestrator {
         return;
       }
 
+      // Caso 4.2: El técnico envía comando de consulta o carga de ubicación GPS
+      if (esComandoConsultaUbicacion) {
+        await this.procesarConsultaUbicacionTecnico(phone, rawText, session, targetJid);
+        return;
+      }
+
       // Caso 5: El técnico envía comando de cambio de contraseña Wi-Fi
       if (esComandoCambioWifi) {
         await this.procesarCambioWifiTecnico(phone, rawText, session, targetJid);
@@ -960,7 +975,7 @@ export class BotOrchestrator {
         const nombreTec = authTecnico.tech?.name ? ` *${authTecnico.tech.name}*` : '';
         await this.enviarYLoguear(
           phone,
-          `🛠️ *Panel Operativo de Técnicos*\n\nHola${nombreTec}, no reconocí ese comando.\n\n👉 Escribe *menu tecnico* para ver las opciones disponibles o ejecuta directamente:\n\n• \`activar cliente [SN] [Folio-Nombre] [Plan] [Zona]\`\n• \`cambio de modem [Folio o Nombre]\`\n• \`cambiar plan [Folio] a [Megas]\`\n• \`cambiar wifi [SN] [NuevoSSID] [NuevaClave]\``,
+          `*Panel Operativo de Técnicos*\n\nHola${nombreTec}, no reconocí ese comando.\n\nEscribe *menu tecnico* para ver las opciones disponibles o ejecuta directamente:\n\n• \`activar cliente [SN] [Folio-Nombre] [Plan] [Zona]\`\n• \`cambio de domicilio [Folio o Nombre]\`\n• \`cambio de modem [Folio o Nombre]\`\n• \`ubicacion [Folio o Nombre]\`\n• \`cambiar plan [Folio] a [Megas]\`\n• \`cambiar wifi [SN] [NuevoSSID] [NuevaClave]\``,
           'ACTIVACION_TECNICO',
           'AYUDA_COMANDO_TECNICO',
           targetJid
@@ -3938,11 +3953,11 @@ export class BotOrchestrator {
           if (fuzzyList.length === 1 || fuzzyList[0].matchScore >= 80) {
             targetClient = fuzzyList[0];
           } else {
-            let listMsg = `🔍 Encontré varias coincidencias para "*${cleanInput}*":\n\n`;
+            let listMsg = `*Múltiples coincidencias para "${cleanInput}":*\n\n`;
             fuzzyList.slice(0, 5).forEach((r: any) => {
               listMsg += `• *#${r.id_servicio}* - ${r.nombre} (IP: ${r.ip || 'N/A'})\n`;
             });
-            listMsg += `\n✍️ Por favor responde escribiendo únicamente el *Número de ID* del cliente a asignar (ej: *${fuzzyList[0].id_servicio}*):`;
+            listMsg += `\nResponde con el *ID de servicio* a asignar (ej: *${fuzzyList[0].id_servicio}*):`;
 
             await this.enviarYLoguear(phone, listMsg, 'ACTIVACION_TECNICO', 'GPS_MULTIPLES_COINCIDENCIAS', targetJid);
             return;
@@ -3969,7 +3984,7 @@ export class BotOrchestrator {
     if (!targetClient) {
       await this.enviarYLoguear(
         phone,
-        `⚠️ No se encontró ningún abonado con el dato "*${cleanInput}*".\n\nPor favor verifica el *ID de servicio* (ej: *715*) o escribe el *Nombre completo* del cliente:`,
+        `No se encontró ningún abonado con "*${cleanInput}*".\n\nPor favor verifica el *ID de servicio* (ej: *715*) o escribe el *Nombre completo* del cliente:`,
         'ACTIVACION_TECNICO',
         'GPS_CLIENTE_NO_ENCONTRADO',
         targetJid
@@ -6106,7 +6121,7 @@ Por favor reconecta tus dispositivos ingresando esta nueva clave.`;
    * Envía la guía didáctica explicativa al técnico que pregunta sobre TR-069 o SmartOLT
    */
   private static async enviarGuiaTr069Tecnico(phone: string, targetJid?: string): Promise<void> {
-    const guiaMsg = `💡 *Aprovisionamiento Todo-en-Uno en SmartOLT*\n\nHola técnico. En este sistema *no requieres activar TR-069 o la IP por separado*.\n\nTodo se realiza automáticamente en un solo paso al enviar:\n👉 *activar cliente [SN] [Folio-Nombre] [Plan] [Zona]*\n\n_Ejemplo:_ \`activar cliente 8D82B0 2473-Juana Larios 40M Actopan\`\n\nEl bot ejecuta en la OLT y en el módem en menos de 10 segundos:\n1️⃣ Registro en puerto PON con su VLAN de servicio\n2️⃣ Perfil de velocidad configurado\n3️⃣ Management IP en VLAN 99 (o 60)\n4️⃣ Perfil TR-069 'SmartOLT' activado\n5️⃣ WAN Static IP con Dual Stack IPv4/IPv6, Auto y Acceso Remoto habilitado.\n\nEl módem queda navegando sin tocar su web local. 🚀`;
+    const guiaMsg = `*Aprovisionamiento Todo-en-Uno en SmartOLT*\n\nHola técnico. En este sistema *no requieres activar TR-069 o la IP por separado*.\n\nTodo se realiza automáticamente en un solo paso al enviar:\n*activar cliente [SN] [Folio-Nombre] [Plan] [Zona]*\n\n_Ejemplo:_ \`activar cliente 8D82B0 2473-Juana Larios 40M Actopan\`\n\nEl bot ejecuta en la OLT y en el módem en menos de 10 segundos:\n1. Registro en puerto PON con su VLAN de servicio\n2. Perfil de velocidad configurado\n3. Management IP en VLAN 99 (o 60)\n4. Perfil TR-069 'SmartOLT' activado\n5. WAN Static IP con Dual Stack IPv4/IPv6, Auto y Acceso Remoto habilitado.\n\nEl módem queda navegando sin tocar su web local.`;
 
     await this.enviarYLoguear(
       phone,
@@ -6123,27 +6138,30 @@ Por favor reconecta tus dispositivos ingresando esta nueva clave.`;
   private static async enviarMenuTecnicoCampo(phone: string, tech: any | null, targetJid?: string): Promise<void> {
     const nombreTec = tech?.name ? ` *${tech.name}*` : '';
     const rolTec = tech?.role ? ` (${tech.role})` : '';
-    const menu = `🛠️ *Panel Operativo de Técnicos - ${this.getIspName()}*\n` +
+    const menu = `*Panel Operativo de Técnicos - ${this.getIspName()}*\n` +
       `Bienvenido${nombreTec}${rolTec}.\n\n` +
       `*Comandos directos en campo:*\n\n` +
-      `1️⃣ *Activar Módem / Cliente:* (Un solo mensaje)\n` +
-      `👉 \`activar cliente [SN] [Folio-Nombre] [Plan] [Zona]\`\n` +
+      `1. *Activar Módem / Cliente:*\n` +
+      `\`activar cliente [SN] [Folio-Nombre] [Plan] [Zona]\`\n` +
       `_Ej: \`activar cliente 4317B5 3456-Juan Perez 40M Actopan\`_\n\n` +
-      `2️⃣ *Cambio de Domicilio / Reubicación:*\n` +
-      `👉 \`cambio de domicilio [Folio, Nombre o IP]\`\n` +
+      `2. *Cambio de Domicilio / Reubicación:*\n` +
+      `\`cambio de domicilio [Folio, Nombre o IP]\`\n` +
       `_Ej: \`cambio de domicilio 3456\`_\n\n` +
-      `3️⃣ *Cambio de Módem (Swap):*\n` +
-      `👉 \`cambio de modem [Folio, Nombre o IP]\`\n` +
+      `3. *Cambio de Módem (Swap):*\n` +
+      `\`cambio de modem [Folio, Nombre o IP]\`\n` +
       `_Ej: \`cambio de modem 3456\`_\n\n` +
-      `4️⃣ *Cambiar Paquete / Velocidad:*\n` +
-      `👉 \`cambiar plan [Folio/Nombre/SN] a [Velocidad]\`\n` +
+      `4. *Consultar / Cargar Ubicación GPS:*\n` +
+      `\`ubicacion [Folio, Nombre o IP]\`\n` +
+      `_Ej: \`ubicacion 3017\` o envía un PIN de ubicación para asignarlo_\n\n` +
+      `5. *Cambiar Paquete / Velocidad:*\n` +
+      `\`cambiar plan [Folio/Nombre/SN] a [Velocidad]\`\n` +
       `_Ej: \`cambiar plan 3456 a 60 megas\`_\n\n` +
-      `5️⃣ *Cambiar Contraseña Wi-Fi:*\n` +
-      `👉 \`cambiar wifi [SN] [NuevoSSID] [NuevaClave]\`\n` +
+      `6. *Cambiar Contraseña Wi-Fi:*\n` +
+      `\`cambiar wifi [SN] [NuevoSSID] [NuevaClave]\`\n` +
       `_Ej: \`cambiar wifi 4317B5 MiRed2.4G Clave2026*\`_\n\n` +
-      `6️⃣ *Guía Didáctica TR-069 & OLT:*\n` +
-      `👉 Escribe: \`guia tr069\`\n\n` +
-      `💡 _Para cualquier comando puedes escribirlo directamente en este chat en cualquier momento._`;
+      `7. *Guía Didáctica TR-069 & OLT:*\n` +
+      `Escribe: \`guia tr069\`\n\n` +
+      `_Puedes escribir cualquier comando directamente en este chat._`;
 
     await this.enviarYLoguear(phone, menu, 'ACTIVACION_TECNICO', 'PANEL_TECNICO_ENVIADO', targetJid);
   }
@@ -6525,6 +6543,210 @@ _(O indica un cambio, ej: cambiar paquete 60 megas)_`;
         'ERROR_AUTORIZACION',
         targetJid
       );
+    }
+  }
+
+  /**
+   * Procesa la consulta o solicitud de carga de ubicación GPS para un cliente por parte de un técnico en campo
+   */
+  private static async procesarConsultaUbicacionTecnico(
+    phone: string,
+    rawText: string,
+    session: Session | null,
+    targetJid?: string
+  ): Promise<void> {
+    const auth = await this.verificarAutorizacionTecnico(phone, rawText);
+    if (!auth.autorizado) {
+      await this.enviarYLoguear(
+        phone,
+        `*Acceso Restringido - Área Técnica*\n\nTu número (*${phone}*) no está registrado como técnico autorizado.`,
+        'ACTIVACION_TECNICO',
+        'NO_AUTORIZADO',
+        targetJid
+      );
+      return;
+    }
+
+    const cleanParams = rawText
+      .replace(/^(?:consultar\s+)?(?:ubicaci[oó]n|donde\s+est[aá]|donde\s+queda|como\s+llegar|gps|ubicar|localizar|mapa|guardar\s+ubicaci[oó]n|cargar\s+ubicaci[oó]n|subir\s+ubicaci[oó]n)(?:\s+(?:de|del|para|al|cliente))?[:\s]*/i, '')
+      .trim();
+
+    if (!cleanParams) {
+      await DbService.upsertSession({
+        phone,
+        step: 'PENDIENTE_CLIENTE_CONSULTA_UBICACION',
+      });
+
+      await this.enviarYLoguear(
+        phone,
+        `*CONSULTA / CARGA DE UBICACIÓN GPS*\n──────────────────────────────\nEscribe el *nombre, folio o IP* del cliente cuya ubicación deseas consultar o cargar:\n\n_(Ej: 3017 o Gabriela Moo o 172.19.2.182)_`,
+        'ACTIVACION_TECNICO',
+        'SOLICITUD_CLIENTE_CONSULTA_UBICACION',
+        targetJid
+      );
+      return;
+    }
+
+    await this.buscarYEnviarUbicacionCliente(phone, cleanParams, session, targetJid);
+  }
+
+  /**
+   * Atiende la respuesta con el nombre o folio del cliente para Consulta/Carga de Ubicación
+   */
+  private static async procesarIdentificacionClienteConsultaUbicacion(
+    phone: string,
+    rawText: string,
+    session: Session | null,
+    targetJid?: string
+  ): Promise<void> {
+    const lower = rawText.trim().toLowerCase();
+    if (/^(no|cancelar|cancelo|abortar|0)\b/i.test(lower)) {
+      await DbService.upsertSession({ phone, step: 'CONVERSACIONAL' });
+      await this.enviarYLoguear(phone, `*Operación cancelada.*`, 'ACTIVACION_TECNICO', 'UBICACION_CANCELADA', targetJid);
+      return;
+    }
+
+    let metaObj: any = {};
+    try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
+    const choices = metaObj.pendingUbicacionChoices;
+    if (Array.isArray(choices) && choices.length > 0) {
+      const idxChoice = parseInt(lower, 10) - 1;
+      if (!isNaN(idxChoice) && idxChoice >= 0 && idxChoice < choices.length) {
+        const selected = choices[idxChoice];
+        await this.buscarYEnviarUbicacionCliente(phone, String(selected.id_servicio || selected.nombre), session, targetJid);
+        return;
+      }
+    }
+
+    await this.buscarYEnviarUbicacionCliente(phone, rawText.trim(), session, targetJid);
+  }
+
+  /**
+   * Busca el cliente y envía su ubicación con link de Maps (o habilita recepción de pin GPS si no tiene)
+   */
+  private static async buscarYEnviarUbicacionCliente(
+    phone: string,
+    query: string,
+    session: Session | null,
+    targetJid?: string
+  ): Promise<void> {
+    const numId = query.replace(/\D/g, '');
+    let targetClient: any = null;
+
+    // 1. Búsqueda directa en WispHub por ID numérico
+    if (numId && /^\d+$/.test(query.trim())) {
+      try {
+        const { getDbClient } = await import('../database/db');
+        const client = getDbClient();
+        const res = await client.execute({
+          sql: `SELECT id_servicio, nombre, ip, router, direccion, coordenadas_gps, google_maps_url, zona_smartolt, olt_smartolt, ubicacion_notas FROM wisphub_clients WHERE id_servicio = ? LIMIT 1`,
+          args: [Number(numId)],
+        });
+        if (res.rows.length > 0) {
+          targetClient = res.rows[0];
+        }
+      } catch {}
+    }
+
+    // 2. Búsqueda difusa en WispHub
+    if (!targetClient) {
+      try {
+        const matches = await DbService.searchWisphubClientsFuzzy(query, 5);
+        if (matches.length === 1 || (matches.length > 0 && matches[0].matchScore >= 80)) {
+          targetClient = matches[0];
+        } else if (matches.length > 1) {
+          let listMsg = `*Múltiples coincidencias para "${query}":*\n──────────────────────────────\n`;
+          matches.slice(0, 5).forEach((m: any, idx) => {
+            listMsg += `*${idx + 1}.* #${m.id_servicio} - ${m.nombre} (IP: ${m.ip || 'N/A'})\n`;
+          });
+          listMsg += `──────────────────────────────\nResponde con el *número de opción* o *folio*:`;
+
+          let metaObj: any = {};
+          try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
+          metaObj.pendingUbicacionChoices = matches;
+
+          await DbService.upsertSession({
+            phone,
+            step: 'PENDIENTE_CLIENTE_CONSULTA_UBICACION',
+            metadata: JSON.stringify(metaObj),
+          });
+
+          await this.enviarYLoguear(phone, listMsg, 'ACTIVACION_TECNICO', 'UBICACION_MULTIPLES_COINCIDENCIAS', targetJid);
+          return;
+        }
+      } catch {}
+    }
+
+    // 3. Fallback en SmartOLT ONUs
+    if (!targetClient) {
+      try {
+        const onuMatches = await DbService.searchOnusFuzzy(query, 3);
+        if (onuMatches.length > 0) {
+          const first = onuMatches[0];
+          targetClient = {
+            id_servicio: first.unique_external_id || first.sn,
+            nombre: first.name,
+            ip: first.ip_address,
+            direccion: first.address,
+            zona_smartolt: first.zone_name,
+            coordenadas_gps: null,
+            google_maps_url: null,
+          };
+        }
+      } catch {}
+    }
+
+    if (!targetClient) {
+      await this.enviarYLoguear(
+        phone,
+        `*Cliente no encontrado*\n\nNo se localizó ningún abonado con "*${query}*". Verifica el nombre, folio o IP e intenta de nuevo.`,
+        'ACTIVACION_TECNICO',
+        'CLIENTE_UBICACION_NO_ENCONTRADO',
+        targetJid
+      );
+      return;
+    }
+
+    // Guardar en sesión como cliente activo para que si el técnico manda el pin GPS, se guarde directamente
+    let metaObj: any = {};
+    try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
+    metaObj.lastServiceInfo = {
+      clientId: targetClient.id_servicio,
+      clientName: targetClient.nombre,
+      ip: targetClient.ip,
+      timestamp: Date.now(),
+    };
+    await DbService.upsertSession({
+      phone,
+      step: 'CONVERSACIONAL',
+      metadata: JSON.stringify(metaObj),
+    });
+
+    const coords = targetClient.coordenadas_gps;
+    let mapsUrl = targetClient.google_maps_url;
+    if (!mapsUrl && coords) {
+      mapsUrl = `https://www.google.com/maps?q=${coords}`;
+    }
+
+    const clientDisplay = targetClient.id_servicio ? `${targetClient.nombre} (#${targetClient.id_servicio})` : targetClient.nombre;
+    const zonaDisplay = targetClient.zona_smartolt || 'Actopan';
+
+    if (mapsUrl || coords) {
+      const respMsg =
+        `*Ubicación de ${clientDisplay}:*\n` +
+        (targetClient.direccion ? `• *Dirección:* ${targetClient.direccion}\n` : '') +
+        `• *Zona:* ${zonaDisplay}\n` +
+        `• *Maps:* ${mapsUrl || `https://www.google.com/maps?q=${coords}`}`;
+
+      await this.enviarYLoguear(phone, respMsg, 'ACTIVACION_TECNICO', 'UBICACION_CLIENTE_ENVIADA', targetJid);
+    } else {
+      const respMsg =
+        `*${clientDisplay} no tiene GPS registrado.*` +
+        (targetClient.direccion ? `\n• *Dirección:* ${targetClient.direccion}` : '') +
+        `\n• *Zona:* ${zonaDisplay}\n\n` +
+        `_(Puedes enviar el pin de ubicación GPS en este momento para guardarlo en su expediente)_`;
+
+      await this.enviarYLoguear(phone, respMsg, 'ACTIVACION_TECNICO', 'UBICACION_CLIENTE_SIN_GPS', targetJid);
     }
   }
 
