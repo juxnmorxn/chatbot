@@ -7,7 +7,7 @@ WORKDIR /app
 
 # Copiar manifiestos e instalar dependencias
 COPY package.json package-lock.json* bun.lock* ./
-RUN npm install
+RUN npm install --legacy-peer-deps
 
 # Copiar código fuente y compilar
 COPY . .
@@ -25,7 +25,7 @@ ENV PORT=3000
 
 # Instalar sólo dependencias de producción
 COPY package.json package-lock.json* bun.lock* ./
-RUN npm install --omit=dev
+RUN npm install --omit=dev --legacy-peer-deps
 
 # Copiar bundle compilado y archivos necesarios
 COPY --from=builder /app/dist ./dist
