@@ -488,7 +488,8 @@ export class BotOrchestrator {
       `• *Concepto / Motivo:* *${session?.client_name || clientName}*\n\n` +
       (officeAddress ? `🏢 *Pago en Oficina Física:*\n• *Horario:* Lun-Vie ${officeWeekday}, Sáb ${officeSaturday}\n• *Dirección:* ${officeAddress}\n\n` : '') +
       `📸 *Envío de Comprobante:*\n` +
-      `Al realizar tu transferencia, por favor envíanos la foto o captura de tu comprobante por aquí para aplicarlo de inmediato a tu cuenta.`;
+      `Al realizar tu transferencia, por favor envíanos la foto o captura de tu comprobante por aquí para aplicarlo de inmediato a tu cuenta.\n\n` +
+      `💡 _*Tip:* También puedes consultar tu saldo en tu Portal Web: ${this.getClientPortalLink(session?.phone || undefined)}_`;
 
     return txt;
   }
@@ -8508,12 +8509,26 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
   }
 
   /**
-   * Saludo general del bot sin botones forzados
+   * Genera el enlace de acceso directo al Portal Web / PWA del Cliente
+   */
+  static getClientPortalLink(phone?: string): string {
+    const appUrl = SettingsService.get('APP_URL', 'APP_URL', config.appUrl || 'http://2.25.241.239:3000').replace(/\/+$/, '');
+    const cleanPhone = (phone || '').replace(/\D/g, '');
+    const last10 = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
+    return last10 ? `${appUrl}/portal?p=${last10}` : `${appUrl}/portal`;
+  }
+
+  /**
+   * Saludo general del bot sin botones forzados con sugerencia al Portal Web
    */
   static async enviarMenuPrincipal(phone: string, clientName?: string | null): Promise<void> {
     const nombreLimpio = formatDisplayName(clientName, true);
     const saludo = nombreLimpio ? `¡Hola, *${nombreLimpio}*! 👋` : `¡Hola! 👋`;
-    const texto = `${saludo} Bienvenido al centro de atención y soporte de *${this.getIspName()}*.\n\n¿En qué podemos ayudarte el día de hoy? Cuéntame tu duda o si presentas alguna falla con tu internet.`;
+    const portalUrl = this.getClientPortalLink(phone);
+    const texto = `${saludo} Bienvenido al centro de atención y soporte de *${this.getIspName()}*.\n\n` +
+      `¿En qué podemos ayudarte el día de hoy? Cuéntame tu duda o si presentas alguna falla con tu internet.\n\n` +
+      `💡 _*Tip:* También puedes consultar tu conexión, potencia y facturas en tu Portal Web:_\n` +
+      `👉 ${portalUrl}`;
 
     await this.enviarYLoguear(phone, texto, 'SALUDO', 'SALUDO_ENVIADO');
     await DbService.updateStep(phone, 'ESPERANDO_PROBLEMA');

@@ -2,13 +2,32 @@ import { Router } from 'express';
 import { HealthController } from '../controllers/health.controller';
 import { WebhookController } from '../controllers/webhook.controller';
 import { AdminController } from '../controllers/admin.controller';
+import { ClientPortalController } from '../controllers/client-portal.controller';
 import { getAdminDashboardHtml } from '../views/admin.html';
 import { requireAdminAuth } from '../utils/auth';
 import { config } from '../config/env';
 
 const router = Router();
 
-// Panel Web de Administración (UI SPA)
+// ==========================================
+// PORTAL DEL CLIENTE / PWA
+// ==========================================
+router.get('/portal', ClientPortalController.renderPortalHtml);
+router.get('/cliente', ClientPortalController.renderPortalHtml);
+router.get('/manifest.json', ClientPortalController.renderManifest);
+router.get('/manifest.webmanifest', ClientPortalController.renderManifest);
+router.get('/sw.js', ClientPortalController.renderServiceWorker);
+router.get('/portal-icon.svg', ClientPortalController.renderIcon);
+
+router.post('/api/portal/auth/login', ClientPortalController.login);
+router.get('/api/portal/me', ClientPortalController.getClientData);
+router.get('/api/portal/signal', ClientPortalController.getLiveSignal);
+router.post('/api/portal/wifi', ClientPortalController.changeWifi);
+router.post('/api/portal/reboot', ClientPortalController.rebootModem);
+
+// ==========================================
+// PANEL WEB DE ADMINISTRACIÓN (UI SPA)
+// ==========================================
 router.get('/', (_req, res) => {
   res.send(getAdminDashboardHtml());
 });
