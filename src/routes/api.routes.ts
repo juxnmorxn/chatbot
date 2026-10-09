@@ -8,17 +8,28 @@ import { config } from '../config/env';
 
 const router = Router();
 
+let cachedAdminDashboardHtml: string | null = null;
+function getCachedAdminHtml(): string {
+  if (!cachedAdminDashboardHtml || process.env.NODE_ENV === 'development') {
+    cachedAdminDashboardHtml = getAdminDashboardHtml();
+  }
+  return cachedAdminDashboardHtml;
+}
+
 // Panel Web de Administración (UI SPA)
 router.get('/', (_req, res) => {
-  res.send(getAdminDashboardHtml());
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(getCachedAdminHtml());
 });
 
 router.get('/admin', (_req, res) => {
-  res.send(getAdminDashboardHtml());
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(getCachedAdminHtml());
 });
 
 router.get('/panel', (_req, res) => {
-  res.send(getAdminDashboardHtml());
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(getCachedAdminHtml());
 });
 
 router.get('/favicon.ico', (_req, res) => {

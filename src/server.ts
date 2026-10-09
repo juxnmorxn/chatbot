@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import compression from 'compression';
 import { config } from './config/env';
 import { initDatabase } from './database/db';
 import { SettingsService } from './services/settings.service';
@@ -11,6 +12,16 @@ const app = express();
 
 // Middlewares
 app.use(cors());
+app.use(compression({
+  filter: (req, res) => {
+    // Evitar compresión en streams SSE en tiempo real
+    if (req.headers.accept && req.headers.accept.includes('text/event-stream')) {
+      return false;
+    }
+    return compression.filter(req, res);
+  },
+  threshold: 1024,
+}));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
