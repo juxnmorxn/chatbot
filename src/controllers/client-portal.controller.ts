@@ -273,18 +273,22 @@ self.addEventListener('fetch', (event) => {
 
       // 3. Verificar si hay caídas de red activas en la zona del cliente
       let activeOutage: any = null;
-      const clientZone = client.router || onuRecord?.zone_name || 'Actopan';
-      const outageRes = await db.execute({
-        sql: `SELECT * FROM network_outages WHERE status = 'active' AND (zone LIKE ? OR zone = 'Todas' OR zone = 'General') LIMIT 1`,
-        args: [`%${clientZone}%`],
-      });
-      if (outageRes.rows.length > 0) {
-        const o = outageRes.rows[0];
-        activeOutage = {
-          active: true,
-          title: o.title || 'Mantenimiento en tu Zona',
-          description: o.description || 'Cuadrillas técnicas trabajando en la infraestructura de fibra.',
-        };
+      try {
+        const clientZone = client.router || onuRecord?.zone_name || 'Actopan';
+        const outageRes = await db.execute({
+          sql: `SELECT * FROM network_outages WHERE status = 'active' AND (zone_name LIKE ? OR LOWER(zone_name) IN ('todas', 'todos', 'general', 'global')) LIMIT 1`,
+          args: [`%${clientZone}%`],
+        });
+        if (outageRes.rows.length > 0) {
+          const o = outageRes.rows[0];
+          activeOutage = {
+            active: true,
+            title: `Mantenimiento en zona ${o.zone_name}`,
+            description: (o.notes as string) || 'Cuadrillas técnicas trabajando en la infraestructura de fibra.',
+          };
+        }
+      } catch (outageErr: any) {
+        logger.warn('Error al verificar network_outages:', outageErr?.message || outageErr);
       }
 
       // 4. Datos Wi-Fi
