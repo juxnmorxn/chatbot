@@ -1,6 +1,5 @@
 import express from 'express';
 import cors from 'cors';
-import compression from 'compression';
 import { config } from './config/env';
 import { initDatabase } from './database/db';
 import { SettingsService } from './services/settings.service';
@@ -12,16 +11,6 @@ const app = express();
 
 // Middlewares
 app.use(cors());
-app.use(compression({
-  filter: (req, res) => {
-    // Evitar compresión en streams SSE en tiempo real
-    if (req.headers.accept && req.headers.accept.includes('text/event-stream')) {
-      return false;
-    }
-    return compression.filter(req, res);
-  },
-  threshold: 1024,
-}));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
@@ -77,7 +66,7 @@ async function startServer() {
     const { SmartOLTService } = await import('./services/smartolt.service');
     const { WispHubService } = await import('./services/wisphub.service');
     const { DbService } = await import('./services/db.service');
-    
+
     // Verificación inicial 10 segundos después del arranque
     setTimeout(async () => {
       try {
@@ -97,6 +86,11 @@ async function startServer() {
         } else {
           logger.info(`Clientes WispHub listos en Base de Datos Local: ${whStats.count} clientes (Última sync: ${whStats.lastSync || 'Previa'})`);
         }
+
+        // Reconciliación cruzada de datos SmartOLT <-> WispHub <-> GPS y normalización de SN
+        await DbService.syncClientDataAndGps().catch((err) => {
+          logger.warn('Aviso: syncClientDataAndGps inicial falló:', err?.message || err);
+        });
       } catch (err: any) {
         logger.warn('No se pudo ejecutar sincronización inicial:', err?.message || err);
       }
@@ -130,9 +124,9 @@ async function startServer() {
         await axios.get(`http://localhost:${config.port}/api/health`, { timeout: 5000 });
         const appUrl = SettingsService.get('APP_URL', 'APP_URL', config.appUrl);
         if (appUrl && appUrl.startsWith('http') && !appUrl.includes('localhost')) {
-          await axios.get(`${appUrl.replace(/\/$/, '')}/api/health`, { timeout: 8000 }).catch(() => {});
+          await axios.get(`${appUrl.replace(/\/$/, '')}/api/health`, { timeout: 8000 }).catch(() => { });
         }
-      } catch {}
+      } catch { }
     }, 4 * 60 * 1000);
   } catch (error: any) {
     logger.error('Error crítico al iniciar el servidor:', error?.message || error);

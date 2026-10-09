@@ -9,13 +9,6 @@ export function getAdminDashboardHtml(): string {
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <script>
-    try {
-      if (localStorage.getItem('cloudware_admin_token')) {
-        document.documentElement.classList.add('is-authenticated');
-      }
-    } catch (_) {}
-  </script>
   <style>
     :root {
       --bg-base: #090d16;
@@ -2180,10 +2173,6 @@ export function getAdminDashboardHtml(): string {
     }
 
     /* Auth Login Overlay */
-    html.is-authenticated #login-overlay {
-      display: none !important;
-    }
-
     #login-overlay {
       position: fixed;
       top: 0;
@@ -2843,7 +2832,7 @@ export function getAdminDashboardHtml(): string {
   </div>
 
   <!-- Login Overlay (Shown if unauthenticated) -->
-  <div id="login-overlay">
+  <div id="login-overlay" style="display: none;">
     <div class="login-box">
       <div style="text-align: center;">
         <div class="brand-logo" style="margin: 0 auto 12px; width: 48px; height: 48px;">
@@ -4743,15 +4732,11 @@ export function getAdminDashboardHtml(): string {
     }
 
     function showLoginModal() {
-      document.documentElement.classList.remove('is-authenticated');
-      const overlay = document.getElementById('login-overlay');
-      if (overlay) overlay.style.display = 'flex';
+      document.getElementById('login-overlay').style.display = 'flex';
     }
 
     function hideLoginModal() {
-      document.documentElement.classList.add('is-authenticated');
-      const overlay = document.getElementById('login-overlay');
-      if (overlay) overlay.style.display = 'none';
+      document.getElementById('login-overlay').style.display = 'none';
     }
 
     async function handleLoginSubmit(e) {

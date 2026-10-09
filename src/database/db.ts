@@ -377,12 +377,15 @@ export async function initDatabase(): Promise<void> {
     try { await client.execute(`ALTER TABLE wisphub_clients ADD COLUMN coordenadas_gps TEXT;`); } catch (_) {}
     try { await client.execute(`ALTER TABLE wisphub_clients ADD COLUMN google_maps_url TEXT;`); } catch (_) {}
     try { await client.execute(`ALTER TABLE wisphub_clients ADD COLUMN ubicacion_notas TEXT;`); } catch (_) {}
+    try { await client.execute(`ALTER TABLE wisphub_clients ADD COLUMN sn_onu_normalized TEXT;`); } catch (_) {}
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_wh_nombre_norm ON wisphub_clients(nombre_normalized);`);
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_wh_servicio ON wisphub_clients(servicio);`);
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_wh_ip ON wisphub_clients(ip);`);
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_wh_estado ON wisphub_clients(estado);`);
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_wh_dia_corte ON wisphub_clients(dia_corte);`);
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_wh_phone ON wisphub_clients(telefono);`);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_wh_sn_onu ON wisphub_clients(sn_onu);`);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_wh_sn_norm ON wisphub_clients(sn_onu_normalized);`);
 
     // Tabla de Tickets para modificaciones manuales en SmartOLT y seguimiento
     await client.execute(`

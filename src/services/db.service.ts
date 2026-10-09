@@ -151,6 +151,18 @@ function parseOnuIpv6Status(rawJson?: any): 'DUAL_STACK' | 'IPV4_ONLY' | 'MISSIN
   }
 }
 
+export function normalizeHexSn(sn: string): string {
+  if (!sn) return '';
+  const s = String(sn).trim().toUpperCase();
+  if (s.startsWith('48575443')) {
+    return 'HWTC' + s.slice(8);
+  }
+  if (s.startsWith('5A544547')) {
+    return 'ZTEG' + s.slice(8);
+  }
+  return s;
+}
+
 export class DbService {
   /**
    * Obtiene la sesión activa de un número de teléfono
@@ -951,7 +963,7 @@ export class DbService {
 
   /**
    * Actualiza o registra las coordenadas GPS, enlace de Google Maps y dirección de un cliente
-   * Funciona buscando por id_servicio, teléfono (principal o adicional) o número de serie ONU.
+   * Funciona buscando por id_servicio, teléfono (principal o adicional), SN de ONU (ASCII o Hex) o nombre.
    */
   static async updateClientLocation(
     identifier: string | number,
@@ -986,6 +998,7 @@ export class DbService {
       const last10 = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : '';
       const rawStr = String(identifier).trim();
       const targetName = loc.clientName || (isNaN(Number(rawStr)) && cleanPhone.length < 10 ? rawStr : '');
+      const normSn = normalizeHexSn(rawStr);
 
       let targetIdServicio: number | null = isNum ? idNum : null;
 
@@ -1033,10 +1046,27 @@ export class DbService {
         }
       }
 
-      // 3. Actualizar por nombre del cliente si se proporcionó
+      // 3. Actualizar por número de serie SN en wisphub_clients (ASCII y Hexadecimal)
+      if (rawStr.length >= 6) {
+        await client.execute({
+          sql: `
+            UPDATE wisphub_clients 
+            SET 
+              coordenadas_gps = COALESCE(NULLIF(?, ''), coordenadas_gps),
+              google_maps_url = COALESCE(NULLIF(?, ''), google_maps_url),
+              ubicacion_notas = COALESCE(NULLIF(?, ''), ubicacion_notas),
+              direccion = COALESCE(NULLIF(?, ''), direccion),
+              updated_at = ?
+            WHERE sn_onu = ? OR sn_onu_normalized = ? OR sn_onu LIKE ? OR sn_onu_normalized LIKE ?
+          `,
+          args: [coordsStr || null, mapsUrl || null, loc.notas || null, loc.direccion || null, now, rawStr.toUpperCase(), normSn, `%${rawStr}%`, `%${normSn}%`],
+        });
+      }
+
+      // 4. Actualizar por nombre del cliente si se proporcionó
       if (targetName && targetName.length >= 3) {
         const cleanTarget = cleanPersonName(targetName);
-        const nameMatches = await client.execute({
+        await client.execute({
           sql: `
             UPDATE wisphub_clients 
             SET 
@@ -1076,8 +1106,9 @@ export class DbService {
         } catch {}
       }
 
-      // 4. Actualizar en smartolt_onus si coincide teléfono, SN o nombre
-      if (last10 || rawStr.length >= 4) {
+      // 5. Actualizar en smartolt_onus si coincide teléfono, SN, nombre o external_id
+      if (last10 || rawStr.length >= 4 || targetName) {
+        const cleanTarget = targetName ? cleanPersonName(targetName) : '';
         await client.execute({
           sql: `
             UPDATE smartolt_onus 
@@ -1085,13 +1116,25 @@ export class DbService {
               coordenadas_gps = COALESCE(NULLIF(?, ''), coordenadas_gps),
               google_maps_url = COALESCE(NULLIF(?, ''), google_maps_url),
               updated_at = ?
-            WHERE phone LIKE ? OR sn = ? OR unique_external_id = ? OR name LIKE ?
+            WHERE phone LIKE ? OR sn = ? OR sn = ? OR unique_external_id = ? OR name LIKE ? OR name LIKE ? OR (length(?) >= 4 AND name_normalized LIKE ?)
           `,
-          args: [coordsStr || null, mapsUrl || null, now, `%${last10 || cleanPhone}%`, rawStr.toUpperCase(), rawStr, `%${targetName || rawStr}%`],
+          args: [
+            coordsStr || null,
+            mapsUrl || null,
+            now,
+            `%${last10 || cleanPhone}%`,
+            rawStr.toUpperCase(),
+            normSn,
+            rawStr,
+            `%${rawStr}%`,
+            `%${targetName || rawStr}%`,
+            cleanTarget,
+            `%${cleanTarget}%`
+          ],
         });
       }
 
-      // 5. Actualizar tickets (por folio o por teléfono)
+      // 6. Actualizar tickets (por folio o por teléfono)
       if (loc.ticketFolio) {
         await client.execute({
           sql: `
@@ -1123,6 +1166,158 @@ export class DbService {
     } catch (err: any) {
       logger.error(`Error al actualizar ubicación para ${identifier}:`, err?.message || err);
       return false;
+    }
+  }
+
+  /**
+   * Consolida y reconcilia datos entre WispHub y SmartOLT:
+   * 1. Genera sn_onu_normalized (Hex a ASCII HWTC/ZTEG)
+   * 2. Cruza y replica coordenadas GPS y URLs de Google Maps bidireccionalmente
+   * 3. Integra ONUs autorizadas de SmartOLT a la lista unificada
+   */
+  static async syncClientDataAndGps(): Promise<{ reconciledGps: number; importedOnus: number }> {
+    try {
+      const client = getDbClient();
+      const now = new Date().toISOString();
+
+      // 1. Normalizar todos los números de serie en wisphub_clients (48575443 -> HWTC, 5A544547 -> ZTEG)
+      const unnormRes = await client.execute(`
+        SELECT id_servicio, sn_onu 
+        FROM wisphub_clients 
+        WHERE sn_onu IS NOT NULL AND sn_onu != '' AND (sn_onu_normalized IS NULL OR sn_onu_normalized = '')
+      `);
+      for (const row of unnormRes.rows) {
+        const idServicio = Number(row.id_servicio);
+        const norm = normalizeHexSn(String(row.sn_onu));
+        await client.execute({
+          sql: `UPDATE wisphub_clients SET sn_onu_normalized = ? WHERE id_servicio = ?`,
+          args: [norm, idServicio],
+        });
+      }
+
+      // 2. Replicar GPS de smartolt_onus a wisphub_clients donde coincida SN, SN normalizado o IP
+      const gpsOnus = await client.execute(`
+        SELECT sn, ip_address, name, coordenadas_gps, google_maps_url 
+        FROM smartolt_onus 
+        WHERE (coordenadas_gps IS NOT NULL AND LENGTH(coordenadas_gps) > 3) OR (google_maps_url IS NOT NULL AND LENGTH(google_maps_url) > 5)
+      `);
+
+      let reconciledGps = 0;
+      for (const o of gpsOnus.rows) {
+        const sn = String(o.sn || '').trim().toUpperCase();
+        const ip = String(o.ip_address || '').trim();
+        const coords = String(o.coordenadas_gps || '').trim();
+        const url = String(o.google_maps_url || (coords ? `https://www.google.com/maps?q=${coords}` : '')).trim();
+
+        if (!coords && !url) continue;
+
+        const updateRes = await client.execute({
+          sql: `
+            UPDATE wisphub_clients 
+            SET 
+              coordenadas_gps = COALESCE(NULLIF(coordenadas_gps, ''), ?),
+              google_maps_url = COALESCE(NULLIF(google_maps_url, ''), ?),
+              updated_at = ?
+            WHERE (sn_onu_normalized = ? OR sn_onu = ? OR (ip IS NOT NULL AND LENGTH(ip) >= 7 AND ip = ?))
+          `,
+          args: [coords || null, url || null, now, sn, sn, ip],
+        });
+
+        if (updateRes.rowsAffected && updateRes.rowsAffected > 0) {
+          reconciledGps += updateRes.rowsAffected;
+        }
+      }
+
+      // 3. Replicar GPS de wisphub_clients a smartolt_onus
+      const gpsClients = await client.execute(`
+        SELECT id_servicio, sn_onu, sn_onu_normalized, ip, coordenadas_gps, google_maps_url 
+        FROM wisphub_clients 
+        WHERE (coordenadas_gps IS NOT NULL AND LENGTH(coordenadas_gps) > 3) OR (google_maps_url IS NOT NULL AND LENGTH(google_maps_url) > 5)
+      `);
+
+      for (const c of gpsClients.rows) {
+        const sn = String(c.sn_onu_normalized || c.sn_onu || '').trim().toUpperCase();
+        const ip = String(c.ip || '').trim();
+        const coords = String(c.coordenadas_gps || '').trim();
+        const url = String(c.google_maps_url || (coords ? `https://www.google.com/maps?q=${coords}` : '')).trim();
+
+        if (!coords && !url) continue;
+
+        await client.execute({
+          sql: `
+            UPDATE smartolt_onus 
+            SET 
+              coordenadas_gps = COALESCE(NULLIF(coordenadas_gps, ''), ?),
+              google_maps_url = COALESCE(NULLIF(google_maps_url, ''), ?),
+              updated_at = ?
+            WHERE (sn = ? OR (ip_address IS NOT NULL AND LENGTH(ip_address) >= 7 AND ip_address = ?))
+          `,
+          args: [coords || null, url || null, now, sn, ip],
+        });
+      }
+
+      // 4. Integrar ONUs de SmartOLT que no están en wisphub_clients
+      const orphanOnus = await client.execute(`
+        SELECT o.unique_external_id, o.sn, o.name, o.name_normalized, o.phone, o.address, o.zone_name, o.speed_profile, o.olt_name, o.ip_address, o.coordenadas_gps, o.google_maps_url 
+        FROM smartolt_onus o
+        WHERE NOT EXISTS (
+          SELECT 1 FROM wisphub_clients w 
+          WHERE w.sn_onu_normalized = o.sn OR w.sn_onu = o.sn OR (w.ip IS NOT NULL AND LENGTH(w.ip) >= 7 AND w.ip = o.ip_address)
+        )
+      `);
+
+      let importedOnus = 0;
+      for (const o of orphanOnus.rows) {
+        const rawName = String(o.name || '').trim();
+        const matchId = rawName.match(/^0*(\d{1,6})\s*[-_]/);
+        const parsedId = matchId ? parseInt(matchId[1], 10) : null;
+        const fallbackId = parsedId || Math.floor(900000 + Math.random() * 99999);
+
+        const checkExisting = await client.execute({
+          sql: `SELECT id_servicio FROM wisphub_clients WHERE id_servicio = ?`,
+          args: [fallbackId],
+        });
+
+        const targetId = checkExisting.rows.length === 0 ? fallbackId : Math.floor(900000 + Math.random() * 99999);
+        const sn = String(o.sn || '').trim();
+        const coords = String(o.coordenadas_gps || '').trim();
+        const url = String(o.google_maps_url || (coords ? `https://www.google.com/maps?q=${coords}` : '')).trim();
+
+        await client.execute({
+          sql: `
+            INSERT OR REPLACE INTO wisphub_clients (
+              id_servicio, nombre, nombre_normalized, servicio, ip, estado, estado_facturas,
+              plan_internet, router, sn_onu, sn_onu_normalized, telefono, coordenadas_gps, google_maps_url,
+              direccion, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `,
+          args: [
+            targetId,
+            rawName,
+            o.name_normalized || normalizeText(rawName),
+            'Fibra Óptica FTTH',
+            o.ip_address || '',
+            'Activo (SmartOLT)',
+            'Pagadas',
+            o.speed_profile || 'Plan FTTH',
+            o.zone_name || o.olt_name || 'Actopan',
+            sn,
+            sn,
+            o.phone || '',
+            coords || null,
+            url || null,
+            o.address || '',
+            now,
+          ],
+        });
+        importedOnus++;
+      }
+
+      logger.info(`[Sync Client & GPS]: GPS Reconciliados=${reconciledGps}, ONUs Integradas=${importedOnus}`);
+      return { reconciledGps, importedOnus };
+    } catch (err: any) {
+      logger.error('Error al sincronizar datos de clientes y GPS:', err?.message || err);
+      return { reconciledGps: 0, importedOnus: 0 };
     }
   }
 
@@ -1204,10 +1399,15 @@ export class DbService {
         client.execute(`
           SELECT 
             COUNT(*) as total,
-            SUM(CASE WHEN LOWER(estado) LIKE '%act%' OR LOWER(estado) LIKE '%grat%' OR LOWER(estado) LIKE '%free%' OR LOWER(estado) LIKE '%cortes%' OR estado = '1' OR estado = '4' THEN 1 ELSE 0 END) as total_active,
-            SUM(CASE WHEN LOWER(estado) LIKE '%susp%' OR LOWER(estado) LIKE '%cort%' OR estado = '2' THEN 1 ELSE 0 END) as total_suspended,
-            SUM(CASE WHEN (coordenadas_gps IS NOT NULL AND LENGTH(coordenadas_gps) > 3) OR (google_maps_url IS NOT NULL AND LENGTH(google_maps_url) > 5) THEN 1 ELSE 0 END) as total_with_gps
-          FROM wisphub_clients
+            SUM(CASE WHEN LOWER(w.estado) LIKE '%act%' OR LOWER(w.estado) LIKE '%grat%' OR LOWER(w.estado) LIKE '%free%' OR LOWER(w.estado) LIKE '%cortes%' OR w.estado = '1' OR w.estado = '4' THEN 1 ELSE 0 END) as total_active,
+            SUM(CASE WHEN LOWER(w.estado) LIKE '%susp%' OR LOWER(w.estado) LIKE '%cort%' OR w.estado = '2' THEN 1 ELSE 0 END) as total_suspended,
+            SUM(CASE WHEN (w.coordenadas_gps IS NOT NULL AND LENGTH(w.coordenadas_gps) > 3) OR (w.google_maps_url IS NOT NULL AND LENGTH(w.google_maps_url) > 5) OR (o.coordenadas_gps IS NOT NULL AND LENGTH(o.coordenadas_gps) > 3) OR (o.google_maps_url IS NOT NULL AND LENGTH(o.google_maps_url) > 5) THEN 1 ELSE 0 END) as total_with_gps
+          FROM wisphub_clients w
+          LEFT JOIN smartolt_onus o ON (
+            (w.sn_onu_normalized IS NOT NULL AND o.sn = w.sn_onu_normalized) OR
+            (w.sn_onu IS NOT NULL AND o.sn = w.sn_onu) OR
+            (w.ip IS NOT NULL AND LENGTH(w.ip) >= 7 AND o.ip_address = w.ip)
+          )
         `),
         client.execute(`
           SELECT DISTINCT router 
@@ -1240,15 +1440,21 @@ export class DbService {
           w.telefonos_adicionales LIKE ? OR
           w.ip LIKE ? OR
           LOWER(w.sn_onu) LIKE ? OR
+          LOWER(w.sn_onu_normalized) LIKE ? OR
           LOWER(w.direccion) LIKE ? OR
           LOWER(w.servicio) LIKE ? OR
-          CAST(w.id_servicio AS TEXT) LIKE ?
+          CAST(w.id_servicio AS TEXT) LIKE ? OR
+          LOWER(o.name) LIKE ? OR
+          LOWER(o.zone_name) LIKE ?
         )`);
         args.push(
           `%${search}%`,
           `%${normSearch}%`,
           `%${cleanSearch}%`,
           `%${cleanSearch}%`,
+          `%${search}%`,
+          `%${search}%`,
+          `%${search}%`,
           `%${search}%`,
           `%${search}%`,
           `%${search}%`,
@@ -1261,8 +1467,8 @@ export class DbService {
       if (options.search_nombre) {
         const val = options.search_nombre.trim().toLowerCase();
         const norm = normalizeText(val);
-        whereClauses.push(`(LOWER(w.nombre) LIKE ? OR w.nombre_normalized LIKE ?)`);
-        args.push(`%${val}%`, `%${norm}%`);
+        whereClauses.push(`(LOWER(w.nombre) LIKE ? OR w.nombre_normalized LIKE ? OR LOWER(o.name) LIKE ?)`);
+        args.push(`%${val}%`, `%${norm}%`, `%${val}%`);
       }
 
       if (options.search_servicio) {
@@ -1297,8 +1503,8 @@ export class DbService {
 
       if (options.search_plan) {
         const val = options.search_plan.trim().toLowerCase();
-        whereClauses.push(`LOWER(w.plan_internet) LIKE ?`);
-        args.push(`%${val}%`);
+        whereClauses.push(`(LOWER(w.plan_internet) LIKE ? OR LOWER(o.speed_profile) LIKE ?)`);
+        args.push(`%${val}%`, `%${val}%`);
       }
 
       if (options.search_router) {
@@ -1310,22 +1516,22 @@ export class DbService {
       if (options.search_telefono) {
         const val = options.search_telefono.trim().replace(/\D/g, '');
         if (val) {
-          whereClauses.push(`(w.telefono LIKE ? OR w.telefonos_adicionales LIKE ?)`);
-          args.push(`%${val}%`, `%${val}%`);
+          whereClauses.push(`(w.telefono LIKE ? OR w.telefonos_adicionales LIKE ? OR o.phone LIKE ?)`);
+          args.push(`%${val}%`, `%${val}%`, `%${val}%`);
         }
       }
 
       if (options.search_direccion) {
         const val = options.search_direccion.trim().toLowerCase();
-        whereClauses.push(`(LOWER(w.direccion) LIKE ? OR LOWER(w.ubicacion_notas) LIKE ?)`);
-        args.push(`%${val}%`, `%${val}%`);
+        whereClauses.push(`(LOWER(w.direccion) LIKE ? OR LOWER(w.ubicacion_notas) LIKE ? OR LOWER(o.address) LIKE ?)`);
+        args.push(`%${val}%`, `%${val}%`, `%${val}%`);
       }
 
       const gpsFilter = (options.search_gps || '').toUpperCase();
       if (gpsFilter === 'CON_GPS' || statusFilter === 'CON_GPS') {
-        whereClauses.push(`((w.coordenadas_gps IS NOT NULL AND LENGTH(w.coordenadas_gps) > 3) OR (w.google_maps_url IS NOT NULL AND LENGTH(w.google_maps_url) > 5))`);
+        whereClauses.push(`((w.coordenadas_gps IS NOT NULL AND LENGTH(w.coordenadas_gps) > 3) OR (w.google_maps_url IS NOT NULL AND LENGTH(w.google_maps_url) > 5) OR (o.coordenadas_gps IS NOT NULL AND LENGTH(o.coordenadas_gps) > 3) OR (o.google_maps_url IS NOT NULL AND LENGTH(o.google_maps_url) > 5))`);
       } else if (gpsFilter === 'SIN_GPS' || statusFilter === 'SIN_GPS') {
-        whereClauses.push(`(w.coordenadas_gps IS NULL OR LENGTH(w.coordenadas_gps) <= 3) AND (w.google_maps_url IS NULL OR LENGTH(w.google_maps_url) <= 5)`);
+        whereClauses.push(`(w.coordenadas_gps IS NULL OR LENGTH(w.coordenadas_gps) <= 3) AND (w.google_maps_url IS NULL OR LENGTH(w.google_maps_url) <= 5) AND (o.coordenadas_gps IS NULL OR LENGTH(o.coordenadas_gps) <= 3) AND (o.google_maps_url IS NULL OR LENGTH(o.google_maps_url) <= 5)`);
       } else if (statusFilter === 'ACTIVO') {
         whereClauses.push(`LOWER(w.estado) LIKE '%act%'`);
       } else if (statusFilter === 'SUSPENDIDO') {
@@ -1334,12 +1540,13 @@ export class DbService {
 
       const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
 
-      // Total filtrado con JOIN si es necesario
+      // Total filtrado con JOIN rápido
       const countSql = `
         SELECT COUNT(*) as filtered_count 
         FROM wisphub_clients w 
         LEFT JOIN smartolt_onus o ON (
-          (w.sn_onu IS NOT NULL AND LENGTH(w.sn_onu) >= 6 AND o.sn = w.sn_onu) OR
+          (w.sn_onu_normalized IS NOT NULL AND o.sn = w.sn_onu_normalized) OR
+          (w.sn_onu IS NOT NULL AND o.sn = w.sn_onu) OR
           (w.ip IS NOT NULL AND LENGTH(w.ip) >= 7 AND o.ip_address = w.ip)
         )
         ${whereSql}
@@ -1360,22 +1567,23 @@ export class DbService {
           w.saldo,
           w.plan_internet,
           w.router,
-          COALESCE(NULLIF(w.sn_onu, ''), o.sn) as sn_onu,
+          COALESCE(NULLIF(w.sn_onu_normalized, ''), NULLIF(w.sn_onu, ''), o.sn) as sn_onu,
           w.telefono,
           w.telefonos_adicionales,
           COALESCE(NULLIF(w.coordenadas_gps, ''), o.coordenadas_gps) as coordenadas_gps,
           COALESCE(NULLIF(w.google_maps_url, ''), o.google_maps_url) as google_maps_url,
           w.ubicacion_notas,
-          w.direccion,
+          COALESCE(NULLIF(w.direccion, ''), o.address) as direccion,
           w.dia_corte,
           w.fecha_corte,
           w.updated_at,
           o.unique_external_id as smartolt_id,
-          o.zone_name as zona_smartolt,
+          COALESCE(NULLIF(w.router, ''), o.zone_name) as zona_smartolt,
           o.olt_name as olt_smartolt
         FROM wisphub_clients w
         LEFT JOIN smartolt_onus o ON (
-          (w.sn_onu IS NOT NULL AND LENGTH(w.sn_onu) >= 6 AND o.sn = w.sn_onu) OR
+          (w.sn_onu_normalized IS NOT NULL AND o.sn = w.sn_onu_normalized) OR
+          (w.sn_onu IS NOT NULL AND o.sn = w.sn_onu) OR
           (w.ip IS NOT NULL AND LENGTH(w.ip) >= 7 AND o.ip_address = w.ip)
         )
         ${whereSql}
@@ -1467,13 +1675,17 @@ export class DbService {
         sql: `
           SELECT 
             w.*,
+            COALESCE(NULLIF(w.sn_onu_normalized, ''), NULLIF(w.sn_onu, ''), o.sn) as sn_onu_full,
+            COALESCE(NULLIF(w.coordenadas_gps, ''), o.coordenadas_gps) as coordenadas_gps_resolved,
+            COALESCE(NULLIF(w.google_maps_url, ''), o.google_maps_url) as google_maps_url_resolved,
             o.unique_external_id as smartolt_id,
-            o.zone_name as zona_smartolt,
+            COALESCE(NULLIF(w.router, ''), o.zone_name) as zona_smartolt,
             o.olt_name as olt_smartolt,
-            o.speed_profile as perfil_velocidad
+            COALESCE(NULLIF(w.plan_internet, ''), o.speed_profile) as perfil_velocidad
           FROM wisphub_clients w
           LEFT JOIN smartolt_onus o ON (
-            (w.sn_onu IS NOT NULL AND LENGTH(w.sn_onu) >= 6 AND o.sn = w.sn_onu) OR
+            (w.sn_onu_normalized IS NOT NULL AND o.sn = w.sn_onu_normalized) OR
+            (w.sn_onu IS NOT NULL AND o.sn = w.sn_onu) OR
             (w.ip IS NOT NULL AND LENGTH(w.ip) >= 7 AND o.ip_address = w.ip)
           )
           WHERE w.id_servicio = ?
@@ -1508,8 +1720,8 @@ export class DbService {
         tickets = tRes.rows as any[];
       }
 
-      let mapsUrl = String(row.google_maps_url || '').trim();
-      const coords = String(row.coordenadas_gps || '').trim();
+      let mapsUrl = String(row.google_maps_url_resolved || row.google_maps_url || '').trim();
+      const coords = String(row.coordenadas_gps_resolved || row.coordenadas_gps || '').trim();
       if (!mapsUrl && coords) {
         mapsUrl = `https://www.google.com/maps?q=${coords}`;
       }
@@ -1525,7 +1737,7 @@ export class DbService {
         saldo: row.saldo,
         plan_internet: String(row.plan_internet || ''),
         router: String(row.router || ''),
-        sn_onu: String(row.sn_onu || ''),
+        sn_onu: String(row.sn_onu_full || row.sn_onu || ''),
         telefono_principal: mainPhone,
         telefonos_adicionales: extraPhones,
         todos_los_telefonos: allPhones,
