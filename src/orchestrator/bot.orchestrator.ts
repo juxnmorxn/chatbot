@@ -3704,12 +3704,12 @@ export class BotOrchestrator {
       try { meta = JSON.parse(session?.metadata || '{}'); } catch {}
       const lastService = meta.lastServiceInfo;
       const isRecentService = lastService && (Date.now() - (lastService.timestamp || 0)) < 10 * 60 * 1000;
-      const targetClientId = meta.pendingActivation?.client_id || meta.pendingActivation?.name || meta.pendingModemSwap?.clientName || (isRecentService ? (lastService.clientName || lastService.clientId) : null) || meta.lastActivatedClientId || meta.lastActivatedName;
+      const targetClientId = meta.pendingActivation?.client_id || meta.pendingActivation?.name || meta.pendingModemSwap?.clientName || (isRecentService ? (lastService.clientName || lastService.clientId) : null);
 
       // Si el técnico está en un flujo activo o terminó en los últimos 10 minutos
       if (targetClientId) {
         const pendingEvidence = meta.pendingActivationEvidence || {};
-        pendingEvidence.gps = { lat, lng, coordsStr, url, direccion };
+        pendingEvidence.gps = { lat, lng, coordsStr, url, direccion, timestamp: Date.now() };
         meta.pendingActivationEvidence = pendingEvidence;
         await DbService.upsertSession({ phone, metadata: JSON.stringify(meta) });
 
@@ -6349,6 +6349,9 @@ Por favor reconecta tus dispositivos ingresando esta nueva clave.`;
     let metaObj: any = {};
     try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
     metaObj.pendingActivation = payload;
+    metaObj.pendingActivationEvidence = null; // Reiniciar evidencia previa para evitar arrastrar GPS viejo
+    metaObj.pendingContractDraft = null;
+    metaObj.targetSn = null;
     metaObj.pendingActivationDetails = {
       snSuffix: parsed.snSuffix,
       oltName: targetOltName,
@@ -6443,11 +6446,15 @@ _(O indica un cambio, ej: cambiar paquete 60 megas)_`;
     }
 
     if (!confirmar || !payload) {
+      this.cancelarPollingOnu(phone);
       metaObj.pendingActivation = null;
       metaObj.pendingActivationDetails = null;
+      metaObj.pendingActivationEvidence = null;
+      metaObj.pendingContractDraft = null;
       metaObj.pendingOnu = null;
       metaObj.pendingName = null;
       metaObj.pendingPlan = null;
+      metaObj.targetSn = null;
       await DbService.upsertSession({
         phone,
         step: 'CONVERSACIONAL',
@@ -6474,11 +6481,17 @@ _(O indica un cambio, ej: cambiar paquete 60 megas)_`;
 
     const result = await SmartOLTService.authorizeOnu(payload);
 
+    // Extraer evidencia actual antes de limpiar la sesión
+    const ev = metaObj.pendingActivationEvidence || {};
+
     metaObj.pendingActivation = null;
     metaObj.pendingActivationDetails = null;
+    metaObj.pendingActivationEvidence = null; // Limpiar evidencia de inmediato
+    metaObj.pendingContractDraft = null;
     metaObj.pendingOnu = null;
     metaObj.pendingName = null;
     metaObj.pendingPlan = null;
+    metaObj.targetSn = null;
     if (result.success) {
       metaObj.lastServiceInfo = {
         clientName: payload.name,
@@ -6508,7 +6521,6 @@ _(O indica un cambio, ej: cambiar paquete 60 megas)_`;
 
       // Notificación automática al grupo de WhatsApp de Activaciones
       let groupMsg = `${payload.name}\n${payload.ip_address}\n${payload.zone || 'Actopan'}\nLISTO`;
-      const ev = metaObj.pendingActivationEvidence || {};
       const extraTags: string[] = [];
       if (ev.potencia_dbm) extraTags.push(`Potencia: ${ev.potencia_dbm} dBm`);
       if (ev.speedtest?.down) extraTags.push(`Test: ${ev.speedtest.down} Mbps`);
@@ -7996,6 +8008,7 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
     try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
     metaObj.pendingActivation = null;
     metaObj.pendingActivationDetails = null;
+    metaObj.pendingActivationEvidence = null;
     metaObj.pendingContractDraft = {
       folio: folio || null,
       cliente: clientName,
@@ -8072,6 +8085,7 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
       this.cancelarPollingOnu(phone);
       metaObj.pendingActivation = null;
       metaObj.pendingActivationDetails = null;
+      metaObj.pendingActivationEvidence = null;
       metaObj.pendingContractDraft = null;
       metaObj.targetSn = null;
       await DbService.upsertSession({
@@ -8382,6 +8396,7 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
         this.cancelarPollingOnu(phone);
         metaObj.pendingActivation = null;
         metaObj.pendingActivationDetails = null;
+        metaObj.pendingActivationEvidence = null;
         metaObj.pendingContractDraft = null;
         metaObj.targetSn = null;
         await DbService.upsertSession({ phone, step: 'CONVERSACIONAL', metadata: JSON.stringify(metaObj) });
