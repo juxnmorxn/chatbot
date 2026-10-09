@@ -1,0 +1,6 @@
+{
+  "name": "Chatbot ISP WhatsApp",
+  "description": "Chatbot inteligente para ISP con panel administrativo web, integración SmartOLT, WispHub y WhatsApp.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

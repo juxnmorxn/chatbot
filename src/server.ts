@@ -32,7 +32,7 @@ async function startServer() {
     logger.info(`Iniciando Chatbot ISP para "${config.isp.name}"...`);
 
     // 1. Levantar Express de inmediato para que Render / Webhook no den 502 por timeout de arranque
-    app.listen(config.port, () => {
+    app.listen(config.port, '0.0.0.0', () => {
       logger.info(`====================================================`);
       logger.info(`🚀 Servidor ejecutándose en el puerto: ${config.port}`);
       logger.info(`🖥️ Panel Administrativo Web en: http://localhost:${config.port}/admin`);

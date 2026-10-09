@@ -32,7 +32,7 @@ export function getAdminDashboardHtml(): string {
       --font-mono: 'JetBrains Mono', monospace;
       --sidebar-width: 260px;
       --sidebar-collapsed-width: 72px;
-      --topbar-height: 64px;
+      --topbar-height: 40px;
       --radius-sm: 8px;
       --radius-md: 14px;
       --radius-lg: 20px;
@@ -544,7 +544,7 @@ export function getAdminDashboardHtml(): string {
     /* Topbar */
     header.topbar {
       height: var(--topbar-height);
-      background: rgba(11, 15, 25, 0.75);
+      background: rgba(11, 15, 25, 0.92);
       backdrop-filter: blur(16px);
       -webkit-backdrop-filter: blur(16px);
       border-bottom: 1px solid var(--card-border);
@@ -554,13 +554,13 @@ export function getAdminDashboardHtml(): string {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 0 24px;
+      padding: 0 14px;
     }
 
     .topbar-left {
       display: flex;
       align-items: center;
-      gap: 16px;
+      gap: 10px;
     }
 
     .mobile-menu-btn {
@@ -568,8 +568,8 @@ export function getAdminDashboardHtml(): string {
       background: transparent;
       border: 1px solid var(--card-border);
       color: var(--text-main);
-      width: 36px;
-      height: 36px;
+      width: 28px;
+      height: 28px;
       border-radius: var(--radius-sm);
       cursor: pointer;
       align-items: center;
@@ -579,40 +579,45 @@ export function getAdminDashboardHtml(): string {
     .view-title-wrap {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 6px;
     }
 
     .view-title {
-      font-size: 17px;
-      font-weight: 700;
-      letter-spacing: -0.3px;
+      font-size: 13.5px;
+      font-weight: 600;
+      letter-spacing: -0.2px;
+      color: #f1f5f9;
+      white-space: nowrap;
     }
 
     .topbar-right {
       display: flex;
       align-items: center;
-      gap: 14px;
+      gap: 8px;
     }
 
     .live-status-pill {
       display: flex;
       align-items: center;
-      gap: 8px;
-      padding: 6px 14px;
+      gap: 6px;
+      padding: 2px 9px;
       border-radius: 999px;
-      font-size: 12px;
-      font-weight: 600;
+      font-size: 11px;
+      font-weight: 500;
       background: rgba(16, 185, 129, 0.1);
       border: 1px solid rgba(16, 185, 129, 0.3);
       color: #34d399;
+      height: 25px;
+      box-sizing: border-box;
+      white-space: nowrap;
     }
 
     .pulse-dot {
-      width: 8px;
-      height: 8px;
+      width: 7px;
+      height: 7px;
       border-radius: 50%;
       background: var(--accent-green);
-      box-shadow: 0 0 8px var(--accent-green);
+      box-shadow: 0 0 6px var(--accent-green);
       animation: pulse-glow 2s infinite;
     }
 
@@ -624,7 +629,7 @@ export function getAdminDashboardHtml(): string {
     /* Page View Container */
     .view-container {
       flex: 1;
-      padding: 24px;
+      padding: 14px 18px;
       max-width: 1400px;
       width: 100%;
       margin: 0 auto;
@@ -905,6 +910,148 @@ export function getAdminDashboardHtml(): string {
       line-height: 1.2;
     }
 
+    /* ========================================================
+       ENTERPRISE SUB-NAVIGATION BAR (SUBPANTALLAS)
+       ======================================================== */
+    .subnav-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 18px;
+      padding-bottom: 2px;
+      flex-wrap: wrap;
+    }
+
+    .subnav-tabs {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: rgba(15, 23, 42, 0.65);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      padding: 4px;
+      max-width: 100%;
+      overflow-x: auto;
+      scrollbar-width: none;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .subnav-tabs::-webkit-scrollbar {
+      display: none;
+    }
+
+    .subnav-tab {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 14px;
+      font-size: 12.5px;
+      font-weight: 500;
+      color: var(--text-muted);
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: 7px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.18s ease;
+      user-select: none;
+      text-decoration: none;
+      outline: none;
+      font-family: var(--font-main);
+    }
+
+    .subnav-tab:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .subnav-tab.active {
+      color: #fff;
+      font-weight: 600;
+      background: rgba(99, 102, 241, 0.22);
+      border-color: rgba(99, 102, 241, 0.45);
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+    }
+
+    .subnav-icon {
+      width: 15px;
+      height: 15px;
+      stroke: currentColor;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      fill: none;
+      flex-shrink: 0;
+      opacity: 0.85;
+      transition: opacity 0.15s, color 0.15s;
+    }
+
+    .subnav-tab.active .subnav-icon {
+      color: #a5b4fc;
+      opacity: 1;
+    }
+
+    .subnav-badge {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 9px;
+      background: rgba(168, 85, 247, 0.25);
+      border: 1px solid rgba(168, 85, 247, 0.45);
+      color: #e9d5ff;
+      line-height: 1.2;
+      margin-left: 3px;
+    }
+
+    .subnav-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    /* Segmented switch (Table / Kanban) */
+    .segmented-control {
+      display: inline-flex;
+      align-items: center;
+      background: rgba(15, 23, 42, 0.65);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 3px;
+      gap: 2px;
+    }
+
+    .segmented-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-muted);
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.18s ease;
+      white-space: nowrap;
+      font-family: var(--font-main);
+      outline: none;
+    }
+
+    .segmented-btn:hover {
+      color: #fff;
+    }
+
+    .segmented-btn.active {
+      color: #fff;
+      font-weight: 600;
+      background: rgba(99, 102, 241, 0.22);
+      border-color: rgba(99, 102, 241, 0.45);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+    }
+
     /* Password Input with Eye Toggle */
     .password-input-wrap {
       position: relative;
@@ -1049,24 +1196,26 @@ export function getAdminDashboardHtml(): string {
     /* Topbar Contextual Search */
     .topbar-center-search {
       flex: 1;
-      max-width: 520px;
-      margin: 0 16px;
+      max-width: 360px;
+      margin: 0 12px;
     }
 
     .topbar-search-wrap {
       display: flex;
       align-items: center;
-      background: rgba(0, 0, 0, 0.45);
+      background: rgba(0, 0, 0, 0.35);
       border: 1px solid var(--card-border);
       border-radius: var(--radius-sm);
-      padding: 6px 12px;
+      padding: 2px 8px;
+      height: 26px;
+      box-sizing: border-box;
       transition: var(--transition);
-      gap: 10px;
+      gap: 6px;
     }
 
     .topbar-search-wrap:focus-within {
       border-color: var(--primary);
-      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
+      box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
       background: rgba(15, 23, 42, 0.95);
     }
 
@@ -1075,7 +1224,7 @@ export function getAdminDashboardHtml(): string {
       background: transparent;
       border: none;
       color: var(--text-main);
-      font-size: 13px;
+      font-size: 11.5px;
       font-family: var(--font-main);
       outline: none;
     }
@@ -1085,14 +1234,7 @@ export function getAdminDashboardHtml(): string {
     }
 
     .topbar-context-badge {
-      background: rgba(99, 102, 241, 0.15);
-      color: #818cf8;
-      border: 1px solid rgba(99, 102, 241, 0.3);
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-size: 11px;
-      font-weight: 600;
-      white-space: nowrap;
+      display: none !important;
     }
 
     .topbar-search-clear {
@@ -2333,38 +2475,298 @@ export function getAdminDashboardHtml(): string {
 
     @media (max-width: 768px) {
       .view-container {
-        padding: 10px 8px;
+        padding: 8px 10px;
+        max-width: 100vw;
+        overflow-x: hidden;
+      }
+      .topbar {
+        padding: 0 10px;
+        gap: 8px;
+      }
+      .topbar-right {
+        gap: 6px;
+      }
+      .topbar-right .btn span,
+      .topbar-right .btn-xs span,
+      .topbar-right .btn-sm span {
+        display: none !important;
+      }
+      .topbar-right .btn,
+      .topbar-right .btn-xs,
+      .topbar-right .btn-sm {
+        padding: 4px 6px !important;
+        min-width: 28px !important;
+        height: 28px !important;
+        gap: 0 !important;
+      }
+      .live-status-pill {
+        padding: 2px 7px !important;
+        font-size: 11px !important;
+        height: 26px !important;
+        gap: 4px !important;
+      }
+      #whatsapp-live-pill #whatsapp-pill-label {
+        display: none !important;
+      }
+      #whatsapp-live-pill::after {
+        content: "WA";
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+      }
+      .view-title-wrap {
+        flex: 1;
+        min-width: 0;
+      }
+      .view-title {
+        font-size: 13.5px !important;
+        max-width: none !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
       }
       .grid-metrics {
-        grid-template-columns: 1fr;
-        gap: 10px;
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 8px !important;
+        margin-bottom: 12px !important;
+      }
+      .metric-card {
+        padding: 9px 11px !important;
+        border-radius: 8px !important;
+      }
+      .metric-header {
+        font-size: 11px !important;
+        margin-bottom: 2px !important;
+      }
+      .metric-header span {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .metric-icon-box {
+        width: 24px !important;
+        height: 24px !important;
+      }
+      .metric-icon-box svg {
+        width: 13px !important;
+        height: 13px !important;
+      }
+      .metric-value {
+        font-size: 17px !important;
+        margin: 2px 0 !important;
+        line-height: 1.2 !important;
+      }
+      .metric-footer {
+        font-size: 9.5px !important;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .subnav-header {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 8px !important;
+        margin-bottom: 12px !important;
+        width: 100% !important;
+      }
+      .subnav-tabs {
+        display: flex !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        overflow-x: auto !important;
+        white-space: nowrap !important;
+        padding: 3px !important;
+        gap: 4px !important;
+        scrollbar-width: none !important;
+        -webkit-overflow-scrolling: touch !important;
+        box-sizing: border-box !important;
+      }
+      .subnav-tabs::-webkit-scrollbar {
+        display: none !important;
+      }
+      .subnav-tab {
+        flex-shrink: 0 !important;
+        padding: 6px 11px !important;
+        font-size: 12px !important;
+        gap: 6px !important;
+        white-space: nowrap !important;
+      }
+      .subnav-actions {
+        display: flex !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        overflow-x: auto !important;
+        white-space: nowrap !important;
+        scrollbar-width: none !important;
+        -webkit-overflow-scrolling: touch !important;
+        justify-content: flex-start !important;
+        gap: 6px !important;
+        padding: 2px 0 !important;
+        box-sizing: border-box !important;
+      }
+      .subnav-actions::-webkit-scrollbar {
+        display: none !important;
+      }
+      .subnav-actions .btn {
+        flex-shrink: 0 !important;
+        font-size: 11px !important;
+        padding: 5px 9px !important;
+      }
+      .db-layout {
+        grid-template-columns: 1fr !important;
+        gap: 12px !important;
+        min-height: auto !important;
+      }
+      .db-sidebar {
+        padding: 10px 12px !important;
+        gap: 8px !important;
+        border-radius: 8px !important;
+      }
+      .db-table-list {
+        max-height: 140px !important;
+        display: grid !important;
+        grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)) !important;
+        gap: 4px !important;
+      }
+      .db-table-btn {
+        padding: 6px 9px !important;
+        font-size: 11.5px !important;
+      }
+      .datatable-toolbar {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 8px !important;
+        padding-bottom: 10px !important;
+        margin-bottom: 10px !important;
+      }
+      .datatable-search-box {
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+      }
+      .datatable-filters-group {
+        justify-content: flex-start !important;
+        width: 100% !important;
+        overflow-x: auto !important;
+        flex-wrap: nowrap !important;
+        padding-bottom: 4px !important;
+        scrollbar-width: none !important;
+        -webkit-overflow-scrolling: touch !important;
+      }
+      .datatable-filters-group::-webkit-scrollbar {
+        display: none !important;
+      }
+      .datatable-select {
+        flex-shrink: 0 !important;
+        font-size: 11.5px !important;
+        padding: 6px 9px !important;
       }
       .glass-card {
         padding: 12px;
         margin-bottom: 12px;
         border-radius: 10px;
       }
+      /* Responsive Tables on Mobile */
+      .table-responsive {
+        width: 100% !important;
+        max-width: 100% !important;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
+        border-radius: 6px !important;
+        scrollbar-width: thin !important;
+      }
+      table.data-table,
+      table.datatable,
+      .db-data-table {
+        min-width: 600px;
+        font-size: 11.5px !important;
+      }
+      table.data-table th,
+      table.datatable th,
+      .db-data-table th {
+        padding: 8px 10px !important;
+        font-size: 10px !important;
+        letter-spacing: 0.4px !important;
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        background: #0f172a !important;
+      }
+      table.data-table td,
+      table.datatable td,
+      .db-data-table td {
+        padding: 8px 10px !important;
+        font-size: 11.5px !important;
+      }
+      table.data-table td .btn,
+      table.data-table td .btn-xs,
+      table.data-table td .btn-sm {
+        padding: 3px 6px !important;
+        font-size: 10.5px !important;
+        min-height: 26px !important;
+      }
+      /* Swipeable Kanban Board on Mobile */
       .kanban-board {
-        grid-template-columns: 1fr;
+        display: flex !important;
+        overflow-x: auto !important;
+        scroll-snap-type: x mandatory !important;
+        gap: 12px !important;
+        padding-bottom: 12px !important;
+        -webkit-overflow-scrolling: touch !important;
+        scrollbar-width: none !important;
       }
-      .topbar-right .btn-sm span {
-        display: none;
+      .kanban-board::-webkit-scrollbar {
+        display: none !important;
       }
-      .topbar-right .btn-sm {
-        padding: 6px;
-        min-width: 34px;
-        height: 34px;
+      .kanban-column {
+        min-width: 270px !important;
+        width: 82vw !important;
+        max-width: 310px !important;
+        flex-shrink: 0 !important;
+        scroll-snap-align: start !important;
+        max-height: calc(100vh - var(--topbar-height) - 130px) !important;
       }
-      .live-status-pill {
-        padding: 3px 8px;
-        font-size: 11px;
+      .kanban-col-header {
+        padding: 10px 12px !important;
+        font-size: 12px !important;
       }
+      /* Subsections Grids on Mobile */
+      #ipam-tab-swap-content > div:first-child {
+        grid-template-columns: 1fr !important;
+        gap: 12px !important;
+      }
+      #ipam-pools-grid {
+        grid-template-columns: 1fr !important;
+        gap: 10px !important;
+      }
+      /* Modals on Mobile */
       .modal-box {
         width: 95vw !important;
         max-width: 95vw !important;
-        margin: 10px auto;
-        max-height: 90vh;
-        padding: 14px;
+        margin: 10px auto !important;
+        max-height: 92vh !important;
+        padding: 0 !important;
+        border-radius: 12px !important;
+      }
+      .modal-header {
+        padding: 12px 14px !important;
+      }
+      .modal-body {
+        padding: 14px !important;
+        max-height: calc(90vh - 110px) !important;
+      }
+      .modal-footer {
+        padding: 10px 14px !important;
+        gap: 8px !important;
+      }
+      /* Pagination Bars on Mobile */
+      #clients-pagination,
+      #audit-pagination-info-bottom,
+      #db-table-pagination {
+        flex-wrap: wrap !important;
+        gap: 8px !important;
+        padding-top: 10px !important;
+        margin-top: 10px !important;
       }
       .chat-input-line-info {
         font-size: 10.5px;
@@ -2379,13 +2781,26 @@ export function getAdminDashboardHtml(): string {
     }
 
     @media (max-width: 480px) {
-      .view-title {
-        font-size: 13.5px;
-        max-width: 110px;
-      }
       .topbar {
         padding: 0 8px;
         gap: 6px;
+      }
+      .view-title-wrap {
+        flex: 1;
+        min-width: 0;
+      }
+      .view-title {
+        font-size: 13px !important;
+        max-width: none !important;
+      }
+      .grid-metrics {
+        gap: 6px !important;
+      }
+      .metric-card {
+        padding: 8px 10px !important;
+      }
+      .metric-value {
+        font-size: 16px !important;
       }
       .chat-messages-container {
         padding: 10px 12px;
@@ -2471,7 +2886,8 @@ export function getAdminDashboardHtml(): string {
       </div>
 
       <nav class="sidebar-nav">
-        <div class="nav-category">Operación Chatbot</div>
+        <!-- 1. OPERACIONES & CHAT -->
+        <div class="nav-category">1. Operaciones & Chat</div>
         <div class="nav-item active" data-view="dashboard" onclick="navigateTo('dashboard')" title="Dashboard General">
           <span class="nav-icon">
             <svg class="svg-icon" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect></svg>
@@ -2485,8 +2901,6 @@ export function getAdminDashboardHtml(): string {
           <span class="nav-text">Live WhatsApp</span>
           <span id="badge-live-chat" class="nav-badge" style="display: none;">0</span>
         </div>
-
-        <div class="nav-category">Gestión & Soporte</div>
         <div class="nav-item" data-view="tickets" onclick="navigateTo('tickets')" title="Mesa de Tickets">
           <span class="nav-icon">
             <svg class="svg-icon" viewBox="0 0 24 24"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"></path><path d="M13 5v2"></path><path d="M13 17v2"></path><path d="M13 11v2"></path></svg>
@@ -2494,13 +2908,9 @@ export function getAdminDashboardHtml(): string {
           <span class="nav-text">Mesa de Tickets</span>
           <span id="badge-tickets-open" class="nav-badge alert-badge" style="display: none;">0</span>
         </div>
-        <div class="nav-item" data-view="office-groups" onclick="navigateTo('office-groups')" title="Grupos de WhatsApp & Derivación de Tickets">
-          <span class="nav-icon">
-            <svg class="svg-icon" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
-          </span>
-          <span class="nav-text">Grupos & Oficinas</span>
-          <span id="badge-office-groups" class="nav-badge" style="display: none;">0</span>
-        </div>
+
+        <!-- 2. CLIENTES & RED -->
+        <div class="nav-category">2. Clientes & Red</div>
         <div class="nav-item" data-view="clients" onclick="navigateTo('clients')" title="Directorio de Clientes & GPS">
           <span class="nav-icon">
             <svg class="svg-icon" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M20 8c0 3-4 7-4 7s-4-4-4-7a4 4 0 0 1 8 0z"></path><circle cx="16" cy="8" r="1.5"></circle></svg>
@@ -2508,51 +2918,32 @@ export function getAdminDashboardHtml(): string {
           <span class="nav-text">Clientes & GPS</span>
           <span id="badge-clients-total" class="nav-badge" style="display: none;">0</span>
         </div>
-        <div class="nav-item" id="nav-item-personal" data-view="personal" onclick="navigateTo('personal')" title="Personal & Accesos (Usuarios del Panel y Técnicos con PIN)">
-          <span class="nav-icon">
-            <svg class="svg-icon" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
-          </span>
-          <span class="nav-text">Personal & Accesos</span>
-        </div>
-
-        <div class="nav-category">Red & Operación Bot</div>
-        <div class="nav-item" id="nav-item-ipam" data-view="ipam" onclick="navigateTo('ipam')" title="Control de Pools IP">
+        <div class="nav-item" id="nav-item-ipam" data-view="ipam" onclick="navigateTo('ipam')" title="Control de Pools IP, ONUs & Auditoría">
           <span class="nav-icon">
             <svg class="svg-icon" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
           </span>
-          <span class="nav-text">Control de Pools IP</span>
+          <span class="nav-text">Pools IP & Red</span>
           <span id="badge-unconfigured-onus" class="nav-badge" style="display: none;">0</span>
         </div>
-        <div class="nav-subitem active" id="nav-subitem-ipam-pools" onclick="switchIpamTab('pools'); navigateTo('ipam', true);" title="Subredes & Pools por VLAN">
-          <span style="font-size: 11.5px; opacity: 0.85;">📊</span>
-          <span class="nav-text">Subredes & VLANs</span>
-        </div>
-        <div class="nav-subitem" id="nav-subitem-ipam-onus" onclick="switchIpamTab('unconfigured'); navigateTo('ipam', true);" title="ONUs Nuevas Sin Configurar en SmartOLT">
-          <span style="font-size: 11.5px; opacity: 0.85;">🔌</span>
-          <span class="nav-text">ONUs Sin Autorizar</span>
-          <span id="badge-unconfigured-onus-sub" class="nav-badge" style="display: none; padding: 1px 6px; font-size: 10px;">0</span>
-        </div>
-        <div class="nav-item" data-view="audit" onclick="navigateTo('audit')" title="Auditoría SmartOLT">
+
+        <!-- 3. EQUIPO & OFICINAS -->
+        <div class="nav-category">3. Equipo & Oficinas</div>
+        <div class="nav-item" id="nav-item-personal" data-view="personal" onclick="navigateTo('personal')" title="Personal, Técnicos & Grupos de WhatsApp">
           <span class="nav-icon">
-            <svg class="svg-icon" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg>
+            <svg class="svg-icon" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
           </span>
-          <span class="nav-text">Auditoría SmartOLT</span>
-        </div>
-        <div class="nav-item" data-view="modem-swap" onclick="navigateTo('modem-swap')" title="Cambio de Módem">
-          <span class="nav-icon">
-            <svg class="svg-icon" viewBox="0 0 24 24"><path d="M21 2v6h-6"></path><path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path><path d="M3 22v-6h6"></path><path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path></svg>
-          </span>
-          <span class="nav-text">Cambio de Módem</span>
+          <span class="nav-text">Equipo & Técnicos</span>
         </div>
 
-        <div class="nav-category">Sistema</div>
-        <div class="nav-item" data-view="database" onclick="navigateTo('database')" title="Base de Datos & Explorador SQL">
+        <!-- 4. AJUSTES & SISTEMA -->
+        <div class="nav-category">4. Ajustes & Sistema</div>
+        <div class="nav-item" data-view="database" onclick="navigateTo('database')" title="Base de Datos SQLite & Explorador SQL">
           <span class="nav-icon">
             <svg class="svg-icon" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
           </span>
           <span class="nav-text">Base de Datos</span>
         </div>
-        <div class="nav-item" data-view="settings" onclick="navigateTo('settings')" title="Configuración">
+        <div class="nav-item" data-view="settings" onclick="navigateTo('settings')" title="Configuración de APIs y Conexiones">
           <span class="nav-icon">
             <svg class="svg-icon" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>
           </span>
@@ -2590,7 +2981,7 @@ export function getAdminDashboardHtml(): string {
             <svg class="svg-icon" viewBox="0 0 24 24"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
           </button>
           <div class="view-title-wrap">
-            <h2 id="current-view-title" class="view-title">Resumen General</h2>
+            <h2 id="current-view-title" class="view-title">Dashboard</h2>
           </div>
         </div>
 
@@ -2598,18 +2989,18 @@ export function getAdminDashboardHtml(): string {
         <div class="topbar-center-search">
           <div class="topbar-search-wrap">
             <svg class="svg-icon svg-icon-sm" style="color: var(--text-muted); flex-shrink: 0;" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-            <input type="text" id="global-context-search" class="topbar-search-input" placeholder="Buscar en la pantalla actual..." oninput="handleGlobalContextSearch(this.value)">
-            <span id="global-search-context-badge" class="topbar-context-badge">Dashboard</span>
+            <input type="text" id="global-context-search" class="topbar-search-input" placeholder="Buscar clientes, IPs, folios..." oninput="handleGlobalContextSearch(this.value)">
+            <span id="global-search-context-badge" class="topbar-context-badge" style="display: none;"></span>
             <button id="global-search-clear-btn" class="topbar-search-clear" onclick="clearGlobalContextSearch()" style="display: none;" title="Limpiar búsqueda">✕</button>
           </div>
         </div>
 
         <div class="topbar-right">
-          <div id="whatsapp-live-pill" class="live-status-pill" style="cursor: pointer;" onclick="openWhatsAppInstancesModal()" title="Gestionar números e instancias de WhatsApp (Clic para ver)">
+          <div id="whatsapp-live-pill" class="live-status-pill" style="cursor: pointer;" onclick="openWhatsAppInstancesModal()" title="Gestionar instancias de WhatsApp">
             <span class="pulse-dot"></span>
             <span id="whatsapp-pill-label">WhatsApp Activo</span>
           </div>
-          <button class="btn btn-secondary btn-sm" onclick="refreshCurrentView()" title="Actualizar datos">
+          <button class="btn btn-secondary btn-xs" onclick="refreshCurrentView()" title="Actualizar datos">
             <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"></path></svg>
             <span>Actualizar</span>
           </button>
@@ -2835,11 +3226,11 @@ export function getAdminDashboardHtml(): string {
             </div>
 
             <div id="chat-empty-state" style="flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #8696a0; gap: 14px; background: #111b21;">
-              <div style="width: 80px; height: 80px; border-radius: 50%; background: #202c33; display: flex; align-items: center; justify-content: center;">
-                <svg class="svg-icon" style="width: 44px; height: 44px; color: #00a884; opacity: 0.8;" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+              <div style="width: 72px; height: 72px; border-radius: 50%; background: #202c33; display: flex; align-items: center; justify-content: center;">
+                <svg class="svg-icon" style="width: 40px; height: 40px; color: #00a884; opacity: 0.8;" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
               </div>
-              <h3 style="font-size: 17px; font-weight: 600; color: #e9edef;">WhatsApp en Vivo para CloudWareMx</h3>
-              <p style="font-size: 13px; max-width: 360px; text-align: center; line-height: 1.5;">Selecciona una conversación del listado izquierdo para chatear en tiempo real con el cliente o traspasarlo de área.</p>
+              <div style="font-size: 15px; font-weight: 600; color: #e9edef;">Selecciona una conversación</div>
+              <p style="font-size: 12.5px; max-width: 360px; text-align: center; line-height: 1.5;">Chatea en tiempo real con clientes, consulta saldo o deriva soporte.</p>
             </div>
 
             <div id="chat-messages-wrap" class="chat-messages-container" style="display: none;"></div>
@@ -2948,11 +3339,8 @@ export function getAdminDashboardHtml(): string {
 
         <!-- Table Container -->
         <div class="glass-card">
-          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 8px;">
-            <div style="display: flex; align-items: center; gap: 10px;">
-              <h3 style="font-size: 15px; font-weight: 700;">Directorio de Clientes & Geolocalización</h3>
-            </div>
-            <span id="clients-count-label" style="font-size: 12px; color: var(--text-muted);">Cargando clientes...</span>
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+            <span id="clients-count-label" style="font-size: 12px; font-weight: 600; color: var(--text-muted);">Cargando clientes...</span>
           </div>
           <div class="table-responsive">
             <table class="data-table">
@@ -2985,35 +3373,34 @@ export function getAdminDashboardHtml(): string {
 
       <!-- VIEW 3: KANBAN & TABLE TICKETS BOARD -->
       <section id="view-tickets" class="view-container">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 10px;">
-          <div>
-            <h3 style="font-size: 16px; font-weight: 700;">Tablero & Listado de Soporte Técnico</h3>
-            <p style="font-size: 12px; color: var(--text-muted);">Gestiona los folios de servicio con filtros por columna y vista Kanban.</p>
-          </div>
-          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-            <div style="display: flex; background: rgba(0,0,0,0.3); border-radius: var(--radius-sm); border: 1px solid var(--card-border); padding: 2px;">
-              <button class="btn btn-primary btn-xs" id="btn-tickets-view-table" onclick="setTicketsDisplayMode('table')">Vista Tabla</button>
-              <button class="btn btn-secondary btn-xs" id="btn-tickets-view-kanban" onclick="setTicketsDisplayMode('kanban')">Vista Kanban</button>
+        <div class="subnav-header">
+          <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+            <div class="segmented-control" role="tablist">
+              <button class="segmented-btn active" id="btn-tickets-view-table" onclick="setTicketsDisplayMode('table')" role="tab" aria-selected="true">
+                <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+                <span>Tabla</span>
+              </button>
+              <button class="segmented-btn" id="btn-tickets-view-kanban" onclick="setTicketsDisplayMode('kanban')" role="tab" aria-selected="false">
+                <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="18" rx="1"></rect><rect x="14" y="3" width="7" height="10" rx="1"></rect></svg>
+                <span>Kanban</span>
+              </button>
             </div>
-            <button class="btn btn-secondary btn-sm" onclick="loadTicketsData()">
+            <span id="tickets-count-label" class="badge badge-info" style="font-size: 11px;">0 tickets</span>
+          </div>
+          <div class="subnav-actions">
+            <button class="btn btn-secondary btn-xs" onclick="loadTicketsData()">
               <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"></path></svg>
               <span>Recargar</span>
             </button>
-            <button id="btn-clear-all-tickets" class="btn btn-danger btn-sm" style="display: none;" onclick="confirmClearAllTickets()">
+            <button id="btn-clear-all-tickets" class="btn btn-danger btn-xs" style="display: none;" onclick="confirmClearAllTickets()">
               <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-              <span>Vaciar Tickets</span>
+              <span>Vaciar</span>
             </button>
           </div>
         </div>
 
         <!-- Tickets Table View -->
         <div id="tickets-table-container" class="glass-card" style="margin-bottom: 24px;">
-          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <h4 style="font-size: 14.5px; font-weight: 700;">Directorio de Folios & Tickets</h4>
-              <span id="tickets-count-label" class="badge badge-info" style="font-size: 10px;">0 tickets</span>
-            </div>
-          </div>
 
           <!-- Datatable Toolbar -->
           <div class="datatable-toolbar" style="justify-content: flex-end;">
@@ -3101,20 +3488,30 @@ export function getAdminDashboardHtml(): string {
       <!-- VIEW 4: IPAM & POOLS (DIVIDED INTO 2 CLEAR SUBSECTIONS) -->
       <section id="view-ipam" class="view-container">
         <!-- Sub-Navigation Tab Bar for IPAM -->
-        <div class="glass-card" style="margin-bottom: 18px; padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
-          <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-            <button id="btn-ipam-tab-pools" class="btn btn-primary btn-sm" onclick="switchIpamTab('pools')">
-              📊 <span>Subredes & Pools por VLAN</span>
+        <div class="subnav-header">
+          <div class="subnav-tabs" role="tablist">
+            <button id="btn-ipam-tab-pools" class="subnav-tab active" onclick="switchIpamTab('pools')" role="tab" aria-selected="true">
+              <svg class="subnav-icon" viewBox="0 0 24 24"><rect x="2" y="2" width="6" height="6" rx="1"></rect><rect x="16" y="2" width="6" height="6" rx="1"></rect><rect x="9" y="16" width="6" height="6" rx="1"></rect><path d="M5 8v3a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M12 12v4"></path></svg>
+              <span>Subredes & Pools VLAN</span>
             </button>
-            <button id="btn-ipam-tab-unconfigured" class="btn btn-secondary btn-sm" onclick="switchIpamTab('unconfigured')">
-              🔌 <span>ONUs Sin Configurar (PON)</span>
-              <span id="badge-tab-unconfigured-count" class="badge badge-purple" style="display: none; margin-left: 4px; padding: 2px 6px; font-size: 10px;">0</span>
+            <button id="btn-ipam-tab-unconfigured" class="subnav-tab" onclick="switchIpamTab('unconfigured')" role="tab" aria-selected="false">
+              <svg class="subnav-icon" viewBox="0 0 24 24"><rect x="2" y="13" width="20" height="8" rx="2"></rect><path d="M6 17h.01M10 17h.01M14 17h.01M18 17h.01M5 13V8a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v5"></path></svg>
+              <span>ONUs Sin Configurar</span>
+              <span id="badge-tab-unconfigured-count" class="subnav-badge" style="display: none;">0</span>
+            </button>
+            <button id="btn-ipam-tab-swap" class="subnav-tab" onclick="switchIpamTab('swap')" role="tab" aria-selected="false">
+              <svg class="subnav-icon" viewBox="0 0 24 24"><path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"></path></svg>
+              <span>Cambio de Módem (Swap OLT)</span>
+            </button>
+            <button id="btn-ipam-tab-audit" class="subnav-tab" onclick="switchIpamTab('audit')" role="tab" aria-selected="false">
+              <svg class="subnav-icon" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path></svg>
+              <span>Auditoría de IPs</span>
             </button>
           </div>
-          <div style="display: flex; gap: 8px; align-items: center;">
+          <div class="subnav-actions">
             <button id="btn-ipam-auto-detect" class="btn btn-secondary btn-xs" onclick="triggerAutoDiscoverVlans()" title="Escanear base de datos y detectar nuevas subredes de ONUs automáticamente">
               <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-              <span>Auto-Detectar Subredes</span>
+              <span>Auto-Detectar</span>
             </button>
             <button class="btn btn-secondary btn-xs" onclick="loadIpamData()" title="Refrescar datos de IPAM">
               <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"></path></svg>
@@ -3126,12 +3523,6 @@ export function getAdminDashboardHtml(): string {
         <!-- SUBSECTION 1: POOLS GRID -->
         <div id="ipam-tab-pools-content" class="ipam-tab-content">
           <div class="glass-card">
-            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 16px;">
-              <div>
-                <h3 style="font-size: 16px; font-weight: 700;">Ocupación de Pools por VLAN & Subredes</h3>
-                <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Detección 100% automática de subredes, gateways y cálculo de capacidad en tiempo real.</p>
-              </div>
-            </div>
             <div id="ipam-pools-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px;"></div>
           </div>
         </div>
@@ -3139,12 +3530,8 @@ export function getAdminDashboardHtml(): string {
         <!-- SUBSECTION 2: UNCONFIGURED ONUS TABLE -->
         <div id="ipam-tab-unconfigured-content" class="ipam-tab-content" style="display: none;">
           <div class="glass-card">
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
-              <div>
-                <h3 style="font-size: 15px; font-weight: 700;">ONUs Nuevas Sin Configurar en SmartOLT</h3>
-                <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Equipos detectados en puertos PON en espera de autorización y asignación de cliente.</p>
-              </div>
-              <button class="btn btn-secondary btn-sm" onclick="loadIpamData()">
+            <div style="display: flex; align-items: center; justify-content: flex-end; margin-bottom: 12px;">
+              <button class="btn btn-secondary btn-xs" onclick="loadIpamData()">
                 <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"></path></svg>
                 <span>Refrescar PON</span>
               </button>
@@ -3189,74 +3576,207 @@ export function getAdminDashboardHtml(): string {
             </div>
           </div>
         </div>
-      </section>
 
-      <!-- VIEW 5: AUDITORÍA SMARTOLT VS WISPHUB -->
-      <section id="view-audit" class="view-container">
-        <div class="glass-card">
-          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
-            <h3 style="font-size: 15px; font-weight: 700;">Auditoría Cruzada SmartOLT vs WispHub</h3>
-            <span id="audit-pagination-info" style="font-size: 12px; color: var(--text-muted);">Página 1</span>
+        <!-- SUBSECTION 3: AUDITORÍA CRUZADA SMARTOLT VS WISPHUB -->
+        <div id="ipam-tab-audit-content" class="ipam-tab-content" style="display: none;">
+          <div class="glass-card">
+            <div style="display: flex; align-items: center; justify-content: flex-end; margin-bottom: 12px;">
+              <span id="audit-pagination-info" style="font-size: 12px; color: var(--text-muted);">Página 1</span>
+            </div>
+
+            <!-- Datatable Toolbar -->
+            <div class="datatable-toolbar" style="justify-content: flex-end;">
+              <div class="datatable-filters-group">
+                <select id="filter-audit-ip-status" class="datatable-select" onchange="handleAuditColFilter()">
+                  <option value="">🌐 Estado IP: Todos</option>
+                  <option value="MATCH">🟢 Correctos (Match)</option>
+                  <option value="MISMATCH">🔴 Discrepancias IP</option>
+                  <option value="ONLY_SMARTOLT">ℹ️ Solo SmartOLT</option>
+                  <option value="ONLY_WISPHUB">🟣 Solo WispHub</option>
+                </select>
+                <select id="filter-audit-tr069" class="datatable-select" onchange="handleAuditColFilter()">
+                  <option value="">⚙️ TR-069: Todos</option>
+                  <option value="ACTIVE">🟢 Configurado / Activo</option>
+                  <option value="INACTIVE">🔴 Falta TR-069</option>
+                </select>
+                <select id="filter-audit-ipv6" class="datatable-select" onchange="handleAuditColFilter()">
+                  <option value="">🌐 IPv6: Todos</option>
+                  <option value="ACTIVE">🟢 Dual Stack</option>
+                  <option value="INACTIVE">🟡 Solo IPv4</option>
+                </select>
+                <select id="filter-audit-sort" class="datatable-select" onchange="sortAuditBy(this.value)">
+                  <option value="cliente_asc">🔤 Cliente (A-Z)</option>
+                  <option value="cliente_desc">🔤 Cliente (Z-A)</option>
+                  <option value="smartolt_ip_asc">🌐 IP SmartOLT</option>
+                  <option value="wisphub_ip_asc">🌐 IP WispHub</option>
+                  <option value="ip_status_asc">⚡ Estado IP</option>
+                </select>
+                <button class="btn btn-secondary btn-sm" onclick="clearAuditColFilters()" title="Limpiar filtros">
+                  🧹 Limpiar
+                </button>
+              </div>
+            </div>
+
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th class="sortable-th" onclick="sortAuditBy('cliente')" style="min-width: 180px;">Cliente <span id="sort-audit-client" class="sort-icon">↕</span></th>
+                    <th class="sortable-th" onclick="sortAuditBy('servicio')" style="min-width: 130px;">Servicio / Folio <span id="sort-audit-srv" class="sort-icon">↕</span></th>
+                    <th class="sortable-th" onclick="sortAuditBy('smartolt_ip')" style="min-width: 130px;">IP SmartOLT <span id="sort-audit-ip-olt" class="sort-icon">↕</span></th>
+                    <th class="sortable-th" onclick="sortAuditBy('wisphub_ip')" style="min-width: 130px;">IP WispHub <span id="sort-audit-ip-wisp" class="sort-icon">↕</span></th>
+                    <th class="sortable-th" onclick="sortAuditBy('ip_status')" style="min-width: 110px;">Estado IP <span id="sort-audit-ip-status" class="sort-icon">↕</span></th>
+                    <th style="min-width: 110px;">TR-069</th>
+                    <th style="min-width: 110px;">IPv6</th>
+                    <th style="min-width: 140px;">Plan WispHub</th>
+                    <th style="text-align: right; min-width: 100px;">Acción</th>
+                  </tr>
+                </thead>
+                <tbody id="table-audit-body">
+                  <tr><td colspan="9" style="text-align: center; color: var(--text-dim);">Cargando auditoría...</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 16px;">
+              <span id="audit-pagination-info-bottom" style="font-size: 12px; color: var(--text-muted);">Página 1</span>
+              <div style="display: flex; gap: 8px;">
+                <button id="btn-audit-prev" class="btn btn-secondary btn-sm" onclick="changeAuditPage(-1)">◀ Anterior</button>
+                <button id="btn-audit-next" class="btn btn-secondary btn-sm" onclick="changeAuditPage(1)">Siguiente ▶</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SUBSECTION 4: CAMBIO DE MÓDEM (REEMPLAZO DE ONU) -->
+        <div id="ipam-tab-swap-content" class="ipam-tab-content" style="display: none;">
+          <!-- 2 Column Layout: Old Modem vs New Modem -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 20px; margin-bottom: 20px;">
+            <!-- Card 1: Old Modem to Replace -->
+            <div class="glass-card" style="border-top: 3px solid var(--accent-rose);">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                <h4 style="font-size: 15px; font-weight: 700; color: var(--accent-rose); display: flex; align-items: center; gap: 6px;">
+                  <span>🔴 1.</span> Módem Actual a Retirar (SmartOLT)
+                </h4>
+                <span class="badge badge-danger" style="font-size: 10px;">Se eliminará de OLT</span>
+              </div>
+              <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">
+                Busca el cliente o módem actual. Sus parámetros de red se transferirán automáticamente al nuevo equipo.
+              </p>
+              <div class="form-group" style="position: relative;">
+                <label class="form-label">Buscar por Cliente, Folio, IP o Serie SN</label>
+                <div style="display: flex; gap: 8px;">
+                  <input type="text" id="swap-search-old-input" class="form-control" placeholder="Ej: Diana Laura, 2982, 172.19.2.178..." oninput="debounceSwapSearchOld(this.value)" autocomplete="off">
+                  <button type="button" class="btn btn-secondary btn-sm" onclick="searchSwapOldOnus(document.getElementById('swap-search-old-input').value)">🔍</button>
+                </div>
+                <div id="swap-old-dropdown-results" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: rgba(15, 23, 42, 0.98); border: 1px solid var(--card-border); border-radius: var(--radius-sm); max-height: 220px; overflow-y: auto; z-index: 100; box-shadow: var(--shadow-lg); margin-top: 4px;"></div>
+              </div>
+              <div id="swap-old-selected-card" style="background: rgba(0, 0, 0, 0.3); border: 1px solid var(--card-border); border-radius: var(--radius-sm); padding: 14px; margin-top: 14px;">
+                <div style="text-align: center; color: var(--text-dim); padding: 20px 10px; font-size: 12.5px;">
+                  👈 Utiliza el buscador para seleccionar el cliente o módem actual.
+                </div>
+              </div>
+            </div>
+
+            <!-- Card 2: New Modem to Authorize -->
+            <div class="glass-card" style="border-top: 3px solid var(--accent-emerald);">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                <h4 style="font-size: 15px; font-weight: 700; color: var(--accent-emerald); display: flex; align-items: center; gap: 6px;">
+                  <span>🟢 2.</span> Nuevo Módem a Instalar (Alta)
+                </h4>
+                <button class="btn btn-secondary btn-xs" onclick="loadSwapUnconfiguredOnus()" title="Escanear ONUs en SmartOLT">
+                  <span>🔄 Escanear OLT</span>
+                </button>
+              </div>
+              <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">
+                Selecciona el nuevo equipo de la lista de ONUs sin autorizar o ingresa su número de serie.
+              </p>
+              <div class="form-group">
+                <label class="form-label">ONUs Sin Autorizar Detectadas</label>
+                <select id="swap-select-unconfigured" class="form-control" onchange="handleSelectSwapUnconfigured(this.value)">
+                  <option value="">-- Seleccionar de ONUs no autorizadas --</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">O Ingresar Número de Serie (SN)</label>
+                <input type="text" id="swap-input-new-sn" class="form-control" placeholder="Ej: HWTC4317B500 o ZTEG12345678" style="font-family: monospace; font-weight: 700; text-transform: uppercase;" oninput="this.value = this.value.toUpperCase()">
+              </div>
+              <div id="swap-new-selected-card" style="background: rgba(0, 0, 0, 0.3); border: 1px solid var(--card-border); border-radius: var(--radius-sm); padding: 14px; margin-top: 14px;">
+                <div style="text-align: center; color: var(--text-dim); padding: 20px 10px; font-size: 12.5px;">
+                  ⚡ Selecciona una ONU sin autorizar o ingresa el SN del nuevo módem.
+                </div>
+              </div>
+            </div>
           </div>
 
-          <!-- Datatable Toolbar -->
-          <div class="datatable-toolbar" style="justify-content: flex-end;">
-            <div class="datatable-filters-group">
-              <select id="filter-audit-ip-status" class="datatable-select" onchange="handleAuditColFilter()">
-                <option value="">🌐 Estado IP: Todos</option>
-                <option value="MATCH">🟢 Correctos (Match)</option>
-                <option value="MISMATCH">🔴 Discrepancias IP</option>
-                <option value="ONLY_SMARTOLT">ℹ️ Solo SmartOLT</option>
-                <option value="ONLY_WISPHUB">🟣 Solo WispHub</option>
-              </select>
-              <select id="filter-audit-tr069" class="datatable-select" onchange="handleAuditColFilter()">
-                <option value="">⚙️ TR-069: Todos</option>
-                <option value="ACTIVE">🟢 Configurado / Activo</option>
-                <option value="INACTIVE">🔴 Falta TR-069</option>
-              </select>
-              <select id="filter-audit-ipv6" class="datatable-select" onchange="handleAuditColFilter()">
-                <option value="">🌐 IPv6: Todos</option>
-                <option value="ACTIVE">🟢 Dual Stack</option>
-                <option value="INACTIVE">🟡 Solo IPv4</option>
-              </select>
-              <select id="filter-audit-sort" class="datatable-select" onchange="sortAuditBy(this.value)">
-                <option value="cliente_asc">🔤 Cliente (A-Z)</option>
-                <option value="cliente_desc">🔤 Cliente (Z-A)</option>
-                <option value="smartolt_ip_asc">🌐 IP SmartOLT</option>
-                <option value="wisphub_ip_asc">🌐 IP WispHub</option>
-                <option value="ip_status_asc">⚡ Estado IP</option>
-              </select>
-              <button class="btn btn-secondary btn-sm" onclick="clearAuditColFilters()" title="Limpiar filtros">
-                🧹 Limpiar
+          <!-- Execution Summary -->
+          <div class="glass-card" style="margin-bottom: 24px; border: 1px solid var(--primary);">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
+              <h4 style="font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+                <span>⚡</span> 3. Confirmación y Notificación Automática
+              </h4>
+              <div style="display: flex; align-items: center; gap: 10px; background: rgba(0,0,0,0.3); padding: 6px 12px; border-radius: var(--radius-sm); border: 1px solid var(--card-border);">
+                <input type="checkbox" id="swap-checkbox-notify-group" style="transform: scale(1.2); cursor: pointer;" checked>
+                <label for="swap-checkbox-notify-group" style="font-size: 12px; font-weight: 600; cursor: pointer; margin-bottom: 0;">
+                  📢 Notificar al grupo de WhatsApp con formato <code style="color: var(--accent-cyan);">CAMBIO DE MODEM</code>
+                </label>
+              </div>
+            </div>
+            <div id="swap-summary-box" style="background: rgba(15, 23, 42, 0.6); border: 1px dashed var(--card-border); border-radius: var(--radius-sm); padding: 16px; margin-bottom: 16px;">
+              <div style="font-size: 13px; color: var(--text-muted); text-align: center;">
+                Completa el Paso 1 (Módem Actual) y el Paso 2 (Nuevo Módem) para habilitar el reemplazo.
+              </div>
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 12px; align-items: center;">
+              <div id="swap-execution-status" style="font-size: 12.5px; font-weight: 600; color: var(--text-muted);"></div>
+              <button type="button" id="btn-execute-swap" class="btn btn-primary" onclick="handleExecuteModemSwap()" style="padding: 12px 28px; font-size: 14px;" disabled>
+                🔄 Ejecutar Cambio de Módem
               </button>
             </div>
           </div>
 
-          <div class="table-responsive">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th class="sortable-th" onclick="sortAuditBy('cliente')" style="min-width: 180px;">Cliente <span id="sort-audit-client" class="sort-icon">↕</span></th>
-                  <th class="sortable-th" onclick="sortAuditBy('servicio')" style="min-width: 130px;">Servicio / Folio <span id="sort-audit-srv" class="sort-icon">↕</span></th>
-                  <th class="sortable-th" onclick="sortAuditBy('smartolt_ip')" style="min-width: 130px;">IP SmartOLT <span id="sort-audit-ip-olt" class="sort-icon">↕</span></th>
-                  <th class="sortable-th" onclick="sortAuditBy('wisphub_ip')" style="min-width: 130px;">IP WispHub <span id="sort-audit-ip-wisp" class="sort-icon">↕</span></th>
-                  <th class="sortable-th" onclick="sortAuditBy('ip_status')" style="min-width: 110px;">Estado IP <span id="sort-audit-ip-status" class="sort-icon">↕</span></th>
-                  <th style="min-width: 110px;">TR-069</th>
-                  <th style="min-width: 110px;">IPv6</th>
-                  <th style="min-width: 140px;">Plan WispHub</th>
-                  <th style="text-align: right; min-width: 100px;">Acción</th>
-                </tr>
-              </thead>
-              <tbody id="table-audit-body">
-                <tr><td colspan="9" style="text-align: center; color: var(--text-dim);">Cargando auditoría...</td></tr>
-              </tbody>
-            </table>
-          </div>
-          <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 16px;">
-            <span id="audit-pagination-info-bottom" style="font-size: 12px; color: var(--text-muted);">Página 1</span>
-            <div style="display: flex; gap: 8px;">
-              <button id="btn-audit-prev" class="btn btn-secondary btn-sm" onclick="changeAuditPage(-1)">◀ Anterior</button>
-              <button id="btn-audit-next" class="btn btn-secondary btn-sm" onclick="changeAuditPage(1)">Siguiente ▶</button>
+          <!-- Swap History Table -->
+          <div id="swap-history-card" class="glass-card">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
+              <div>
+                <h4 style="font-size: 15px; font-weight: 700;">📋 Historial de Cambios de Módem</h4>
+                <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Bitácora de reemplazos y respaldos en la BD Local.</p>
+              </div>
+              <button class="btn btn-secondary btn-xs" onclick="loadModemSwapHistory()">🔄 Actualizar</button>
+            </div>
+            <div class="datatable-toolbar" style="justify-content: flex-end;">
+              <div class="datatable-filters-group">
+                <select id="filter-swap-status" class="datatable-select" onchange="filterSwapHistoryTable()" title="Filtrar por estado">
+                  <option value="">⚡ Todos los estados</option>
+                  <option value="COMPLETADO">Completado</option>
+                  <option value="ERROR">Error</option>
+                </select>
+                <select id="filter-swap-sort" class="datatable-select" onchange="sortSwapHistoryBy(this.value)" title="Ordenar historial">
+                  <option value="date_desc">Más recientes primero</option>
+                  <option value="date_asc">Más antiguos primero</option>
+                  <option value="client_asc">Cliente (A-Z)</option>
+                </select>
+                <button class="btn btn-secondary btn-sm" onclick="clearSwapHistoryFilters()" title="Limpiar filtros">Limpiar</button>
+              </div>
+            </div>
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th class="sortable-th" onclick="sortSwapHistoryBy('date')" style="min-width: 130px;">Fecha <span class="sort-icon">↕</span></th>
+                    <th class="sortable-th" onclick="sortSwapHistoryBy('client')" style="min-width: 170px;">Cliente <span class="sort-icon">↕</span></th>
+                    <th class="sortable-th" onclick="sortSwapHistoryBy('old_sn')" style="min-width: 140px;">Módem Retirado <span class="sort-icon">↕</span></th>
+                    <th class="sortable-th" onclick="sortSwapHistoryBy('new_sn')" style="min-width: 140px;">Nuevo Módem <span class="sort-icon">↕</span></th>
+                    <th class="sortable-th" onclick="sortSwapHistoryBy('ip')" style="min-width: 130px;">IP / VLAN <span class="sort-icon">↕</span></th>
+                    <th class="sortable-th" onclick="sortSwapHistoryBy('zone')" style="min-width: 120px;">Zona <span class="sort-icon">↕</span></th>
+                    <th class="sortable-th" onclick="sortSwapHistoryBy('tech')" style="min-width: 140px;">Responsable <span class="sort-icon">↕</span></th>
+                    <th class="sortable-th" onclick="sortSwapHistoryBy('status')" style="min-width: 110px;">Estado <span class="sort-icon">↕</span></th>
+                    <th style="text-align: right; min-width: 90px;">Acción</th>
+                  </tr>
+                </thead>
+                <tbody id="table-swap-history-body">
+                  <tr><td colspan="9" style="text-align: center; color: var(--text-dim);">Cargando historial...</td></tr>
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
@@ -3264,33 +3784,27 @@ export function getAdminDashboardHtml(): string {
 
       <!-- VIEW 6: PERSONAL & ACCESOS (USUARIOS PANEL + TÉCNICOS & PINS) -->
       <section id="view-personal" class="view-container">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
-          <div>
-            <h3 style="font-size: 17px; font-weight: 800; letter-spacing: -0.3px; display: flex; align-items: center; gap: 8px;">
-              <span>👥</span> Personal, Roles & Técnicos de Campo
-            </h3>
-            <p style="font-size: 12.5px; color: var(--text-muted); margin-top: 2px;">
-              Administra los accesos de operadores al panel y los PINs de técnicos para diagnóstico por WhatsApp.
-            </p>
-          </div>
-          <div style="display: flex; gap: 8px; background: rgba(0,0,0,0.3); padding: 4px; border-radius: var(--radius-sm); border: 1px solid var(--card-border);">
-            <button id="btn-personal-tab-users" class="btn btn-primary btn-sm" onclick="switchPersonalTab('users')">
-              👥 Usuarios del Panel
+        <div class="subnav-header">
+          <div class="subnav-tabs" role="tablist">
+            <button id="btn-personal-tab-techs" class="subnav-tab active" onclick="switchPersonalTab('techs')" role="tab" aria-selected="true">
+              <svg class="subnav-icon" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+              <span>Técnicos & PINs</span>
             </button>
-            <button id="btn-personal-tab-techs" class="btn btn-secondary btn-sm" onclick="switchPersonalTab('techs')">
-              🔧 Técnicos & PINs
+            <button id="btn-personal-tab-groups" class="subnav-tab" onclick="switchPersonalTab('groups')" role="tab" aria-selected="false">
+              <svg class="subnav-icon" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+              <span>Grupos de WhatsApp</span>
+            </button>
+            <button id="btn-personal-tab-users" class="subnav-tab" onclick="switchPersonalTab('users')" role="tab" aria-selected="false">
+              <svg class="subnav-icon" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+              <span>Usuarios del Panel</span>
             </button>
           </div>
         </div>
 
         <!-- Tab 1: Usuarios del Panel (RBAC) -->
-        <div id="personal-tab-users-content">
+        <div id="personal-tab-users-content" style="display: none;">
           <div class="glass-card">
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
-              <div>
-                <h4 style="font-size: 15px; font-weight: 700;">Administradores y Operadores del Panel</h4>
-                <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Cuentas de usuario con roles de superadmin, soporte o facturación.</p>
-              </div>
+            <div style="display: flex; align-items: center; justify-content: flex-end; margin-bottom: 12px;">
               <button class="btn btn-primary btn-sm" onclick="openNewAdminUserModal()">
                 <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                 <span>Nuevo Administrador</span>
@@ -3341,11 +3855,7 @@ export function getAdminDashboardHtml(): string {
         <!-- Tab 2: Técnicos de Campo & PINs -->
         <div id="personal-tab-techs-content" style="display: none;">
           <div class="glass-card">
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
-              <div>
-                <h4 style="font-size: 15px; font-weight: 700;">Técnicos de Campo Autorizados</h4>
-                <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">PINs de 5 dígitos para consultas y diagnósticos directamente en WhatsApp.</p>
-              </div>
+            <div style="display: flex; align-items: center; justify-content: flex-end; margin-bottom: 12px;">
               <button class="btn btn-primary btn-sm" onclick="openNewTechnicianModal()">
                 <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                 <span>Nuevo Técnico</span>
@@ -3398,174 +3908,74 @@ export function getAdminDashboardHtml(): string {
             </div>
           </div>
         </div>
-      </section>
 
-      <!-- VIEW: CAMBIO DE MÓDEM (REEMPLAZO DE ONU) -->
-      <section id="view-modem-swap" class="view-container">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
-          <div>
-            <h3 style="font-size: 17px; font-weight: 800; letter-spacing: -0.3px; display: flex; align-items: center; gap: 8px;">
-              <span>🔄</span> Cambio de Módem (Reemplazo de ONU)
-            </h3>
-            <p style="font-size: 12.5px; color: var(--text-muted); margin-top: 4px;">
-              Reemplaza un módem conservando su IP, VLAN, Cliente, Plan y Zona. Respalda en BD, desvincula en SmartOLT y da de alta el nuevo equipo con notificación al grupo de WhatsApp.
-            </p>
-          </div>
-          <div style="display: flex; gap: 10px;">
-            <button class="btn btn-secondary btn-sm" onclick="loadModemSwapData()">
-              <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M21 2v6h-6"></path><path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path><path d="M3 22v-6h6"></path><path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path></svg>
-              <span>Refrescar</span>
-            </button>
-            <button class="btn btn-secondary btn-sm" onclick="document.getElementById('swap-history-card').scrollIntoView({ behavior: 'smooth' })">
-              <span>📋 Ver Historial</span>
-            </button>
-          </div>
-        </div>
-
-        <!-- 2 Column Layout: Old Modem vs New Modem -->
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 20px; margin-bottom: 20px;">
-          
-          <!-- Card 1: Old Modem to Replace -->
-          <div class="glass-card" style="border-top: 3px solid var(--accent-rose);">
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-              <h4 style="font-size: 15px; font-weight: 700; color: var(--accent-rose); display: flex; align-items: center; gap: 6px;">
-                <span>🔴 1.</span> Módem Actual a Retirar (SmartOLT)
-              </h4>
-              <span class="badge badge-danger" style="font-size: 10px;">Se eliminará de OLT</span>
-            </div>
-            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">
-              Busca el cliente o módem actual. Sus parámetros de red (IP, VLAN, Plan, Zona) se transferirán automáticamente al nuevo equipo.
-            </p>
-
-            <div class="form-group" style="position: relative;">
-              <label class="form-label">Buscar por Nombre de Cliente, Folio, IP o Serie SN</label>
-              <div style="display: flex; gap: 8px;">
-                <input type="text" id="swap-search-old-input" class="form-control" placeholder="Ej: Diana Laura, 2982, 172.19.2.178 o HWTCE9C840B3..." oninput="debounceSwapSearchOld(this.value)" autocomplete="off">
-                <button type="button" class="btn btn-secondary btn-sm" onclick="searchSwapOldOnus(document.getElementById('swap-search-old-input').value)">🔍</button>
+        <!-- Tab 3: Grupos de WhatsApp & Notificaciones -->
+        <div id="personal-tab-groups-content" style="display: none;">
+          <!-- Metric KPI Cards -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-bottom: 16px;">
+            <div class="glass-card stat-card" style="padding: 14px;">
+              <div style="display: flex; align-items: center; justify-content: space-between;">
+                <span style="font-size: 11.5px; color: var(--text-muted); font-weight: 600;">TOTAL GRUPOS</span>
+                <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24" style="color: var(--text-dim);"><rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect><line x1="9" y1="6" x2="9" y2="6.01"></line><line x1="15" y1="6" x2="15" y2="6.01"></line><line x1="9" y1="10" x2="9" y2="10.01"></line><line x1="15" y1="10" x2="15" y2="10.01"></line><line x1="9" y1="14" x2="9" y2="14.01"></line><line x1="15" y1="14" x2="15" y2="14.01"></line><line x1="9" y1="18" x2="15" y2="18"></line></svg>
               </div>
-              <!-- Dropdown results -->
-              <div id="swap-old-dropdown-results" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: rgba(15, 23, 42, 0.98); border: 1px solid var(--card-border); border-radius: var(--radius-sm); max-height: 220px; overflow-y: auto; z-index: 100; box-shadow: var(--shadow-lg); margin-top: 4px;"></div>
+              <div id="stat-office-groups-total" style="font-size: 22px; font-weight: 800; margin-top: 4px; color: #fff;">0</div>
+              <div style="font-size: 10.5px; color: var(--text-dim); margin-top: 2px;">En BD Local</div>
             </div>
 
-            <!-- Selected Old ONU Details Card -->
-            <div id="swap-old-selected-card" style="background: rgba(0, 0, 0, 0.3); border: 1px solid var(--card-border); border-radius: var(--radius-sm); padding: 14px; margin-top: 14px;">
-              <div style="text-align: center; color: var(--text-dim); padding: 20px 10px; font-size: 12.5px;">
-                👈 Utiliza el buscador para seleccionar el cliente o módem actual.
+            <div class="glass-card stat-card" style="padding: 14px;">
+              <div style="display: flex; align-items: center; justify-content: space-between;">
+                <span style="font-size: 11.5px; color: var(--text-muted); font-weight: 600;">GRUPOS ACTIVOS</span>
+                <span class="status-dot online" style="width: 8px; height: 8px;"></span>
+              </div>
+              <div id="stat-office-groups-active" style="font-size: 22px; font-weight: 800; margin-top: 4px; color: var(--accent-emerald);">0</div>
+              <div style="font-size: 10.5px; color: var(--text-dim); margin-top: 2px;">Recibiendo tickets</div>
+            </div>
+
+            <div class="glass-card stat-card" style="padding: 14px; border-top: 2px solid var(--accent-emerald);">
+              <div style="display: flex; align-items: center; justify-content: space-between;">
+                <span style="font-size: 11px; color: var(--accent-emerald); font-weight: 700;">CANAL DE ACTIVACIONES</span>
+                <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24" style="color: var(--accent-emerald);"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+              </div>
+              <div id="stat-activations-group-name" style="font-size: 14px; font-weight: 700; margin-top: 4px; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">No configurado</div>
+              <div id="stat-activations-group-jid" style="font-size: 10.5px; font-family: var(--font-mono); color: var(--text-dim); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">--</div>
+            </div>
+          </div>
+
+          <!-- Groups Table Container -->
+          <div class="glass-card">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
+              <div style="display: flex; gap: 8px; align-items: center;">
+                <button class="btn btn-secondary btn-xs" onclick="loadOfficeGroupsData()">🔄 Refrescar</button>
+                <button class="btn btn-primary btn-xs" onclick="openOfficeGroupModal()">+ Vincular Grupo</button>
+              </div>
+              <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                <select id="filter-group-role" class="form-control" style="font-size: 12px; width: auto; padding: 4px 10px;" onchange="filterOfficeGroupsTable()">
+                  <option value="">Todos los Roles</option>
+                  <option value="TICKETS_OFICINA">Tickets de Oficina</option>
+                  <option value="ACTIVACIONES">Activaciones & Swap Módem</option>
+                  <option value="SOPORTE_GENERAL">Soporte General</option>
+                </select>
+                <input type="text" id="filter-group-search" class="form-control" placeholder="Buscar por nombre o JID..." style="font-size: 12px; width: 200px; padding: 4px 10px;" oninput="filterOfficeGroupsTable()">
               </div>
             </div>
-          </div>
 
-          <!-- Card 2: New Modem to Authorize -->
-          <div class="glass-card" style="border-top: 3px solid var(--accent-emerald);">
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-              <h4 style="font-size: 15px; font-weight: 700; color: var(--accent-emerald); display: flex; align-items: center; gap: 6px;">
-                <span>🟢 2.</span> Nuevo Módem a Instalar (Alta)
-              </h4>
-              <button class="btn btn-secondary btn-xs" onclick="loadSwapUnconfiguredOnus()" title="Escanear ONUs no autorizadas en SmartOLT">
-                <span>🔄 Escanear OLT</span>
-              </button>
+            <div class="table-responsive">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th style="min-width: 190px;">Grupo & Sucursal</th>
+                    <th style="min-width: 170px;">Rol / Propósito</th>
+                    <th style="min-width: 150px;">Zonas Asignadas</th>
+                    <th style="min-width: 230px;">WhatsApp JID / Enlace</th>
+                    <th style="text-align: center; min-width: 110px;">Estado</th>
+                    <th style="text-align: right; min-width: 200px;">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="table-office-groups-body">
+                  <tr><td colspan="6" style="text-align: center; color: var(--text-dim); padding: 24px;">Cargando grupos...</td></tr>
+                </tbody>
+              </table>
             </div>
-            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">
-              Selecciona el nuevo equipo de la lista de ONUs sin autorizar detectadas en SmartOLT o escribe su número de serie.
-            </p>
-
-            <div class="form-group">
-              <label class="form-label">ONUs Sin Autorizar Detectadas en SmartOLT</label>
-              <select id="swap-select-unconfigured" class="form-control" onchange="handleSelectSwapUnconfigured(this.value)">
-                <option value="">-- Seleccionar de ONUs no autorizadas --</option>
-              </select>
-            </div>
-
-            <div class="form-group">
-              <label class="form-label">O Ingresar Número de Serie (SN) del Nuevo Módem</label>
-              <input type="text" id="swap-input-new-sn" class="form-control" placeholder="Ej: HWTC4317B500 o ZTEG12345678" style="font-family: monospace; font-weight: 700; text-transform: uppercase;" oninput="this.value = this.value.toUpperCase()">
-            </div>
-
-            <!-- New ONU Detected Info -->
-            <div id="swap-new-selected-card" style="background: rgba(0, 0, 0, 0.3); border: 1px solid var(--card-border); border-radius: var(--radius-sm); padding: 14px; margin-top: 14px;">
-              <div style="text-align: center; color: var(--text-dim); padding: 20px 10px; font-size: 12.5px;">
-                ⚡ Selecciona una ONU sin autorizar o ingresa el SN del nuevo módem.
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Card 3: Execution and Confirmation Summary -->
-        <div class="glass-card" style="margin-bottom: 24px; border: 1px solid var(--primary);">
-          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
-            <h4 style="font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px;">
-              <span>⚡</span> 3. Confirmación y Notificación Automática
-            </h4>
-            <div style="display: flex; align-items: center; gap: 10px; background: rgba(0,0,0,0.3); padding: 6px 12px; border-radius: var(--radius-sm); border: 1px solid var(--card-border);">
-              <input type="checkbox" id="swap-checkbox-notify-group" style="transform: scale(1.2); cursor: pointer;" checked>
-              <label for="swap-checkbox-notify-group" style="font-size: 12px; font-weight: 600; cursor: pointer; margin-bottom: 0;">
-                📢 Notificar al grupo de WhatsApp con formato <code style="color: var(--accent-cyan);">CAMBIO DE MODEM</code>
-              </label>
-            </div>
-          </div>
-
-          <div id="swap-summary-box" style="background: rgba(15, 23, 42, 0.6); border: 1px dashed var(--card-border); border-radius: var(--radius-sm); padding: 16px; margin-bottom: 16px;">
-            <div style="font-size: 13px; color: var(--text-muted); text-align: center;">
-              Completa el Paso 1 (Módem Actual) y el Paso 2 (Nuevo Módem) para habilitar la ejecución del reemplazo.
-            </div>
-          </div>
-
-          <div style="display: flex; justify-content: flex-end; gap: 12px; align-items: center;">
-            <div id="swap-execution-status" style="font-size: 12.5px; font-weight: 600; color: var(--text-muted);"></div>
-            <button type="button" id="btn-execute-swap" class="btn btn-primary" onclick="handleExecuteModemSwap()" style="padding: 12px 28px; font-size: 14px;" disabled>
-              🔄 Ejecutar Cambio de Módem
-            </button>
-          </div>
-        </div>
-
-        <!-- Card 4: Modem Swaps History Table -->
-        <div id="swap-history-card" class="glass-card">
-          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;">
-            <div>
-              <h4 style="font-size: 15px; font-weight: 700;">📋 Historial de Cambios de Módem Realizados</h4>
-              <p style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Bitácora de reemplazos y respaldos de equipos en la Base de Datos Local.</p>
-            </div>
-            <button class="btn btn-secondary btn-xs" onclick="loadModemSwapHistory()">🔄 Actualizar Historial</button>
-          </div>
-
-          <!-- Datatable Toolbar -->
-          <div class="datatable-toolbar" style="justify-content: flex-end;">
-            <div class="datatable-filters-group">
-              <select id="filter-swap-status" class="datatable-select" onchange="filterSwapHistoryTable()" title="Filtrar por estado">
-                <option value="">⚡ Todos los estados</option>
-                <option value="COMPLETADO">Completado</option>
-                <option value="ERROR">Error</option>
-              </select>
-              <select id="filter-swap-sort" class="datatable-select" onchange="sortSwapHistoryBy(this.value)" title="Ordenar historial">
-                <option value="date_desc">Ordenar: Más recientes primero</option>
-                <option value="date_asc">Ordenar: Más antiguos primero</option>
-                <option value="client_asc">Ordenar: Cliente (A-Z)</option>
-              </select>
-              <button class="btn btn-secondary btn-sm" onclick="clearSwapHistoryFilters()" title="Limpiar filtros">
-                🧹 Limpiar
-              </button>
-            </div>
-          </div>
-
-          <div class="table-responsive">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th class="sortable-th" onclick="sortSwapHistoryBy('date')" style="min-width: 130px;">Fecha <span class="sort-icon">↕</span></th>
-                  <th class="sortable-th" onclick="sortSwapHistoryBy('client')" style="min-width: 170px;">Cliente <span class="sort-icon">↕</span></th>
-                  <th class="sortable-th" onclick="sortSwapHistoryBy('old_sn')" style="min-width: 140px;">Módem Retirado (Old SN) <span class="sort-icon">↕</span></th>
-                  <th class="sortable-th" onclick="sortSwapHistoryBy('new_sn')" style="min-width: 140px;">Nuevo Módem (New SN) <span class="sort-icon">↕</span></th>
-                  <th class="sortable-th" onclick="sortSwapHistoryBy('ip')" style="min-width: 130px;">IP / VLAN <span class="sort-icon">↕</span></th>
-                  <th class="sortable-th" onclick="sortSwapHistoryBy('zone')" style="min-width: 120px;">Zona <span class="sort-icon">↕</span></th>
-                  <th class="sortable-th" onclick="sortSwapHistoryBy('tech')" style="min-width: 140px;">Técnico / Responsable <span class="sort-icon">↕</span></th>
-                  <th class="sortable-th" onclick="sortSwapHistoryBy('status')" style="min-width: 110px;">Estado <span class="sort-icon">↕</span></th>
-                  <th style="text-align: right; min-width: 90px;">Acción</th>
-                </tr>
-              </thead>
-              <tbody id="table-swap-history-body">
-                <tr><td colspan="9" style="text-align: center; color: var(--text-dim);">Cargando historial...</td></tr>
-              </tbody>
-            </table>
           </div>
         </div>
       </section>
@@ -3612,28 +4022,34 @@ export function getAdminDashboardHtml(): string {
         </div>
 
         <!-- Database Action Bar & Tabs -->
-        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 20px;">
-          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-            <button class="btn btn-primary btn-sm" id="btn-db-tab-tables" onclick="switchDbTab('tables')">
-              <span>📋 Explorador de Tablas</span>
+        <div class="subnav-header">
+          <div class="subnav-tabs" role="tablist">
+            <button class="subnav-tab active" id="btn-db-tab-tables" onclick="switchDbTab('tables')" role="tab" aria-selected="true">
+              <svg class="subnav-icon" viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line><rect x="3" y="3" width="18" height="18" rx="2"></rect></svg>
+              <span>Explorador de Tablas</span>
             </button>
-            <button class="btn btn-secondary btn-sm" id="btn-db-tab-sql" onclick="switchDbTab('sql')">
-              <span>⚡ Consola SQL en Vivo</span>
+            <button class="subnav-tab" id="btn-db-tab-sql" onclick="switchDbTab('sql')" role="tab" aria-selected="false">
+              <svg class="subnav-icon" viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+              <span>Consola SQL en Vivo</span>
             </button>
-            <button class="btn btn-secondary btn-sm" id="btn-db-tab-engine" onclick="switchDbTab('engine')">
-              <span>⚙️ Motor & Migración</span>
+            <button class="subnav-tab" id="btn-db-tab-engine" onclick="switchDbTab('engine')" role="tab" aria-selected="false">
+              <svg class="subnav-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+              <span>Motor & Migración</span>
             </button>
           </div>
 
-          <div style="display: flex; gap: 10px; flex-wrap: wrap;">
-            <button class="btn btn-secondary btn-sm" onclick="optimizeDatabaseAction()" title="Ejecuta VACUUM y optimiza índices">
-              <span>🧹 Optimizar (VACUUM)</span>
+          <div class="subnav-actions">
+            <button class="btn btn-secondary btn-xs" onclick="optimizeDatabaseAction()" title="Ejecuta VACUUM y optimiza índices">
+              <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"></path></svg>
+              <span>VACUUM</span>
             </button>
-            <button class="btn btn-secondary btn-sm" onclick="downloadDatabaseBackup()" title="Descargar archivo .db de respaldo">
-              <span>📥 Descargar Backup (.db)</span>
+            <button class="btn btn-secondary btn-xs" onclick="downloadDatabaseBackup()" title="Descargar archivo .db de respaldo">
+              <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+              <span>Backup .db</span>
             </button>
-            <button class="btn btn-secondary btn-sm" onclick="loadDatabaseViewData()" title="Refrescar métricas y tablas">
-              <span>🔄 Refrescar</span>
+            <button class="btn btn-secondary btn-xs" onclick="loadDatabaseViewData()" title="Refrescar métricas y tablas">
+              <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"></path></svg>
+              <span>Refrescar</span>
             </button>
           </div>
         </div>
@@ -4151,118 +4567,6 @@ export function getAdminDashboardHtml(): string {
           </div>
         </div>
       </section>
-
-      <!-- VIEW: GRUPOS DE WHATSAPP & OFICINAS -->
-      <section id="view-office-groups" class="view-container">
-        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 12px;">
-          <div>
-            <h3 style="font-size: 17px; font-weight: 800; letter-spacing: -0.3px; display: flex; align-items: center; gap: 8px;">
-              <svg class="svg-icon" viewBox="0 0 24 24" style="color: var(--accent-cyan);"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
-              <span>Grupos de WhatsApp & Derivación de Tickets</span>
-            </h3>
-            <p style="font-size: 12.5px; color: var(--text-muted); margin-top: 4px;">
-              Configura los grupos de WhatsApp por oficina/sucursal para transferir folios de soporte técnico entre oficinas y define el canal de notificaciones para Activaciones y Cambio de Módem.
-            </p>
-          </div>
-          <div style="display: flex; gap: 10px; align-items: center;">
-            <button class="btn btn-secondary btn-sm" onclick="loadOfficeGroupsData()">
-              <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M21 2v6h-6"></path><path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path><path d="M3 22v-6h6"></path><path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path></svg>
-              <span>Refrescar</span>
-            </button>
-            <button class="btn btn-primary btn-sm" onclick="openOfficeGroupModal()">
-              <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-              <span>Vincular Nuevo Grupo</span>
-            </button>
-          </div>
-        </div>
-
-        <!-- Metric KPI Cards -->
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-bottom: 22px;">
-          <div class="glass-card stat-card">
-            <div style="display: flex; align-items: center; justify-content: space-between;">
-              <span style="font-size: 12px; color: var(--text-muted); font-weight: 600;">TOTAL GRUPOS</span>
-              <svg class="svg-icon" viewBox="0 0 24 24" style="color: var(--text-dim);"><rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect><line x1="9" y1="6" x2="9" y2="6.01"></line><line x1="15" y1="6" x2="15" y2="6.01"></line><line x1="9" y1="10" x2="9" y2="10.01"></line><line x1="15" y1="10" x2="15" y2="10.01"></line><line x1="9" y1="14" x2="9" y2="14.01"></line><line x1="15" y1="14" x2="15" y2="14.01"></line><line x1="9" y1="18" x2="15" y2="18"></line></svg>
-            </div>
-            <div id="stat-office-groups-total" style="font-size: 26px; font-weight: 800; margin-top: 8px; color: #fff;">0</div>
-            <div style="font-size: 11px; color: var(--text-dim); margin-top: 4px;">Configurados en BD Hostinger</div>
-          </div>
-
-          <div class="glass-card stat-card">
-            <div style="display: flex; align-items: center; justify-content: space-between;">
-              <span style="font-size: 12px; color: var(--text-muted); font-weight: 600;">GRUPOS ACTIVOS</span>
-              <span class="status-dot online" style="width: 10px; height: 10px;"></span>
-            </div>
-            <div id="stat-office-groups-active" style="font-size: 26px; font-weight: 800; margin-top: 8px; color: var(--accent-emerald);">0</div>
-            <div style="font-size: 11px; color: var(--text-dim); margin-top: 4px;">Recibiendo tickets y avisos</div>
-          </div>
-
-          <div class="glass-card stat-card" style="border-top: 3px solid var(--accent-emerald);">
-            <div style="display: flex; align-items: center; justify-content: space-between;">
-              <span style="font-size: 12px; color: var(--accent-emerald); font-weight: 700;">CANAL DE ACTIVACIONES & SWAP</span>
-              <svg class="svg-icon" viewBox="0 0 24 24" style="color: var(--accent-emerald);"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
-            </div>
-            <div id="stat-activations-group-name" style="font-size: 15px; font-weight: 700; margin-top: 8px; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">No configurado</div>
-            <div id="stat-activations-group-jid" style="font-size: 10.5px; font-family: var(--font-mono); color: var(--text-dim); margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">--</div>
-          </div>
-        </div>
-
-        <!-- Groups Table Container -->
-        <div class="glass-card">
-          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
-            <div style="display: flex; align-items: center; gap: 10px;">
-              <h4 style="font-size: 15px; font-weight: 700;">Directorio de Grupos de WhatsApp</h4>
-              <span id="badge-groups-count" class="badge badge-info" style="font-size: 10px;">0 grupos</span>
-            </div>
-            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-              <select id="filter-group-role" class="form-control" style="font-size: 12px; width: auto; padding: 4px 10px;" onchange="filterOfficeGroupsTable()">
-                <option value="">Todos los Roles</option>
-                <option value="TICKETS_OFICINA">Tickets de Oficina</option>
-                <option value="ACTIVACIONES">Activaciones & Swap Módem</option>
-                <option value="SOPORTE_GENERAL">Soporte General</option>
-              </select>
-              <input type="text" id="filter-group-search" class="form-control" placeholder="Buscar por nombre, oficina o JID..." style="font-size: 12px; width: 220px; padding: 4px 10px;" oninput="filterOfficeGroupsTable()">
-            </div>
-          </div>
-
-          <div class="table-responsive">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th style="min-width: 190px;">Grupo & Sucursal</th>
-                  <th style="min-width: 170px;">Rol / Propósito</th>
-                  <th style="min-width: 150px;">Zonas Asignadas</th>
-                  <th style="min-width: 230px;">WhatsApp JID / Enlace</th>
-                  <th style="text-align: center; min-width: 110px;">Estado</th>
-                  <th style="text-align: right; min-width: 200px;">Acciones</th>
-                </tr>
-              </thead>
-              <tbody id="table-office-groups-body">
-                <tr><td colspan="6" style="text-align: center; color: var(--text-dim); padding: 24px;">Cargando grupos...</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- Help Notice Box -->
-        <div class="glass-card" style="margin-top: 20px; border-left: 4px solid var(--accent-cyan); background: rgba(6, 182, 212, 0.05);">
-          <div style="display: flex; gap: 12px; align-items: flex-start;">
-            <svg class="svg-icon" viewBox="0 0 24 24" style="color: var(--accent-cyan); width: 22px; height: 22px; flex-shrink: 0; margin-top: 2px;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-            <div>
-              <h5 style="font-size: 13.5px; font-weight: 700; color: var(--accent-cyan); margin-bottom: 4px;">Guía de Ruteo de Tickets por Grupos</h5>
-              <p style="font-size: 12px; color: var(--text-muted); line-height: 1.5; margin-bottom: 6px;">
-                1. <strong>Crear grupo en WhatsApp:</strong> Agrega al bot como participante o administrador al nuevo grupo de la oficina.<br>
-                2. <strong>Vincular al Panel:</strong> Haz clic en <em>"Vincular Nuevo Grupo"</em> y selecciona el grupo de la lista desplegable o pega el enlace de invitación.<br>
-                3. <strong>Derivar Tickets:</strong> En la <a href="javascript:navigateTo('tickets')" style="color: var(--accent-cyan); text-decoration: underline;">Mesa de Tickets</a>, pulsa <strong>"Derivar a Oficina"</strong> en cualquier ticket y selecciona la sucursal de destino. El bot notificará instantáneamente al grupo de WhatsApp con la ficha completa del cliente, ubicación GPS y falla técnica.<br>
-                4. <strong>Cambio de Módem y Activaciones:</strong> Las activaciones y los cambios de módem se envían automáticamente al grupo con rol <code>ACTIVACIONES</code> con el formato estándar (Nombre, IP, Zona, CAMBIO DE MODEM).
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- VIEW 8: USUARIOS & ROLES (Consolidado en Personal & Accesos) -->
-      <section id="view-users" class="view-container" style="display: none;"></section>
-
     </main>
   </div>
 
@@ -4530,7 +4834,7 @@ export function getAdminDashboardHtml(): string {
       const parts = rawHash.split('?');
       const viewName = parts[0];
       const queryStr = parts[1];
-      const validViews = ['dashboard', 'live-chat', 'clients', 'tickets', 'ipam', 'ipam-pools', 'ipam-onus', 'audit', 'personal', 'technicians', 'modem-swap', 'database', 'settings', 'users'];
+      const validViews = ['dashboard', 'live-chat', 'clients', 'tickets', 'ipam', 'ipam-pools', 'ipam-onus', 'audit', 'personal', 'technicians', 'office-groups', 'modem-swap', 'database', 'settings', 'users'];
       if (validViews.includes(viewName)) {
         if (queryStr && viewName === 'live-chat') {
           const params = new URLSearchParams(queryStr);
@@ -4539,6 +4843,10 @@ export function getAdminDashboardHtml(): string {
         }
         if (viewName === 'technicians') {
           setTimeout(() => switchPersonalTab('techs'), 50);
+          return 'personal';
+        }
+        if (viewName === 'office-groups') {
+          setTimeout(() => switchPersonalTab('groups'), 50);
           return 'personal';
         }
         if (viewName === 'users') {
@@ -4553,6 +4861,14 @@ export function getAdminDashboardHtml(): string {
           setTimeout(() => switchIpamTab('unconfigured'), 50);
           return 'ipam';
         }
+        if (viewName === 'modem-swap') {
+          setTimeout(() => switchIpamTab('swap'), 50);
+          return 'ipam';
+        }
+        if (viewName === 'audit') {
+          setTimeout(() => switchIpamTab('audit'), 50);
+          return 'ipam';
+        }
         return viewName;
       }
       return null;
@@ -4564,6 +4880,9 @@ export function getAdminDashboardHtml(): string {
       if (viewId === 'technicians') {
         viewId = 'personal';
         setTimeout(() => switchPersonalTab('techs'), 50);
+      } else if (viewId === 'office-groups') {
+        viewId = 'personal';
+        setTimeout(() => switchPersonalTab('groups'), 50);
       } else if (viewId === 'users') {
         viewId = 'personal';
         setTimeout(() => switchPersonalTab('users'), 50);
@@ -4573,6 +4892,12 @@ export function getAdminDashboardHtml(): string {
       } else if (viewId === 'ipam-onus' || viewId === 'ipam-unconfigured') {
         viewId = 'ipam';
         setTimeout(() => switchIpamTab('unconfigured'), 50);
+      } else if (viewId === 'modem-swap') {
+        viewId = 'ipam';
+        setTimeout(() => switchIpamTab('swap'), 50);
+      } else if (viewId === 'audit') {
+        viewId = 'ipam';
+        setTimeout(() => switchIpamTab('audit'), 50);
       }
       state.currentView = viewId;
       localStorage.setItem('cloudware_last_view', viewId);
@@ -4607,19 +4932,14 @@ export function getAdminDashboardHtml(): string {
       if (target) target.classList.add('active');
 
       const titles = {
-        'dashboard': 'Resumen General',
-        'live-chat': 'Live WhatsApp & Atención en Vivo',
-        'clients': 'Directorio de Clientes & Geolocalización GPS',
-        'tickets': 'Mesa de Tickets & Órdenes de Servicio',
-        'office-groups': 'Grupos de WhatsApp & Derivación de Tickets',
-        'ipam': 'Control de Subredes & Pools de IP',
-        'audit': 'Auditoría SmartOLT vs WispHub',
-        'personal': 'Personal, Roles & Técnicos de Campo',
-        'technicians': 'Personal, Roles & Técnicos de Campo',
-        'modem-swap': 'Cambio de Módem (Historial & Reemplazo)',
-        'database': 'Base de Datos & Explorador SQL',
-        'settings': 'Configuración del Sistema',
-        'users': 'Personal, Roles & Técnicos de Campo',
+        'dashboard': 'Dashboard',
+        'live-chat': 'WhatsApp en Vivo',
+        'clients': 'Clientes & GPS',
+        'tickets': 'Mesa de Tickets',
+        'ipam': 'Red, Pools IP & ONUs',
+        'personal': 'Equipo & Técnicos',
+        'database': 'Base de Datos SQLite',
+        'settings': 'Configuración de APIs',
       };
       document.getElementById('current-view-title').innerText = titles[viewId] || 'Panel';
       
@@ -4633,18 +4953,13 @@ export function getAdminDashboardHtml(): string {
     // Topbar Context-Aware Search Engine
     const searchContextMap = {
       'dashboard': { label: 'Dashboard', placeholder: 'Buscar en bitácora de eventos y logs...' },
-      'live-chat': { label: 'Live Chat', placeholder: 'Buscar cliente por nombre o teléfono...' },
-      'clients': { label: 'Clientes & GPS', placeholder: 'Buscar por cliente, folio, IP, SN o teléfono...' },
-      'tickets': { label: 'Tickets', placeholder: 'Buscar por folio, cliente o falla...' },
-      'office-groups': { label: 'Grupos & Oficinas', placeholder: 'Buscar grupo por nombre, oficina o JID...' },
-      'ipam': { label: 'Pools IP', placeholder: 'Buscar ONUs o subredes...' },
-      'audit': { label: 'Auditoría', placeholder: 'Buscar por cliente, IP, servicio o plan...' },
-      'personal': { label: 'Personal', placeholder: 'Buscar usuarios o técnicos con PIN...' },
-      'technicians': { label: 'Técnicos', placeholder: 'Buscar técnico por nombre, teléfono o PIN...' },
-      'modem-swap': { label: 'Cambio Módem', placeholder: 'Buscar en bitácora de cambios de módem...' },
+      'live-chat': { label: 'WhatsApp', placeholder: 'Buscar chat por nombre o número...' },
+      'clients': { label: 'Clientes', placeholder: 'Buscar por nombre, folio, IP, SN o teléfono...' },
+      'tickets': { label: 'Tickets', placeholder: 'Buscar por folio, cliente o problema...' },
+      'ipam': { label: 'Red & Pools', placeholder: 'Buscar subredes, ONUs o seriales...' },
+      'personal': { label: 'Equipo', placeholder: 'Buscar técnicos, grupos o usuarios...' },
       'database': { label: 'Base de Datos', placeholder: 'Buscar en la tabla seleccionada...' },
       'settings': { label: 'Ajustes', placeholder: 'Buscar configuraciones...' },
-      'users': { label: 'Usuarios RBAC', placeholder: 'Buscar administrador por usuario o nombre...' },
     };
 
     function updateGlobalSearchContext(viewId) {
@@ -4813,49 +5128,68 @@ export function getAdminDashboardHtml(): string {
         case 'live-chat': loadLiveChatData(); break;
         case 'clients': loadClientsData(); break;
         case 'tickets': loadTicketsData(); break;
-        case 'office-groups': loadOfficeGroupsData(); break;
+        case 'office-groups':
+          switchPersonalTab('groups');
+          break;
         case 'ipam': {
           const savedIpamTab = localStorage.getItem('cloudware_ipam_tab') || state.ipamTab || 'pools';
           switchIpamTab(savedIpamTab);
           loadIpamData();
           break;
         }
-        case 'audit': loadAuditData(); break;
-        case 'personal':
-          loadAdminUsersData();
-          loadTechniciansData();
+        case 'audit':
+          switchIpamTab('audit');
           break;
+        case 'personal': {
+          const savedPersonalTab = localStorage.getItem('cloudware_personal_tab') || 'techs';
+          switchPersonalTab(savedPersonalTab);
+          break;
+        }
         case 'technicians':
           switchPersonalTab('techs');
-          loadTechniciansData();
           break;
-        case 'modem-swap': loadModemSwapData(); break;
+        case 'modem-swap':
+          switchIpamTab('swap');
+          break;
         case 'database': loadDatabaseViewData(); break;
         case 'settings': loadSettingsData(); break;
         case 'users':
           switchPersonalTab('users');
-          loadAdminUsersData();
           break;
       }
     }
 
     function switchPersonalTab(tab) {
+      try { localStorage.setItem('cloudware_personal_tab', tab); } catch (e) {}
       const usersContent = document.getElementById('personal-tab-users-content');
       const techsContent = document.getElementById('personal-tab-techs-content');
+      const groupsContent = document.getElementById('personal-tab-groups-content');
       const btnUsers = document.getElementById('btn-personal-tab-users');
       const btnTechs = document.getElementById('btn-personal-tab-techs');
+      const btnGroups = document.getElementById('btn-personal-tab-groups');
+
+      if (usersContent) usersContent.style.display = tab === 'users' ? 'block' : 'none';
+      if (techsContent) techsContent.style.display = tab === 'techs' ? 'block' : 'none';
+      if (groupsContent) groupsContent.style.display = tab === 'groups' ? 'block' : 'none';
+
+      if (btnUsers) {
+        btnUsers.className = tab === 'users' ? 'subnav-tab active' : 'subnav-tab';
+        btnUsers.setAttribute('aria-selected', tab === 'users' ? 'true' : 'false');
+      }
+      if (btnTechs) {
+        btnTechs.className = tab === 'techs' ? 'subnav-tab active' : 'subnav-tab';
+        btnTechs.setAttribute('aria-selected', tab === 'techs' ? 'true' : 'false');
+      }
+      if (btnGroups) {
+        btnGroups.className = tab === 'groups' ? 'subnav-tab active' : 'subnav-tab';
+        btnGroups.setAttribute('aria-selected', tab === 'groups' ? 'true' : 'false');
+      }
 
       if (tab === 'techs') {
-        if (usersContent) usersContent.style.display = 'none';
-        if (techsContent) techsContent.style.display = 'block';
-        if (btnUsers) { btnUsers.className = 'btn btn-secondary btn-sm'; }
-        if (btnTechs) { btnTechs.className = 'btn btn-primary btn-sm'; }
         loadTechniciansData();
+      } else if (tab === 'groups') {
+        loadOfficeGroupsData();
       } else {
-        if (usersContent) usersContent.style.display = 'block';
-        if (techsContent) techsContent.style.display = 'none';
-        if (btnUsers) { btnUsers.className = 'btn btn-primary btn-sm'; }
-        if (btnTechs) { btnTechs.className = 'btn btn-secondary btn-sm'; }
         loadAdminUsersData();
       }
     }
@@ -4866,29 +5200,45 @@ export function getAdminDashboardHtml(): string {
 
       const poolsContent = document.getElementById('ipam-tab-pools-content');
       const unconfContent = document.getElementById('ipam-tab-unconfigured-content');
+      const swapContent = document.getElementById('ipam-tab-swap-content');
+      const auditContent = document.getElementById('ipam-tab-audit-content');
       const btnPools = document.getElementById('btn-ipam-tab-pools');
       const btnUnconf = document.getElementById('btn-ipam-tab-unconfigured');
-      const subPools = document.getElementById('nav-subitem-ipam-pools');
-      const subOnus = document.getElementById('nav-subitem-ipam-onus');
+      const btnSwap = document.getElementById('btn-ipam-tab-swap');
+      const btnAudit = document.getElementById('btn-ipam-tab-audit');
       const btnAutoDetect = document.getElementById('btn-ipam-auto-detect');
 
+      if (poolsContent) poolsContent.style.display = tab === 'pools' ? 'block' : 'none';
+      if (unconfContent) unconfContent.style.display = tab === 'unconfigured' ? 'block' : 'none';
+      if (swapContent) swapContent.style.display = tab === 'swap' ? 'block' : 'none';
+      if (auditContent) auditContent.style.display = tab === 'audit' ? 'block' : 'none';
+
+      if (btnPools) {
+        btnPools.className = tab === 'pools' ? 'subnav-tab active' : 'subnav-tab';
+        btnPools.setAttribute('aria-selected', tab === 'pools' ? 'true' : 'false');
+      }
+      if (btnUnconf) {
+        btnUnconf.className = tab === 'unconfigured' ? 'subnav-tab active' : 'subnav-tab';
+        btnUnconf.setAttribute('aria-selected', tab === 'unconfigured' ? 'true' : 'false');
+      }
+      if (btnSwap) {
+        btnSwap.className = tab === 'swap' ? 'subnav-tab active' : 'subnav-tab';
+        btnSwap.setAttribute('aria-selected', tab === 'swap' ? 'true' : 'false');
+      }
+      if (btnAudit) {
+        btnAudit.className = tab === 'audit' ? 'subnav-tab active' : 'subnav-tab';
+        btnAudit.setAttribute('aria-selected', tab === 'audit' ? 'true' : 'false');
+      }
+
+      if (btnAutoDetect) btnAutoDetect.style.display = tab === 'pools' ? 'inline-flex' : 'none';
+
       if (tab === 'unconfigured') {
-        if (poolsContent) poolsContent.style.display = 'none';
-        if (unconfContent) unconfContent.style.display = 'block';
-        if (btnPools) btnPools.className = 'btn btn-secondary btn-sm';
-        if (btnUnconf) btnUnconf.className = 'btn btn-primary btn-sm';
-        if (subPools) subPools.classList.remove('active');
-        if (subOnus) subOnus.classList.add('active');
-        if (btnAutoDetect) btnAutoDetect.style.display = 'none';
         filterUnconfiguredOnus();
+      } else if (tab === 'swap') {
+        loadModemSwapData();
+      } else if (tab === 'audit') {
+        loadAuditData();
       } else {
-        if (poolsContent) poolsContent.style.display = 'block';
-        if (unconfContent) unconfContent.style.display = 'none';
-        if (btnPools) btnPools.className = 'btn btn-primary btn-sm';
-        if (btnUnconf) btnUnconf.className = 'btn btn-secondary btn-sm';
-        if (subPools) subPools.classList.add('active');
-        if (subOnus) subOnus.classList.remove('active');
-        if (btnAutoDetect) btnAutoDetect.style.display = 'inline-flex';
         filterIpamPools();
       }
     }
@@ -6196,13 +6546,13 @@ export function getAdminDashboardHtml(): string {
       if (mode === 'kanban') {
         if (tblCont) tblCont.style.display = 'none';
         if (kanCont) kanCont.style.display = 'grid';
-        if (btnTbl) { btnTbl.classList.remove('btn-primary'); btnTbl.classList.add('btn-secondary'); }
-        if (btnKan) { btnKan.classList.remove('btn-secondary'); btnKan.classList.add('btn-primary'); }
+        if (btnTbl) { btnTbl.className = 'segmented-btn'; btnTbl.setAttribute('aria-selected', 'false'); }
+        if (btnKan) { btnKan.className = 'segmented-btn active'; btnKan.setAttribute('aria-selected', 'true'); }
       } else {
         if (tblCont) tblCont.style.display = 'block';
         if (kanCont) kanCont.style.display = 'none';
-        if (btnTbl) { btnTbl.classList.remove('btn-secondary'); btnTbl.classList.add('btn-primary'); }
-        if (btnKan) { btnKan.classList.remove('btn-primary'); btnKan.classList.add('btn-secondary'); }
+        if (btnTbl) { btnTbl.className = 'segmented-btn active'; btnTbl.setAttribute('aria-selected', 'true'); }
+        if (btnKan) { btnKan.className = 'segmented-btn'; btnKan.setAttribute('aria-selected', 'false'); }
       }
     }
 
@@ -8735,40 +9085,42 @@ export function getAdminDashboardHtml(): string {
         return \`
           <tr>
             <td>
-              <div style="font-weight: 700; font-size: 13px; color: #fff; cursor: pointer;" onclick="openClientDetailModal(\${c.id_servicio})" title="Click para ver expediente completo">\${escapeHtml(c.nombre)}</div>
-              <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
-                <span style="font-family: var(--font-mono); color: var(--primary); font-weight: 700;">#\${c.id_servicio || '--'}</span>
-                \${c.servicio ? \` &bull; \${escapeHtml(c.servicio)}\` : ''}
+              <div style="font-weight: 600; font-size: 13.5px; color: #fff; cursor: pointer;" onclick="openClientDetailModal(\${c.id_servicio})" title="Click para ver expediente completo">\${escapeHtml(c.nombre)}</div>
+              <div style="font-size: 11.5px; color: var(--text-dim); margin-top: 2px;">
+                <span style="font-family: var(--font-mono); color: var(--primary); font-weight: 600;">#\${c.id_servicio || '--'}</span>
+                \${c.servicio ? \` · \${escapeHtml(c.servicio)}\` : ''}
               </div>
             </td>
             <td>
-              <div style="display: flex; flex-direction: column; gap: 2px; font-size: 11.5px;">
-                <div><span style="color: var(--text-dim);">IP:</span> <span style="font-family: var(--font-mono); font-weight: 600; color: #38bdf8;">\${c.ip || '--'}</span></div>
-                <div><span style="color: var(--text-dim);">SN:</span> <span style="font-family: var(--font-mono); color: var(--accent-cyan); font-weight: 600;">\${c.sn_onu || '--'}</span></div>
-                <div style="font-size: 10.5px; color: var(--text-dim);">\${escapeHtml(c.router || '--')}</div>
+              <div style="display: flex; flex-direction: column; gap: 1px; font-size: 11.5px;">
+                <div><span style="font-family: var(--font-mono); font-weight: 600; color: #38bdf8;">\${c.ip || 'Sin IP'}</span></div>
+                <div style="font-size: 10.5px; color: var(--text-dim); font-family: var(--font-mono);">\${c.sn_onu ? 'SN: ' + escapeHtml(c.sn_onu) : escapeHtml(c.router || '--')}</div>
               </div>
             </td>
             <td>
-              <div style="display: flex; flex-direction: column; gap: 4px;">
-                <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+              <div style="display: flex; flex-direction: column; gap: 3px;">
+                <div style="display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
                   \${estadoBadge}
                   \${facturasBadge}
                 </div>
-                <span class="badge badge-purple" style="font-size: 10.5px; font-weight: 600; align-self: flex-start;">
+                <div style="font-size: 11px; color: var(--text-dim);">
                   \${escapeHtml(c.plan_internet || '--')}
-                </span>
+                </div>
               </div>
             </td>
             <td>\${phonesHtml}</td>
             <td>\${gpsHtml}</td>
             <td style="text-align: right;">
               <div style="display: flex; gap: 6px; justify-content: flex-end; align-items: center;">
-                <button class="btn btn-primary btn-sm" onclick='openDispatchModal(\${JSON.stringify(c).replace(/'/g, "&apos;")})' title="Asignar orden de visita técnica vía WhatsApp">
+                <button class="btn btn-secondary btn-sm" onclick="openClientDetailModal(\${c.id_servicio})" title="Ver ficha completa">
+                  Ficha
+                </button>
+                <button class="btn btn-primary btn-sm" onclick='openDispatchModal(\${JSON.stringify(c).replace(/'/g, "&apos;")})' title="Asignar orden técnica">
                   Asignar
                 </button>
                 \${primaryPhone ? \`
-                  <button class="btn btn-secondary btn-sm" onclick="selectChat('\${primaryPhone}'); navigateTo('live-chat');" title="Abrir Chat WhatsApp">
-                    Chat
+                  <button class="btn btn-secondary btn-sm" style="padding: 2px 6px;" onclick="selectChat('\${primaryPhone}'); navigateTo('live-chat');" title="Abrir Chat WhatsApp">
+                    💬
                   </button>
                 \` : ''}
               </div>
@@ -9756,9 +10108,18 @@ export function getAdminDashboardHtml(): string {
       if (sqlContent) sqlContent.style.display = tab === 'sql' ? 'flex' : 'none';
       if (engineContent) engineContent.style.display = tab === 'engine' ? 'block' : 'none';
 
-      if (btnTables) btnTables.className = tab === 'tables' ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm';
-      if (btnSql) btnSql.className = tab === 'sql' ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm';
-      if (btnEngine) btnEngine.className = tab === 'engine' ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm';
+      if (btnTables) {
+        btnTables.className = tab === 'tables' ? 'subnav-tab active' : 'subnav-tab';
+        btnTables.setAttribute('aria-selected', tab === 'tables' ? 'true' : 'false');
+      }
+      if (btnSql) {
+        btnSql.className = tab === 'sql' ? 'subnav-tab active' : 'subnav-tab';
+        btnSql.setAttribute('aria-selected', tab === 'sql' ? 'true' : 'false');
+      }
+      if (btnEngine) {
+        btnEngine.className = tab === 'engine' ? 'subnav-tab active' : 'subnav-tab';
+        btnEngine.setAttribute('aria-selected', tab === 'engine' ? 'true' : 'false');
+      }
     }
 
     async function loadDatabaseViewData() {

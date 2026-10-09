@@ -1475,15 +1475,34 @@ export class AdminController {
    */
   static async syncWisphub(req: Request, res: Response): Promise<void> {
     try {
-      logger.info('Iniciando sincronización manual de clientes WispHub...');
-      const result = await WispHubService.syncAllClientesToLocalDb();
+      logger.info('Iniciando sincronización de clientes WispHub en segundo plano...');
+      // Respondemos de inmediato para evitar que el navegador o proxy agoten el timeout HTTP
       res.json({
-        success: result.success,
-        message: result.message || `Sincronización completada: ${result.count} clientes procesados en Base de Datos Local.`,
-        stats: result,
+        success: true,
+        message: 'Sincronización de WispHub iniciada en segundo plano. Los clientes e IPs se están actualizando sin congelar la interfaz.',
+        background: true,
       });
+
+      // Ejecución no bloqueante en segundo plano
+      WispHubService.syncAllClientesToLocalDb()
+        .then((result) => {
+          logger.info(`Sincronización en segundo plano completada: ${result.count} clientes.`);
+          AdminController.broadcastSSE('wisphub:sync_finished', {
+            success: result.success,
+            count: result.count,
+            message: result.message,
+            timestamp: new Date().toISOString(),
+          });
+        })
+        .catch((err) => {
+          logger.error('Error en sincronización en segundo plano de WispHub:', err?.message || err);
+          AdminController.broadcastSSE('wisphub:sync_error', {
+            error: err?.message || 'Error de sincronización',
+            timestamp: new Date().toISOString(),
+          });
+        });
     } catch (error: any) {
-      logger.error('Error al sincronizar WispHub:', error?.message || error);
+      logger.error('Error al iniciar sincronización WispHub:', error?.message || error);
       res.status(500).json({ success: false, error: error?.message || error });
     }
   }
