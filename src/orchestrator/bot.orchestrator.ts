@@ -8605,7 +8605,7 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
     if (rawUrl && rawUrl.startsWith('http') && !rawUrl.includes('localhost')) {
       return rawUrl;
     }
-    return 'http://2.25.241.239';
+    return 'http://2.25.241.239:3000';
   }
 
   /**

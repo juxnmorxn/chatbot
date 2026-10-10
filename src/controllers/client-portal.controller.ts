@@ -529,11 +529,16 @@ self.addEventListener('fetch', (event) => {
 
       await db.execute({
         sql: `
-          UPDATE client_portal_accounts 
-          SET password_hash = ?, reset_token = NULL, reset_token_expires = NULL, updated_at = ?, last_login = ?
-          WHERE telefono = ?
+          INSERT INTO client_portal_accounts (telefono, password_hash, nombre, reset_token, reset_token_expires, updated_at, last_login)
+          VALUES (?, ?, ?, NULL, NULL, ?, ?)
+          ON CONFLICT(telefono) DO UPDATE SET
+            password_hash = excluded.password_hash,
+            reset_token = NULL,
+            reset_token_expires = NULL,
+            updated_at = excluded.updated_at,
+            last_login = excluded.last_login
         `,
-        args: [passHash, now, now, last10],
+        args: [last10, passHash, (account.nombre as string) || services[0]?.nombre, now, now],
       });
 
       const services = await ClientPortalController.findClientsByIdentifier(last10);
@@ -662,21 +667,53 @@ self.addEventListener('fetch', (event) => {
         logger.warn('Error al verificar network_outages:', outageErr?.message || outageErr);
       }
 
-      // 4. Datos Wi-Fi
+      // 4. Datos Wi-Fi reales desde SmartOLT o Base de Datos
+      let wifiSsid = '';
+      let wifiPass = '';
+
+      if (targetOnuId) {
+        try {
+          const timeoutPromise = new Promise<any>((resolve) => setTimeout(() => resolve(null), 1800));
+          const wifiPromise = SmartOLTService.getOnuWifiDetails(targetOnuId);
+          const wifiDetails = await Promise.race([wifiPromise, timeoutPromise]);
+          if (wifiDetails) {
+            const wlan1 = wifiDetails?.wlan1 || wifiDetails?.wlan_1 || wifiDetails?.wireless_lan_1 || 
+                          (Array.isArray(wifiDetails?.wifi) ? wifiDetails.wifi.find((w: any) => String(w.index || w.wlan_id) === '1') : null);
+            wifiSsid = wlan1?.ssid || wifiDetails?.ssid || wifiDetails?.wifi_ssid || '';
+            wifiPass = wlan1?.password || wlan1?.key || wifiDetails?.password || wifiDetails?.wifi_password || '';
+          }
+        } catch (wErr) {
+          logger.warn(`No se pudo obtener WiFi de SmartOLT para ${targetOnuId}:`, wErr);
+        }
+      }
+
+      const ispName = SettingsService.get('ISP_NAME', 'ISP_NAME', config.isp.name || 'CloudWareMx');
+      if (!wifiSsid) {
+        const rawOnuName = (onuRecord?.name || '').replace(/^[\d\s\-#_.]+/, '').trim();
+        const clientFirstName = (client.nombre || '').replace(/^[\d\s\-#_.]+/, '').split(' ')[0] || 'Cliente';
+        wifiSsid = rawOnuName || `${ispName}_${clientFirstName}`;
+      }
+
+      if (!wifiPass) {
+        wifiPass = onuRecord?.sn ? onuRecord.sn.slice(-8) : '********';
+      }
+
       const wifi = {
-        ssid24: onuRecord?.name || `CloudWare_${client.id_servicio || 'WiFi'}`,
-        password: onuRecord?.sn ? onuRecord.sn.slice(-8) : '********',
+        ssid24: wifiSsid,
+        password: wifiPass,
       };
 
       // 5. Verificar si el cliente ya tiene contraseña registrada
-      const cleanPhone = (client.telefono || rawId || '').replace(/\D/g, '').slice(-10);
+      const targetPhone10 = (verifiedPhone || rawId || client.telefono || '').replace(/\D/g, '').slice(-10);
+      const clientPhone10 = (client.telefono || '').replace(/\D/g, '').slice(-10);
       let hasPassword = false;
-      if (cleanPhone) {
-        const accRes = await db.execute({
-          sql: `SELECT id, password_hash FROM client_portal_accounts WHERE telefono = ? LIMIT 1`,
-          args: [cleanPhone],
-        });
-        hasPassword = accRes.rows.length > 0 && Boolean(accRes.rows[0].password_hash);
+
+      const accRes = await db.execute({
+        sql: `SELECT id, password_hash FROM client_portal_accounts WHERE (telefono = ? OR telefono = ? OR nombre = ?) AND password_hash IS NOT NULL AND password_hash != '' LIMIT 1`,
+        args: [targetPhone10, clientPhone10, client.nombre],
+      });
+      if (accRes.rows.length > 0) {
+        hasPassword = true;
       }
 
       // Generar token permanente e indestructible para auto-autenticación

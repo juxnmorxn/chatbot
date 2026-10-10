@@ -84,17 +84,34 @@ export function getClientPortalHtml(): string {
       padding: 0;
     }
 
-    /* App Wrapper Móvil */
+    /* App Wrapper Móvil / Tablet / Desktop Responsivo */
     .app-screen {
       width: 100%;
-      max-width: 480px;
+      max-width: 580px;
+      margin: 0 auto;
       min-height: 100vh;
       display: flex;
       flex-direction: column;
       background: transparent;
-      padding: 14px 14px 70px 14px;
-      gap: 14px;
+      padding: 16px 16px 80px 16px;
+      gap: 16px;
       position: relative;
+    }
+
+    @media (min-width: 640px) {
+      .app-screen {
+        max-width: 640px;
+        padding: 24px 20px 90px 20px;
+        gap: 18px;
+      }
+    }
+
+    @media (min-width: 1024px) {
+      .app-screen {
+        max-width: 720px;
+        padding: 36px 24px 100px 24px;
+        gap: 20px;
+      }
     }
 
     /* Barra Superior */
@@ -1372,13 +1389,9 @@ export function getClientPortalHtml(): string {
         sub.innerText = 'Revisa tu equipo';
       }
 
-      // Wi-Fi
+      // Wi-Fi Real (Directo de módem / OLT)
       const wifi = data.wifi || {};
-      // Si el SSID es el nombre del cliente con folio, poner un nombre amigable o el SSID real
-      let rawSsid = wifi.ssid24 || '';
-      if (!rawSsid || rawSsid.includes('-') && /\\d+/.test(rawSsid)) {
-        rawSsid = 'Mi_Red_WiFi_' + c.id_servicio;
-      }
+      const rawSsid = wifi.ssid24 || ('CloudWare_' + c.id_servicio);
       document.getElementById('wifiSsidLabel').innerText = rawSsid;
       realWifiPassword = wifi.password || '********';
       document.getElementById('wifiPassLabel').innerText = isPassRevealed ? realWifiPassword : '••••••••';
