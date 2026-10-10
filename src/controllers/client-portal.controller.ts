@@ -356,32 +356,39 @@ self.addEventListener('fetch', (event) => {
           });
           const account = accRes.rows[0];
 
-          // Validación estricta de Revocación / Desactivación
-          if (account) {
-            if (account.is_active === 0) {
-              res.status(403).json({
-                success: false,
-                sessionRevoked: true,
-                message: 'Esta cuenta o enlace ha sido desactivado por el administrador.',
-              });
-              return;
-            }
-            if (account.tokens_revoked_at && payload.iat < Math.floor(new Date(account.tokens_revoked_at as string).getTime() / 1000)) {
-              res.status(401).json({
-                success: false,
-                sessionRevoked: true,
-                message: 'Este enlace de acceso ha expirado o fue revocado.',
-              });
-              return;
-            }
-            if (account.token_version && payload.ver && payload.ver < Number(account.token_version)) {
-              res.status(401).json({
-                success: false,
-                sessionRevoked: true,
-                message: 'Este enlace de acceso fue reemplazado por uno nuevo.',
-              });
-              return;
-            }
+          // Validación estricta de Existencia y Revocación / Desactivación
+          if (!account) {
+            res.status(401).json({
+              success: false,
+              sessionRevoked: true,
+              message: 'Este enlace de acceso ha expirado o ya no existe.',
+            });
+            return;
+          }
+
+          if (account.is_active === 0) {
+            res.status(403).json({
+              success: false,
+              sessionRevoked: true,
+              message: 'Esta cuenta o enlace ha sido desactivado por el administrador.',
+            });
+            return;
+          }
+          if (account.tokens_revoked_at && payload.iat < Math.floor(new Date(account.tokens_revoked_at as string).getTime() / 1000)) {
+            res.status(401).json({
+              success: false,
+              sessionRevoked: true,
+              message: 'Este enlace de acceso ha expirado o fue revocado.',
+            });
+            return;
+          }
+          if (account.token_version && payload.ver && payload.ver < Number(account.token_version)) {
+            res.status(401).json({
+              success: false,
+              sessionRevoked: true,
+              message: 'Este enlace de acceso fue reemplazado por uno nuevo.',
+            });
+            return;
           }
 
           const services = await ClientPortalController.findClientsByIdentifier(payload.phone);
@@ -651,31 +658,39 @@ self.addEventListener('fetch', (event) => {
           });
           const account = accRes.rows[0];
 
-          if (account) {
-            if (account.is_active === 0) {
-              res.status(403).json({
-                success: false,
-                sessionRevoked: true,
-                message: 'Esta cuenta o enlace ha sido desactivado por el administrador.',
-              });
-              return;
-            }
-            if (account.tokens_revoked_at && payload.iat < Math.floor(new Date(account.tokens_revoked_at as string).getTime() / 1000)) {
-              res.status(401).json({
-                success: false,
-                sessionRevoked: true,
-                message: 'Tu sesión o enlace ha expirado o fue revocado por seguridad.',
-              });
-              return;
-            }
-            if (account.token_version && payload.ver && payload.ver < Number(account.token_version)) {
-              res.status(401).json({
-                success: false,
-                sessionRevoked: true,
-                message: 'Tu sesión ha sido renovada. Por favor ingresa nuevamente.',
-              });
-              return;
-            }
+          if (!account) {
+            // Si el usuario fue eliminado de client_portal_accounts, el enlace/sesión queda revocado de inmediato
+            res.status(401).json({
+              success: false,
+              sessionRevoked: true,
+              message: 'Esta sesión o enlace ya no existe o fue eliminado.',
+            });
+            return;
+          }
+
+          if (account.is_active === 0) {
+            res.status(403).json({
+              success: false,
+              sessionRevoked: true,
+              message: 'Esta cuenta o enlace ha sido desactivado por el administrador.',
+            });
+            return;
+          }
+          if (account.tokens_revoked_at && payload.iat < Math.floor(new Date(account.tokens_revoked_at as string).getTime() / 1000)) {
+            res.status(401).json({
+              success: false,
+              sessionRevoked: true,
+              message: 'Tu sesión o enlace ha expirado o fue revocado por seguridad.',
+            });
+            return;
+          }
+          if (account.token_version && payload.ver && payload.ver < Number(account.token_version)) {
+            res.status(401).json({
+              success: false,
+              sessionRevoked: true,
+              message: 'Tu sesión ha sido renovada. Por favor ingresa nuevamente.',
+            });
+            return;
           }
 
           verifiedPhone = payload.phone;
@@ -736,19 +751,43 @@ self.addEventListener('fetch', (event) => {
       const allOnusRes = await db.execute('SELECT unique_external_id, sn, name, ip_address, zone_name, speed_profile FROM smartolt_onus');
       const allOnus = allOnusRes.rows || [];
 
-      const relatedServices = services.map((s: any) => {
-        const srvId = String(s.id_servicio || '').trim();
-        const srvSn = String(s.sn_onu || '').trim().toUpperCase();
-        const srvIp = String(s.ip || '').trim();
+      const matchOnuForService = (srv: any) => {
+        const srvId = String(srv.id_servicio || '').trim();
+        let srvSn = String(srv.sn_onu || '').trim().toUpperCase();
+        if (srvSn.startsWith('48575443')) srvSn = 'HWTC' + srvSn.slice(8);
+        if (srvSn.startsWith('5A544547')) srvSn = 'ZTEG' + srvSn.slice(8);
+        const srvSnSuffix = srvSn.length >= 8 ? srvSn.slice(-8) : srvSn;
+        const srvIp = String(srv.ip || '').trim();
+        const srvName = cleanPersonName(String(srv.nombre || ''));
 
-        // Buscar coincidencia en SmartOLT
-        const matchedOnu = allOnus.find((o: any) => {
+        return allOnus.find((o: any) => {
           const oName = String(o.name || '');
-          if (srvId && (oName.startsWith(`${srvId}-`) || oName.startsWith(`${srvId}.`) || oName.startsWith(`${srvId} `))) return true;
-          if (srvSn && o.sn && String(o.sn).toUpperCase() === srvSn) return true;
-          if (srvIp && o.ip_address && String(o.ip_address) === srvIp) return true;
+          const oSn = String(o.sn || '').toUpperCase();
+          const oIp = String(o.ip_address || '').trim();
+
+          // Coincidencia 1: Por SN completo o terminación (8 caracteres)
+          if (srvSnSuffix && (oSn === srvSn || oSn.endsWith(srvSnSuffix) || (srvSn.length >= 8 && oSn.includes(srvSnSuffix)))) {
+            return true;
+          }
+          // Coincidencia 2: Por IP exacta
+          if (srvIp && oIp && oIp === srvIp && oIp !== 'N/A') {
+            return true;
+          }
+          // Coincidencia 3: Por ID de servicio en el nombre de SmartOLT (ej: "696-Nombre", "715-Nombre")
+          if (srvId && (oName.startsWith(`${srvId}-`) || oName.startsWith(`${srvId}.`) || oName.startsWith(`${srvId} `) || oName.startsWith(`${srvId}_`))) {
+            return true;
+          }
+          // Coincidencia 4: Por nombre del cliente
+          if (srvName && srvName.length >= 6 && oName) {
+            const score = computeNameMatchScore(srvName, oName);
+            if (score >= 45) return true;
+          }
           return false;
         });
+      };
+
+      const relatedServices = services.map((s: any) => {
+        const matchedOnu = matchOnuForService(s);
 
         return {
           id_servicio: s.id_servicio,
@@ -765,37 +804,37 @@ self.addEventListener('fetch', (event) => {
         };
       });
 
-      // 1. Obtener registro de SmartOLT (búsqueda multicriterio: ID de Servicio en nombre, SN, IP, Nombre)
-      let onuRecord: any = null;
+      // 1. Obtener registro de SmartOLT para el servicio activo seleccionado
+      let onuRecord: any = matchOnuForService(client);
       let cleanSn = (client.sn_onu || '').trim();
       if (/^48575443/i.test(cleanSn)) {
         cleanSn = 'HWTC' + cleanSn.slice(8);
+      } else if (/^5A544547/i.test(cleanSn)) {
+        cleanSn = 'ZTEG' + cleanSn.slice(8);
       }
 
-      // Prioridad 1: Por ID exacto de contrato en el nombre de SmartOLT (ej: "1855-Nombre", "1857-Nombre", "1298-...")
-      if (client.id_servicio) {
-        const srvId = String(client.id_servicio).trim();
-        const onuRes = await db.execute({
-          sql: `SELECT * FROM smartolt_onus WHERE name LIKE ? OR name LIKE ? OR name LIKE ? OR raw_data LIKE ? LIMIT 1`,
-          args: [`${srvId}-%`, `${srvId}.%`, `${srvId} %`, `%"${srvId}"%`],
-        });
-        if (onuRes.rows.length > 0) onuRecord = onuRes.rows[0];
-      }
-
-      // Prioridad 2: Por Número de Serie (SN)
+      // Si no encontró en allOnus, intentar búsquedas directas en la base de datos
       if (!onuRecord && cleanSn) {
         const onuRes = await db.execute({
           sql: `SELECT * FROM smartolt_onus WHERE sn = ? OR sn = ? OR unique_external_id = ? OR sn LIKE ? LIMIT 1`,
-          args: [cleanSn.toUpperCase(), (client.sn_onu || '').toUpperCase(), cleanSn.toUpperCase(), `%${cleanSn.slice(-6)}%`],
+          args: [cleanSn.toUpperCase(), (client.sn_onu || '').toUpperCase(), cleanSn.toUpperCase(), `%${cleanSn.slice(-8)}%`],
         });
         if (onuRes.rows.length > 0) onuRecord = onuRes.rows[0];
       }
 
-      // Prioridad 3: Por Dirección IP
       if (!onuRecord && client.ip) {
         const onuRes = await db.execute({
           sql: `SELECT * FROM smartolt_onus WHERE ip_address = ? OR raw_data LIKE ? LIMIT 1`,
           args: [client.ip, `%"${client.ip}"%`],
+        });
+        if (onuRes.rows.length > 0) onuRecord = onuRes.rows[0];
+      }
+
+      if (!onuRecord && client.id_servicio) {
+        const srvId = String(client.id_servicio).trim();
+        const onuRes = await db.execute({
+          sql: `SELECT * FROM smartolt_onus WHERE name LIKE ? OR name LIKE ? OR name LIKE ? OR raw_data LIKE ? LIMIT 1`,
+          args: [`${srvId}-%`, `${srvId}.%`, `${srvId} %`, `%"${srvId}"%`],
         });
         if (onuRes.rows.length > 0) onuRecord = onuRes.rows[0];
       }

@@ -614,6 +614,54 @@ export class DbService {
   }
 
   /**
+   * Busca una ONU registrada en SmartOLT por su ID externo, número de serie (SN) o IP
+   */
+  static async getOnuById(identifier: string): Promise<SmartOltOnuRecord | null> {
+    if (!identifier) return null;
+    const cleanId = String(identifier).trim();
+    let cleanSn = cleanId.toUpperCase();
+    if (cleanSn.startsWith('48575443')) {
+      cleanSn = 'HWTC' + cleanSn.slice(8);
+    }
+
+    try {
+      const client = getDbClient();
+      const res = await client.execute({
+        sql: `
+          SELECT * FROM smartolt_onus 
+          WHERE unique_external_id = ? 
+             OR sn = ? 
+             OR sn = ? 
+             OR sn LIKE ?
+             OR ip_address = ?
+          LIMIT 1
+        `,
+        args: [cleanId, cleanSn, cleanId.toUpperCase(), `%${cleanSn.slice(-8)}%`, cleanId],
+      });
+
+      if (res.rows.length === 0) return null;
+      const row = res.rows[0];
+      return {
+        unique_external_id: String(row.unique_external_id || ''),
+        sn: String(row.sn || ''),
+        name: String(row.name || ''),
+        name_normalized: row.name_normalized ? String(row.name_normalized) : undefined,
+        phone: row.phone ? String(row.phone) : undefined,
+        address: row.address ? String(row.address) : undefined,
+        zone_name: row.zone_name ? String(row.zone_name) : undefined,
+        speed_profile: row.speed_profile ? String(row.speed_profile) : undefined,
+        olt_name: row.olt_name ? String(row.olt_name) : undefined,
+        ip_address: row.ip_address ? String(row.ip_address) : undefined,
+        raw_data: row.raw_data ? String(row.raw_data) : undefined,
+        updated_at: row.updated_at ? String(row.updated_at) : undefined,
+      };
+    } catch (error: any) {
+      logger.error(`Error al buscar ONU ${identifier} en DbService:`, error?.message || error);
+      return null;
+    }
+  }
+
+  /**
    * Elimina una ONU de la base de datos local Base de Datos Local liberando de inmediato su IP
    */
   static async deleteSmartOltOnu(identifier: string): Promise<boolean> {
@@ -1944,36 +1992,6 @@ export class DbService {
     } catch (error: any) {
       logger.error(`Error en búsqueda difusa de ONUs para "${query}":`, error?.message || error);
       return [];
-    }
-  }
-
-  /**
-   * Obtiene una ONU específica por su unique_external_id o SN
-   */
-  static async getOnuById(idOrSn: string): Promise<SmartOltOnuRecord | null> {
-    try {
-      const client = getDbClient();
-      const res = await client.execute({
-        sql: `SELECT * FROM smartolt_onus WHERE unique_external_id = ? OR sn = ? LIMIT 1`,
-        args: [idOrSn, idOrSn],
-      });
-      if (res.rows.length === 0) return null;
-      const row = res.rows[0];
-      return {
-        unique_external_id: String(row.unique_external_id),
-        sn: String(row.sn || ''),
-        name: String(row.name || ''),
-        name_normalized: String(row.name_normalized || ''),
-        phone: String(row.phone || ''),
-        address: String(row.address || ''),
-        zone_name: String(row.zone_name || ''),
-        speed_profile: String(row.speed_profile || ''),
-        olt_name: String(row.olt_name || ''),
-        updated_at: String(row.updated_at || ''),
-      };
-    } catch (error: any) {
-      logger.error(`Error al obtener ONU por ID ${idOrSn}:`, error?.message || error);
-      return null;
     }
   }
 
