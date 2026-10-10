@@ -669,6 +669,36 @@ export function getClientPortalHtml(): string {
       </div>
     </div>
 
+    <!-- 1.5 VISTA DE VINCULAR CONTRATO (Cuando el teléfono no está registrado) -->
+    <div id="viewNotFound" class="auth-container hidden">
+      <div class="auth-card">
+        <div class="auth-header">
+          <div style="font-size: 34px; color: var(--accent-cyan); margin-bottom: 8px;"><i class="fa-solid fa-link"></i></div>
+          <h2>Vincular tu WhatsApp</h2>
+          <p>No encontramos un servicio con el número <strong id="notFoundPhoneLabel" style="color: var(--accent-cyan); font-family: monospace;"></strong>.</p>
+          <p style="margin-top: 6px; font-size: 13px;">Ingresa tu <strong>Folio de servicio</strong> (ej: 696 o 2) o tu <strong>Nombre completo</strong> para conectar tu cuenta en 1 clic:</p>
+        </div>
+
+        <form id="formLinkContract" onsubmit="handleLinkContract(event)">
+          <div class="form-group">
+            <label class="form-label">Folio de Servicio o Nombre del Titular</label>
+            <div class="input-wrapper">
+              <i class="fa-solid fa-id-card input-icon"></i>
+              <input type="text" id="linkIdentifier" class="form-control" placeholder="Ej: 696 o Juan Pérez" required>
+            </div>
+          </div>
+
+          <button type="submit" class="btn-primary" style="margin-top: 16px;">
+            <i class="fa-solid fa-link"></i> Vincular mi WhatsApp y Entrar
+          </button>
+        </form>
+
+        <div class="auth-links" style="justify-content: center;">
+          <span class="auth-link" onclick="showLogin()">Ya tengo contraseña · Iniciar Sesión</span>
+        </div>
+      </div>
+    </div>
+
     <!-- 2. VISTA DE REGISTRO / CREAR CONTRASEÑA -->
     <div id="viewRegister" class="auth-container hidden">
       <div class="auth-card">
@@ -1037,14 +1067,26 @@ export function getClientPortalHtml(): string {
     // UI View Switchers
     function showLogin() {
       document.getElementById('viewLogin').classList.remove('hidden');
+      document.getElementById('viewNotFound').classList.add('hidden');
       document.getElementById('viewRegister').classList.add('hidden');
       document.getElementById('viewForgot').classList.add('hidden');
       document.getElementById('viewDashboard').classList.add('hidden');
       document.getElementById('btnLogout').classList.add('hidden');
     }
 
+    function showNotFound(phone) {
+      document.getElementById('viewLogin').classList.add('hidden');
+      document.getElementById('viewNotFound').classList.remove('hidden');
+      document.getElementById('viewRegister').classList.add('hidden');
+      document.getElementById('viewForgot').classList.add('hidden');
+      document.getElementById('viewDashboard').classList.add('hidden');
+      document.getElementById('btnLogout').classList.add('hidden');
+      document.getElementById('notFoundPhoneLabel').innerText = phone || currentPhone;
+    }
+
     function showRegister() {
       document.getElementById('viewLogin').classList.add('hidden');
+      document.getElementById('viewNotFound').classList.add('hidden');
       document.getElementById('viewRegister').classList.remove('hidden');
       document.getElementById('viewForgot').classList.add('hidden');
       document.getElementById('viewDashboard').classList.add('hidden');
@@ -1052,6 +1094,7 @@ export function getClientPortalHtml(): string {
 
     function showForgotPassword() {
       document.getElementById('viewLogin').classList.add('hidden');
+      document.getElementById('viewNotFound').classList.add('hidden');
       document.getElementById('viewRegister').classList.add('hidden');
       document.getElementById('viewForgot').classList.remove('hidden');
       document.getElementById('forgotStep1').classList.remove('hidden');
@@ -1080,6 +1123,39 @@ export function getClientPortalHtml(): string {
     }
 
     // Auth Handlers
+    async function handleLinkContract(e) {
+      e.preventDefault();
+      const identifier = document.getElementById('linkIdentifier').value.trim();
+      const phone = currentPhone || localStorage.getItem('cp_phone') || '';
+
+      if (!identifier) {
+        showToast('Ingresa tu Folio o Nombre.');
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/portal/auth/link-phone', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone, identifier })
+        });
+        const data = await res.json();
+
+        if (data.success && data.token) {
+          localStorage.setItem('cp_token', data.token);
+          localStorage.setItem('cp_phone', phone);
+          currentToken = data.token;
+          showToast('✅ ¡WhatsApp vinculado con éxito!');
+          document.getElementById('viewNotFound').classList.add('hidden');
+          loadDashboard();
+        } else {
+          showToast(data.message || 'No se encontró el contrato.');
+        }
+      } catch {
+        showToast('Error al conectar con el servidor.');
+      }
+    }
+
     async function handleLogin(e) {
       e.preventDefault();
       const phone = document.getElementById('loginPhone').value.trim();
@@ -1235,11 +1311,16 @@ export function getClientPortalHtml(): string {
         const data = await res.json();
 
         if (!data.success || !data.client) {
-          showLogin();
+          if (currentPhone) {
+            showNotFound(currentPhone);
+          } else {
+            showLogin();
+          }
           return;
         }
 
         document.getElementById('viewLogin').classList.add('hidden');
+        document.getElementById('viewNotFound').classList.add('hidden');
         document.getElementById('viewRegister').classList.add('hidden');
         document.getElementById('viewForgot').classList.add('hidden');
         document.getElementById('viewDashboard').classList.remove('hidden');

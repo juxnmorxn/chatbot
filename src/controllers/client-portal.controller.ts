@@ -251,6 +251,74 @@ self.addEventListener('fetch', (event) => {
   }
 
   /**
+   * Vincula un número de teléfono / WhatsApp a un contrato existente por Folio o Nombre
+   */
+  static async linkPhone(req: Request, res: Response): Promise<void> {
+    try {
+      const { phone, identifier } = req.body;
+      const cleanDigits = (phone || '').replace(/\D/g, '');
+      const last10 = cleanDigits.length >= 10 ? cleanDigits.slice(-10) : cleanDigits;
+
+      if (!last10 || last10.length < 7) {
+        res.status(400).json({ success: false, message: 'Número de teléfono requerido.' });
+        return;
+      }
+
+      if (!identifier) {
+        res.status(400).json({ success: false, message: 'Ingresa tu Folio o Nombre para vincular.' });
+        return;
+      }
+
+      const services = await ClientPortalController.findClientsByIdentifier(String(identifier));
+      if (!services || services.length === 0) {
+        res.status(404).json({ success: false, message: 'No encontramos ningún contrato con ese Folio o Nombre.' });
+        return;
+      }
+
+      const client = services[0];
+      const db = getDbClient();
+      const now = new Date().toISOString();
+
+      // 1. Actualizar teléfono en wisphub_clients
+      await db.execute({
+        sql: `UPDATE wisphub_clients SET telefono = ? WHERE id_servicio = ?`,
+        args: [last10, client.id_servicio],
+      });
+
+      // 2. Registrar en client_portal_accounts
+      await db.execute({
+        sql: `
+          INSERT INTO client_portal_accounts (telefono, password_hash, nombre, created_at, updated_at, last_login)
+          VALUES (?, '', ?, ?, ?, ?)
+          ON CONFLICT(telefono) DO UPDATE SET
+            nombre = excluded.nombre,
+            updated_at = excluded.updated_at,
+            last_login = excluded.last_login
+        `,
+        args: [last10, client.nombre, now, now, now],
+      });
+
+      const serviceIds = services.map(s => s.id_servicio);
+      const token = generateClientPortalToken(last10, client.nombre, serviceIds);
+
+      res.json({
+        success: true,
+        message: '¡Servicio vinculado exitosamente con tu número celular!',
+        token,
+        client: {
+          id_servicio: client.id_servicio,
+          nombre: client.nombre,
+          telefono: last10,
+        },
+      });
+    } catch (err: any) {
+      logger.error('Error al vincular teléfono con servicio:', err?.message || err);
+      res.status(500).json({ success: false, message: 'Error interno al vincular contrato.' });
+    }
+  }
+
+
+  /**
    * Iniciar Sesión con Teléfono y Contraseña
    */
   static async login(req: Request, res: Response): Promise<void> {
@@ -921,6 +989,19 @@ self.addEventListener('fetch', (event) => {
         args: [`%${last10}%`, `%${last10}%`],
       });
       if (res.rows.length > 0) return res.rows as any[];
+
+      // 2.1 Buscar si este teléfono fue vinculado previamente en client_portal_accounts
+      const acc = await db.execute({
+        sql: `SELECT * FROM client_portal_accounts WHERE telefono = ? LIMIT 1`,
+        args: [last10],
+      });
+      if (acc.rows.length > 0 && acc.rows[0].nombre) {
+        const byName = await db.execute({
+          sql: `SELECT * FROM wisphub_clients WHERE nombre LIKE ? OR nombre_normalized LIKE ? ORDER BY id_servicio ASC LIMIT 20`,
+          args: [`%${acc.rows[0].nombre}%`, `%${acc.rows[0].nombre}%`],
+        });
+        if (byName.rows.length > 0) return byName.rows as any[];
+      }
     }
 
     // 3. Por Número de Serie (SN)

@@ -21,6 +21,7 @@ router.get('/portal-icon.svg', ClientPortalController.renderIcon);
 
 router.post('/api/portal/auth/check', ClientPortalController.checkAccount);
 router.post('/api/portal/auth/register', ClientPortalController.register);
+router.post('/api/portal/auth/link-phone', ClientPortalController.linkPhone);
 router.post('/api/portal/auth/login', ClientPortalController.login);
 router.post('/api/portal/auth/forgot-password', ClientPortalController.forgotPassword);
 router.post('/api/portal/auth/reset-password', ClientPortalController.resetPassword);

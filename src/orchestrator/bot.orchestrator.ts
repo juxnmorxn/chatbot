@@ -8603,7 +8603,7 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
   /**
    * Genera el enlace de acceso directo y seguro (Magic Link) al Portal Web / PWA del Cliente
    */
-  static getClientPortalLink(phone?: string, clientName?: string): string {
+  static getClientPortalLink(phone?: string, _clientName?: string): string {
     const defaultDomain = 'http://srv2002262.hstgr.cloud';
     let appUrl = SettingsService.get('APP_URL', 'APP_URL', config.appUrl || defaultDomain).replace(/\/+$/, '');
     if (!appUrl || appUrl.includes('localhost') || appUrl.includes('2.25.241.239')) {
@@ -8613,9 +8613,7 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
     const last10 = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
     if (!last10) return `${appUrl}/portal`;
 
-    const { generateClientPortalToken } = require('../utils/auth');
-    const token = generateClientPortalToken(last10, clientName || '');
-    return `${appUrl}/portal?auth=${token}`;
+    return `${appUrl}/portal?p=${last10}`;
   }
 
   /**
