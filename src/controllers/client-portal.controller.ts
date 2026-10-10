@@ -71,13 +71,14 @@ export class ClientPortalController {
    */
   static renderServiceWorker(_req: Request, res: Response): void {
     const swCode = `
-const CACHE_NAME = 'client-portal-v3';
+const CACHE_NAME = 'client-portal-v4';
 const ASSETS_TO_CACHE = [
   '/portal',
   '/manifest.json',
   '/portal-icon.svg',
   'https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap',
-  'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css'
+  'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css',
+  'https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js'
 ];
 
 self.addEventListener('install', (event) => {
@@ -125,19 +126,19 @@ self.addEventListener('fetch', (event) => {
   }
 
   /**
-   * PWA: Ícono dinámico en formato SVG
+   * PWA: Ícono dinámico en formato SVG con la identidad CloudWare
    */
   static renderIcon(_req: Request, res: Response): void {
     const svgIcon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
       <defs>
-        <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stop-color="#06b6d4"/>
-          <stop offset="100%" stop-color="#3b82f6"/>
+        <linearGradient id="cloudGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#6366f1"/>
+          <stop offset="100%" stop-color="#06b6d4"/>
         </linearGradient>
       </defs>
-      <rect width="512" height="512" rx="120" fill="#0f172a"/>
-      <rect x="16" y="16" width="480" height="480" rx="104" fill="none" stroke="url(#grad)" stroke-width="8" opacity="0.3"/>
-      <path fill="url(#grad)" d="M256 112c-79.5 0-151.5 32.2-203.7 84.4-7.5 7.5-7.5 19.6 0 27.1l27.1 27.1c7.5 7.5 19.6 7.5 27.1 0C144.3 212.8 197.8 192 256 192s111.7 20.8 149.5 58.6c7.5 7.5 19.6 7.5 27.1 0l27.1-27.1c7.5-7.5 7.5-19.6 0-27.1C407.5 144.2 335.5 112 256 112zm0 112c-48.6 0-92.6 19.7-124.5 51.6-7.5 7.5-7.5 19.6 0 27.1l27.1 27.1c7.5 7.5 19.6 7.5 27.1 0 18.7-18.7 44.5-30.3 73-30.3 28.5 0 54.3 11.6 73 30.3 7.5 7.5 19.6 7.5 27.1 0l27.1-27.1c7.5-7.5 7.5-19.6 0-27.1C348.6 243.7 304.6 224 256 224zm0 112c-17.7 0-32 14.3-32 32s14.3 32 32 32 32-14.3 32-32-14.3-32-32-32z"/>
+      <rect width="512" height="512" rx="120" fill="#090d16"/>
+      <rect x="20" y="20" width="472" height="472" rx="100" fill="none" stroke="url(#cloudGrad)" stroke-width="8" opacity="0.35"/>
+      <path fill="url(#cloudGrad)" d="M384 224a112 112 0 0 0-218.4-38.4A96 96 0 0 0 80 272a96 96 0 0 0 96 96h208a80 80 0 0 0 0-160h-16zm-104 32v64h-48v-64h-40l64-80 64 80h-40z"/>
     </svg>`;
     res.setHeader('Content-Type', 'image/svg+xml');
     res.send(svgIcon);

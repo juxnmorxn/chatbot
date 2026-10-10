@@ -809,7 +809,12 @@ export function getClientPortalHtml(): string {
     <!-- Header Móvil -->
     <header class="app-header">
       <div class="brand-group">
-        <div class="brand-icon"><i class="fa-solid fa-wifi"></i></div>
+        <div class="brand-icon" style="background: linear-gradient(135deg, #6366f1 0%, #06b6d4 100%);">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>
+            <path d="M12 12l2 2 4-4"/>
+          </svg>
+        </div>
         <div class="brand-info">
           <h1>${ispName}</h1>
           <span id="headerGreeting">Mi Conexión</span>
@@ -910,7 +915,6 @@ export function getClientPortalHtml(): string {
     </div>
 
     <!-- 4. DASHBOARD DEL CLIENTE (100% AMIGABLE Y VISUAL) -->
-    <!-- 4. DASHBOARD DEL CLIENTE (RESPONSIVO MÓVIL Y PANTALLAS GRANDES) -->
     <div id="viewDashboard" class="hidden">
 
       <!-- Banners de alerta que abarcan todo el ancho -->
@@ -955,22 +959,45 @@ export function getClientPortalHtml(): string {
       <!-- Contenedor responsivo: 2 columnas en pantallas grandes / 1 columna fluida en móvil -->
       <div class="dashboard-cols">
 
-        <!-- COLUMNA 1: ESTADO DE CONEXIÓN Y RED WI-FI DUAL BAND -->
+        <!-- COLUMNA 1: TU PAQUETE CONTRATADO Y RED WI-FI SIMPLIFICADA -->
         <div class="portal-col">
 
-          <!-- TARJETA 1: ESTADO DEL INTERNET -->
-          <div class="app-card">
-            <div class="card-head">
-              <div class="card-head-title"><i class="fa-solid fa-circle-nodes"></i> Estado de tu Conexión</div>
-              <span id="planSpeedTag" class="status-speed-badge">40 Megas</span>
+          <!-- TARJETA 1: TU PAQUETE CONTRATADO (ALTO ÉNFASIS) -->
+          <div class="app-card" style="background: linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.8) 100%); border: 1px solid rgba(56, 189, 248, 0.35); box-shadow: 0 8px 30px rgba(14, 165, 233, 0.18);">
+            <div class="card-head" style="margin-bottom: 6px;">
+              <div class="card-head-title" style="color: #38bdf8; font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px;">
+                <i class="fa-solid fa-bolt"></i> Tu Paquete de Internet
+              </div>
+              <span class="status-speed-badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border-color: rgba(16, 185, 129, 0.3); font-size: 11px;">
+                <i class="fa-solid fa-circle-check"></i> Activo
+              </span>
             </div>
 
-            <div class="status-banner-box">
+            <!-- Gran Énfasis en Nombre de Paquete y Velocidad -->
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 8px 0 14px 0; padding-bottom: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.08);">
+              <div>
+                <div id="planNameBig" style="font-family: 'Outfit', sans-serif; font-size: 22px; font-weight: 800; color: #ffffff; line-height: 1.15;">
+                  Paquete 40 Megas
+                </div>
+                <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px; display: flex; align-items: center; gap: 6px;">
+                  <i class="fa-solid fa-network-wired" style="color: #38bdf8;"></i> Fibra Óptica Simétrica
+                </div>
+              </div>
+              <div style="text-align: right; background: rgba(14, 165, 233, 0.1); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 12px; padding: 6px 14px;">
+                <div id="planSpeedBig" style="font-family: 'Outfit', sans-serif; font-size: 28px; font-weight: 800; color: #38bdf8; line-height: 1;">
+                  40M
+                </div>
+                <span style="font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px;">Velocidad</span>
+              </div>
+            </div>
+
+            <!-- Estado de Conexión en Vivo -->
+            <div class="status-banner-box" style="margin-top: 0; margin-bottom: 12px; background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.05);">
               <div class="status-left">
                 <div id="statusPulseDot" class="status-pulse-circle"></div>
                 <div>
-                  <div id="statusFriendlyTitle" class="status-text-main">Tu internet está funcionando al 100%</div>
-                  <div id="statusFriendlySub" class="status-text-sub">Señal excelente en tu domicilio</div>
+                  <div id="statusFriendlyTitle" class="status-text-main" style="font-size: 13.5px;">Tu internet está funcionando al 100%</div>
+                  <div id="statusFriendlySub" class="status-text-sub">Señal excelente y óptima en tu domicilio</div>
                 </div>
               </div>
             </div>
@@ -981,72 +1008,67 @@ export function getClientPortalHtml(): string {
             </div>
           </div>
 
-          <!-- TARJETA 2: TU RED WI-FI DE CASA (DOBLE BANDA 2.4G Y 5G) -->
+          <!-- TARJETA 2: TU RED WI-FI (DOBLE BANDA - UNA SOLA CONTRASEÑA) -->
           <div class="app-card">
             <div class="card-head">
               <div class="card-head-title"><i class="fa-solid fa-wifi"></i> Tu Red Wi-Fi (Doble Banda)</div>
               <button class="btn-header-action" onclick="openModalWifi()" style="padding: 6px 12px; font-size: 12px;">
-                <i class="fa-solid fa-pen"></i> Cambiar
+                <i class="fa-solid fa-pen"></i> Cambiar Clave
               </button>
             </div>
 
-            <!-- BANDA 2.4 GHz -->
-            <div class="wifi-band-card">
-              <div class="wifi-band-head">
-                <div class="wifi-band-tag tag-24g">
-                  <i class="fa-solid fa-tower-broadcast"></i> Red 2.4 GHz
-                </div>
-                <span class="wifi-band-hint">Mayor cobertura / Alcance</span>
-              </div>
-
+            <!-- Nombres de Red (2.4 GHz y 5 GHz) -->
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <!-- 2.4 GHz -->
               <div class="wifi-item">
                 <div class="wifi-item-info">
-                  <span class="wifi-label">Nombre de Red (SSID)</span>
-                  <span id="wifiSsid24Label" class="wifi-val">Cargando...</span>
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <span class="wifi-band-tag tag-24g"><i class="fa-solid fa-tower-broadcast"></i> Red 2.4 GHz</span>
+                    <span style="font-size: 11px; color: var(--text-muted);">Mayor cobertura</span>
+                  </div>
+                  <span id="wifiSsid24Label" class="wifi-val" style="margin-top: 3px;">Cargando...</span>
                 </div>
-                <button class="btn-action-icon" onclick="copyWifiSsid24()" title="Copiar nombre de red"><i class="fa-solid fa-copy"></i></button>
+                <button class="btn-action-icon" onclick="copyWifiSsid24()" title="Copiar nombre de red 2.4G"><i class="fa-solid fa-copy"></i></button>
               </div>
 
-              <div class="wifi-item" style="margin-top: 8px;">
+              <!-- 5 GHz -->
+              <div id="boxWifi5g" class="wifi-item">
                 <div class="wifi-item-info">
-                  <span class="wifi-label">Contraseña Wi-Fi</span>
-                  <span id="wifiPass24Label" class="wifi-val mono">••••••••</span>
+                  <div style="display: flex; align-items: center; gap: 6px;">
+                    <span class="wifi-band-tag tag-5g"><i class="fa-solid fa-bolt"></i> Red 5 GHz</span>
+                    <span style="font-size: 11px; color: var(--text-muted);">Ultra velocidad / Streaming</span>
+                  </div>
+                  <span id="wifiSsid5gLabel" class="wifi-val" style="margin-top: 3px;">Cargando...</span>
                 </div>
-                <div class="wifi-actions">
-                  <button class="btn-action-icon" onclick="toggleShowWifiPass24()" title="Ver u ocultar contraseña"><i id="eyeIcon24" class="fa-solid fa-eye"></i></button>
-                  <button class="btn-action-icon" onclick="copyWifiPass24()" title="Copiar contraseña"><i class="fa-solid fa-copy"></i></button>
-                  <button class="btn-action-icon" onclick="openQrModal('24')" title="Generar QR para visitas"><i class="fa-solid fa-qrcode"></i></button>
-                </div>
+                <button class="btn-action-icon" onclick="copyWifiSsid5g()" title="Copiar nombre de red 5G"><i class="fa-solid fa-copy"></i></button>
               </div>
             </div>
 
-            <!-- BANDA 5 GHz -->
-            <div id="boxWifi5g" class="wifi-band-card" style="margin-top: 12px;">
-              <div class="wifi-band-head">
-                <div class="wifi-band-tag tag-5g">
-                  <i class="fa-solid fa-bolt"></i> Red 5 GHz
-                </div>
-                <span class="wifi-band-hint">Ultra velocidad / Streaming</span>
+            <!-- Contraseña Wi-Fi ÚNICA y Compartida -->
+            <div style="background: rgba(15, 23, 42, 0.85); border: 1px solid var(--border-highlight); border-radius: var(--radius-md); padding: 14px; margin-top: 12px; display: flex; flex-direction: column; gap: 10px;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span class="wifi-label" style="color: #38bdf8; font-size: 11px; display: flex; align-items: center; gap: 6px;">
+                  <i class="fa-solid fa-key"></i> Contraseña Wi-Fi (Para ambas redes)
+                </span>
+                <span style="font-size: 10px; color: var(--text-muted);">Misma clave en 2.4G y 5G</span>
               </div>
 
-              <div class="wifi-item">
-                <div class="wifi-item-info">
-                  <span class="wifi-label">Nombre de Red (SSID)</span>
-                  <span id="wifiSsid5gLabel" class="wifi-val">Cargando...</span>
-                </div>
-                <button class="btn-action-icon" onclick="copyWifiSsid5g()" title="Copiar nombre de red"><i class="fa-solid fa-copy"></i></button>
-              </div>
-
-              <div class="wifi-item" style="margin-top: 8px;">
-                <div class="wifi-item-info">
-                  <span class="wifi-label">Contraseña Wi-Fi</span>
-                  <span id="wifiPass5gLabel" class="wifi-val mono">••••••••</span>
-                </div>
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--bg-surface); padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-card);">
+                <span id="wifiPassSharedLabel" class="wifi-val mono" style="font-size: 17px; letter-spacing: 2px;">••••••••</span>
                 <div class="wifi-actions">
-                  <button class="btn-action-icon" onclick="toggleShowWifiPass5g()" title="Ver u ocultar contraseña"><i id="eyeIcon5g" class="fa-solid fa-eye"></i></button>
-                  <button class="btn-action-icon" onclick="copyWifiPass5g()" title="Copiar contraseña"><i class="fa-solid fa-copy"></i></button>
-                  <button class="btn-action-icon" onclick="openQrModal('5g')" title="Generar QR para visitas"><i class="fa-solid fa-qrcode"></i></button>
+                  <button class="btn-action-icon" onclick="toggleShowWifiPassShared()" title="Ver u ocultar contraseña"><i id="eyeIconShared" class="fa-solid fa-eye"></i></button>
+                  <button class="btn-action-icon" onclick="copyWifiPassShared()" title="Copiar contraseña"><i class="fa-solid fa-copy"></i></button>
                 </div>
+              </div>
+
+              <!-- Acciones Rápidas: QR 5 GHz Directo y Cambiar Clave -->
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 2px;">
+                <button class="btn-outline" onclick="openQrModal('5g')" style="padding: 10px 12px; font-size: 12.5px; border-color: rgba(168, 85, 247, 0.4); background: rgba(168, 85, 247, 0.12); color: #c084fc; font-weight: 700;">
+                  <i class="fa-solid fa-qrcode"></i> Conectar QR (5G)
+                </button>
+                <button class="btn-main" onclick="openModalWifi()" style="padding: 10px 12px; font-size: 12.5px;">
+                  <i class="fa-solid fa-pen"></i> Cambiar Clave
+                </button>
               </div>
             </div>
           </div>
@@ -1180,17 +1202,64 @@ export function getClientPortalHtml(): string {
     </div>
   </div>
 
-  <!-- MODAL: CÓDIGO QR PARA VISITAS -->
+  <!-- MODAL: CÓDIGO QR PARA VISITAS (CONEXIÓN DIRECTA 5 GHz) -->
   <div id="modalQr" class="modal-overlay">
     <div class="modal-sheet" style="text-align: center; align-items: center;">
       <div class="modal-sheet-header" style="width: 100%;">
-        <div class="modal-sheet-title" id="qrModalTitle">Conectar por Código QR</div>
+        <div class="modal-sheet-title" id="qrModalTitle" style="display: flex; align-items: center; gap: 8px;">
+          <i class="fa-solid fa-bolt" style="color: #c084fc;"></i> Conectar por QR (5 GHz)
+        </div>
         <button class="btn-close-modal" onclick="closeModal('modalQr')">&times;</button>
       </div>
-      <p id="qrNetworkName" style="font-size: 13px; color: #38bdf8; font-weight: 700; margin-bottom: 4px;"></p>
-      <p style="font-size: 12px; color: var(--text-body);">Escanea este código con la cámara de tu celular para conectarte sin escribir la clave:</p>
-      <div id="qrcodeBox" style="background: white; padding: 16px; border-radius: 16px; margin: 12px auto; display: flex; justify-content: center;"></div>
-      <button class="btn-outline" onclick="closeModal('modalQr')">Listo, cerrar</button>
+
+      <div style="background: rgba(168, 85, 247, 0.12); border: 1px solid rgba(168, 85, 247, 0.3); border-radius: var(--radius-sm); padding: 6px 12px; margin-top: 4px;">
+        <span id="qrNetworkName" style="font-size: 13px; color: #c084fc; font-weight: 700;"></span>
+      </div>
+
+      <p style="font-size: 12px; color: var(--text-body); margin-top: 6px;">
+        Escanea este código con la cámara de tu celular para conectarte a <strong>máxima velocidad (5 GHz)</strong> sin escribir la clave:
+      </p>
+
+      <div id="qrcodeBox" style="background: white; padding: 16px; border-radius: 16px; margin: 10px auto; display: flex; justify-content: center; box-shadow: 0 4px 20px rgba(0,0,0,0.5);"></div>
+
+      <div style="display: flex; flex-direction: column; gap: 6px; width: 100%;">
+        <button id="qrAltBandBtn" class="btn-outline" onclick="toggleQrBand()" style="font-size: 12px; padding: 8px 12px;">
+          <i class="fa-solid fa-tower-broadcast"></i> Cambiar a Red 2.4 GHz
+        </button>
+        <button class="btn-main" onclick="closeModal('modalQr')" style="font-size: 13px; padding: 10px 14px;">
+          Listo, cerrar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: AVISO TRAS CAMBIO DE CONTRASEÑA (DESCONEXIÓN WI-FI TEMPORAL) -->
+  <div id="modalPostWifiSuccess" class="modal-overlay">
+    <div class="modal-sheet" style="text-align: center;">
+      <div style="font-size: 42px; color: #10b981; margin-bottom: 4px;">
+        <i class="fa-solid fa-circle-check"></i>
+      </div>
+      <div class="modal-sheet-title" style="font-size: 18px; color: #fff;">¡Contraseña Guardada en tu Módem!</div>
+      
+      <div style="background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.4); border-radius: var(--radius-md); padding: 12px; margin: 12px 0; text-align: left; font-size: 12.5px; color: #f8fafc; line-height: 1.4;">
+        ⚠️ <strong>Tu teléfono se desconectará del Wi-Fi en unos segundos.</strong><br>
+        Para volver a tener internet, conéctate a tu red usando esta nueva clave:
+      </div>
+
+      <div style="background: var(--bg-surface); border: 2px dashed #38bdf8; border-radius: var(--radius-md); padding: 14px; margin-bottom: 12px;">
+        <span style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 4px;">Tu Nueva Contraseña Wi-Fi:</span>
+        <div id="postWifiNewPassLabel" style="font-family: monospace; font-size: 20px; font-weight: 800; color: #38bdf8; letter-spacing: 2px;"></div>
+        <button class="btn-outline" onclick="copyPostWifiPass()" style="margin-top: 10px; padding: 8px 12px; font-size: 12px; width: 100%;">
+          <i class="fa-solid fa-copy"></i> Copiar Contraseña
+        </button>
+      </div>
+
+      <button class="btn-main" onclick="openQrModal('5g')" style="margin-bottom: 8px;">
+        <i class="fa-solid fa-qrcode"></i> Conectar por QR (Red 5 GHz)
+      </button>
+      <button class="btn-outline" onclick="closeModal('modalPostWifiSuccess')">
+        Entendido, cerrar
+      </button>
     </div>
   </div>
 
@@ -1549,7 +1618,10 @@ export function getClientPortalHtml(): string {
       }
     }
 
-    // Dashboard Data Loading (Carga Instantánea y Conexión Segura)
+    let isPassRevealedShared = false;
+    let currentQrBand = '5g';
+
+    // Dashboard Data Loading (Carga Instantánea y Conexión Segura con Soporte Offline)
     async function loadDashboard(serviceId) {
       if (isLoadingDashboard) return;
       isLoadingDashboard = true;
@@ -1600,13 +1672,39 @@ export function getClientPortalHtml(): string {
           currentPhone = data.client.telefono;
         }
 
+        // Guardar en caché local para persistencia 100% offline
+        try {
+          localStorage.setItem('cp_cached_dashboard_' + currentPhone, JSON.stringify(data));
+        } catch (e) {}
+
         hideAllViews();
         document.getElementById('viewDashboard').classList.remove('hidden');
         document.getElementById('btnLogout').classList.remove('hidden');
 
         renderDashboard(data);
       } catch (err) {
-        console.warn('[Portal] Error al cargar datos:', err);
+        console.warn('[Portal] Conexión caída o cambio de Wi-Fi. Intentando cargar caché offline...', err);
+        // Rescatar datos de caché offline para que el usuario NUNCA se quede fuera de su portal
+        const cachedStr = localStorage.getItem('cp_cached_dashboard_' + targetPhone);
+        if (cachedStr) {
+          try {
+            const cachedData = JSON.parse(cachedStr);
+            const localPass = localStorage.getItem('cp_last_pass');
+            if (localPass) {
+              if (!cachedData.wifi) cachedData.wifi = {};
+              cachedData.wifi.password = localPass;
+              cachedData.wifi.password24 = localPass;
+              cachedData.wifi.password5g = localPass;
+            }
+            hideAllViews();
+            document.getElementById('viewDashboard').classList.remove('hidden');
+            document.getElementById('btnLogout').classList.remove('hidden');
+            renderDashboard(cachedData);
+            showToast('Mostrando datos guardados en tu dispositivo');
+            return;
+          } catch (e2) {}
+        }
+
         if (!isDashVisible) {
           if (targetPhone) {
             showNotFound(targetPhone);
@@ -1632,9 +1730,20 @@ export function getClientPortalHtml(): string {
       document.getElementById('titularName').innerText = c.nombre;
       document.getElementById('contractFolio').innerText = '#' + c.id_servicio;
 
-      // Plan amigable
-      const cleanPlan = (c.plan_internet || 'Fibra Óptica').replace(/^paquete\\s+/i, '');
-      document.getElementById('planSpeedTag').innerText = cleanPlan;
+      // Paquete Contratado con Gran Énfasis Visual
+      const rawPlan = (c.plan_internet || '40 Megas').trim();
+      const cleanPlan = rawPlan.replace(/^paquete\s+/i, '');
+      const speedMatch = cleanPlan.match(/(\d+)\s*(m|megas?|mbps)/i);
+      const speedBig = speedMatch ? (speedMatch[1] + 'M') : (cleanPlan.length <= 6 ? cleanPlan : '40M');
+
+      const planNameEl = document.getElementById('planNameBig');
+      if (planNameEl) {
+        planNameEl.innerText = cleanPlan.toUpperCase().startsWith('PAQUETE') ? cleanPlan : ('Paquete ' + cleanPlan);
+      }
+      const planSpeedEl = document.getElementById('planSpeedBig');
+      if (planSpeedEl) {
+        planSpeedEl.innerText = speedBig;
+      }
 
       // Onboarding Password Banner
       const onb = document.getElementById('onboardingBanner');
@@ -1699,23 +1808,25 @@ export function getClientPortalHtml(): string {
         sub.innerText = 'Revisa tu equipo';
       }
 
-      // Wi-Fi Real Dual Band (Directo de módem / SmartOLT)
+      // Wi-Fi Real Dual Band Simplificado (Una Sola Contraseña Compartida)
       const wifi = data.wifi || {};
       realWifiSsid24 = wifi.ssid24 || ('CloudWare_' + c.id_servicio);
       realWifiPassword24 = wifi.password24 || wifi.password || '********';
+      realWifiSsid5g = wifi.ssid5g || (realWifiSsid24 + '-5G');
+      realWifiPassword5g = wifi.password5g || realWifiPassword24;
+
       document.getElementById('wifiSsid24Label').innerText = realWifiSsid24;
-      document.getElementById('wifiPass24Label').innerText = isPassRevealed24 ? realWifiPassword24 : '••••••••';
 
       const box5g = document.getElementById('boxWifi5g');
-      if (wifi.has5g) {
-        if (box5g) box5g.classList.remove('hidden');
-        realWifiSsid5g = wifi.ssid5g || (realWifiSsid24 + '-5G');
-        realWifiPassword5g = wifi.password5g || realWifiPassword24;
+      if (wifi.has5g !== false) {
+        if (box5g) box5g.style.display = 'flex';
         document.getElementById('wifiSsid5gLabel').innerText = realWifiSsid5g;
-        document.getElementById('wifiPass5gLabel').innerText = isPassRevealed5g ? realWifiPassword5g : '••••••••';
       } else {
-        if (box5g) box5g.classList.add('hidden');
+        if (box5g) box5g.style.display = 'none';
       }
+
+      const sharedPass = realWifiPassword5g || realWifiPassword24;
+      document.getElementById('wifiPassSharedLabel').innerText = isPassRevealedShared ? sharedPass : '••••••••';
 
       // Facturación y Saldo
       const balance = Number(c.saldo || 0);
@@ -1784,34 +1895,24 @@ export function getClientPortalHtml(): string {
       }
     }
 
-    async function triggerModemReboot() {
-      const btn = document.getElementById('btnRebootModem');
-      btn.disabled = true;
-      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Reiniciando tu módem...';
-
-      try {
-        const res = await fetch('/api/portal/reboot', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ clientId: currentContractId })
-        });
-        const d = await res.json();
-        showToast(d.message || 'Módem reiniciado. Espera 1 minuto.');
-      } catch {
-        showToast('No se pudo enviar la orden de reinicio');
-      } finally {
-        setTimeout(() => {
-          btn.disabled = false;
-          btn.innerHTML = '<i class="fa-solid fa-rotate"></i> Optimizar / Reiniciar mi Conexión';
-        }, 5000);
-      }
+    // Toggle y Copiado Contraseña Única
+    function toggleShowWifiPassShared() {
+      isPassRevealedShared = !isPassRevealedShared;
+      const pass = realWifiPassword5g || realWifiPassword24;
+      document.getElementById('wifiPassSharedLabel').innerText = isPassRevealedShared ? pass : '••••••••';
+      document.getElementById('eyeIconShared').className = isPassRevealedShared ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye';
     }
 
-    // Toggle y Copiado 2.4 GHz
-    function toggleShowWifiPass24() {
-      isPassRevealed24 = !isPassRevealed24;
-      document.getElementById('wifiPass24Label').innerText = isPassRevealed24 ? realWifiPassword24 : '••••••••';
-      document.getElementById('eyeIcon24').className = isPassRevealed24 ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye';
+    function copyWifiPassShared() {
+      const pass = realWifiPassword5g || realWifiPassword24;
+      navigator.clipboard.writeText(pass);
+      showToast('Contraseña Wi-Fi copiada al portapapeles');
+    }
+
+    function copyPostWifiPass() {
+      const pass = realWifiPassword5g || realWifiPassword24;
+      navigator.clipboard.writeText(pass);
+      showToast('Contraseña Wi-Fi copiada');
     }
 
     function copyWifiSsid24() {
@@ -1819,26 +1920,9 @@ export function getClientPortalHtml(): string {
       showToast('Nombre de red 2.4 GHz copiado');
     }
 
-    function copyWifiPass24() {
-      navigator.clipboard.writeText(realWifiPassword24);
-      showToast('Contraseña 2.4 GHz copiada');
-    }
-
-    // Toggle y Copiado 5 GHz
-    function toggleShowWifiPass5g() {
-      isPassRevealed5g = !isPassRevealed5g;
-      document.getElementById('wifiPass5gLabel').innerText = isPassRevealed5g ? realWifiPassword5g : '••••••••';
-      document.getElementById('eyeIcon5g').className = isPassRevealed5g ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye';
-    }
-
     function copyWifiSsid5g() {
       navigator.clipboard.writeText(realWifiSsid5g || document.getElementById('wifiSsid5gLabel').innerText);
       showToast('Nombre de red 5 GHz copiado');
-    }
-
-    function copyWifiPass5g() {
-      navigator.clipboard.writeText(realWifiPassword5g);
-      showToast('Contraseña 5 GHz copiada');
     }
 
     function copyClabe() {
@@ -1968,29 +2052,48 @@ export function getClientPortalHtml(): string {
       }
     }
 
-    function openQrModal(band) {
-      const is5g = band === '5g';
-      const ssid = is5g ? (realWifiSsid5g || document.getElementById('wifiSsid5gLabel').innerText) : (realWifiSsid24 || document.getElementById('wifiSsid24Label').innerText);
-      const pass = is5g ? realWifiPassword5g : realWifiPassword24;
-      const bandName = is5g ? 'Red 5 GHz (Ultra Velocidad)' : 'Red 2.4 GHz (Mayor Alcance)';
+    // QR Code por defecto conectando a 5 GHz (Ultra Velocidad)
+    function openQrModal(band = '5g') {
+      currentQrBand = (band === '24' || (!realWifiSsid5g && band !== '5g')) ? '24' : '5g';
+      const is5g = currentQrBand === '5g';
+      const ssid = is5g ? (realWifiSsid5g || (realWifiSsid24 + '-5G')) : (realWifiSsid24 || document.getElementById('wifiSsid24Label').innerText);
+      const pass = realWifiPassword5g || realWifiPassword24;
 
       const titleEl = document.getElementById('qrModalTitle');
-      if (titleEl) titleEl.innerText = 'Conectar por QR · ' + (is5g ? '5 GHz' : '2.4 GHz');
+      if (titleEl) {
+        titleEl.innerHTML = is5g 
+          ? '<i class="fa-solid fa-bolt" style="color: #c084fc;"></i> Conectar por QR (Red 5 GHz)' 
+          : '<i class="fa-solid fa-tower-broadcast" style="color: #38bdf8;"></i> Conectar por QR (Red 2.4 GHz)';
+      }
+      
       const nameEl = document.getElementById('qrNetworkName');
-      if (nameEl) nameEl.innerText = ssid + ' (' + bandName + ')';
+      if (nameEl) {
+        nameEl.innerText = ssid + (is5g ? ' · Red 5 GHz (Ultra Velocidad)' : ' · Red 2.4 GHz (Mayor Alcance)');
+      }
+
+      const altBtn = document.getElementById('qrAltBandBtn');
+      if (altBtn) {
+        altBtn.innerHTML = is5g 
+          ? '<i class="fa-solid fa-tower-broadcast"></i> Cambiar a Red 2.4 GHz' 
+          : '<i class="fa-solid fa-bolt"></i> Cambiar a Red 5 GHz';
+      }
 
       const qrData = 'WIFI:T:WPA;S:' + ssid + ';P:' + pass + ';;';
       const box = document.getElementById('qrcodeBox');
       box.innerHTML = '';
       new QRCode(box, {
         text: qrData,
-        width: 170,
-        height: 170,
+        width: 175,
+        height: 175,
         colorDark: "#000000",
         colorLight: "#ffffff",
         correctLevel: QRCode.CorrectLevel.H
       });
       document.getElementById('modalQr').style.display = 'flex';
+    }
+
+    function toggleQrBand() {
+      openQrModal(currentQrBand === '5g' ? '24' : '5g');
     }
 
     function openModalBank() {
@@ -2034,14 +2137,20 @@ export function getClientPortalHtml(): string {
         });
         const d = await res.json();
         if (d.success) {
-          showToast('✅ ¡Contraseña Wi-Fi configurada con éxito!');
-          closeModal('modalWifi');
           realWifiPassword24 = password;
           realWifiPassword5g = password;
-          document.getElementById('wifiPass24Label').innerText = isPassRevealed24 ? password : '••••••••';
-          if (document.getElementById('wifiPass5gLabel')) {
-            document.getElementById('wifiPass5gLabel').innerText = isPassRevealed5g ? password : '••••••••';
-          }
+          localStorage.setItem('cp_last_pass', password);
+
+          // Actualizar contraseña en el dashboard de inmediato
+          document.getElementById('wifiPassSharedLabel').innerText = isPassRevealedShared ? password : '••••••••';
+
+          closeModal('modalWifi');
+
+          // Mostrar modal con la nueva contraseña y el QR 5G
+          document.getElementById('postWifiNewPassLabel').innerText = password;
+          document.getElementById('modalPostWifiSuccess').style.display = 'flex';
+
+          showToast('✅ ¡Contraseña guardada en tu módem!');
         } else {
           showToast(d.message || 'Error al actualizar Wi-Fi');
         }
