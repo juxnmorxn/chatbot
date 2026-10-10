@@ -23,6 +23,13 @@ interface CachedSignal {
 const signalCache = new Map<string, CachedSignal>();
 const SIGNAL_CACHE_TTL_MS = 90 * 1000; // 90 segundos de caché por ONU
 
+interface CachedWifi {
+  data: any;
+  timestamp: number;
+}
+const wifiCache = new Map<string, CachedWifi>();
+const WIFI_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos de caché para Wi-Fi
+
 const rebootCooldowns = new Map<string, number>();
 const REBOOT_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutos entre reinicios por cliente
 
@@ -37,10 +44,12 @@ export class ClientPortalController {
   static clearPortalCache(phoneOrOnu?: string): void {
     if (phoneOrOnu) {
       signalCache.delete(phoneOrOnu);
+      wifiCache.delete(phoneOrOnu);
       rebootCooldowns.delete(phoneOrOnu);
       wifiChangeCooldowns.delete(phoneOrOnu);
     } else {
       signalCache.clear();
+      wifiCache.clear();
       rebootCooldowns.clear();
       wifiChangeCooldowns.clear();
     }
@@ -340,7 +349,47 @@ self.addEventListener('fetch', (event) => {
       if (autoToken && typeof autoToken === 'string') {
         const payload = verifyClientPortalToken(autoToken);
         if (payload) {
+          const db = getDbClient();
+          const accRes = await db.execute({
+            sql: `SELECT * FROM client_portal_accounts WHERE telefono = ? LIMIT 1`,
+            args: [payload.phone],
+          });
+          const account = accRes.rows[0];
+
+          // Validación estricta de Revocación / Desactivación
+          if (account) {
+            if (account.is_active === 0) {
+              res.status(403).json({
+                success: false,
+                sessionRevoked: true,
+                message: 'Esta cuenta o enlace ha sido desactivado por el administrador.',
+              });
+              return;
+            }
+            if (account.tokens_revoked_at && payload.iat < Math.floor(new Date(account.tokens_revoked_at as string).getTime() / 1000)) {
+              res.status(401).json({
+                success: false,
+                sessionRevoked: true,
+                message: 'Este enlace de acceso ha expirado o fue revocado.',
+              });
+              return;
+            }
+            if (account.token_version && payload.ver && payload.ver < Number(account.token_version)) {
+              res.status(401).json({
+                success: false,
+                sessionRevoked: true,
+                message: 'Este enlace de acceso fue reemplazado por uno nuevo.',
+              });
+              return;
+            }
+          }
+
           const services = await ClientPortalController.findClientsByIdentifier(payload.phone);
+          if (!services || services.length === 0) {
+            res.status(404).json({ success: false, message: 'No se encontraron servicios asociados a este enlace.' });
+            return;
+          }
+
           res.json({
             success: true,
             token: autoToken,
@@ -359,6 +408,13 @@ self.addEventListener('fetch', (event) => {
               estado: s.estado,
               saldo: s.saldo,
             })),
+          });
+          return;
+        } else {
+          res.status(401).json({
+            success: false,
+            sessionRevoked: true,
+            message: 'El enlace de acceso es inválido o ha expirado.',
           });
           return;
         }
@@ -588,9 +644,51 @@ self.addEventListener('fetch', (event) => {
       if (token) {
         const payload = verifyClientPortalToken(token);
         if (payload) {
+          const db = getDbClient();
+          const accRes = await db.execute({
+            sql: `SELECT * FROM client_portal_accounts WHERE telefono = ? LIMIT 1`,
+            args: [payload.phone],
+          });
+          const account = accRes.rows[0];
+
+          if (account) {
+            if (account.is_active === 0) {
+              res.status(403).json({
+                success: false,
+                sessionRevoked: true,
+                message: 'Esta cuenta o enlace ha sido desactivado por el administrador.',
+              });
+              return;
+            }
+            if (account.tokens_revoked_at && payload.iat < Math.floor(new Date(account.tokens_revoked_at as string).getTime() / 1000)) {
+              res.status(401).json({
+                success: false,
+                sessionRevoked: true,
+                message: 'Tu sesión o enlace ha expirado o fue revocado por seguridad.',
+              });
+              return;
+            }
+            if (account.token_version && payload.ver && payload.ver < Number(account.token_version)) {
+              res.status(401).json({
+                success: false,
+                sessionRevoked: true,
+                message: 'Tu sesión ha sido renovada. Por favor ingresa nuevamente.',
+              });
+              return;
+            }
+          }
+
           verifiedPhone = payload.phone;
           tokenName = payload.name || '';
           tokenServiceIds = payload.serviceIds || [];
+        } else {
+          // Token provisto pero inválido
+          res.status(401).json({
+            success: false,
+            sessionRevoked: true,
+            message: 'Tu sesión es inválida o ha expirado.',
+          });
+          return;
         }
       }
 
@@ -632,18 +730,40 @@ self.addEventListener('fetch', (event) => {
         if (exact) client = exact;
       }
 
-      const relatedServices = services.map((s: any) => ({
-        id_servicio: s.id_servicio,
-        nombre: s.nombre,
-        direccion: s.direccion || s.router || 'Domicilio registrado',
-        ip: s.ip,
-        router: s.router,
-        plan_internet: s.plan_internet,
-        estado: s.estado,
-        saldo: s.saldo || 0,
-      }));
-
       const db = getDbClient();
+
+      // Obtener lista completa de ONUs en SmartOLT para asociar nombres reales a cada servicio
+      const allOnusRes = await db.execute('SELECT unique_external_id, sn, name, ip_address, zone_name, speed_profile FROM smartolt_onus');
+      const allOnus = allOnusRes.rows || [];
+
+      const relatedServices = services.map((s: any) => {
+        const srvId = String(s.id_servicio || '').trim();
+        const srvSn = String(s.sn_onu || '').trim().toUpperCase();
+        const srvIp = String(s.ip || '').trim();
+
+        // Buscar coincidencia en SmartOLT
+        const matchedOnu = allOnus.find((o: any) => {
+          const oName = String(o.name || '');
+          if (srvId && (oName.startsWith(`${srvId}-`) || oName.startsWith(`${srvId}.`) || oName.startsWith(`${srvId} `))) return true;
+          if (srvSn && o.sn && String(o.sn).toUpperCase() === srvSn) return true;
+          if (srvIp && o.ip_address && String(o.ip_address) === srvIp) return true;
+          return false;
+        });
+
+        return {
+          id_servicio: s.id_servicio,
+          nombre: s.nombre,
+          smartolt_name: matchedOnu?.name || s.nombre,
+          sn_onu: matchedOnu?.sn || s.sn_onu || '',
+          direccion: s.direccion || matchedOnu?.zone_name || s.router || 'Domicilio registrado',
+          zona: matchedOnu?.zone_name || s.router || '',
+          ip: s.ip || matchedOnu?.ip_address,
+          router: s.router,
+          plan_internet: s.plan_internet || matchedOnu?.speed_profile,
+          estado: s.estado,
+          saldo: s.saldo || 0,
+        };
+      });
 
       // 1. Obtener registro de SmartOLT (búsqueda multicriterio: ID de Servicio en nombre, SN, IP, Nombre)
       let onuRecord: any = null;
@@ -758,35 +878,43 @@ self.addEventListener('fetch', (event) => {
       };
 
       if (targetOnuId) {
-        try {
-          const timeoutPromise = new Promise<any>((resolve) => setTimeout(() => resolve(null), 3000));
-          const wifiPromise = SmartOLTService.getOnuWifiDetails(targetOnuId);
-          const wifiDetails = await Promise.race([wifiPromise, timeoutPromise]);
-          if (wifiDetails) {
-            wifiInfo = {
-              ssid24: wifiDetails.ssid24 || wifiDetails.ssid || '',
-              password24: wifiDetails.password24 || wifiDetails.password || '',
-              ssid5g: wifiDetails.ssid5g || '',
-              password5g: wifiDetails.password5g || wifiDetails.password24 || '',
-              has5g: !!wifiDetails.has5g,
-              ssid: wifiDetails.ssid24 || wifiDetails.ssid || '',
-              password: wifiDetails.password24 || wifiDetails.password || '',
-            };
+        // Revisar caché en memoria primero
+        const cached = wifiCache.get(targetOnuId);
+        const now = Date.now();
+        if (cached && (now - cached.timestamp) < WIFI_CACHE_TTL_MS && (cached.data.ssid24 || cached.data.ssid5g)) {
+          wifiInfo = cached.data;
+        } else {
+          try {
+            const timeoutPromise = new Promise<any>((resolve) => setTimeout(() => resolve(null), 8000));
+            const wifiPromise = SmartOLTService.getOnuWifiDetails(targetOnuId);
+            const wifiDetails = await Promise.race([wifiPromise, timeoutPromise]);
+            if (wifiDetails && (wifiDetails.ssid24 || wifiDetails.ssid5g || wifiDetails.ssid)) {
+              wifiInfo = {
+                ssid24: wifiDetails.ssid24 || wifiDetails.ssid || '',
+                password24: wifiDetails.password24 || wifiDetails.password || '',
+                ssid5g: wifiDetails.ssid5g || '',
+                password5g: wifiDetails.password5g || wifiDetails.password24 || '',
+                has5g: !!wifiDetails.has5g,
+                ssid: wifiDetails.ssid24 || wifiDetails.ssid || '',
+                password: wifiDetails.password24 || wifiDetails.password || '',
+              };
+              wifiCache.set(targetOnuId, { data: wifiInfo, timestamp: now });
+            }
+          } catch (wErr) {
+            logger.warn(`No se pudo obtener WiFi de SmartOLT para ${targetOnuId}:`, wErr);
           }
-        } catch (wErr) {
-          logger.warn(`No se pudo obtener WiFi de SmartOLT para ${targetOnuId}:`, wErr);
         }
       }
 
       // Si la OLT no traía SSIDs configurados todavía, fallback con marca de servicio
       const ispName = SettingsService.get('ISP_NAME', 'ISP_NAME', config.isp.name || 'CloudWareMx');
-      if (!wifiInfo.ssid24) {
+      if (!wifiInfo.ssid24 && !wifiInfo.ssid5g) {
         wifiInfo.ssid24 = `${ispName}-${client.id_servicio}`;
         wifiInfo.password24 = onuRecord?.sn ? onuRecord.sn.slice(-8) : '12345678';
         wifiInfo.ssid = wifiInfo.ssid24;
         wifiInfo.password = wifiInfo.password24;
       }
-      if (wifiInfo.has5g && !wifiInfo.ssid5g) {
+      if (wifiInfo.has5g && !wifiInfo.ssid5g && wifiInfo.ssid24) {
         wifiInfo.ssid5g = `${wifiInfo.ssid24}-5G`;
         wifiInfo.password5g = wifiInfo.password24;
       }
@@ -797,18 +925,20 @@ self.addEventListener('fetch', (event) => {
       const targetPhone10 = (verifiedPhone || client.telefono || '').replace(/\D/g, '').slice(-10);
       const clientPhone10 = (client.telefono || '').replace(/\D/g, '').slice(-10);
       let hasPassword = false;
+      let tokenVer = 1;
 
       const accRes = await db.execute({
-        sql: `SELECT id, password_hash FROM client_portal_accounts WHERE (telefono = ? OR telefono = ? OR nombre = ?) AND password_hash IS NOT NULL AND password_hash != '' LIMIT 1`,
+        sql: `SELECT id, password_hash, token_version FROM client_portal_accounts WHERE (telefono = ? OR telefono = ? OR nombre = ?) AND password_hash IS NOT NULL AND password_hash != '' LIMIT 1`,
         args: [targetPhone10, clientPhone10, client.nombre],
       });
       if (accRes.rows.length > 0) {
         hasPassword = true;
+        tokenVer = Number(accRes.rows[0].token_version || 1);
       }
 
       // Generar token permanente e indestructible para auto-autenticación
       const serviceIds = services.map((s: any) => s.id_servicio);
-      const sessionToken = generateClientPortalToken(verifiedPhone || client.telefono || '', client.nombre, serviceIds);
+      const sessionToken = generateClientPortalToken(verifiedPhone || client.telefono || '', client.nombre, serviceIds, tokenVer);
 
       res.json({
         success: true,
@@ -817,9 +947,10 @@ self.addEventListener('fetch', (event) => {
         client: {
           id_servicio: client.id_servicio,
           nombre: client.nombre,
+          smartolt_name: onuRecord?.name || client.nombre,
           telefono: client.telefono,
-          direccion: client.direccion,
-          ip: client.ip,
+          direccion: client.direccion || onuRecord?.zone_name,
+          ip: client.ip || onuRecord?.ip_address,
           router: client.router,
           estado: client.estado,
           saldo: client.saldo || 0,
@@ -830,6 +961,7 @@ self.addEventListener('fetch', (event) => {
         },
         onu: onuRecord ? {
           sn: onuRecord.sn,
+          name: onuRecord.name,
           model: onuRecord.onu_type_name,
           zone_name: onuRecord.zone_name,
           speed_profile: onuRecord.speed_profile,

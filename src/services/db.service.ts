@@ -4073,7 +4073,7 @@ export class DbService {
   }
 
   /**
-   * Restablece la cuenta de portal de un cliente y la sesión del bot para pruebas
+   * Restablece la cuenta de portal de un cliente, revoca sus enlaces y reinicia la sesión del bot para pruebas
    */
   static async resetPortalUserPhone(phone: string): Promise<{ portalRows: number; sessionRows: number; cleanPhone: string }> {
     const client = getDbClient();
@@ -4084,25 +4084,78 @@ export class DbService {
       return { portalRows: 0, sessionRows: 0, cleanPhone: '' };
     }
 
-    // 1. Eliminar de client_portal_accounts
+    const now = new Date().toISOString();
+
+    // 1. Invalidar y revocar permanentemente enlaces y tokens anteriores
     const portalRes = await client.execute({
-      sql: `DELETE FROM client_portal_accounts WHERE telefono = ? OR telefono LIKE ?`,
-      args: [cleanPhone, `%${cleanPhone}`],
+      sql: `
+        INSERT INTO client_portal_accounts (telefono, password_hash, nombre, is_active, token_version, tokens_revoked_at, updated_at)
+        VALUES (?, '', 'Revocado', 1, 2, ?, ?)
+        ON CONFLICT(telefono) DO UPDATE SET
+          password_hash = '',
+          token_version = client_portal_accounts.token_version + 1,
+          tokens_revoked_at = excluded.tokens_revoked_at,
+          updated_at = excluded.updated_at
+      `,
+      args: [cleanPhone, now, now],
     });
 
-    // 2. Eliminar de sessions (bot)
+    // 2. Eliminar de sessions (bot de WhatsApp)
     const sessionRes = await client.execute({
       sql: `DELETE FROM sessions WHERE phone = ? OR phone LIKE ?`,
       args: [cleanPhone, `%${cleanPhone}`],
     });
 
-    logger.info(`Teléfono ${cleanPhone} restablecido para pruebas. Eliminadas ${portalRes.rowsAffected || 0} cuenta(s) y ${sessionRes.rowsAffected || 0} sesión(es).`);
+    logger.info(`Teléfono ${cleanPhone} restablecido y enlaces revocados. Eliminadas ${portalRes.rowsAffected || 0} cuenta(s) y ${sessionRes.rowsAffected || 0} sesión(es).`);
 
     return {
       portalRows: portalRes.rowsAffected || 0,
       sessionRows: sessionRes.rowsAffected || 0,
       cleanPhone,
     };
+  }
+
+  /**
+   * Desactiva / Activa el acceso al portal para un número específico
+   */
+  static async togglePortalAccountActive(phone: string, active: boolean): Promise<boolean> {
+    const client = getDbClient();
+    const cleanDigits = (phone || '').replace(/\D/g, '');
+    const cleanPhone = cleanDigits.length >= 10 ? cleanDigits.slice(-10) : cleanDigits;
+    if (!cleanPhone) return false;
+
+    const now = new Date().toISOString();
+    const res = await client.execute({
+      sql: `
+        INSERT INTO client_portal_accounts (telefono, password_hash, nombre, is_active, token_version, tokens_revoked_at, updated_at)
+        VALUES (?, '', '', ?, 2, ?, ?)
+        ON CONFLICT(telefono) DO UPDATE SET
+          is_active = excluded.is_active,
+          token_version = client_portal_accounts.token_version + 1,
+          tokens_revoked_at = excluded.tokens_revoked_at,
+          updated_at = excluded.updated_at
+      `,
+      args: [cleanPhone, active ? 1 : 0, now, now],
+    });
+
+    logger.info(`Acceso de portal para ${cleanPhone} cambiado a is_active = ${active ? 1 : 0}`);
+    return (res.rowsAffected || 0) > 0;
+  }
+
+  /**
+   * Revoca todas las sesiones y enlaces mágicos activos de todos los clientes
+   */
+  static async revokeAllPortalSessions(): Promise<number> {
+    const client = getDbClient();
+    const now = new Date().toISOString();
+    const res = await client.execute({
+      sql: `UPDATE client_portal_accounts SET token_version = token_version + 1, tokens_revoked_at = ?, updated_at = ?`,
+      args: [now, now],
+    });
+    // Limpiar también todas las sesiones del bot
+    await client.execute(`DELETE FROM sessions`);
+    logger.info(`Todas las sesiones y enlaces mágicos del portal han sido revocados globalmente.`);
+    return res.rowsAffected || 0;
   }
 }
 

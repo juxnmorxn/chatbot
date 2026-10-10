@@ -4595,8 +4595,11 @@ export function getAdminDashboardHtml(): string {
 
           <!-- Acciones de Vaciado Global -->
           <div>
-            <div style="font-size: 12px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; margin-bottom: 10px; letter-spacing: 0.5px;">Acciones Globales de Limpieza</div>
+            <div style="font-size: 12px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; margin-bottom: 10px; letter-spacing: 0.5px;">Acciones Globales de Limpieza & Portal</div>
             <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
+              <button class="btn btn-danger btn-sm" onclick="handleRevokeAllPortalLinks()" style="display: inline-flex; align-items: center; gap: 6px; background: rgba(225, 29, 72, 0.2); border-color: #f43f5e; color: #fff;">
+                <span>🔒</span> <span>Revocar Todos los Links Mágicos del Portal</span>
+              </button>
               <button class="btn btn-danger btn-sm" onclick="confirmClearAllTickets()" style="display: inline-flex; align-items: center; gap: 6px;">
                 <span>🎫</span> <span>Vaciar Todos los Tickets de WhatsApp</span>
               </button>
@@ -8776,6 +8779,25 @@ export function getAdminDashboardHtml(): string {
         return;
       }
       handleResetTestPhoneWithNumber(state.activeChatPhone);
+    }
+
+    async function handleRevokeAllPortalLinks() {
+      showConfirmDialog(
+        '🔒 Revocar Todos los Enlaces Mágicos',
+        '¿Estás seguro de que deseas invalidar y revocar TODOS los enlaces mágicos de acceso al portal emitidos previamente? Todos los clientes deberán solicitar un nuevo enlace por WhatsApp para entrar.',
+        async () => {
+          try {
+            const res = await apiFetch('/api/admin/portal/revoke-all', { method: 'POST' });
+            if (res.success) {
+              showToast('Enlaces Invalidados', res.message || 'Se han revocado todos los enlaces y sesiones de clientes.', 'success');
+            } else {
+              showToast('Error', res.error || 'No se pudo revocar los enlaces.', 'error');
+            }
+          } catch (err) {
+            showToast('Error', err.message || 'Error de conexión', 'error');
+          }
+        }
+      );
     }
 
     function clearSessionsData() {

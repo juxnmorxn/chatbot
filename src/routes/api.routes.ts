@@ -217,6 +217,9 @@ router.post('/api/admin/portal/reset-phone', requireAdminAuth(['superadmin', 'so
 router.delete('/api/admin/portal/reset-phone', requireAdminAuth(['superadmin', 'soporte']), AdminController.resetPortalUserPhone);
 router.post('/api/admin/portal/reset-phone/:phone', requireAdminAuth(['superadmin', 'soporte']), AdminController.resetPortalUserPhone);
 router.delete('/api/admin/portal/reset-phone/:phone', requireAdminAuth(['superadmin', 'soporte']), AdminController.resetPortalUserPhone);
+router.post('/api/admin/portal/revoke-all', requireAdminAuth(['superadmin', 'soporte']), AdminController.revokeAllPortalSessions);
+router.delete('/api/admin/portal/revoke-all', requireAdminAuth(['superadmin', 'soporte']), AdminController.revokeAllPortalSessions);
+router.post('/api/admin/portal/toggle-phone', requireAdminAuth(['superadmin', 'soporte']), AdminController.togglePortalAccount);
 
 
 // ==========================================

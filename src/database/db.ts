@@ -593,6 +593,10 @@ export async function initDatabase(): Promise<void> {
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_cpa_telefono ON client_portal_accounts(telefono);`);
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_cpa_reset ON client_portal_accounts(reset_token);`);
 
+    try { await client.execute(`ALTER TABLE client_portal_accounts ADD COLUMN token_version INTEGER DEFAULT 1;`); } catch (_) {}
+    try { await client.execute(`ALTER TABLE client_portal_accounts ADD COLUMN is_active INTEGER DEFAULT 1;`); } catch (_) {}
+    try { await client.execute(`ALTER TABLE client_portal_accounts ADD COLUMN tokens_revoked_at TEXT;`); } catch (_) {}
+
     try { await client.execute(`ALTER TABLE tickets ADD COLUMN assigned_office TEXT;`); } catch (_) {}
     try { await client.execute(`ALTER TABLE tickets ADD COLUMN whatsapp_group_jid TEXT;`); } catch (_) {}
 

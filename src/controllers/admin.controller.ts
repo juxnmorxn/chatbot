@@ -2575,13 +2575,66 @@ export class AdminController {
 
       res.json({
         success: true,
-        message: `Teléfono ${cleanPhone} restablecido exitosamente. Se eliminó la cuenta del portal y la sesión del bot para nuevas pruebas.`,
+        message: `Teléfono ${cleanPhone} restablecido exitosamente. Se revocaron los enlaces de acceso y se eliminó la sesión del bot para nuevas pruebas.`,
         phone: cleanPhone,
         portalAccountsDeleted: result.portalRows,
         botSessionsDeleted: result.sessionRows,
       });
     } catch (error: any) {
       logger.error('Error al restablecer teléfono de portal:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Revoca todas las sesiones y enlaces mágicos de clientes globalmente
+   */
+  static async revokeAllPortalSessions(_req: Request, res: Response): Promise<void> {
+    try {
+      const count = await DbService.revokeAllPortalSessions();
+      try {
+        const { ClientPortalController } = await import('./client-portal.controller');
+        ClientPortalController.clearPortalCache();
+      } catch (_) {}
+
+      res.json({
+        success: true,
+        message: `Se revocaron todas las sesiones y enlaces mágicos activos (${count} cuentas actualizadas).`,
+        count,
+      });
+    } catch (error: any) {
+      logger.error('Error al revocar sesiones globales:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Desactiva o activa el portal para un número de cliente
+   */
+  static async togglePortalAccount(req: Request, res: Response): Promise<void> {
+    try {
+      const { phone, active } = req.body;
+      const cleanDigits = String(phone || '').replace(/\D/g, '');
+      const cleanPhone = cleanDigits.length >= 10 ? cleanDigits.slice(-10) : cleanDigits;
+
+      if (!cleanPhone) {
+        res.status(400).json({ success: false, error: 'Número de teléfono inválido.' });
+        return;
+      }
+
+      const ok = await DbService.togglePortalAccountActive(cleanPhone, active !== false);
+      try {
+        const { ClientPortalController } = await import('./client-portal.controller');
+        ClientPortalController.clearPortalCache(cleanPhone);
+      } catch (_) {}
+
+      res.json({
+        success: ok,
+        message: `Acceso al portal para ${cleanPhone} ${active !== false ? 'activado' : 'desactivado'}.`,
+        active: active !== false,
+      });
+    } catch (error: any) {
+      logger.error('Error al cambiar estado de cuenta portal:', error?.message || error);
       res.status(500).json({ success: false, error: error?.message || error });
     }
   }

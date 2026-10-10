@@ -116,6 +116,7 @@ export interface ClientPortalTokenPayload {
   phone: string;
   name?: string;
   serviceIds: (number | string)[];
+  ver?: number;
   iat: number;
   exp?: number;
 }
@@ -123,7 +124,7 @@ export interface ClientPortalTokenPayload {
 /**
  * Genera un token firmado de sesión para el Portal del Cliente permanente e indefinido
  */
-export function generateClientPortalToken(phone: string, name?: string, serviceIds: (number | string)[] = []): string {
+export function generateClientPortalToken(phone: string, name?: string, serviceIds: (number | string)[] = [], version = 1): string {
   const now = Math.floor(Date.now() / 1000);
   const cleanPhone = phone.replace(/\D/g, '');
   const last10 = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
@@ -131,6 +132,7 @@ export function generateClientPortalToken(phone: string, name?: string, serviceI
     phone: last10,
     name: name || '',
     serviceIds,
+    ver: version || 1,
     iat: now,
     exp: now + (100 * 365 * 24 * 60 * 60), // Permanente (100 años de vigencia)
   };

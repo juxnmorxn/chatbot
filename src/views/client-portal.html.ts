@@ -1808,8 +1808,15 @@ export function getClientPortalHtml(): string {
 
         const data = await res.json();
 
-        if (!data.success || !data.client) {
-          if (targetPhone) {
+        if (!data.success || !data.client || data.sessionRevoked || res.status === 401 || res.status === 403) {
+          localStorage.removeItem('cp_token');
+          localStorage.removeItem('cp_phone');
+          localStorage.removeItem('cp_selected_service');
+          sessionStorage.clear();
+          if (data?.sessionRevoked || res.status === 401 || res.status === 403) {
+            showToast(data?.message || 'Tu enlace o sesión ha sido revocado. Ingresa de nuevo.', 'warning');
+          }
+          if (targetPhone && !data?.sessionRevoked && res.status !== 401 && res.status !== 403) {
             showNotFound(targetPhone);
           } else {
             showLogin();
@@ -1838,9 +1845,9 @@ export function getClientPortalHtml(): string {
         renderDashboard(data);
       } catch (err) {
         console.warn('[Portal] Conexión caída o cambio de Wi-Fi. Intentando cargar caché offline...', err);
-        // Rescatar datos de caché offline para que el usuario NUNCA se quede fuera de su portal
+        // Rescatar datos de caché offline solo si no hay error de autenticación
         const cachedStr = localStorage.getItem('cp_cached_dashboard_' + targetPhone);
-        if (cachedStr) {
+        if (cachedStr && targetToken) {
           try {
             const cachedData = JSON.parse(cachedStr);
             const localPass = localStorage.getItem('cp_last_pass');
@@ -1881,7 +1888,7 @@ export function getClientPortalHtml(): string {
       // Header Saludo
       const firstName = (c.nombre || '').split(' ')[0] || 'Cliente';
       document.getElementById('headerGreeting').innerText = 'Hola, ' + firstName;
-      document.getElementById('titularName').innerText = c.nombre;
+      document.getElementById('titularName').innerText = data.onu?.name || c.smartolt_name || c.nombre;
       document.getElementById('contractFolio').innerText = '#' + c.id_servicio;
 
       // Paquete Contratado con Gran Énfasis Visual y Corrección de Discrepancias
@@ -1943,11 +1950,13 @@ export function getClientPortalHtml(): string {
           const activeBadge = isActive 
             ? '<span class="service-card-badge active"><i class="fa-solid fa-circle-check"></i> En Pantalla</span>' 
             : '<span class="service-card-badge inactive"><i class="fa-regular fa-circle"></i> Tocar para ver</span>';
-          const dir = s.direccion || s.router || ('Servicio ' + (idx + 1));
+          const dir = s.direccion || s.zona || s.router || ('Servicio ' + (idx + 1));
+          const srvTitle = s.smartolt_name || s.nombre || ('Servicio #' + s.id_servicio);
           let plan = (s.plan_internet || 'Internet Fibra').replace(/^(?:paquete|pakete|plan)\\s+/i, '');
           const saldo = Number(s.saldo || 0);
           const saldoTxt = saldo <= 0 ? 'Al corriente' : ('Debe $' + saldo.toFixed(2));
           const saldoColor = saldo <= 0 ? '#10b981' : '#f59e0b';
+          const onuTag = s.sn_onu ? ('<span style="font-family:monospace; font-size:10.5px; background:rgba(2,132,199,0.12); color:#38bdf8; padding:2px 5px; border-radius:4px;">ONU: ' + s.sn_onu + '</span>') : '';
 
           return '<div class="service-card-item ' + activeClass + '" data-service-id="' + s.id_servicio + '" onclick="onSwitchService(' + s.id_servicio + ')">' +
             '<div style="display:flex; align-items:center; justify-content:space-between; gap:6px;">' +
@@ -1956,7 +1965,11 @@ export function getClientPortalHtml(): string {
               '</span>' +
               activeBadge +
             '</div>' +
-            '<div style="font-size:12px; color:var(--text-body); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px;" title="' + dir + '">' + dir + '</div>' +
+            '<div style="font-size:12.5px; font-weight:700; color:#38bdf8; margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + srvTitle + '">' + srvTitle + '</div>' +
+            '<div style="font-size:11.5px; color:var(--text-body); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:3px; display:flex; align-items:center; gap:6px;">' +
+              '<span>' + dir + '</span>' +
+              onuTag +
+            '</div>' +
             '<div style="display:flex; justify-content:space-between; align-items:center; font-size:11.5px; margin-top:6px; padding-top:6px; border-top:1px solid var(--border-card);">' +
               '<span style="color:var(--text-muted); font-weight:600;"><i class="fa-solid fa-bolt" style="color:#0284c7; font-size:10px;"></i> ' + plan + '</span>' +
               '<span style="font-weight:700; color:' + saldoColor + ';">' + saldoTxt + '</span>' +

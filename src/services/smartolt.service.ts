@@ -1037,47 +1037,112 @@ export class SmartOLTService {
         externalId = onuRecord.unique_external_id;
       }
 
+      // Helper interno para extraer SSIDs y passwords de cualquier estructura SmartOLT
+      const parseWifiFromObject = (det: any) => {
+        if (!det) return null;
+        const ports = Array.isArray(det.wifi_ports) ? det.wifi_ports
+          : (Array.isArray(det.wifi) ? det.wifi
+          : (Array.isArray(det.onu_wifi) ? det.onu_wifi
+          : (Array.isArray(det.wireless_ports) ? det.wireless_ports
+          : (Array.isArray(det.wlan) ? det.wlan : []))));
+
+        let port24 = ports.find((p: any) => {
+          const portName = String(p.port || p.name || p.id || p.wlan_id || '').toLowerCase();
+          return portName.includes('0/1') || portName === '1' || portName === 'wlan0' || portName === 'wlan1' || portName.includes('2.4') || portName.includes('2g');
+        });
+
+        let port5 = ports.find((p: any) => {
+          const portName = String(p.port || p.name || p.id || p.wlan_id || '').toLowerCase();
+          return portName.includes('0/5') || portName === '5' || portName === 'wlan2' || portName.includes('5g') || portName.includes('5ghz');
+        });
+
+        if (!port24 && ports.length > 0) port24 = ports[0];
+        if (!port5 && ports.length > 1) port5 = ports[1];
+
+        // Extracción de campos directos (en caso de firmware o respuesta plana)
+        const ssid24 = (port24?.ssid || port24?.ssid_name || det.wifi_0_1_ssid || det.wifi_ssid_1 || det.ssid_24 || det.wifi_ssid || det.ssid || '').trim();
+        const pass24 = (port24?.password || port24?.wpa_key || port24?.key || det.wifi_0_1_password || det.wifi_password_1 || det.password_24 || det.wifi_password || det.password || '').trim();
+
+        const ssid5 = (port5?.ssid || port5?.ssid_name || det.wifi_0_5_ssid || det.wifi_ssid_5 || det.ssid_5g || det.ssid_5 || '').trim();
+        const pass5 = (port5?.password || port5?.wpa_key || port5?.key || det.wifi_0_5_password || det.wifi_password_5 || det.password_5g || det.password_5 || pass24 || '').trim();
+
+        const has5g = !!(port5 && (ssid5 || port5.admin_state === 'Enabled' || port5.admin_state === 'enabled' || port5.admin_state === 1 || port5.admin_state === '1') || ssid5);
+
+        if (!ssid24 && !ssid5 && !pass24 && !pass5) {
+          return null;
+        }
+
+        return {
+          has5g,
+          ssid24: ssid24 || (ssid5 ? ssid5.replace(/-5g$/i, '') : ''),
+          password24: pass24 || pass5,
+          ssid5g: ssid5 || (has5g && ssid24 ? `${ssid24}-5G` : ''),
+          password5g: pass5 || pass24,
+          ssid: ssid24 || ssid5,
+          password: pass24 || pass5,
+          wlan1: {
+            ssid: ssid24,
+            password: pass24,
+            admin_state: port24?.admin_state || 'Enabled',
+            mode: port24?.mode || 'LAN',
+            auth_mode: port24?.auth_mode || 'wpa2',
+          },
+          wlan5: has5g ? {
+            ssid: ssid5,
+            password: pass5,
+            admin_state: port5?.admin_state || 'Enabled',
+            mode: port5?.mode || 'LAN',
+            auth_mode: port5?.auth_mode || 'wpa2',
+          } : null,
+          raw: ports,
+        };
+      };
+
+      // 1. Intentar consulta en vivo a SmartOLT
       const api = this.getApi();
       const res = await api.get(`/onu/get_onu_details/${encodeURIComponent(externalId)}`);
-      const det = res.data?.onu_details || res.data;
-      if (!det) return null;
+      const det = res.data?.onu_details || res.data?.response || res.data?.onu || res.data?.details || res.data;
+      const parsed = parseWifiFromObject(det);
 
-      const wifiPorts = Array.isArray(det.wifi_ports) ? det.wifi_ports : [];
-      const port24 = wifiPorts.find((p: any) => p.port === 'wifi_0/1' || p.port === '1' || p.wlan_id === '1') || wifiPorts[0];
-      const port5 = wifiPorts.find((p: any) => p.port === 'wifi_0/5' || p.port === '5' || p.wlan_id === '5');
+      if (parsed) {
+        return parsed;
+      }
 
-      const ssid24 = (port24?.ssid || '').trim();
-      const pass24 = (port24?.password || '').trim();
-      const ssid5 = (port5?.ssid || '').trim();
-      const pass5 = (port5?.password || pass24 || '').trim();
-      const has5g = !!(port5 && (port5.ssid || port5.admin_state === 'Enabled' || port5.admin_state === 'enabled'));
+      // 2. Fallback: Si la consulta en vivo no trajo wifi_ports, revisar datos almacenados en base de datos
+      if (onuRecord?.raw_data) {
+        try {
+          const rawObj = JSON.parse(onuRecord.raw_data);
+          const cachedParsed = parseWifiFromObject(rawObj);
+          if (cachedParsed) return cachedParsed;
+        } catch (_) {}
+      }
 
-      return {
-        has5g,
-        ssid24: ssid24 || (ssid5 ? ssid5.replace(/-5g$/i, '') : ''),
-        password24: pass24,
-        ssid5g: ssid5 || (has5g && ssid24 ? `${ssid24}-5G` : ''),
-        password5g: pass5 || pass24,
-        ssid: ssid24 || ssid5,
-        password: pass24 || pass5,
-        wlan1: {
-          ssid: ssid24,
-          password: pass24,
-          admin_state: port24?.admin_state || 'Enabled',
-          mode: port24?.mode || 'LAN',
-          auth_mode: port24?.auth_mode || 'wpa2',
-        },
-        wlan5: has5g ? {
-          ssid: ssid5,
-          password: pass5,
-          admin_state: port5?.admin_state || 'Enabled',
-          mode: port5?.mode || 'LAN',
-          auth_mode: port5?.auth_mode || 'wpa2',
-        } : null,
-        raw: wifiPorts,
-      };
+      return null;
     } catch (e: any) {
       logger.warn(`No se pudieron obtener detalles WiFi de ${onuIdOrExternalId}:`, e?.message);
+      
+      // Fallback desde DB si la API falló
+      try {
+        const onuRecord = await DbService.getOnuById(cleanId);
+        if (onuRecord?.raw_data) {
+          const rawObj = JSON.parse(onuRecord.raw_data);
+          if (rawObj.wifi_ports || rawObj.ssid) {
+            const ports = rawObj.wifi_ports || [];
+            const p24 = ports[0] || {};
+            const p5 = ports[1] || {};
+            return {
+              has5g: !!p5.ssid,
+              ssid24: p24.ssid || rawObj.ssid || '',
+              password24: p24.password || rawObj.password || '',
+              ssid5g: p5.ssid || '',
+              password5g: p5.password || p24.password || '',
+              ssid: p24.ssid || rawObj.ssid || '',
+              password: p24.password || rawObj.password || '',
+            };
+          }
+        }
+      } catch (_) {}
+
       return null;
     }
   }
