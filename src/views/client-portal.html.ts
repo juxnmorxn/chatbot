@@ -2,72 +2,65 @@ import { config } from '../config/env';
 import { SettingsService } from '../services/settings.service';
 
 /**
- * Genera el HTML completo para el Portal Web / PWA de Clientes
- * Incluye:
- * - Autenticación segura por Teléfono + Contraseña
- * - Flujo de creación de contraseña inicial (Onboarding)
- * - Recuperación de contraseña por WhatsApp con código OTP de 6 dígitos
- * - Soporte Multi-Servicio con selector interactivo
- * - Historial detallado de facturas y pagos (WispHub / Sipgun)
- * - Gestión Wi-Fi con generador de QR para visitas
- * - Diagnóstico óptico con protección de API SmartOLT
+ * Genera el HTML completo para el Portal Móvil / PWA de Clientes
+ * Diseñado 100% para celulares (Mobile-First), interfaz limpia, cero tecnicismos y muy intuitiva.
  */
 export function getClientPortalHtml(): string {
   const ispName = SettingsService.get('ISP_NAME', 'ISP_NAME', config.isp.name || 'CloudWareMx');
-  const supportPhone = SettingsService.get('SUPPORT_PHONE', 'SUPPORT_PHONE', config.isp.soporteHumanoPhone || '');
+  const supportPhone = SettingsService.get('SUPPORT_PHONE', 'SUPPORT_PHONE', config.isp.soporteHumanoPhone || '7721284398');
   const bankName = SettingsService.get('PAYMENT_BANK_NAME', 'PAYMENT_BANK_NAME', 'BBVA Bancomer');
   const bankClabe = SettingsService.get('PAYMENT_BANK_CLABE', 'PAYMENT_BANK_CLABE', '012320001234567890');
   const bankAccount = SettingsService.get('PAYMENT_BANK_ACCOUNT', 'PAYMENT_BANK_ACCOUNT', '0123456789');
 
   return `<!DOCTYPE html>
-<html lang="es" class="dark">
+<html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>${ispName} - Portal del Cliente</title>
+  <title>${ispName} · Mi Servicio</title>
   
   <!-- PWA Meta Tags -->
-  <meta name="theme-color" content="#0f172a">
+  <meta name="theme-color" content="#0b1329">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="${ispName}">
-  <meta name="description" content="Consulta tu conexión de fibra óptica, potencia, Wi-Fi, facturas y reporta fallas en tiempo real.">
   <link rel="manifest" href="/manifest.json">
   <link rel="icon" type="image/svg+xml" href="/portal-icon.svg">
   <link rel="apple-touch-icon" href="/portal-icon.svg">
   
-  <!-- Google Fonts -->
+  <!-- Google Fonts: Outfit & Inter -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   
-  <!-- Font Awesome -->
+  <!-- Font Awesome Icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <!-- QRCode.js -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
   <style>
     :root {
-      --bg-base: #090d16;
+      --bg-body: #080d1a;
       --bg-surface: #0f172a;
-      --bg-card: rgba(30, 41, 59, 0.7);
-      --bg-card-hover: rgba(51, 65, 85, 0.75);
-      --border-subtle: rgba(148, 163, 184, 0.12);
-      --border-glow: rgba(56, 189, 248, 0.3);
-      --text-main: #f8fafc;
-      --text-muted: #94a3b8;
-      --text-faint: #64748b;
-      --accent-cyan: #06b6d4;
-      --accent-blue: #3b82f6;
-      --accent-indigo: #6366f1;
-      --accent-green: #10b981;
-      --accent-emerald: #059669;
-      --accent-amber: #f59e0b;
-      --accent-rose: #f43f5e;
-      --radius-sm: 8px;
-      --radius-md: 14px;
-      --radius-lg: 20px;
-      --radius-xl: 28px;
+      --bg-card: #131d36;
+      --bg-card-alt: #182342;
+      --border-card: rgba(255, 255, 255, 0.08);
+      --border-highlight: rgba(14, 165, 233, 0.35);
+      --text-title: #ffffff;
+      --text-body: #94a3b8;
+      --text-muted: #64748b;
+      --primary: #0284c7;
+      --primary-gradient: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%);
+      --success: #10b981;
+      --success-bg: rgba(16, 185, 129, 0.12);
+      --warning: #f59e0b;
+      --warning-bg: rgba(245, 158, 11, 0.12);
+      --danger: #ef4444;
+      --danger-bg: rgba(239, 68, 68, 0.12);
+      --radius-sm: 12px;
+      --radius-md: 18px;
+      --radius-lg: 24px;
+      --radius-full: 9999px;
     }
     
     * {
@@ -78,471 +71,512 @@ export function getClientPortalHtml(): string {
     }
     
     body {
-      font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
-      background-color: var(--bg-base);
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: var(--bg-body);
       background-image: 
-        radial-gradient(at 0% 0%, rgba(6, 182, 212, 0.08) 0px, transparent 50%),
-        radial-gradient(at 100% 100%, rgba(99, 102, 241, 0.08) 0px, transparent 50%);
+        radial-gradient(circle at 50% 0%, rgba(14, 165, 233, 0.15) 0%, transparent 60%),
+        radial-gradient(circle at 100% 100%, rgba(37, 99, 235, 0.08) 0%, transparent 50%);
       background-attachment: fixed;
-      color: var(--text-main);
+      color: #f1f5f9;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      padding: 0;
+    }
+
+    /* App Wrapper Móvil */
+    .app-screen {
+      width: 100%;
+      max-width: 480px;
       min-height: 100vh;
       display: flex;
       flex-direction: column;
-      overflow-x: hidden;
+      background: transparent;
+      padding: 14px 14px 70px 14px;
+      gap: 14px;
+      position: relative;
     }
-    
-    ::-webkit-scrollbar { width: 6px; }
-    ::-webkit-scrollbar-track { background: var(--bg-base); }
-    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
-    
-    /* Header */
-    .header {
-      position: sticky;
-      top: 0;
-      z-index: 50;
-      background: rgba(15, 23, 42, 0.85);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      border-bottom: 1px solid var(--border-subtle);
-      padding: 12px 20px;
+
+    /* Barra Superior */
+    .app-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
+      padding: 6px 4px;
     }
-    
-    .brand {
+
+    .brand-group {
       display: flex;
       align-items: center;
       gap: 10px;
-      text-decoration: none;
-      color: var(--text-main);
     }
-    
-    .brand-logo {
-      width: 38px;
-      height: 38px;
-      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
-      border-radius: 10px;
+
+    .brand-icon {
+      width: 40px;
+      height: 40px;
+      background: var(--primary-gradient);
+      border-radius: var(--radius-sm);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 18px;
+      font-size: 19px;
       color: white;
-      box-shadow: 0 4px 14px rgba(6, 182, 212, 0.3);
+      box-shadow: 0 4px 16px rgba(14, 165, 233, 0.35);
     }
-    
-    .brand-text h1 {
-      font-size: 16px;
+
+    .brand-info h1 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 17px;
       font-weight: 700;
-      letter-spacing: -0.3px;
-      background: linear-gradient(to right, #ffffff, #94a3b8);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
+      color: var(--text-title);
+      line-height: 1.2;
     }
-    
-    .brand-text span {
-      font-size: 11px;
-      color: var(--accent-cyan);
-      font-weight: 500;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
+
+    .brand-info span {
+      font-size: 12px;
+      color: #38bdf8;
+      font-weight: 600;
     }
-    
-    .header-actions {
+
+    .btn-header-action {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border-card);
+      color: var(--text-body);
+      border-radius: var(--radius-full);
+      padding: 8px 14px;
+      font-size: 13px;
+      font-weight: 600;
       display: flex;
       align-items: center;
-      gap: 8px;
-    }
-    
-    .btn-pwa-install {
-      display: none;
-      background: linear-gradient(135deg, var(--accent-indigo), var(--accent-blue));
-      color: white;
-      border: none;
-      padding: 7px 12px;
-      border-radius: 20px;
-      font-size: 12px;
-      font-weight: 600;
-      cursor: pointer;
-      align-items: center;
       gap: 6px;
-      box-shadow: 0 2px 10px rgba(99, 102, 241, 0.3);
+      cursor: pointer;
+      text-decoration: none;
       transition: all 0.2s ease;
     }
-    
-    .btn-icon {
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid var(--border-subtle);
-      color: var(--text-muted);
-      width: 36px;
-      height: 36px;
-      border-radius: 10px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    
-    .btn-icon:hover {
-      color: var(--text-main);
-      background: rgba(255, 255, 255, 0.1);
-    }
-    
-    /* Container */
-    .container {
-      max-width: 680px;
-      width: 100%;
-      margin: 0 auto;
-      padding: 20px 16px 80px 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-    
-    /* Auth Cards */
-    .auth-container {
-      max-width: 440px;
-      margin: 20px auto;
-      width: 100%;
+
+    .btn-header-action:active {
+      transform: scale(0.96);
+      background: rgba(255, 255, 255, 0.12);
     }
 
-    .auth-card {
+    /* Selector de Contratos */
+    .service-pill-select {
       background: var(--bg-card);
-      border: 1px solid var(--border-subtle);
-      backdrop-filter: blur(20px);
-      -webkit-backdrop-filter: blur(20px);
-      border-radius: var(--radius-xl);
-      padding: 30px 24px;
-      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+      border: 1px solid var(--border-highlight);
+      border-radius: var(--radius-md);
+      padding: 10px 14px;
       display: flex;
       flex-direction: column;
-      gap: 18px;
+      gap: 4px;
     }
 
-    .auth-header {
-      text-align: center;
-    }
-
-    .auth-header h2 {
-      font-size: 22px;
+    .service-pill-select label {
+      font-size: 11px;
+      color: var(--text-muted);
       font-weight: 700;
-      margin-bottom: 6px;
-    }
-
-    .auth-header p {
-      font-size: 13px;
-      color: var(--text-muted);
-      line-height: 1.4;
-    }
-
-    .form-group {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      text-align: left;
-    }
-
-    .form-label {
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--text-muted);
       text-transform: uppercase;
       letter-spacing: 0.5px;
     }
 
-    .input-wrapper {
-      position: relative;
-      display: flex;
-      align-items: center;
-    }
-
-    .input-icon {
-      position: absolute;
-      left: 14px;
-      color: var(--text-faint);
+    .select-styled {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-card);
+      color: #fff;
       font-size: 14px;
-    }
-
-    .input-toggle-pass {
-      position: absolute;
-      right: 14px;
-      color: var(--text-faint);
-      cursor: pointer;
-      background: none;
-      border: none;
-      font-size: 14px;
-    }
-
-    .form-control {
-      width: 100%;
-      background: rgba(15, 23, 42, 0.8);
-      border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-md);
-      padding: 12px 14px 12px 40px;
-      color: var(--text-main);
-      font-size: 15px;
-      font-family: inherit;
-      outline: none;
-      transition: all 0.2s;
-    }
-
-    .form-control:focus {
-      border-color: var(--accent-cyan);
-      box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.15);
-    }
-
-    .btn-primary {
-      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
-      color: white;
-      border: none;
-      border-radius: var(--radius-md);
-      padding: 13px 20px;
-      font-size: 15px;
       font-weight: 600;
       font-family: inherit;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      box-shadow: 0 4px 14px rgba(6, 182, 212, 0.3);
-      transition: all 0.2s;
+      padding: 10px 12px;
+      border-radius: var(--radius-sm);
+      outline: none;
       width: 100%;
     }
 
-    .btn-primary:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 6px 20px rgba(6, 182, 212, 0.4);
-    }
-
-    .btn-secondary {
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid var(--border-subtle);
-      color: var(--text-main);
-      border-radius: var(--radius-md);
-      padding: 10px 16px;
-      font-size: 13px;
-      font-weight: 500;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      transition: all 0.2s;
-      width: 100%;
-    }
-
-    .btn-secondary:hover {
-      background: rgba(255, 255, 255, 0.1);
-    }
-
-    .auth-links {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 13px;
-      margin-top: 4px;
-    }
-
-    .auth-link {
-      color: var(--accent-cyan);
-      text-decoration: none;
-      cursor: pointer;
-      transition: opacity 0.2s;
-    }
-
-    .auth-link:hover {
-      text-decoration: underline;
-    }
-
-    /* Cards */
-    .card {
-      background: var(--bg-card);
-      border: 1px solid var(--border-subtle);
+    /* Banner Onboarding (Crear Contraseña) */
+    .onboarding-card {
+      background: linear-gradient(135deg, rgba(14, 165, 233, 0.18) 0%, rgba(37, 99, 235, 0.18) 100%);
+      border: 1px solid rgba(56, 189, 248, 0.4);
       border-radius: var(--radius-lg);
-      padding: 18px;
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
+      padding: 18px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      box-shadow: 0 8px 24px rgba(14, 165, 233, 0.12);
+      animation: pulseBorder 3s infinite ease-in-out;
+    }
+
+    @keyframes pulseBorder {
+      0%, 100% { border-color: rgba(56, 189, 248, 0.35); }
+      50% { border-color: rgba(56, 189, 248, 0.7); }
+    }
+
+    .onboarding-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 16px;
+      font-weight: 700;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .onboarding-desc {
+      font-size: 13px;
+      color: #cbd5e1;
+      line-height: 1.45;
+    }
+
+    .onboarding-desc strong {
+      color: #38bdf8;
+    }
+
+    .onboarding-form {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    /* Tarjetas Principales */
+    .app-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-card);
+      border-radius: var(--radius-lg);
+      padding: 18px 16px;
       display: flex;
       flex-direction: column;
       gap: 14px;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
     }
 
-    .card-header {
+    .card-head {
       display: flex;
       align-items: center;
       justify-content: space-between;
     }
 
-    .card-title {
+    .card-head-title {
+      font-family: 'Outfit', sans-serif;
       font-size: 15px;
       font-weight: 700;
+      color: var(--text-title);
       display: flex;
       align-items: center;
       gap: 8px;
     }
 
-    .card-title i {
-      color: var(--accent-cyan);
+    .card-head-title i {
+      color: #38bdf8;
+      font-size: 16px;
     }
 
-    /* Multi-Service Switcher */
-    .service-switcher-wrapper {
-      background: rgba(15, 23, 42, 0.6);
-      border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-lg);
+    /* Estado de Conexión Amigable */
+    .status-banner-box {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-card);
+      border-radius: var(--radius-md);
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .status-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .status-pulse-circle {
+      width: 14px;
+      height: 14px;
+      border-radius: var(--radius-full);
+      background: var(--success);
+      box-shadow: 0 0 12px var(--success);
+      flex-shrink: 0;
+    }
+
+    .status-pulse-circle.red {
+      background: var(--danger);
+      box-shadow: 0 0 12px var(--danger);
+    }
+
+    .status-pulse-circle.yellow {
+      background: var(--warning);
+      box-shadow: 0 0 12px var(--warning);
+    }
+
+    .status-text-main {
+      font-size: 14px;
+      font-weight: 700;
+      color: #ffffff;
+      line-height: 1.3;
+    }
+
+    .status-text-sub {
+      font-size: 12px;
+      color: var(--text-body);
+    }
+
+    .status-speed-badge {
+      background: rgba(14, 165, 233, 0.15);
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      padding: 4px 10px;
+      border-radius: var(--radius-full);
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    /* Wi-Fi Card Items */
+    .wifi-item {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-card);
+      border-radius: var(--radius-md);
       padding: 12px 14px;
       display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .service-switcher-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 12px;
-      color: var(--text-muted);
-      font-weight: 600;
-      text-transform: uppercase;
-    }
-
-    .service-select-control {
-      background: var(--bg-surface);
-      border: 1px solid var(--border-glow);
-      color: var(--text-main);
-      border-radius: var(--radius-md);
-      padding: 10px 12px;
-      font-size: 14px;
-      font-family: inherit;
-      font-weight: 600;
-      outline: none;
-      cursor: pointer;
-      width: 100%;
-    }
-
-    /* Signal Gauge */
-    .signal-box {
-      background: rgba(15, 23, 42, 0.9);
-      border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-md);
-      padding: 14px;
-      display: flex;
       align-items: center;
       justify-content: space-between;
-    }
-
-    .signal-status-badge {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-weight: 700;
-      font-size: 14px;
-    }
-
-    .status-dot {
-      width: 12px;
-      height: 12px;
-      border-radius: 50%;
-      display: inline-block;
-    }
-
-    .dot-green { background: var(--accent-green); box-shadow: 0 0 10px var(--accent-green); }
-    .dot-yellow { background: var(--accent-amber); box-shadow: 0 0 10px var(--accent-amber); }
-    .dot-red { background: var(--accent-rose); box-shadow: 0 0 10px var(--accent-rose); }
-
-    /* WiFi Info */
-    .wifi-grid {
-      display: grid;
-      grid-template-columns: 1fr;
       gap: 10px;
     }
 
-    .wifi-card {
-      background: rgba(15, 23, 42, 0.8);
-      border: 1px solid var(--border-subtle);
+    .wifi-item-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      overflow: hidden;
+    }
+
+    .wifi-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .wifi-val {
+      font-size: 15px;
+      font-weight: 700;
+      color: #ffffff;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .wifi-val.mono {
+      font-family: 'Outfit', monospace;
+      color: #38bdf8;
+      letter-spacing: 1px;
+    }
+
+    .wifi-actions {
+      display: flex;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    .btn-action-icon {
+      width: 38px;
+      height: 38px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border-card);
+      color: var(--text-body);
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 15px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .btn-action-icon:active {
+      transform: scale(0.92);
+      background: rgba(255, 255, 255, 0.14);
+      color: #fff;
+    }
+
+    /* Estado de Cuenta */
+    .billing-hero {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-card);
       border-radius: var(--radius-md);
-      padding: 12px 14px;
+      padding: 16px;
       display: flex;
       align-items: center;
       justify-content: space-between;
     }
 
-    .wifi-details {
+    .billing-hero-left {
       display: flex;
       flex-direction: column;
       gap: 2px;
     }
 
-    .wifi-ssid {
-      font-size: 14px;
-      font-weight: 700;
-      color: var(--text-main);
-    }
-
-    .wifi-pass {
-      font-family: 'JetBrains Mono', monospace;
-      font-size: 13px;
-      color: var(--accent-cyan);
-    }
-
-    /* Billing */
-    .billing-summary {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      background: rgba(15, 23, 42, 0.9);
-      border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-md);
-      padding: 16px;
-    }
-
-    .billing-amount {
-      font-size: 26px;
+    .billing-hero-amount {
+      font-family: 'Outfit', sans-serif;
+      font-size: 28px;
       font-weight: 800;
-      color: var(--text-main);
+      color: #ffffff;
     }
 
-    .billing-status-tag {
-      padding: 4px 10px;
-      border-radius: 20px;
+    .billing-hero-date {
+      font-size: 12px;
+      color: var(--text-body);
+    }
+
+    .badge-status {
+      padding: 6px 12px;
+      border-radius: var(--radius-full);
       font-size: 12px;
       font-weight: 700;
       text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
 
-    .tag-paid { background: rgba(16, 185, 129, 0.2); color: var(--accent-green); border: 1px solid var(--accent-green); }
-    .tag-pending { background: rgba(244, 63, 94, 0.2); color: var(--accent-rose); border: 1px solid var(--accent-rose); }
+    .badge-status.paid {
+      background: var(--success-bg);
+      color: var(--success);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
 
-    /* Invoices History Table */
-    .invoices-table {
+    .badge-status.pending {
+      background: var(--danger-bg);
+      color: var(--danger);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    /* Botones Principales */
+    .btn-main {
+      background: var(--primary-gradient);
+      color: #ffffff;
+      border: none;
+      border-radius: var(--radius-md);
+      padding: 13px 18px;
+      font-size: 14px;
+      font-weight: 700;
+      font-family: inherit;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      cursor: pointer;
+      box-shadow: 0 4px 16px rgba(14, 165, 233, 0.3);
+      transition: all 0.2s ease;
+      text-decoration: none;
       width: 100%;
-      border-collapse: collapse;
+    }
+
+    .btn-main:active {
+      transform: scale(0.97);
+    }
+
+    .btn-outline {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-card);
+      color: #f1f5f9;
+      border-radius: var(--radius-md);
+      padding: 12px 16px;
+      font-size: 14px;
+      font-weight: 600;
+      font-family: inherit;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      cursor: pointer;
+      text-decoration: none;
+      width: 100%;
+      transition: all 0.2s ease;
+    }
+
+    .btn-outline:active {
+      background: rgba(255, 255, 255, 0.1);
+      transform: scale(0.98);
+    }
+
+    .btn-whatsapp {
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      color: white;
+      border: none;
+      border-radius: var(--radius-md);
+      padding: 14px 20px;
+      font-size: 15px;
+      font-weight: 700;
+      font-family: inherit;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      cursor: pointer;
+      text-decoration: none;
+      box-shadow: 0 6px 20px rgba(16, 185, 129, 0.3);
+      width: 100%;
+    }
+
+    .btn-whatsapp:active {
+      transform: scale(0.97);
+    }
+
+    /* Formularios y Cajas de Texto */
+    .form-input-group {
+      display: flex;
+      gap: 8px;
+    }
+
+    .form-input {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-card);
+      border-radius: var(--radius-sm);
+      padding: 12px 14px;
+      color: #ffffff;
+      font-size: 14px;
+      font-family: inherit;
+      outline: none;
+      width: 100%;
+      transition: border-color 0.2s;
+    }
+
+    .form-input:focus {
+      border-color: #38bdf8;
+      box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.2);
+    }
+
+    /* Vistas de Login / Vincular */
+    .auth-box {
+      background: var(--bg-card);
+      border: 1px solid var(--border-card);
+      border-radius: var(--radius-lg);
+      padding: 24px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+      margin-top: 10px;
+    }
+
+    .auth-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 20px;
+      font-weight: 800;
+      color: #ffffff;
+      text-align: center;
+    }
+
+    .auth-sub {
       font-size: 13px;
-      margin-top: 6px;
+      color: var(--text-body);
+      text-align: center;
+      line-height: 1.4;
     }
 
-    .invoices-table th {
-      text-align: left;
-      padding: 8px;
-      color: var(--text-muted);
-      border-bottom: 1px solid var(--border-subtle);
-      font-size: 11px;
-      text-transform: uppercase;
-    }
-
-    .invoices-table td {
-      padding: 10px 8px;
-      border-bottom: 1px solid rgba(148, 163, 184, 0.06);
-    }
-
-    /* Modal */
-    .modal-backdrop {
+    /* Modales */
+    .modal-overlay {
       display: none;
       position: fixed;
       inset: 0;
-      background: rgba(0, 0, 0, 0.7);
+      background: rgba(0, 0, 0, 0.75);
       backdrop-filter: blur(8px);
       z-index: 100;
       align-items: center;
@@ -550,36 +584,44 @@ export function getClientPortalHtml(): string {
       padding: 16px;
     }
 
-    .modal-box {
-      background: var(--bg-surface);
-      border: 1px solid var(--border-glow);
-      border-radius: var(--radius-xl);
-      padding: 24px;
+    .modal-sheet {
+      background: #0f172a;
+      border: 1px solid var(--border-highlight);
+      border-radius: var(--radius-lg);
+      padding: 22px 18px;
       max-width: 420px;
       width: 100%;
       display: flex;
       flex-direction: column;
       gap: 16px;
-      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7);
     }
 
-    .modal-header {
+    .modal-sheet-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
     }
 
-    .modal-title {
+    .modal-sheet-title {
+      font-family: 'Outfit', sans-serif;
       font-size: 17px;
       font-weight: 700;
+      color: #fff;
     }
 
-    .btn-close {
-      background: none;
+    .btn-close-modal {
+      background: rgba(255, 255, 255, 0.08);
       border: none;
-      color: var(--text-muted);
-      font-size: 18px;
+      color: var(--text-body);
+      width: 32px;
+      height: 32px;
+      border-radius: var(--radius-full);
+      font-size: 16px;
       cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
 
     /* Toast */
@@ -587,359 +629,257 @@ export function getClientPortalHtml(): string {
       position: fixed;
       bottom: 24px;
       left: 50%;
-      transform: translateX(-50%) translateY(100px);
+      transform: translateX(-50%) translateY(120px);
       background: #1e293b;
-      border: 1px solid var(--accent-cyan);
-      color: white;
+      border: 1px solid #38bdf8;
+      color: #fff;
       padding: 12px 20px;
-      border-radius: 30px;
+      border-radius: var(--radius-full);
       font-size: 13px;
-      font-weight: 500;
+      font-weight: 600;
       z-index: 200;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.6);
       transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
       display: flex;
       align-items: center;
       gap: 8px;
+      max-width: 90%;
+      text-align: center;
     }
 
     #toast.show {
       transform: translateX(-50%) translateY(0);
     }
 
-    /* Hidden Utility */
     .hidden { display: none !important; }
   </style>
 </head>
 <body>
 
-  <!-- Header -->
-  <header class="header">
-    <a href="/portal" class="brand">
-      <div class="brand-logo"><i class="fa-solid fa-wifi"></i></div>
-      <div class="brand-text">
-        <h1>${ispName}</h1>
-        <span>Portal del Cliente</span>
-      </div>
-    </a>
-    <div class="header-actions">
-      <button id="btnInstallPwa" class="btn-pwa-install"><i class="fa-solid fa-download"></i> App</button>
-      <button id="btnLogout" class="btn-icon hidden" title="Cerrar Sesión"><i class="fa-solid fa-arrow-right-from-bracket"></i></button>
-    </div>
-  </header>
+  <div class="app-screen">
 
-  <!-- Main Content -->
-  <div class="container">
+    <!-- Header Móvil -->
+    <header class="app-header">
+      <div class="brand-group">
+        <div class="brand-icon"><i class="fa-solid fa-wifi"></i></div>
+        <div class="brand-info">
+          <h1>${ispName}</h1>
+          <span id="headerGreeting">Mi Conexión</span>
+        </div>
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <button id="btnPwa" class="btn-header-action hidden"><i class="fa-solid fa-download"></i> App</button>
+        <button id="btnLogout" class="btn-header-action hidden" onclick="logoutClient()" title="Cerrar sesión"><i class="fa-solid fa-right-from-bracket"></i></button>
+      </div>
+    </header>
 
     <!-- 1. VISTA DE INICIO DE SESIÓN -->
-    <div id="viewLogin" class="auth-container">
-      <div class="auth-card">
-        <div class="auth-header">
-          <h2>Iniciar Sesión</h2>
-          <p>Ingresa tu número de teléfono registrado y tu contraseña para acceder a tu conexión y facturas.</p>
-        </div>
+    <div id="viewLogin" class="auth-box">
+      <div class="auth-title">Iniciar Sesión</div>
+      <p class="auth-sub">Ingresa tu número celular y tu contraseña para ver tu red, facturas y saldo.</p>
 
-        <form id="formLogin" onsubmit="handleLogin(event)">
-          <div class="form-group">
-            <label class="form-label">Número de Teléfono</label>
-            <div class="input-wrapper">
-              <i class="fa-solid fa-phone input-icon"></i>
-              <input type="tel" id="loginPhone" class="form-control" placeholder="Ej: 7721234567" maxlength="10" required>
-            </div>
-          </div>
+      <form onsubmit="handleLogin(event)" style="display: flex; flex-direction: column; gap: 12px;">
+        <input type="tel" id="loginPhone" class="form-input" placeholder="Número de celular (10 dígitos)" maxlength="10" required>
+        <input type="password" id="loginPass" class="form-input" placeholder="Tu contraseña" required>
+        <button type="submit" class="btn-main"><i class="fa-solid fa-arrow-right-to-bracket"></i> Entrar a mi Cuenta</button>
+      </form>
 
-          <div class="form-group" style="margin-top: 10px;">
-            <label class="form-label">Contraseña</label>
-            <div class="input-wrapper">
-              <i class="fa-solid fa-lock input-icon"></i>
-              <input type="password" id="loginPassword" class="form-control" placeholder="••••••••" required>
-              <button type="button" class="input-toggle-pass" onclick="togglePass('loginPassword')"><i class="fa-solid fa-eye"></i></button>
-            </div>
-          </div>
+      <div style="display: flex; justify-content: space-between; font-size: 13px; margin-top: 4px;">
+        <span style="color: #38bdf8; cursor: pointer;" onclick="showForgot()">¿Olvidaste tu clave?</span>
+        <span style="color: #38bdf8; cursor: pointer;" onclick="showRegister()">Crear contraseña</span>
+      </div>
+    </div>
 
-          <button type="submit" class="btn-primary" style="margin-top: 16px;">
-            <i class="fa-solid fa-right-to-bracket"></i> Entrar a mi Portal
-          </button>
+    <!-- 1.5 VISTA VINCULAR WHATSAPP (Si el número no coincide de inicio) -->
+    <div id="viewNotFound" class="auth-box hidden">
+      <div style="text-align: center; font-size: 38px; color: #38bdf8; margin-bottom: 2px;">
+        <i class="fa-solid fa-link"></i>
+      </div>
+      <div class="auth-title">Vincular mi WhatsApp</div>
+      <p class="auth-sub">
+        No encontramos un servicio con el celular <strong id="notFoundPhoneLabel" style="color: #38bdf8;"></strong>.<br>
+        Ingresa tu <strong>Folio de servicio</strong> (ej. 696 o 2) o tu <strong>Nombre completo</strong> para vincularlo en 1 clic:
+      </p>
+
+      <form onsubmit="handleLinkContract(event)" style="display: flex; flex-direction: column; gap: 12px;">
+        <input type="text" id="linkIdentifier" class="form-input" placeholder="Folio (ej. 696) o Nombre completo" required>
+        <button type="submit" class="btn-main"><i class="fa-solid fa-check-circle"></i> Vincular y Entrar</button>
+      </form>
+
+      <div style="text-align: center; margin-top: 4px;">
+        <span style="color: #94a3b8; font-size: 13px; cursor: pointer;" onclick="showLogin()">Iniciar sesión normal</span>
+      </div>
+    </div>
+
+    <!-- 2. VISTA CREAR CONTRASEÑA -->
+    <div id="viewRegister" class="auth-box hidden">
+      <div class="auth-title">Activar mi Contraseña</div>
+      <p class="auth-sub">Crea una contraseña segura para entrar a tu cuenta cuando quieras.</p>
+
+      <form onsubmit="handleRegister(event)" style="display: flex; flex-direction: column; gap: 12px;">
+        <input type="tel" id="regPhone" class="form-input" placeholder="Número celular (10 dígitos)" maxlength="10" required>
+        <input type="password" id="regPass" class="form-input" placeholder="Crea tu contraseña (mínimo 6 letras o números)" minlength="6" required>
+        <button type="submit" class="btn-main"><i class="fa-solid fa-key"></i> Guardar y Entrar</button>
+      </form>
+
+      <div style="text-align: center; margin-top: 4px;">
+        <span style="color: #38bdf8; font-size: 13px; cursor: pointer;" onclick="showLogin()">Ya tengo contraseña · Entrar</span>
+      </div>
+    </div>
+
+    <!-- 3. VISTA RECUPERAR CLAVE -->
+    <div id="viewForgot" class="auth-box hidden">
+      <div class="auth-title">Recuperar Contraseña</div>
+      <p class="auth-sub">Te enviaremos un código de seguridad de 6 dígitos a tu WhatsApp.</p>
+
+      <div id="forgotStep1">
+        <form onsubmit="handleSendOtp(event)" style="display: flex; flex-direction: column; gap: 12px;">
+          <input type="tel" id="forgotPhone" class="form-input" placeholder="Tu número de celular" maxlength="10" required>
+          <button type="submit" class="btn-main"><i class="fa-brands fa-whatsapp"></i> Enviar Código a mi WhatsApp</button>
         </form>
-
-        <div class="auth-links">
-          <span class="auth-link" onclick="showForgotPassword()">¿Olvidaste tu contraseña?</span>
-          <span class="auth-link" onclick="showRegister()">Crear cuenta</span>
-        </div>
       </div>
-    </div>
 
-    <!-- 1.5 VISTA DE VINCULAR CONTRATO (Cuando el teléfono no está registrado) -->
-    <div id="viewNotFound" class="auth-container hidden">
-      <div class="auth-card">
-        <div class="auth-header">
-          <div style="font-size: 34px; color: var(--accent-cyan); margin-bottom: 8px;"><i class="fa-solid fa-link"></i></div>
-          <h2>Vincular tu WhatsApp</h2>
-          <p>No encontramos un servicio con el número <strong id="notFoundPhoneLabel" style="color: var(--accent-cyan); font-family: monospace;"></strong>.</p>
-          <p style="margin-top: 6px; font-size: 13px;">Ingresa tu <strong>Folio de servicio</strong> (ej: 696 o 2) o tu <strong>Nombre completo</strong> para conectar tu cuenta en 1 clic:</p>
-        </div>
-
-        <form id="formLinkContract" onsubmit="handleLinkContract(event)">
-          <div class="form-group">
-            <label class="form-label">Folio de Servicio o Nombre del Titular</label>
-            <div class="input-wrapper">
-              <i class="fa-solid fa-id-card input-icon"></i>
-              <input type="text" id="linkIdentifier" class="form-control" placeholder="Ej: 696 o Juan Pérez" required>
-            </div>
-          </div>
-
-          <button type="submit" class="btn-primary" style="margin-top: 16px;">
-            <i class="fa-solid fa-link"></i> Vincular mi WhatsApp y Entrar
-          </button>
+      <div id="forgotStep2" class="hidden">
+        <form onsubmit="handleResetPassword(event)" style="display: flex; flex-direction: column; gap: 12px;">
+          <input type="text" id="resetOtp" class="form-input" placeholder="Código de 6 dígitos recibido" maxlength="6" required>
+          <input type="password" id="resetNewPass" class="form-input" placeholder="Nueva contraseña (mín 6 caracteres)" minlength="6" required>
+          <button type="submit" class="btn-main"><i class="fa-solid fa-rotate"></i> Restablecer y Entrar</button>
         </form>
+      </div>
 
-        <div class="auth-links" style="justify-content: center;">
-          <span class="auth-link" onclick="showLogin()">Ya tengo contraseña · Iniciar Sesión</span>
-        </div>
+      <div style="text-align: center; margin-top: 6px;">
+        <span style="color: #94a3b8; font-size: 13px; cursor: pointer;" onclick="showLogin()">Regresar al inicio</span>
       </div>
     </div>
 
-    <!-- 2. VISTA DE REGISTRO / CREAR CONTRASEÑA -->
-    <div id="viewRegister" class="auth-container hidden">
-      <div class="auth-card">
-        <div class="auth-header">
-          <h2>Activar mi Cuenta</h2>
-          <p>Crea tu contraseña de acceso para gestionar tu Wi-Fi, revisar tu conexión y pagar en línea.</p>
+    <!-- 4. DASHBOARD DEL CLIENTE (100% AMIGABLE Y VISUAL) -->
+    <div id="viewDashboard" class="hidden" style="display: flex; flex-direction: column; gap: 14px;">
+
+      <!-- Banner Amigable de Creación de Contraseña -->
+      <div id="onboardingBanner" class="onboarding-card hidden">
+        <div class="onboarding-title">
+          <i class="fa-solid fa-shield-halved" style="color: #38bdf8;"></i>
+          <span>¡Asegura tu cuenta de cliente!</span>
         </div>
-
-        <form id="formRegister" onsubmit="handleRegister(event)">
-          <div class="form-group">
-            <label class="form-label">Número de Teléfono</label>
-            <div class="input-wrapper">
-              <i class="fa-solid fa-phone input-icon"></i>
-              <input type="tel" id="regPhone" class="form-control" placeholder="10 dígitos registrados" maxlength="10" required>
-            </div>
-          </div>
-
-          <div class="form-group" style="margin-top: 10px;">
-            <label class="form-label">Nueva Contraseña (mínimo 6 caracteres)</label>
-            <div class="input-wrapper">
-              <i class="fa-solid fa-key input-icon"></i>
-              <input type="password" id="regPassword" class="form-control" placeholder="Crea tu contraseña segura" minlength="6" required>
-              <button type="button" class="input-toggle-pass" onclick="togglePass('regPassword')"><i class="fa-solid fa-eye"></i></button>
-            </div>
-          </div>
-
-          <button type="submit" class="btn-primary" style="margin-top: 16px;">
-            <i class="fa-solid fa-check-circle"></i> Guardar y Entrar
-          </button>
+        <p class="onboarding-desc">
+          📱 <strong>Tu usuario es tu celular:</strong> <span id="onboardingPhoneLabel"></span><br>
+          🔒 Crea tu contraseña para entrar desde cualquier teléfono o computadora:
+        </p>
+        <form onsubmit="handleSaveOnboardingPassword(event)" class="onboarding-form">
+          <input type="password" id="onboardingPassInput" class="form-input" placeholder="Crea tu contraseña (mín 6 caracteres)" minlength="6" required>
+          <button type="submit" class="btn-main" style="padding: 11px 16px;"><i class="fa-solid fa-floppy-disk"></i> Guardar mi Contraseña</button>
         </form>
-
-        <div class="auth-links" style="justify-content: center;">
-          <span class="auth-link" onclick="showLogin()">Ya tengo contraseña · Iniciar Sesión</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- 3. VISTA DE RECUPERACIÓN POR WHATSAPP -->
-    <div id="viewForgot" class="auth-container hidden">
-      <div class="auth-card">
-        <div class="auth-header">
-          <h2>Recuperar Contraseña</h2>
-          <p>Te enviaremos un código de seguridad de 6 dígitos a tu WhatsApp para restablecer tu clave.</p>
-        </div>
-
-        <div id="forgotStep1">
-          <form onsubmit="handleSendOtp(event)">
-            <div class="form-group">
-              <label class="form-label">Número de Teléfono</label>
-              <div class="input-wrapper">
-                <i class="fa-solid fa-phone input-icon"></i>
-                <input type="tel" id="forgotPhone" class="form-control" placeholder="10 dígitos registrados" maxlength="10" required>
-              </div>
-            </div>
-
-            <button type="submit" class="btn-primary" style="margin-top: 16px;">
-              <i class="fa-brands fa-whatsapp"></i> Enviar Código por WhatsApp
-            </button>
-          </form>
-        </div>
-
-        <div id="forgotStep2" class="hidden">
-          <form onsubmit="handleResetPassword(event)">
-            <div class="form-group">
-              <label class="form-label">Código de 6 dígitos recibido</label>
-              <div class="input-wrapper">
-                <i class="fa-solid fa-shield-halved input-icon"></i>
-                <input type="text" id="resetOtp" class="form-control" placeholder="Ej: 123456" maxlength="6" required>
-              </div>
-            </div>
-
-            <div class="form-group" style="margin-top: 10px;">
-              <label class="form-label">Nueva Contraseña</label>
-              <div class="input-wrapper">
-                <i class="fa-solid fa-lock input-icon"></i>
-                <input type="password" id="resetNewPass" class="form-control" placeholder="Mínimo 6 caracteres" minlength="6" required>
-              </div>
-            </div>
-
-            <button type="submit" class="btn-primary" style="margin-top: 16px;">
-              <i class="fa-solid fa-rotate"></i> Restablecer y Entrar
-            </button>
-          </form>
-        </div>
-
-        <div class="auth-links" style="justify-content: center;">
-          <span class="auth-link" onclick="showLogin()">Regresar al inicio de sesión</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- 4. DASHBOARD PRINCIPAL DEL CLIENTE -->
-    <div id="viewDashboard" class="hidden" style="display: flex; flex-direction: column; gap: 16px;">
-
-      <!-- Banner de Onboarding: Creación de Contraseña Inicial -->
-      <div id="onboardingBanner" class="card hidden" style="background: linear-gradient(135deg, rgba(6, 182, 212, 0.12), rgba(59, 130, 246, 0.12)); border: 1px solid var(--accent-cyan); box-shadow: 0 4px 20px rgba(6, 182, 212, 0.15);">
-        <div style="display: flex; gap: 14px; align-items: flex-start;">
-          <div style="font-size: 26px; color: var(--accent-cyan); margin-top: 2px;"><i class="fa-solid fa-shield-halved"></i></div>
-          <div style="flex: 1; display: flex; flex-direction: column; gap: 6px;">
-            <div style="font-size: 16px; font-weight: 700; color: #fff;">¡Crea tu contraseña de acceso!</div>
-            <div style="font-size: 13px; color: var(--text-muted); line-height: 1.4;">
-              📱 <strong>Tu usuario de acceso es tu número de celular:</strong> <span id="onboardingPhone" style="color: var(--accent-cyan); font-family: 'JetBrains Mono', monospace; font-weight: 700;"></span><br>
-              🔒 Crea una contraseña para ingresar desde cualquier computadora o dispositivo en el futuro:
-            </div>
-            <form onsubmit="handleOnboardingSavePassword(event)" style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px;">
-              <input type="password" id="onboardingPass" class="form-control" style="flex: 1; min-width: 200px; padding-left: 14px;" placeholder="Crea tu contraseña (mín 6 caracteres)" minlength="6" required>
-              <button type="submit" class="btn-primary" style="width: auto; padding: 10px 18px; font-size: 13px;">
-                <i class="fa-solid fa-floppy-disk"></i> Guardar Contraseña
-              </button>
-            </form>
-          </div>
-        </div>
       </div>
 
-      <!-- Selector Multi-Servicio -->
-      <div id="multiServiceContainer" class="service-switcher-wrapper hidden">
-        <div class="service-switcher-header">
-          <span><i class="fa-solid fa-building-user"></i> Tus Contratos Activos</span>
-          <span id="serviceCountBadge">1 Contrato</span>
-        </div>
-        <select id="serviceSelector" class="service-select-control" onchange="onSelectService(this.value)">
+      <!-- Selector si el titular tiene múltiples casas o contratos -->
+      <div id="multiServiceBox" class="service-pill-select hidden">
+        <label><i class="fa-solid fa-house"></i> Selecciona tu Domicilio / Contrato</label>
+        <select id="serviceSelect" class="select-styled" onchange="onSwitchService(this.value)">
           <!-- Opciones dinámicas -->
         </select>
       </div>
 
-      <!-- Alerta de Corte de Zona -->
-      <div id="outageBanner" class="card hidden" style="border-color: var(--accent-amber); background: rgba(245, 158, 11, 0.1);">
-        <div class="card-title" style="color: var(--accent-amber);">
-          <i class="fa-solid fa-triangle-exclamation"></i>
-          <span id="outageTitle">Mantenimiento de Red en Curso</span>
+      <!-- Alerta Amigable de Mantenimiento / Falla de Zona -->
+      <div id="outageBox" class="app-card hidden" style="background: rgba(245, 158, 11, 0.12); border-color: rgba(245, 158, 11, 0.4);">
+        <div style="display: flex; align-items: center; gap: 10px; color: #f59e0b; font-weight: 700;">
+          <i class="fa-solid fa-triangle-exclamation" style="font-size: 20px;"></i>
+          <span id="outageTitle">Mantenimiento en tu Zona</span>
         </div>
-        <p id="outageDesc" style="font-size: 13px; color: var(--text-muted);"></p>
+        <p id="outageDesc" style="font-size: 13px; color: #e2e8f0; line-height: 1.4;"></p>
       </div>
 
-      <!-- Tarjeta 1: Estado de Fibra Óptica -->
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title"><i class="fa-solid fa-tower-broadcast"></i> Conexión de Fibra Óptica</div>
-          <button class="btn-secondary" style="width: auto; padding: 6px 12px; font-size: 11px;" onclick="refreshSignal()"><i class="fa-solid fa-rotate"></i> Probar Señal</button>
+      <!-- TARJETA 1: ESTADO DEL INTERNET (Cero tecnicismos) -->
+      <div class="app-card">
+        <div class="card-head">
+          <div class="card-head-title"><i class="fa-solid fa-circle-nodes"></i> Estado de tu Conexión</div>
+          <span id="planSpeedTag" class="status-speed-badge">40 Megas</span>
         </div>
 
-        <div class="signal-box">
-          <div class="signal-status-badge">
-            <span id="statusDot" class="status-dot dot-green"></span>
-            <span id="statusText">Conexión Excelente</span>
+        <div class="status-banner-box">
+          <div class="status-left">
+            <div id="statusPulseDot" class="status-pulse-circle"></div>
+            <div>
+              <div id="statusFriendlyTitle" class="status-text-main">Tu internet está funcionando al 100%</div>
+              <div id="statusFriendlySub" class="status-text-sub">Señal excelente en tu domicilio</div>
+            </div>
           </div>
-          <div id="signalDbm" style="font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--text-muted);">
-            -21.4 dBm
-          </div>
         </div>
 
-        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--text-muted);">
-          <span>Plan contratado: <strong id="planName" style="color: var(--text-main);">50 Megas</strong></span>
-          <span>Titular: <strong id="clientTitular" style="color: var(--text-main);">Juan</strong></span>
+        <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text-body); padding: 0 4px;">
+          <span>Titular: <strong id="titularName" style="color: #fff;">-</strong></span>
+          <span>Folio: <strong id="contractFolio" style="color: #38bdf8;">#-</strong></span>
         </div>
 
-        <button id="btnReboot" class="btn-secondary" onclick="rebootModem()">
-          <i class="fa-solid fa-power-off"></i> Reiniciar mi Módem
+        <button id="btnRebootModem" class="btn-outline" onclick="triggerModemReboot()">
+          <i class="fa-solid fa-rotate"></i> Optimizar / Reiniciar mi Conexión
         </button>
       </div>
 
-      <!-- Tarjeta 2: Configuración Wi-Fi -->
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title"><i class="fa-solid fa-wifi"></i> Tu Red Wi-Fi</div>
-          <button class="btn-secondary" style="width: auto; padding: 6px 12px; font-size: 11px;" onclick="openWifiModal()"><i class="fa-solid fa-pen"></i> Cambiar Clave</button>
+      <!-- TARJETA 2: TU RED WI-FI DE CASA -->
+      <div class="app-card">
+        <div class="card-head">
+          <div class="card-head-title"><i class="fa-solid fa-wifi"></i> Tu Red Wi-Fi</div>
+          <button class="btn-header-action" onclick="openModalWifi()" style="padding: 6px 12px; font-size: 12px;">
+            <i class="fa-solid fa-pen"></i> Cambiar
+          </button>
         </div>
 
-        <div class="wifi-grid">
-          <div class="wifi-card">
-            <div class="wifi-details">
-              <span style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Nombre de Red (SSID)</span>
-              <span id="wifiSsid" class="wifi-ssid">Cargando...</span>
-            </div>
-            <button class="btn-icon" onclick="copyWifiSsid()" title="Copiar nombre"><i class="fa-solid fa-copy"></i></button>
+        <!-- Nombre de red -->
+        <div class="wifi-item">
+          <div class="wifi-item-info">
+            <span class="wifi-label">Nombre de Red</span>
+            <span id="wifiSsidLabel" class="wifi-val">Cargando...</span>
           </div>
+          <button class="btn-action-icon" onclick="copyWifiSsid()" title="Copiar nombre de red"><i class="fa-solid fa-copy"></i></button>
+        </div>
 
-          <div class="wifi-card">
-            <div class="wifi-details">
-              <span style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Contraseña</span>
-              <span id="wifiPass" class="wifi-pass">••••••••</span>
-            </div>
-            <div style="display: flex; gap: 6px;">
-              <button class="btn-icon" onclick="toggleWifiPassVisibility()" title="Ver contraseña"><i class="fa-solid fa-eye"></i></button>
-              <button class="btn-icon" onclick="copyWifiPass()" title="Copiar contraseña"><i class="fa-solid fa-copy"></i></button>
-              <button class="btn-icon" onclick="openQrModal()" title="Generar QR para visitas"><i class="fa-solid fa-qrcode"></i></button>
-            </div>
+        <!-- Contraseña -->
+        <div class="wifi-item">
+          <div class="wifi-item-info">
+            <span class="wifi-label">Contraseña Wi-Fi</span>
+            <span id="wifiPassLabel" class="wifi-val mono">••••••••</span>
+          </div>
+          <div class="wifi-actions">
+            <button class="btn-action-icon" onclick="toggleShowWifiPass()" title="Ver u ocultar contraseña"><i id="eyeIcon" class="fa-solid fa-eye"></i></button>
+            <button class="btn-action-icon" onclick="copyWifiPass()" title="Copiar contraseña"><i class="fa-solid fa-copy"></i></button>
+            <button class="btn-action-icon" onclick="openQrModal()" title="Compartir con visitas"><i class="fa-solid fa-qrcode"></i></button>
           </div>
         </div>
       </div>
 
-      <!-- Tarjeta 3: Facturación e Historial de Pagos -->
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title"><i class="fa-solid fa-receipt"></i> Estado de Cuenta y Facturas</div>
-          <button class="btn-secondary" style="width: auto; padding: 6px 12px; font-size: 11px;" onclick="loadBillingHistory()"><i class="fa-solid fa-rotate"></i> Actualizar</button>
+      <!-- TARJETA 3: TU SALDO Y PAGOS -->
+      <div class="app-card">
+        <div class="card-head">
+          <div class="card-head-title"><i class="fa-solid fa-receipt"></i> Tu Saldo y Recibos</div>
+          <span id="billingBadge" class="badge-status paid">Al Corriente</span>
         </div>
 
-        <div class="billing-summary">
-          <div>
-            <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">Saldo Actual</div>
-            <div id="billingAmount" class="billing-amount">$0.00</div>
-            <div id="billingDueDate" style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">Corte: Día 5 de cada mes</div>
+        <div class="billing-hero">
+          <div class="billing-hero-left">
+            <span style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">Saldo a Pagar</span>
+            <div id="billingAmountLabel" class="billing-hero-amount">$0.00</div>
+            <div id="billingDueLabel" class="billing-hero-date">Día 5 de cada mes</div>
           </div>
-          <span id="billingStatusTag" class="billing-status-tag tag-paid">Al Corriente</span>
+          <button class="btn-outline" style="width: auto; padding: 10px 14px; font-size: 13px;" onclick="openModalBank()">
+            <i class="fa-solid fa-building-columns"></i> Datos de Pago
+          </button>
         </div>
 
-        <!-- Botones de Pago -->
-        <div id="paymentActions" style="display: flex; gap: 10px;">
-          <button class="btn-primary" onclick="openBankModal()"><i class="fa-solid fa-building-columns"></i> Datos de Transferencia</button>
-          <a id="btnPayOnline" href="#" target="_blank" class="btn-secondary hidden" style="text-decoration: none;"><i class="fa-solid fa-credit-card"></i> Pagar en Línea</a>
-        </div>
-
-        <!-- Tabla Historial -->
+        <!-- Lista limpia de recibos -->
         <div>
-          <div style="font-size: 12px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 6px;">Historial de Recibos y Pagos</div>
-          <div style="overflow-x: auto;">
-            <table class="invoices-table">
-              <thead>
-                <tr>
-                  <th>Folio</th>
-                  <th>Fecha</th>
-                  <th>Monto</th>
-                  <th>Estado</th>
-                  <th>Acción</th>
-                </tr>
-              </thead>
-              <tbody id="invoicesTbody">
-                <tr><td colspan="5" style="text-align: center; color: var(--text-muted);">Consultando recibos...</td></tr>
-              </tbody>
-            </table>
+          <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px;">Historial de Recibos</div>
+          <div id="invoicesList" style="display: flex; flex-direction: column; gap: 8px;">
+            <div style="text-align: center; color: var(--text-muted); font-size: 13px; padding: 10px;">Consultando recibos...</div>
           </div>
         </div>
       </div>
 
-      <!-- Tarjeta 4: Soporte Técnico Directo -->
-      <div class="card" style="text-align: center; align-items: center; padding: 20px;">
-        <i class="fa-brands fa-whatsapp" style="font-size: 32px; color: var(--accent-green);"></i>
-        <div style="font-weight: 700; font-size: 16px;">¿Necesitas ayuda con tu servicio?</div>
-        <p style="font-size: 13px; color: var(--text-muted); max-width: 380px;">Nuestro asistente inteligente y equipo técnico están disponibles las 24 horas por WhatsApp.</p>
-        <a id="btnWhatsappSupport" href="https://wa.me/${supportPhone}?text=Hola,%20necesito%20apoyo%20con%20mi%20servicio" target="_blank" class="btn-primary" style="width: auto; text-decoration: none;">
+      <!-- TARJETA 4: ASISTENCIA Y SOPORTE DIRECTO -->
+      <div class="app-card" style="text-align: center; align-items: center; gap: 10px;">
+        <i class="fa-brands fa-whatsapp" style="font-size: 36px; color: #10b981;"></i>
+        <div style="font-size: 16px; font-weight: 700; color: #fff;">¿Tienes alguna duda o problema?</div>
+        <p style="font-size: 13px; color: var(--text-body); max-width: 320px;">Estamos listos para atenderte 24/7 por WhatsApp.</p>
+        <a id="btnSupportWa" href="https://wa.me/${supportPhone}?text=Hola,%20necesito%20apoyo%20con%20mi%20servicio" target="_blank" class="btn-whatsapp">
           <i class="fa-brands fa-whatsapp"></i> Chatear con Soporte
         </a>
       </div>
@@ -948,90 +888,92 @@ export function getClientPortalHtml(): string {
 
   </div>
 
-  <!-- Modal Wi-Fi -->
-  <div id="modalWifi" class="modal-backdrop">
-    <div class="modal-box">
-      <div class="modal-header">
-        <span class="modal-title">Cambiar Clave Wi-Fi</span>
-        <button class="btn-close" onclick="closeModal('modalWifi')">&times;</button>
+  <!-- MODAL: CAMBIAR CLAVE WI-FI -->
+  <div id="modalWifi" class="modal-overlay">
+    <div class="modal-sheet">
+      <div class="modal-sheet-header">
+        <div class="modal-sheet-title">Cambiar Nombre o Clave Wi-Fi</div>
+        <button class="btn-close-modal" onclick="closeModal('modalWifi')">&times;</button>
       </div>
-      <form onsubmit="handleSaveWifi(event)">
-        <div class="form-group">
-          <label class="form-label">Nombre de Red Wi-Fi (SSID)</label>
-          <input type="text" id="modalSsid" class="form-control" style="padding-left: 14px;" required>
+      <form onsubmit="handleSaveWifi(event)" style="display: flex; flex-direction: column; gap: 12px;">
+        <div>
+          <label style="font-size: 12px; color: var(--text-body); margin-bottom: 4px; display: block;">Nombre de Red (SSID)</label>
+          <input type="text" id="modalSsidInput" class="form-input" required>
         </div>
-        <div class="form-group" style="margin-top: 10px;">
-          <label class="form-label">Nueva Contraseña (mínimo 8 caracteres)</label>
-          <input type="password" id="modalPass" class="form-control" style="padding-left: 14px;" minlength="8" required>
+        <div>
+          <label style="font-size: 12px; color: var(--text-body); margin-bottom: 4px; display: block;">Nueva Contraseña (mínimo 8 caracteres)</label>
+          <input type="password" id="modalPassInput" class="form-input" minlength="8" placeholder="Escribe tu nueva clave" required>
         </div>
-        <button type="submit" class="btn-primary" style="margin-top: 16px;"><i class="fa-solid fa-save"></i> Aplicar en mi Módem</button>
+        <button type="submit" class="btn-main" style="margin-top: 6px;"><i class="fa-solid fa-save"></i> Aplicar en mi Módem</button>
       </form>
     </div>
   </div>
 
-  <!-- Modal QR Wi-Fi -->
-  <div id="modalQr" class="modal-backdrop">
-    <div class="modal-box" style="text-align: center; align-items: center;">
-      <div class="modal-header" style="width: 100%;">
-        <span class="modal-title">Conectar por Código QR</span>
-        <button class="btn-close" onclick="closeModal('modalQr')">&times;</button>
+  <!-- MODAL: CÓDIGO QR PARA VISITAS -->
+  <div id="modalQr" class="modal-overlay">
+    <div class="modal-sheet" style="text-align: center; align-items: center;">
+      <div class="modal-sheet-header" style="width: 100%;">
+        <div class="modal-sheet-title">Conectar por Código QR</div>
+        <button class="btn-close-modal" onclick="closeModal('modalQr')">&times;</button>
       </div>
-      <p style="font-size: 13px; color: var(--text-muted);">Pídele a tus visitas que apunten la cámara de su celular para conectarse al instante.</p>
-      <div id="qrcodeContainer" style="background: white; padding: 16px; border-radius: 12px; margin: 10px 0;"></div>
-      <button class="btn-secondary" onclick="closeModal('modalQr')">Cerrar</button>
+      <p style="font-size: 13px; color: var(--text-body);">Pídele a tus visitas que escaneen este código con la cámara de su celular para conectarse sin escribir la clave:</p>
+      <div id="qrcodeBox" style="background: white; padding: 16px; border-radius: 16px; margin: 10px auto;"></div>
+      <button class="btn-outline" onclick="closeModal('modalQr')">Listo, cerrar</button>
     </div>
   </div>
 
-  <!-- Modal Datos Bancarios -->
-  <div id="modalBank" class="modal-backdrop">
-    <div class="modal-box">
-      <div class="modal-header">
-        <span class="modal-title">Datos para Pago por Transferencia (SPEI)</span>
-        <button class="btn-close" onclick="closeModal('modalBank')">&times;</button>
+  <!-- MODAL: DATOS BANCARIOS (SPEI) -->
+  <div id="modalBank" class="modal-overlay">
+    <div class="modal-sheet">
+      <div class="modal-sheet-header">
+        <div class="modal-sheet-title">Datos para Pago por Transferencia</div>
+        <button class="btn-close-modal" onclick="closeModal('modalBank')">&times;</button>
       </div>
-      <div style="font-size: 13px; display: flex; flex-direction: column; gap: 8px;">
+      <div style="background: var(--bg-surface); padding: 14px; border-radius: var(--radius-md); font-size: 13px; display: flex; flex-direction: column; gap: 8px;">
         <div><strong>Banco:</strong> ${bankName}</div>
-        <div><strong>CLABE Interbancaria:</strong> <span id="bankClabeVal" style="font-family: monospace; color: var(--accent-cyan);">${bankClabe}</span></div>
-        <div><strong>Número de Cuenta:</strong> ${bankAccount}</div>
+        <div><strong>CLABE Interbancaria:</strong> <span id="bankClabeText" style="color: #38bdf8; font-family: monospace; font-weight: 700;">${bankClabe}</span></div>
+        <div><strong>Cuenta:</strong> ${bankAccount}</div>
         <div><strong>Beneficiario:</strong> ${ispName}</div>
-        <div><strong>Concepto / Referencia:</strong> <span id="bankRefVal" style="font-weight: 700; color: var(--accent-green);">SRV-100</span></div>
+        <div><strong>Concepto / Referencia:</strong> <strong id="bankRefText" style="color: #10b981;">SRV-100</strong></div>
       </div>
-      <button class="btn-primary" onclick="copyBankClabe()"><i class="fa-solid fa-copy"></i> Copiar CLABE</button>
+      <button class="btn-main" onclick="copyClabe()"><i class="fa-solid fa-copy"></i> Copiar CLABE Interbancaria</button>
     </div>
   </div>
 
-  <!-- Toast -->
-  <div id="toast"><i class="fa-solid fa-circle-check"></i> <span id="toastMsg">Listo</span></div>
+  <!-- TOAST NOTIFICACIÓN -->
+  <div id="toast"><i class="fa-solid fa-circle-check"></i> <span id="toastMessage">Listo</span></div>
 
   <script>
     let currentToken = localStorage.getItem('cp_token') || '';
     let currentPhone = localStorage.getItem('cp_phone') || '';
+    let currentContractId = '';
     let currentServices = [];
-    let currentServiceId = '';
-    let currentWifiRealPass = '';
-    let isPassVisible = false;
+    let realWifiPassword = '';
+    let isPassRevealed = false;
 
-    // Inicializar PWA y Eventos
     document.addEventListener('DOMContentLoaded', () => {
       initPwa();
-      checkUrlParams();
-      if (currentToken) {
+      checkParams();
+      if (currentToken || currentPhone) {
         loadDashboard();
       } else {
         showLogin();
       }
     });
 
-    function checkUrlParams() {
+    function checkParams() {
       const url = new URL(window.location.href);
       const autoAuth = url.searchParams.get('auth') || url.searchParams.get('token');
       const resetCode = url.searchParams.get('resetCode');
       const p = url.searchParams.get('p') || url.searchParams.get('phone');
 
       if (p) {
-        document.getElementById('loginPhone').value = p;
-        document.getElementById('regPhone').value = p;
-        document.getElementById('forgotPhone').value = p;
+        const cleanP = p.replace(/\\D/g, '').slice(-10);
+        currentPhone = cleanP;
+        localStorage.setItem('cp_phone', cleanP);
+        document.getElementById('loginPhone').value = cleanP;
+        document.getElementById('regPhone').value = cleanP;
+        document.getElementById('forgotPhone').value = cleanP;
       }
 
       if (autoAuth) {
@@ -1041,7 +983,6 @@ export function getClientPortalHtml(): string {
       } else if (resetCode && p) {
         showForgotStep2(p, resetCode);
       } else if (p) {
-        currentPhone = p;
         loadDashboard();
       }
     }
@@ -1054,112 +995,75 @@ export function getClientPortalHtml(): string {
       window.addEventListener('beforeinstallprompt', (e) => {
         e.preventDefault();
         deferredPrompt = e;
-        const btn = document.getElementById('btnInstallPwa');
+        const btn = document.getElementById('btnPwa');
         if (btn) {
-          btn.style.display = 'flex';
-          btn.onclick = () => {
-            deferredPrompt.prompt();
-          };
+          btn.classList.remove('hidden');
+          btn.onclick = () => { deferredPrompt.prompt(); };
         }
       });
     }
 
-    // UI View Switchers
-    function showLogin() {
-      document.getElementById('viewLogin').classList.remove('hidden');
+    function showToast(text) {
+      const t = document.getElementById('toast');
+      document.getElementById('toastMessage').innerText = text;
+      t.classList.add('show');
+      setTimeout(() => t.classList.remove('show'), 3500);
+    }
+
+    function hideAllViews() {
+      document.getElementById('viewLogin').classList.add('hidden');
       document.getElementById('viewNotFound').classList.add('hidden');
       document.getElementById('viewRegister').classList.add('hidden');
       document.getElementById('viewForgot').classList.add('hidden');
       document.getElementById('viewDashboard').classList.add('hidden');
+    }
+
+    function showLogin() {
+      hideAllViews();
+      document.getElementById('viewLogin').classList.remove('hidden');
       document.getElementById('btnLogout').classList.add('hidden');
     }
 
     function showNotFound(phone) {
-      document.getElementById('viewLogin').classList.add('hidden');
+      hideAllViews();
       document.getElementById('viewNotFound').classList.remove('hidden');
-      document.getElementById('viewRegister').classList.add('hidden');
-      document.getElementById('viewForgot').classList.add('hidden');
-      document.getElementById('viewDashboard').classList.add('hidden');
-      document.getElementById('btnLogout').classList.add('hidden');
       document.getElementById('notFoundPhoneLabel').innerText = phone || currentPhone;
     }
 
     function showRegister() {
-      document.getElementById('viewLogin').classList.add('hidden');
-      document.getElementById('viewNotFound').classList.add('hidden');
+      hideAllViews();
       document.getElementById('viewRegister').classList.remove('hidden');
-      document.getElementById('viewForgot').classList.add('hidden');
-      document.getElementById('viewDashboard').classList.add('hidden');
     }
 
-    function showForgotPassword() {
-      document.getElementById('viewLogin').classList.add('hidden');
-      document.getElementById('viewNotFound').classList.add('hidden');
-      document.getElementById('viewRegister').classList.add('hidden');
+    function showForgot() {
+      hideAllViews();
       document.getElementById('viewForgot').classList.remove('hidden');
       document.getElementById('forgotStep1').classList.remove('hidden');
       document.getElementById('forgotStep2').classList.add('hidden');
-      document.getElementById('viewDashboard').classList.add('hidden');
     }
 
     function showForgotStep2(phone, code) {
-      showForgotPassword();
+      showForgot();
       document.getElementById('forgotStep1').classList.add('hidden');
       document.getElementById('forgotStep2').classList.remove('hidden');
       if (code) document.getElementById('resetOtp').value = code;
       if (phone) currentPhone = phone;
     }
 
-    function togglePass(id) {
-      const el = document.getElementById(id);
-      el.type = el.type === 'password' ? 'text' : 'password';
+    function logoutClient() {
+      localStorage.removeItem('cp_token');
+      localStorage.removeItem('cp_phone');
+      currentToken = '';
+      currentPhone = '';
+      showLogin();
+      showToast('Sesión cerrada');
     }
 
-    function showToast(msg) {
-      const toast = document.getElementById('toast');
-      document.getElementById('toastMsg').innerText = msg;
-      toast.classList.add('show');
-      setTimeout(() => toast.classList.remove('show'), 3500);
-    }
-
-    // Auth Handlers
-    async function handleLinkContract(e) {
-      e.preventDefault();
-      const identifier = document.getElementById('linkIdentifier').value.trim();
-      const phone = currentPhone || localStorage.getItem('cp_phone') || '';
-
-      if (!identifier) {
-        showToast('Ingresa tu Folio o Nombre.');
-        return;
-      }
-
-      try {
-        const res = await fetch('/api/portal/auth/link-phone', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phone, identifier })
-        });
-        const data = await res.json();
-
-        if (data.success && data.token) {
-          localStorage.setItem('cp_token', data.token);
-          localStorage.setItem('cp_phone', phone);
-          currentToken = data.token;
-          showToast('✅ ¡WhatsApp vinculado con éxito!');
-          document.getElementById('viewNotFound').classList.add('hidden');
-          loadDashboard();
-        } else {
-          showToast(data.message || 'No se encontró el contrato.');
-        }
-      } catch {
-        showToast('Error al conectar con el servidor.');
-      }
-    }
-
+    // Handlers de Autenticación
     async function handleLogin(e) {
       e.preventDefault();
       const phone = document.getElementById('loginPhone').value.trim();
-      const password = document.getElementById('loginPassword').value;
+      const password = document.getElementById('loginPass').value;
 
       try {
         const res = await fetch('/api/portal/auth/login', {
@@ -1168,13 +1072,12 @@ export function getClientPortalHtml(): string {
           body: JSON.stringify({ phone, password })
         });
         const data = await res.json();
-
         if (data.success && data.token) {
           localStorage.setItem('cp_token', data.token);
           localStorage.setItem('cp_phone', phone);
           currentToken = data.token;
           currentPhone = phone;
-          showToast('¡Bienvenido a tu portal!');
+          showToast('¡Bienvenido!');
           loadDashboard();
         } else if (data.needsRegistration) {
           document.getElementById('regPhone').value = phone;
@@ -1184,14 +1087,40 @@ export function getClientPortalHtml(): string {
           showToast(data.message || 'Error al iniciar sesión');
         }
       } catch {
-        showToast('Error de conexión al autenticar.');
+        showToast('Error de conexión');
+      }
+    }
+
+    async function handleLinkContract(e) {
+      e.preventDefault();
+      const identifier = document.getElementById('linkIdentifier').value.trim();
+      const phone = currentPhone || localStorage.getItem('cp_phone') || '';
+
+      try {
+        const res = await fetch('/api/portal/auth/link-phone', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone, identifier })
+        });
+        const data = await res.json();
+        if (data.success && data.token) {
+          localStorage.setItem('cp_token', data.token);
+          localStorage.setItem('cp_phone', phone);
+          currentToken = data.token;
+          showToast('✅ ¡WhatsApp vinculado con éxito!');
+          loadDashboard();
+        } else {
+          showToast(data.message || 'No se encontró el contrato');
+        }
+      } catch {
+        showToast('Error al vincular servicio');
       }
     }
 
     async function handleRegister(e) {
       e.preventDefault();
       const phone = document.getElementById('regPhone').value.trim();
-      const password = document.getElementById('regPassword').value;
+      const password = document.getElementById('regPass').value;
 
       try {
         const res = await fetch('/api/portal/auth/register', {
@@ -1200,19 +1129,18 @@ export function getClientPortalHtml(): string {
           body: JSON.stringify({ phone, password })
         });
         const data = await res.json();
-
         if (data.success && data.token) {
           localStorage.setItem('cp_token', data.token);
           localStorage.setItem('cp_phone', phone);
           currentToken = data.token;
           currentPhone = phone;
-          showToast('¡Cuenta activada con éxito!');
+          showToast('¡Cuenta activada!');
           loadDashboard();
         } else {
-          showToast(data.message || 'No se pudo crear la cuenta.');
+          showToast(data.message || 'Error al crear cuenta');
         }
       } catch {
-        showToast('Error al conectar con el servidor.');
+        showToast('Error de conexión');
       }
     }
 
@@ -1233,10 +1161,10 @@ export function getClientPortalHtml(): string {
           document.getElementById('forgotStep1').classList.add('hidden');
           document.getElementById('forgotStep2').classList.remove('hidden');
         } else {
-          showToast(data.message || 'Error al enviar código.');
+          showToast(data.message || 'Error al enviar código');
         }
       } catch {
-        showToast('Error de conexión.');
+        showToast('Error al conectar');
       }
     }
 
@@ -1261,17 +1189,18 @@ export function getClientPortalHtml(): string {
           showToast(data.message || 'Código incorrecto');
         }
       } catch {
-        showToast('Error al restablecer contraseña.');
+        showToast('Error de conexión');
       }
     }
 
-    async function handleOnboardingSavePassword(e) {
+    async function handleSaveOnboardingPassword(e) {
       e.preventDefault();
-      const pass = document.getElementById('onboardingPass').value;
+      const pass = document.getElementById('onboardingPassInput').value;
       if (!pass || pass.length < 6) {
         showToast('La contraseña debe tener al menos 6 caracteres.');
         return;
       }
+
       try {
         const res = await fetch('/api/portal/auth/register', {
           method: 'POST',
@@ -1290,18 +1219,9 @@ export function getClientPortalHtml(): string {
           showToast(d.message || 'Error al guardar contraseña');
         }
       } catch {
-        showToast('Error al conectar con el servidor.');
+        showToast('Error de conexión');
       }
     }
-
-    document.getElementById('btnLogout').onclick = () => {
-      localStorage.removeItem('cp_token');
-      localStorage.removeItem('cp_phone');
-      currentToken = '';
-      currentPhone = '';
-      showLogin();
-      showToast('Sesión cerrada.');
-    };
 
     // Dashboard Data Loading
     async function loadDashboard(serviceId) {
@@ -1319,215 +1239,208 @@ export function getClientPortalHtml(): string {
           return;
         }
 
-        document.getElementById('viewLogin').classList.add('hidden');
-        document.getElementById('viewNotFound').classList.add('hidden');
-        document.getElementById('viewRegister').classList.add('hidden');
-        document.getElementById('viewForgot').classList.add('hidden');
+        hideAllViews();
         document.getElementById('viewDashboard').classList.remove('hidden');
         document.getElementById('btnLogout').classList.remove('hidden');
 
-        renderDashboardData(data);
+        renderDashboard(data);
       } catch {
-        showToast('Error al cargar datos del servicio.');
+        showToast('Error al cargar información');
       }
     }
 
-    function renderDashboardData(data) {
+    function renderDashboard(data) {
       const c = data.client;
-      currentServiceId = String(c.id_servicio);
+      currentContractId = String(c.id_servicio);
       currentServices = data.relatedServices || [];
       currentPhone = c.telefono || currentPhone;
 
-      // Banner de Onboarding si el usuario no tiene contraseña registrada
-      const onbBanner = document.getElementById('onboardingBanner');
+      // Header Saludo
+      const firstName = (c.nombre || '').split(' ')[0] || 'Cliente';
+      document.getElementById('headerGreeting').innerText = 'Hola, ' + firstName;
+      document.getElementById('titularName').innerText = c.nombre;
+      document.getElementById('contractFolio').innerText = '#' + c.id_servicio;
+
+      // Plan amigable
+      const cleanPlan = (c.plan_internet || 'Fibra Óptica').replace(/^paquete\\s+/i, '');
+      document.getElementById('planSpeedTag').innerText = cleanPlan;
+
+      // Onboarding Password Banner
+      const onb = document.getElementById('onboardingBanner');
       if (data.hasPassword === false) {
-        onbBanner.classList.remove('hidden');
-        document.getElementById('onboardingPhone').innerText = currentPhone;
+        onb.classList.remove('hidden');
+        document.getElementById('onboardingPhoneLabel').innerText = currentPhone;
       } else {
-        onbBanner.classList.add('hidden');
+        onb.classList.add('hidden');
       }
 
-      // Titular y Plan
-      document.getElementById('clientTitular').innerText = c.nombre;
-      document.getElementById('planName').innerText = c.plan_internet || 'Fibra Óptica';
-
-      // Multi-Servicio Switcher
-      const switcherContainer = document.getElementById('multiServiceContainer');
-      const selector = document.getElementById('serviceSelector');
+      // Multi-Servicio
+      const multiBox = document.getElementById('multiServiceBox');
+      const select = document.getElementById('serviceSelect');
       if (currentServices.length > 1) {
-        switcherContainer.classList.remove('hidden');
-        document.getElementById('serviceCountBadge').innerText = currentServices.length + ' Contratos';
-        selector.innerHTML = currentServices.map(s => {
-          const isSelected = String(s.id_servicio) === currentServiceId ? 'selected' : '';
+        multiBox.classList.remove('hidden');
+        select.innerHTML = currentServices.map(s => {
+          const sel = String(s.id_servicio) === currentContractId ? 'selected' : '';
           const dir = s.direccion || s.router || 'Domicilio registrado';
-          const plan = s.plan_internet || 'Fibra';
-          return '<option value="' + s.id_servicio + '" ' + isSelected + '>🏠 ' + dir + ' · Folio #' + s.id_servicio + ' (' + plan + ')</option>';
+          return '<option value="' + s.id_servicio + '" ' + sel + '>🏠 ' + dir + ' (Folio #' + s.id_servicio + ')</option>';
         }).join('');
       } else {
-        switcherContainer.classList.add('hidden');
+        multiBox.classList.add('hidden');
       }
 
-      // Outage
-      const outBanner = document.getElementById('outageBanner');
-      if (data.outage && data.outage.active) {
-        outBanner.classList.remove('hidden');
-        document.getElementById('outageTitle').innerText = data.outage.title;
-        document.getElementById('outageDesc').innerText = data.outage.description;
-      } else {
-        outBanner.classList.add('hidden');
-      }
-
-      // Signal
-      const dot = document.getElementById('statusDot');
-      const stText = document.getElementById('statusText');
-      const sigDbm = document.getElementById('signalDbm');
+      // Estado Amigable (Cero dBm o tecnicismos)
+      const dot = document.getElementById('statusPulseDot');
+      const title = document.getElementById('statusFriendlyTitle');
+      const sub = document.getElementById('statusFriendlySub');
       const sig = data.signal || {};
 
-      if (sig.status === 'ONLINE') {
-        dot.className = 'status-dot dot-green';
-        stText.innerText = 'Conexión Excelente y Activa';
+      if (sig.status === 'ONLINE' || c.estado === 'activo') {
+        dot.className = 'status-pulse-circle';
+        title.innerText = 'Tu internet está funcionando al 100%';
+        sub.innerText = 'Señal excelente y estable';
       } else if (sig.status === 'LOS' || sig.status === 'OFFLINE') {
-        dot.className = 'status-dot dot-red';
-        stText.innerText = 'Sin Señal (Fibra desconectada o corte)';
+        dot.className = 'status-pulse-circle red';
+        title.innerText = 'Módem sin señal de fibra';
+        sub.innerText = 'Verifica que el cable amarillo esté bien conectado';
       } else {
-        dot.className = 'status-dot dot-yellow';
-        stText.innerText = 'Equipo Sincronizado';
+        dot.className = 'status-pulse-circle yellow';
+        title.innerText = 'Módem sincronizando conexión';
+        sub.innerText = 'Revisa tu equipo';
       }
-
-      sigDbm.innerText = sig.opticalPowerDbm ? sig.opticalPowerDbm + ' dBm' : 'OK';
 
       // Wi-Fi
       const wifi = data.wifi || {};
-      document.getElementById('wifiSsid').innerText = wifi.ssid24 || ('CloudWare_' + c.id_servicio);
-      currentWifiRealPass = wifi.password || '********';
-      document.getElementById('wifiPass').innerText = isPassVisible ? currentWifiRealPass : '••••••••';
+      // Si el SSID es el nombre del cliente con folio, poner un nombre amigable o el SSID real
+      let rawSsid = wifi.ssid24 || '';
+      if (!rawSsid || rawSsid.includes('-') && /\\d+/.test(rawSsid)) {
+        rawSsid = 'Mi_Red_WiFi_' + c.id_servicio;
+      }
+      document.getElementById('wifiSsidLabel').innerText = rawSsid;
+      realWifiPassword = wifi.password || '********';
+      document.getElementById('wifiPassLabel').innerText = isPassRevealed ? realWifiPassword : '••••••••';
 
-      // Facturación
+      // Facturación y Saldo
       const balance = Number(c.saldo || 0);
-      document.getElementById('billingAmount').innerText = '$' + balance.toFixed(2);
-      document.getElementById('billingDueDate').innerText = 'Corte: ' + (c.fecha_corte || ('Día ' + (c.dia_corte || 5) + ' de cada mes'));
+      document.getElementById('billingAmountLabel').innerText = '$' + balance.toFixed(2);
+      document.getElementById('billingDueLabel').innerText = 'Corte: ' + (c.fecha_corte || ('Día ' + (c.dia_corte || 5) + ' del mes'));
 
-      const tag = document.getElementById('billingStatusTag');
+      const bBadge = document.getElementById('billingBadge');
       if (balance <= 0) {
-        tag.className = 'billing-status-tag tag-paid';
-        tag.innerText = 'Al Corriente';
+        bBadge.className = 'badge-status paid';
+        bBadge.innerText = 'Al Corriente';
       } else {
-        tag.className = 'billing-status-tag tag-pending';
-        tag.innerText = 'Pago Pendiente';
+        bBadge.className = 'badge-status pending';
+        bBadge.innerText = 'Pago Pendiente';
       }
 
-      document.getElementById('bankRefVal').innerText = 'SRV-' + c.id_servicio;
+      document.getElementById('bankRefText').innerText = 'SRV-' + c.id_servicio;
 
-      loadBillingHistory();
+      loadInvoicesHistory();
     }
 
-    function onSelectService(serviceId) {
+    function onSwitchService(serviceId) {
       loadDashboard(serviceId);
     }
 
-    async function loadBillingHistory() {
-      if (!currentServiceId) return;
+    async function loadInvoicesHistory() {
+      if (!currentContractId) return;
       try {
-        const res = await fetch('/api/portal/billing-history?serviceId=' + currentServiceId + '&token=' + encodeURIComponent(currentToken));
+        const res = await fetch('/api/portal/billing-history?serviceId=' + currentContractId + '&token=' + encodeURIComponent(currentToken));
         const data = await res.json();
-        const tbody = document.getElementById('invoicesTbody');
+        const container = document.getElementById('invoicesList');
 
         if (data.success && data.invoices && data.invoices.length > 0) {
-          tbody.innerHTML = data.invoices.map(inv => {
+          container.innerHTML = data.invoices.map(inv => {
             const isPaid = String(inv.estado || '').toLowerCase().includes('pagad');
-            const badgeClass = isPaid ? 'tag-paid' : 'tag-pending';
-            const pdfBtn = inv.pdf_url ? '<a href="' + inv.pdf_url + '" target="_blank" class="btn-icon" style="display:inline-flex; width:28px; height:28px;" title="Ver PDF"><i class="fa-solid fa-file-pdf"></i></a>' : '';
-            const payBtn = (!isPaid && inv.link_pago) ? '<a href="' + inv.link_pago + '" target="_blank" class="btn-primary" style="display:inline-flex; width:auto; padding:4px 8px; font-size:11px;" title="Pagar">Pagar</a>' : '';
-            return '<tr>' +
-              '<td><strong>#' + (inv.folio || inv.id) + '</strong></td>' +
-              '<td>' + (inv.fecha_emision || 'N/A') + '</td>' +
-              '<td>$' + Number(inv.monto || 0).toFixed(2) + '</td>' +
-              '<td><span class="billing-status-tag ' + badgeClass + '" style="font-size: 10px; padding: 2px 6px;">' + inv.estado + '</span></td>' +
-              '<td>' + pdfBtn + payBtn + '</td>' +
-              '</tr>';
+            const statusClass = isPaid ? 'paid' : 'pending';
+            const pdfBtn = inv.pdf_url ? '<a href="' + inv.pdf_url + '" target="_blank" class="btn-action-icon" style="width:32px; height:32px;" title="Ver PDF"><i class="fa-solid fa-file-pdf"></i></a>' : '';
+            return '<div style="display:flex; align-items:center; justify-content:space-between; background:var(--bg-surface); border:1px solid var(--border-card); border-radius:var(--radius-sm); padding:10px 12px;">' +
+              '<div>' +
+                '<div style="font-weight:700; font-size:13px; color:#fff;">Recibo #' + (inv.folio || inv.id) + '</div>' +
+                '<div style="font-size:11px; color:var(--text-muted);">' + (inv.fecha_emision || 'Reciente') + '</div>' +
+              '</div>' +
+              '<div style="display:flex; align-items:center; gap:8px;">' +
+                '<span style="font-weight:700; font-size:14px; color:#fff;">$' + Number(inv.monto || 0).toFixed(2) + '</span>' +
+                '<span class="badge-status ' + statusClass + '" style="font-size:10px; padding:2px 8px;">' + inv.estado + '</span>' +
+                pdfBtn +
+              '</div>' +
+            '</div>';
           }).join('');
         } else {
-          tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted);">Sin facturas pendientes registradas.</td></tr>';
+          container.innerHTML = '<div style="text-align:center; color:var(--text-muted); font-size:13px; padding:10px;">Estás al corriente con tus pagos 👍</div>';
         }
       } catch {}
     }
 
-    async function refreshSignal() {
-      showToast('Verificando potencia óptica...');
-      await loadDashboard(currentServiceId);
-      showToast('Señal actualizada.');
-    }
-
-    async function rebootModem() {
-      const btn = document.getElementById('btnReboot');
+    async function triggerModemReboot() {
+      const btn = document.getElementById('btnRebootModem');
       btn.disabled = true;
-      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Enviando orden...';
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Reiniciando tu módem...';
 
       try {
         const res = await fetch('/api/portal/reboot', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ clientId: currentServiceId })
+          body: JSON.stringify({ clientId: currentContractId })
         });
-        const data = await res.json();
-        showToast(data.message || 'Señal de reinicio enviada');
+        const d = await res.json();
+        showToast(d.message || 'Módem reiniciado. Espera 1 minuto.');
       } catch {
-        showToast('No se pudo reiniciar el módem.');
+        showToast('No se pudo enviar la orden de reinicio');
       } finally {
         setTimeout(() => {
           btn.disabled = false;
-          btn.innerHTML = '<i class="fa-solid fa-power-off"></i> Reiniciar mi Módem';
+          btn.innerHTML = '<i class="fa-solid fa-rotate"></i> Optimizar / Reiniciar mi Conexión';
         }, 5000);
       }
     }
 
-    function toggleWifiPassVisibility() {
-      isPassVisible = !isPassVisible;
-      document.getElementById('wifiPass').innerText = isPassVisible ? currentWifiRealPass : '••••••••';
+    function toggleShowWifiPass() {
+      isPassRevealed = !isPassRevealed;
+      document.getElementById('wifiPassLabel').innerText = isPassRevealed ? realWifiPassword : '••••••••';
+      document.getElementById('eyeIcon').className = isPassRevealed ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye';
     }
 
     function copyWifiSsid() {
-      navigator.clipboard.writeText(document.getElementById('wifiSsid').innerText);
-      showToast('Nombre de red copiado');
+      navigator.clipboard.writeText(document.getElementById('wifiSsidLabel').innerText);
+      showToast('Nombre de Wi-Fi copiado');
     }
 
     function copyWifiPass() {
-      navigator.clipboard.writeText(currentWifiRealPass);
-      showToast('Contraseña Wi-Fi copiada');
+      navigator.clipboard.writeText(realWifiPassword);
+      showToast('Contraseña copiada');
     }
 
-    function copyBankClabe() {
-      navigator.clipboard.writeText(document.getElementById('bankClabeVal').innerText);
+    function copyClabe() {
+      navigator.clipboard.writeText(document.getElementById('bankClabeText').innerText);
       showToast('CLABE copiada al portapapeles');
     }
 
-    function openWifiModal() {
-      document.getElementById('modalSsid').value = document.getElementById('wifiSsid').innerText;
-      document.getElementById('modalPass').value = '';
+    function openModalWifi() {
+      document.getElementById('modalSsidInput').value = document.getElementById('wifiSsidLabel').innerText;
+      document.getElementById('modalPassInput').value = '';
       document.getElementById('modalWifi').style.display = 'flex';
     }
 
     function openQrModal() {
-      const ssid = document.getElementById('wifiSsid').innerText;
-      const pass = currentWifiRealPass;
+      const ssid = document.getElementById('wifiSsidLabel').innerText;
+      const pass = realWifiPassword;
       const qrData = 'WIFI:T:WPA;S:' + ssid + ';P:' + pass + ';;';
 
-      const container = document.getElementById('qrcodeContainer');
-      container.innerHTML = '';
-      new QRCode(container, {
+      const box = document.getElementById('qrcodeBox');
+      box.innerHTML = '';
+      new QRCode(box, {
         text: qrData,
-        width: 180,
-        height: 180,
+        width: 170,
+        height: 170,
         colorDark: "#000000",
         colorLight: "#ffffff",
         correctLevel: QRCode.CorrectLevel.H
       });
-
       document.getElementById('modalQr').style.display = 'flex';
     }
 
-
-    function openBankModal() {
+    function openModalBank() {
       document.getElementById('modalBank').style.display = 'flex';
     }
 
@@ -1537,25 +1450,25 @@ export function getClientPortalHtml(): string {
 
     async function handleSaveWifi(e) {
       e.preventDefault();
-      const ssid = document.getElementById('modalSsid').value.trim();
-      const password = document.getElementById('modalPass').value;
+      const ssid = document.getElementById('modalSsidInput').value.trim();
+      const password = document.getElementById('modalPassInput').value;
 
       try {
         const res = await fetch('/api/portal/wifi', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ clientId: currentServiceId, ssid, password })
+          body: JSON.stringify({ clientId: currentContractId, ssid, password })
         });
-        const data = await res.json();
-        if (data.success) {
-          showToast(data.message || 'Wi-Fi actualizado con éxito.');
+        const d = await res.json();
+        if (d.success) {
+          showToast('✅ ¡Wi-Fi actualizado!');
           closeModal('modalWifi');
-          loadDashboard(currentServiceId);
+          loadDashboard(currentContractId);
         } else {
-          showToast(data.message || 'Error al actualizar Wi-Fi.');
+          showToast(d.message || 'Error al actualizar Wi-Fi');
         }
       } catch {
-        showToast('Error al conectar con la OLT.');
+        showToast('Error al conectar con el módem');
       }
     }
   </script>
