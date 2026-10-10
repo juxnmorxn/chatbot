@@ -21,9 +21,11 @@ export function getClientPortalHtml(): string {
   
   <!-- PWA Meta Tags -->
   <meta name="theme-color" content="#0b1329">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="${ispName}">
+  <meta name="application-name" content="${ispName}">
   <link rel="manifest" href="/manifest.json">
   <link rel="icon" type="image/svg+xml" href="/portal-icon.svg">
   <link rel="apple-touch-icon" href="/portal-icon.svg">
@@ -357,6 +359,77 @@ export function getClientPortalHtml(): string {
       font-size: 12px;
       font-weight: 700;
       white-space: nowrap;
+    }
+
+    /* Selector visual de multi-servicio para titulares con varios contratos */
+    .multi-service-section {
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid var(--border-highlight);
+      border-radius: var(--radius-lg);
+      padding: 16px;
+      margin-bottom: 20px;
+      backdrop-filter: blur(12px);
+    }
+
+    .multi-service-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .multi-service-title {
+      font-size: 13px;
+      font-weight: 800;
+      color: #38bdf8;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .multi-service-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 10px;
+    }
+
+    .service-card-item {
+      background: var(--bg-surface);
+      border: 2px solid var(--border-card);
+      border-radius: var(--radius-md);
+      padding: 12px 14px;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      position: relative;
+    }
+
+    .service-card-item:hover {
+      border-color: rgba(56, 189, 248, 0.5);
+      background: rgba(30, 41, 59, 0.8);
+      transform: translateY(-2px);
+    }
+
+    .service-card-item.active {
+      border-color: #38bdf8;
+      background: rgba(14, 165, 233, 0.1);
+      box-shadow: 0 0 20px rgba(56, 189, 248, 0.25);
+    }
+
+    .service-card-badge {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: var(--radius-full);
+      background: #0284c7;
+      color: #ffffff;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
     }
 
     /* Wi-Fi Dual-Band Styling */
@@ -856,12 +929,18 @@ export function getClientPortalHtml(): string {
         </form>
       </div>
 
-      <!-- Selector si el titular tiene múltiples casas o contratos -->
-      <div id="multiServiceBox" class="service-pill-select hidden">
-        <label><i class="fa-solid fa-house"></i> Selecciona tu Domicilio / Contrato</label>
-        <select id="serviceSelect" class="select-styled" onchange="onSwitchService(this.value)">
-          <!-- Opciones dinámicas -->
-        </select>
+      <!-- Selector interactivo si el titular tiene múltiples contratos / servicios -->
+      <div id="multiServiceSection" class="multi-service-section hidden">
+        <div class="multi-service-header">
+          <div class="multi-service-title">
+            <i class="fa-solid fa-layer-group"></i>
+            <span>Tus Servicios / Domicilios (<strong id="multiServiceCount" style="color: #fff;">0</strong>)</span>
+          </div>
+          <span style="font-size: 11px; color: var(--text-muted);">Toca para cambiar de contrato</span>
+        </div>
+        <div id="multiServiceCards" class="multi-service-grid">
+          <!-- Tarjetas interactivas de cada contrato -->
+        </div>
       </div>
 
       <!-- Alerta Amigable de Mantenimiento / Falla de Zona -->
@@ -900,10 +979,6 @@ export function getClientPortalHtml(): string {
               <span>Titular: <strong id="titularName" style="color: #fff;">-</strong></span>
               <span>Folio: <strong id="contractFolio" style="color: #38bdf8;">#-</strong></span>
             </div>
-
-            <button id="btnRebootModem" class="btn-outline" onclick="triggerModemReboot()">
-              <i class="fa-solid fa-rotate"></i> Optimizar / Reiniciar mi Conexión
-            </button>
           </div>
 
           <!-- TARJETA 2: TU RED WI-FI DE CASA (DOBLE BANDA 2.4G Y 5G) -->
@@ -1029,28 +1104,65 @@ export function getClientPortalHtml(): string {
 
   </div>
 
-  <!-- MODAL: CAMBIAR CLAVE WI-FI -->
+  <!-- MODAL: CAMBIAR CONTRASEÑA WI-FI -->
   <div id="modalWifi" class="modal-overlay">
     <div class="modal-sheet">
       <div class="modal-sheet-header">
-        <div class="modal-sheet-title">Cambiar Nombre o Clave Wi-Fi</div>
+        <div class="modal-sheet-title" style="display: flex; align-items: center; gap: 8px;">
+          <i class="fa-solid fa-key" style="color: #38bdf8;"></i> Cambiar Contraseña Wi-Fi
+        </div>
         <button class="btn-close-modal" onclick="closeModal('modalWifi')">&times;</button>
       </div>
-      <form onsubmit="handleSaveWifi(event)" style="display: flex; flex-direction: column; gap: 12px;">
+
+      <!-- Información de nombres de red actuales (Solo Lectura) -->
+      <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-card); border-radius: var(--radius-md); padding: 12px 14px;">
+        <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 6px;">
+          Tus Redes Wi-Fi Actuales
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px; font-size: 13px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="color: var(--text-body);"><i class="fa-solid fa-tower-broadcast" style="color: #38bdf8;"></i> Red 2.4 GHz:</span>
+            <strong id="modalSsid24Display" style="color: #fff; font-family: monospace;">-</strong>
+          </div>
+          <div id="modalSsid5gRow" style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="color: var(--text-body);"><i class="fa-solid fa-bolt" style="color: #c084fc;"></i> Red 5 GHz:</span>
+            <strong id="modalSsid5gDisplay" style="color: #fff; font-family: monospace;">-</strong>
+          </div>
+        </div>
+      </div>
+
+      <form onsubmit="handleSaveWifi(event)" style="display: flex; flex-direction: column; gap: 14px;">
         <div>
-          <label style="font-size: 12px; color: var(--text-body); margin-bottom: 4px; display: block;">Nombre de Red 2.4 GHz (SSID)</label>
-          <input type="text" id="modalSsid24Input" class="form-input" required>
+          <label style="font-size: 12px; color: var(--text-body); margin-bottom: 6px; display: block; font-weight: 600;">
+            Nueva Contraseña Wi-Fi (mínimo 8 caracteres)
+          </label>
+          <div style="position: relative;">
+            <input type="password" id="modalPassInput" class="form-input" minlength="8" placeholder="Escribe tu nueva clave" required style="padding-right: 42px;">
+            <button type="button" onclick="toggleModalPassVisibility('modalPassInput', 'eyeModalPass1')" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 15px;">
+              <i id="eyeModalPass1" class="fa-solid fa-eye"></i>
+            </button>
+          </div>
         </div>
-        <div id="modalSsid5gBox">
-          <label style="font-size: 12px; color: var(--text-body); margin-bottom: 4px; display: block;">Nombre de Red 5 GHz (SSID)</label>
-          <input type="text" id="modalSsid5gInput" class="form-input">
-        </div>
+
         <div>
-          <label style="font-size: 12px; color: var(--text-body); margin-bottom: 4px; display: block;">Nueva Contraseña (mínimo 8 caracteres)</label>
-          <input type="password" id="modalPassInput" class="form-input" minlength="8" placeholder="Escribe tu nueva clave" required>
-          <span style="font-size: 11px; color: var(--text-muted); margin-top: 4px; display: block;">Se aplicará a ambas redes (2.4G y 5G) en tu módem.</span>
+          <label style="font-size: 12px; color: var(--text-body); margin-bottom: 6px; display: block; font-weight: 600;">
+            Confirmar Nueva Contraseña
+          </label>
+          <div style="position: relative;">
+            <input type="password" id="modalPassConfirmInput" class="form-input" minlength="8" placeholder="Vuelve a escribir la clave" required style="padding-right: 42px;">
+            <button type="button" onclick="toggleModalPassVisibility('modalPassConfirmInput', 'eyeModalPass2')" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 15px;">
+              <i id="eyeModalPass2" class="fa-solid fa-eye"></i>
+            </button>
+          </div>
         </div>
-        <button type="submit" id="btnSubmitWifi" class="btn-main" style="margin-top: 6px;"><i class="fa-solid fa-save"></i> Aplicar en mi Módem</button>
+
+        <div style="font-size: 12px; color: var(--text-muted); line-height: 1.4; background: rgba(56, 189, 248, 0.06); padding: 8px 12px; border-radius: var(--radius-sm); border-left: 3px solid #38bdf8;">
+          💡 Tu nueva contraseña se configurará automáticamente para tus redes <strong>2.4 GHz</strong> y <strong>5 GHz</strong> en tu módem.
+        </div>
+
+        <button type="submit" id="btnSubmitWifi" class="btn-main" style="margin-top: 4px;">
+          <i class="fa-solid fa-floppy-disk"></i> Guardar en mi Módem
+        </button>
       </form>
     </div>
   </div>
@@ -1440,7 +1552,8 @@ export function getClientPortalHtml(): string {
       }
 
       try {
-        const url = '/api/portal/me?token=' + encodeURIComponent(targetToken) + '&p=' + encodeURIComponent(targetPhone) + (serviceId ? '&serviceId=' + encodeURIComponent(serviceId) : '');
+        const activeService = serviceId || localStorage.getItem('cp_selected_service') || '';
+        const url = '/api/portal/me?token=' + encodeURIComponent(targetToken) + '&p=' + encodeURIComponent(targetPhone) + (activeService ? '&serviceId=' + encodeURIComponent(activeService) : '');
         
         // AbortController para que jamás se quede congelado
         const controller = new AbortController();
@@ -1514,15 +1627,35 @@ export function getClientPortalHtml(): string {
         onb.classList.add('hidden');
       }
 
-      // Multi-Servicio
-      const multiBox = document.getElementById('multiServiceBox');
-      const select = document.getElementById('serviceSelect');
+      // Multi-Servicio: Tarjetas interactivas para titulares con múltiples contratos
+      const multiBox = document.getElementById('multiServiceSection');
+      const multiCards = document.getElementById('multiServiceCards');
       if (currentServices.length > 1) {
         multiBox.classList.remove('hidden');
-        select.innerHTML = currentServices.map(s => {
-          const sel = String(s.id_servicio) === currentContractId ? 'selected' : '';
-          const dir = s.direccion || s.router || 'Domicilio registrado';
-          return '<option value="' + s.id_servicio + '" ' + sel + '>🏠 ' + dir + ' (Folio #' + s.id_servicio + ')</option>';
+        document.getElementById('multiServiceCount').innerText = currentServices.length;
+        multiCards.innerHTML = currentServices.map((s, idx) => {
+          const isActive = String(s.id_servicio) === String(currentContractId);
+          const activeClass = isActive ? 'active' : '';
+          const activeBadge = isActive ? '<span class="service-card-badge"><i class="fa-solid fa-circle-check"></i> Activo</span>' : '';
+          const dir = s.direccion || s.router || ('Servicio ' + (idx + 1));
+          const plan = (s.plan_internet || 'Internet Fibra').replace(/^paquete\s+/i, '');
+          const saldo = Number(s.saldo || 0);
+          const saldoTxt = saldo <= 0 ? 'Al corriente' : ('Debe $' + saldo.toFixed(2));
+          const saldoColor = saldo <= 0 ? '#10b981' : '#f59e0b';
+
+          return '<div class="service-card-item ' + activeClass + '" onclick="onSwitchService(\'' + s.id_servicio + '\')">' +
+            '<div style="display:flex; align-items:center; justify-content:space-between; gap:6px;">' +
+              '<span style="font-weight:700; font-size:13px; color:#fff; display:flex; align-items:center; gap:6px;">' +
+                '<i class="fa-solid fa-house-signal" style="color:#0ea5e9;"></i> Folio #' + s.id_servicio +
+              '</span>' +
+              activeBadge +
+            '</div>' +
+            '<div style="font-size:12px; color:var(--text-body); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + dir + '">' + dir + '</div>' +
+            '<div style="display:flex; justify-content:space-between; align-items:center; font-size:11px; margin-top:4px; padding-top:4px; border-top:1px solid rgba(255,255,255,0.06);">' +
+              '<span style="color:var(--text-muted);">' + plan + '</span>' +
+              '<span style="font-weight:600; color:' + saldoColor + ';">' + saldoTxt + '</span>' +
+            '</div>' +
+          '</div>';
         }).join('');
       } else {
         multiBox.classList.add('hidden');
@@ -1586,6 +1719,7 @@ export function getClientPortalHtml(): string {
     }
 
     function onSwitchService(serviceId) {
+      localStorage.setItem('cp_selected_service', serviceId);
       loadDashboard(serviceId);
     }
 
@@ -1695,11 +1829,31 @@ export function getClientPortalHtml(): string {
     }
 
     function openModalWifi() {
-      document.getElementById('modalSsid24Input').value = realWifiSsid24;
-      const m5 = document.getElementById('modalSsid5gInput');
-      if (m5) m5.value = realWifiSsid5g || (realWifiSsid24 ? realWifiSsid24 + '-5G' : '');
+      document.getElementById('modalSsid24Display').innerText = realWifiSsid24;
+      const m5Row = document.getElementById('modalSsid5gRow');
+      const m5Display = document.getElementById('modalSsid5gDisplay');
+      if (realWifiSsid5g) {
+        if (m5Row) m5Row.style.display = 'flex';
+        if (m5Display) m5Display.innerText = realWifiSsid5g;
+      } else {
+        if (m5Row) m5Row.style.display = 'none';
+      }
       document.getElementById('modalPassInput').value = '';
+      document.getElementById('modalPassConfirmInput').value = '';
       document.getElementById('modalWifi').style.display = 'flex';
+    }
+
+    function toggleModalPassVisibility(inputId, iconId) {
+      const input = document.getElementById(inputId);
+      const icon = document.getElementById(iconId);
+      if (!input || !icon) return;
+      if (input.type === 'password') {
+        input.type = 'text';
+        icon.className = 'fa-solid fa-eye-slash';
+      } else {
+        input.type = 'password';
+        icon.className = 'fa-solid fa-eye';
+      }
     }
 
     function openQrModal(band) {
@@ -1737,12 +1891,16 @@ export function getClientPortalHtml(): string {
 
     async function handleSaveWifi(e) {
       e.preventDefault();
-      const ssid24 = document.getElementById('modalSsid24Input').value.trim();
-      const ssid5g = document.getElementById('modalSsid5gInput') ? document.getElementById('modalSsid5gInput').value.trim() : '';
       const password = document.getElementById('modalPassInput').value.trim();
+      const confirmPassword = document.getElementById('modalPassConfirmInput').value.trim();
 
       if (!password || password.length < 8) {
         showToast('La contraseña debe tener mínimo 8 caracteres.');
+        return;
+      }
+
+      if (password !== confirmPassword) {
+        showToast('Las contraseñas no coinciden. Verifícalas.');
         return;
       }
 
@@ -1759,24 +1917,15 @@ export function getClientPortalHtml(): string {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             clientId: currentContractId,
-            password,
-            ssid: ssid24,
-            ssid24,
-            ssid5g,
+            password
           })
         });
         const d = await res.json();
         if (d.success) {
-          showToast('✅ ¡Wi-Fi actualizado en tu módem!');
+          showToast('✅ ¡Contraseña Wi-Fi configurada con éxito!');
           closeModal('modalWifi');
           realWifiPassword24 = password;
           realWifiPassword5g = password;
-          if (ssid24) realWifiSsid24 = ssid24;
-          if (ssid5g) realWifiSsid5g = ssid5g;
-          document.getElementById('wifiSsid24Label').innerText = realWifiSsid24;
-          if (document.getElementById('wifiSsid5gLabel') && realWifiSsid5g) {
-            document.getElementById('wifiSsid5gLabel').innerText = realWifiSsid5g;
-          }
           document.getElementById('wifiPass24Label').innerText = isPassRevealed24 ? password : '••••••••';
           if (document.getElementById('wifiPass5gLabel')) {
             document.getElementById('wifiPass5gLabel').innerText = isPassRevealed5g ? password : '••••••••';
