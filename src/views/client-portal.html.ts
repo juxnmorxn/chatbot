@@ -1178,7 +1178,7 @@ export function getClientPortalHtml(): string {
     // Dashboard Data Loading
     async function loadDashboard(serviceId) {
       try {
-        const url = `/api/portal/me?token=${encodeURIComponent(currentToken)}${serviceId ? '&serviceId=' + serviceId : ''}`;
+        const url = '/api/portal/me?token=' + encodeURIComponent(currentToken) + (serviceId ? '&serviceId=' + serviceId : '');
         const res = await fetch(url);
         const data = await res.json();
 
@@ -1213,12 +1213,13 @@ export function getClientPortalHtml(): string {
       const selector = document.getElementById('serviceSelector');
       if (currentServices.length > 1) {
         switcherContainer.classList.remove('hidden');
-        document.getElementById('serviceCountBadge').innerText = `${currentServices.length} Contratos`;
-        selector.innerHTML = currentServices.map(s => `
-          <option value="${s.id_servicio}" ${String(s.id_servicio) === currentServiceId ? 'selected' : ''}>
-            🏠 ${s.direccion || s.router} · Folio #${s.id_servicio} (${s.plan_internet || 'Fibra'})
-          </option>
-        `).join('');
+        document.getElementById('serviceCountBadge').innerText = currentServices.length + ' Contratos';
+        selector.innerHTML = currentServices.map(s => {
+          const isSelected = String(s.id_servicio) === currentServiceId ? 'selected' : '';
+          const dir = s.direccion || s.router || 'Domicilio registrado';
+          const plan = s.plan_internet || 'Fibra';
+          return '<option value="' + s.id_servicio + '" ' + isSelected + '>🏠 ' + dir + ' · Folio #' + s.id_servicio + ' (' + plan + ')</option>';
+        }).join('');
       } else {
         switcherContainer.classList.add('hidden');
       }
@@ -1250,18 +1251,18 @@ export function getClientPortalHtml(): string {
         stText.innerText = 'Equipo Sincronizado';
       }
 
-      sigDbm.innerText = sig.opticalPowerDbm ? `${sig.opticalPowerDbm} dBm` : 'OK';
+      sigDbm.innerText = sig.opticalPowerDbm ? sig.opticalPowerDbm + ' dBm' : 'OK';
 
       // Wi-Fi
       const wifi = data.wifi || {};
-      document.getElementById('wifiSsid').innerText = wifi.ssid24 || `CloudWare_${c.id_servicio}`;
+      document.getElementById('wifiSsid').innerText = wifi.ssid24 || ('CloudWare_' + c.id_servicio);
       currentWifiRealPass = wifi.password || '********';
       document.getElementById('wifiPass').innerText = isPassVisible ? currentWifiRealPass : '••••••••';
 
       // Facturación
       const balance = Number(c.saldo || 0);
-      document.getElementById('billingAmount').innerText = `$${balance.toFixed(2)}`;
-      document.getElementById('billingDueDate').innerText = `Corte: ${c.fecha_corte || ('Día ' + (c.dia_corte || 5) + ' de cada mes')}`;
+      document.getElementById('billingAmount').innerText = '$' + balance.toFixed(2);
+      document.getElementById('billingDueDate').innerText = 'Corte: ' + (c.fecha_corte || ('Día ' + (c.dia_corte || 5) + ' de cada mes'));
 
       const tag = document.getElementById('billingStatusTag');
       if (balance <= 0) {
@@ -1272,7 +1273,7 @@ export function getClientPortalHtml(): string {
         tag.innerText = 'Pago Pendiente';
       }
 
-      document.getElementById('bankRefVal').innerText = `SRV-${c.id_servicio}`;
+      document.getElementById('bankRefVal').innerText = 'SRV-' + c.id_servicio;
 
       loadBillingHistory();
     }
@@ -1284,29 +1285,26 @@ export function getClientPortalHtml(): string {
     async function loadBillingHistory() {
       if (!currentServiceId) return;
       try {
-        const res = await fetch(`/api/portal/billing-history?serviceId=${currentServiceId}&token=${encodeURIComponent(currentToken)}`);
+        const res = await fetch('/api/portal/billing-history?serviceId=' + currentServiceId + '&token=' + encodeURIComponent(currentToken));
         const data = await res.json();
         const tbody = document.getElementById('invoicesTbody');
 
         if (data.success && data.invoices && data.invoices.length > 0) {
-          tbody.innerHTML = data.invoices.map(inv => `
-            <tr>
-              <td><strong>#${inv.folio || inv.id}</strong></td>
-              <td>${inv.fecha_emision || 'N/A'}</td>
-              <td>$${Number(inv.monto || 0).toFixed(2)}</td>
-              <td>
-                <span class="billing-status-tag ${inv.estado.toLowerCase().includes('pagad') ? 'tag-paid' : 'tag-pending'}" style="font-size: 10px; padding: 2px 6px;">
-                  ${inv.estado}
-                </span>
-              </td>
-              <td>
-                ${inv.pdf_url ? `<a href="${inv.pdf_url}" target="_blank" class="btn-icon" style="display:inline-flex; width:28px; height:28px;" title="Ver PDF"><i class="fa-solid fa-file-pdf"></i></a>` : ''}
-                ${!inv.estado.toLowerCase().includes('pagad') && inv.link_pago ? `<a href="${inv.link_pago}" target="_blank" class="btn-primary" style="display:inline-flex; width:auto; padding:4px 8px; font-size:11px;" title="Pagar">Pagar</a>` : ''}
-              </td>
-            </tr>
-          `).join('');
+          tbody.innerHTML = data.invoices.map(inv => {
+            const isPaid = String(inv.estado || '').toLowerCase().includes('pagad');
+            const badgeClass = isPaid ? 'tag-paid' : 'tag-pending';
+            const pdfBtn = inv.pdf_url ? '<a href="' + inv.pdf_url + '" target="_blank" class="btn-icon" style="display:inline-flex; width:28px; height:28px;" title="Ver PDF"><i class="fa-solid fa-file-pdf"></i></a>' : '';
+            const payBtn = (!isPaid && inv.link_pago) ? '<a href="' + inv.link_pago + '" target="_blank" class="btn-primary" style="display:inline-flex; width:auto; padding:4px 8px; font-size:11px;" title="Pagar">Pagar</a>' : '';
+            return '<tr>' +
+              '<td><strong>#' + (inv.folio || inv.id) + '</strong></td>' +
+              '<td>' + (inv.fecha_emision || 'N/A') + '</td>' +
+              '<td>$' + Number(inv.monto || 0).toFixed(2) + '</td>' +
+              '<td><span class="billing-status-tag ' + badgeClass + '" style="font-size: 10px; padding: 2px 6px;">' + inv.estado + '</span></td>' +
+              '<td>' + pdfBtn + payBtn + '</td>' +
+              '</tr>';
+          }).join('');
         } else {
-          tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted);">Sin facturas pendientes registradas.</td></tr>`;
+          tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted);">Sin facturas pendientes registradas.</td></tr>';
         }
       } catch {}
     }
@@ -1369,7 +1367,7 @@ export function getClientPortalHtml(): string {
     function openQrModal() {
       const ssid = document.getElementById('wifiSsid').innerText;
       const pass = currentWifiRealPass;
-      const qrData = `WIFI:T:WPA;S:${ssid};P:${pass};;`;
+      const qrData = 'WIFI:T:WPA;S:' + ssid + ';P:' + pass + ';;';
 
       const container = document.getElementById('qrcodeContainer');
       container.innerHTML = '';
@@ -1384,6 +1382,7 @@ export function getClientPortalHtml(): string {
 
       document.getElementById('modalQr').style.display = 'flex';
     }
+
 
     function openBankModal() {
       document.getElementById('modalBank').style.display = 'flex';
