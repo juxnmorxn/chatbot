@@ -1131,18 +1131,31 @@ export function getClientPortalHtml(): string {
         </div>
       </div>
 
+      <!-- Generador de contraseña aleatoria de 10 caracteres -->
+      <div style="display: flex; flex-direction: column; gap: 6px;">
+        <button type="button" class="btn-outline" onclick="generateSecureRandomWifiPass()" style="border-color: rgba(56, 189, 248, 0.4); background: rgba(14, 165, 233, 0.12); color: #38bdf8; font-weight: 700; padding: 11px 14px;">
+          <i class="fa-solid fa-wand-magic-sparkles"></i> Generar Contraseña Segura (10 caracteres)
+        </button>
+        <span style="font-size: 11px; color: var(--text-muted); text-align: center;">
+          Crea una clave segura de 10 caracteres (letras, números y símbolo)
+        </span>
+      </div>
+
       <form onsubmit="handleSaveWifi(event)" style="display: flex; flex-direction: column; gap: 14px;">
         <div>
           <label style="font-size: 12px; color: var(--text-body); margin-bottom: 6px; display: block; font-weight: 600;">
-            Nueva Contraseña Wi-Fi (mínimo 8 caracteres)
+            Nueva Contraseña Wi-Fi (o escribe una manual)
           </label>
           <div style="position: relative;">
-            <input type="password" id="modalPassInput" class="form-input" minlength="8" placeholder="Escribe tu nueva clave" required style="padding-right: 42px;">
+            <input type="password" id="modalPassInput" class="form-input" minlength="8" placeholder="Escribe tu nueva clave" oninput="checkWifiPassStrength(this.value)" required style="padding-right: 42px;">
             <button type="button" onclick="toggleModalPassVisibility('modalPassInput', 'eyeModalPass1')" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 15px;">
               <i id="eyeModalPass1" class="fa-solid fa-eye"></i>
             </button>
           </div>
         </div>
+
+        <!-- Indicador de seguridad / Advertencia manual -->
+        <div id="passStrengthBox" style="display: none; border: 1px solid transparent; border-radius: var(--radius-sm); padding: 10px 12px; transition: all 0.2s ease;"></div>
 
         <div>
           <label style="font-size: 12px; color: var(--text-body); margin-bottom: 6px; display: block; font-weight: 600;">
@@ -1843,9 +1856,103 @@ export function getClientPortalHtml(): string {
       } else {
         if (m5Row) m5Row.style.display = 'none';
       }
-      document.getElementById('modalPassInput').value = '';
-      document.getElementById('modalPassConfirmInput').value = '';
+      const passIn = document.getElementById('modalPassInput');
+      const passConf = document.getElementById('modalPassConfirmInput');
+      passIn.value = '';
+      passConf.value = '';
+      passIn.type = 'password';
+      passConf.type = 'password';
+      const eye1 = document.getElementById('eyeModalPass1');
+      const eye2 = document.getElementById('eyeModalPass2');
+      if (eye1) eye1.className = 'fa-solid fa-eye';
+      if (eye2) eye2.className = 'fa-solid fa-eye';
+
+      const sBox = document.getElementById('passStrengthBox');
+      if (sBox) sBox.style.display = 'none';
+
       document.getElementById('modalWifi').style.display = 'flex';
+    }
+
+    function generateSecureRandomWifiPass() {
+      const uppers = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+      const lowers = 'abcdefghijkmnopqrstuvwxyz';
+      const numbers = '23456789';
+      const symbols = '@#$%&*!';
+
+      let chars = [];
+      // 3 mayúsculas, 3 minúsculas, 3 números, 1 símbolo = 10 caracteres exactos
+      for (let i = 0; i < 3; i++) chars.push(uppers[Math.floor(Math.random() * uppers.length)]);
+      for (let i = 0; i < 3; i++) chars.push(lowers[Math.floor(Math.random() * lowers.length)]);
+      for (let i = 0; i < 3; i++) chars.push(numbers[Math.floor(Math.random() * numbers.length)]);
+      chars.push(symbols[Math.floor(Math.random() * symbols.length)]);
+
+      // Mezclar aleatoriamente (Fisher-Yates)
+      for (let i = chars.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        const temp = chars[i];
+        chars[i] = chars[j];
+        chars[j] = temp;
+      }
+
+      const generated = chars.join('');
+      const passIn = document.getElementById('modalPassInput');
+      const passConf = document.getElementById('modalPassConfirmInput');
+
+      passIn.value = generated;
+      passConf.value = generated;
+
+      // Hacer visible para que el cliente la pueda ver y memorizar/anotar fácilmente
+      passIn.type = 'text';
+      passConf.type = 'text';
+      const eye1 = document.getElementById('eyeModalPass1');
+      const eye2 = document.getElementById('eyeModalPass2');
+      if (eye1) eye1.className = 'fa-solid fa-eye-slash';
+      if (eye2) eye2.className = 'fa-solid fa-eye-slash';
+
+      checkWifiPassStrength(generated, true);
+      showToast('¡Contraseña recomendada de 10 caracteres generada!');
+    }
+
+    function checkWifiPassStrength(val, isAutoGenerated = false) {
+      const box = document.getElementById('passStrengthBox');
+      if (!box) return;
+
+      if (!val || val.length === 0) {
+        box.style.display = 'none';
+        return;
+      }
+
+      box.style.display = 'block';
+
+      const hasUpper = /[A-Z]/.test(val);
+      const hasLower = /[a-z]/.test(val);
+      const hasNumber = /[0-9]/.test(val);
+      const hasSymbol = /[^A-Za-z0-9]/.test(val);
+      const isLengthOk = val.length >= 10;
+
+      const isStrong = hasUpper && hasLower && hasNumber && hasSymbol && isLengthOk;
+
+      if (isStrong) {
+        box.style.background = 'rgba(16, 185, 129, 0.12)';
+        box.style.borderColor = 'rgba(16, 185, 129, 0.35)';
+        box.style.color = '#34d399';
+        box.innerHTML = '<div style="display:flex; align-items:center; gap:8px; font-weight:700; font-size:12px;">' +
+          '<i class="fa-solid fa-shield-halved"></i> Contraseña de Alta Seguridad (Recomendada)' +
+          '</div>' +
+          '<div style="font-size:11px; color:#e2e8f0; margin-top:4px; line-height:1.3;">' +
+          'Cumple con 10 caracteres, mayúsculas, minúsculas, números y símbolo. Tu red estará 100% protegida.' +
+          '</div>';
+      } else {
+        box.style.background = 'rgba(245, 158, 11, 0.12)';
+        box.style.borderColor = 'rgba(245, 158, 11, 0.35)';
+        box.style.color = '#fbbf24';
+        box.innerHTML = '<div style="display:flex; align-items:center; gap:8px; font-weight:700; font-size:12px;">' +
+          '<i class="fa-solid fa-triangle-exclamation"></i> Contraseña manual poco segura' +
+          '</div>' +
+          '<div style="font-size:11px; color:#f1f5f9; margin-top:4px; line-height:1.3;">' +
+          'Las contraseñas manuales o sencillas son fáciles de vulnerar por extraños. Te sugerimos tocar <strong>"Generar Contraseña Segura"</strong> para proteger tu Wi-Fi.' +
+          '</div>';
+      }
     }
 
     function toggleModalPassVisibility(inputId, iconId) {
