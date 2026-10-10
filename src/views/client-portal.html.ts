@@ -78,6 +78,8 @@ export function getClientPortalHtml(): string {
       --onboard-border: rgba(56, 189, 248, 0.4);
       --plan-card-bg: linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.85) 100%);
       --slogan-color: #94a3b8;
+      --service-card-bg: #131d36;
+      --service-card-active-bg: rgba(14, 165, 233, 0.18);
       --radius-sm: 12px;
       --radius-md: 18px;
       --radius-lg: 24px;
@@ -85,41 +87,43 @@ export function getClientPortalHtml(): string {
     }
 
     [data-theme="light"] {
-      --bg-body: #f8fafc;
+      --bg-body: #f1f5f9;
       --bg-surface: #ffffff;
       --bg-card: #ffffff;
-      --bg-card-alt: #f1f5f9;
-      --border-card: rgba(0, 0, 0, 0.08);
-      --border-highlight: rgba(14, 165, 233, 0.4);
-      --text-title: #0f172a;
-      --text-body: #475569;
+      --bg-card-alt: #f8fafc;
+      --border-card: rgba(0, 0, 0, 0.12);
+      --border-highlight: rgba(2, 132, 199, 0.45);
+      --text-title: #090d16;
+      --text-body: #1e293b;
       --text-muted: #64748b;
       --primary: #0284c7;
-      --primary-gradient: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%);
+      --primary-gradient: linear-gradient(135deg, #0284c7 0%, #1d4ed8 100%);
       --success: #059669;
-      --success-bg: rgba(16, 185, 129, 0.12);
+      --success-bg: rgba(16, 185, 129, 0.14);
       --warning: #d97706;
-      --warning-bg: rgba(245, 158, 11, 0.12);
+      --warning-bg: rgba(245, 158, 11, 0.14);
       --danger: #dc2626;
-      --danger-bg: rgba(239, 68, 68, 0.12);
-      --input-bg: #f8fafc;
-      --input-text: #0f172a;
+      --danger-bg: rgba(239, 68, 68, 0.14);
+      --input-bg: #ffffff;
+      --input-text: #090d16;
       --input-border: #cbd5e1;
       --modal-bg: #ffffff;
-      --modal-text: #0f172a;
-      --btn-header-bg: rgba(0, 0, 0, 0.05);
-      --btn-header-hover: rgba(0, 0, 0, 0.1);
-      --btn-header-text: #334155;
-      --btn-icon-bg: #f1f5f9;
-      --btn-icon-text: #475569;
-      --btn-outline-bg: #f8fafc;
-      --btn-outline-text: #0f172a;
-      --card-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+      --modal-text: #090d16;
+      --btn-header-bg: rgba(0, 0, 0, 0.06);
+      --btn-header-hover: rgba(0, 0, 0, 0.12);
+      --btn-header-text: #0f172a;
+      --btn-icon-bg: #e2e8f0;
+      --btn-icon-text: #1e293b;
+      --btn-outline-bg: #ffffff;
+      --btn-outline-text: #090d16;
+      --card-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
       --wifi-band-bg: #f8fafc;
       --onboard-bg: linear-gradient(135deg, #e0f2fe 0%, #dbeafe 100%);
-      --onboard-border: #7dd3fc;
+      --onboard-border: #0284c7;
       --plan-card-bg: linear-gradient(135deg, #ffffff 0%, #f0f9ff 100%);
-      --slogan-color: #475569;
+      --slogan-color: #334155;
+      --service-card-bg: #ffffff;
+      --service-card-active-bg: rgba(2, 132, 199, 0.12);
       --radius-sm: 12px;
       --radius-md: 18px;
       --radius-lg: 24px;
@@ -457,39 +461,52 @@ export function getClientPortalHtml(): string {
     }
 
     .service-card-item {
-      background: var(--bg-card-alt);
+      background: var(--service-card-bg, var(--bg-card));
       border: 2px solid var(--border-card);
       border-radius: var(--radius-md);
       padding: 12px 14px;
       cursor: pointer;
-      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      gap: 5px;
       position: relative;
+      color: var(--text-title);
     }
 
     .service-card-item:hover {
-      border-color: rgba(56, 189, 248, 0.6);
+      border-color: #0284c7;
       transform: translateY(-2px);
+      box-shadow: 0 6px 18px rgba(2, 132, 199, 0.16);
     }
 
     .service-card-item.active {
-      border-color: #0284c7;
-      background: rgba(14, 165, 233, 0.12);
-      box-shadow: 0 0 20px rgba(56, 189, 248, 0.25);
+      border-color: #0284c7 !important;
+      background: var(--service-card-active-bg, rgba(14, 165, 233, 0.16)) !important;
+      box-shadow: 0 0 0 1px #0284c7, 0 6px 20px rgba(14, 165, 233, 0.22) !important;
     }
 
     .service-card-badge {
-      font-size: 10px;
+      font-size: 10.5px;
       font-weight: 700;
-      padding: 2px 8px;
+      padding: 3px 9px;
       border-radius: var(--radius-full);
-      background: #0284c7;
-      color: #ffffff;
       display: inline-flex;
       align-items: center;
       gap: 4px;
+      letter-spacing: 0.3px;
+    }
+
+    .service-card-badge.active {
+      background: #0284c7;
+      color: #ffffff;
+      box-shadow: 0 2px 6px rgba(2, 132, 199, 0.35);
+    }
+
+    .service-card-badge.inactive {
+      background: rgba(148, 163, 184, 0.15);
+      color: var(--text-muted);
+      border: 1px solid var(--border-card);
     }
 
     /* Wi-Fi Dual-Band Styling */
@@ -1013,9 +1030,9 @@ export function getClientPortalHtml(): string {
         <div class="multi-service-header">
           <div class="multi-service-title">
             <i class="fa-solid fa-layer-group"></i>
-            <span>Tus Servicios / Domicilios (<strong id="multiServiceCount" style="color: #fff;">0</strong>)</span>
+            <span>Tus Servicios / Domicilios (<strong id="multiServiceCount" style="color: var(--text-title);">0</strong>)</span>
           </div>
-          <span style="font-size: 11px; color: var(--text-muted);">Toca para cambiar de contrato</span>
+          <span style="font-size: 11px; color: var(--text-muted); font-weight: 600;">Toca para cambiar de contrato</span>
         </div>
         <div id="multiServiceCards" class="multi-service-grid">
           <!-- Tarjetas interactivas de cada contrato -->
@@ -1028,7 +1045,7 @@ export function getClientPortalHtml(): string {
           <i class="fa-solid fa-triangle-exclamation" style="font-size: 20px;"></i>
           <span id="outageTitle">Mantenimiento en tu Zona</span>
         </div>
-        <p id="outageDesc" style="font-size: 13px; color: #e2e8f0; line-height: 1.4;"></p>
+        <p id="outageDesc" style="font-size: 13px; color: var(--text-body); line-height: 1.4;"></p>
       </div>
 
       <!-- Contenedor responsivo: 2 columnas en pantallas grandes / 1 columna fluida en móvil -->
@@ -1229,11 +1246,11 @@ export function getClientPortalHtml(): string {
         <div style="display: flex; flex-direction: column; gap: 6px; font-size: 13px;">
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <span style="color: var(--text-body);"><i class="fa-solid fa-tower-broadcast" style="color: #38bdf8;"></i> Red 2.4 GHz:</span>
-            <strong id="modalSsid24Display" style="color: #fff; font-family: monospace;">-</strong>
+            <strong id="modalSsid24Display" style="color: var(--text-title); font-family: monospace;">-</strong>
           </div>
           <div id="modalSsid5gRow" style="display: flex; justify-content: space-between; align-items: center;">
             <span style="color: var(--text-body);"><i class="fa-solid fa-bolt" style="color: #c084fc;"></i> Red 5 GHz:</span>
-            <strong id="modalSsid5gDisplay" style="color: #fff; font-family: monospace;">-</strong>
+            <strong id="modalSsid5gDisplay" style="color: var(--text-title); font-family: monospace;">-</strong>
           </div>
         </div>
       </div>
@@ -1324,9 +1341,9 @@ export function getClientPortalHtml(): string {
       <div style="font-size: 42px; color: #10b981; margin-bottom: 4px;">
         <i class="fa-solid fa-circle-check"></i>
       </div>
-      <div class="modal-sheet-title" style="font-size: 18px; color: #fff;">¡Contraseña Guardada en tu Módem!</div>
+      <div class="modal-sheet-title" style="font-size: 18px; color: var(--text-title);">¡Contraseña Guardada en tu Módem!</div>
       
-      <div style="background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.4); border-radius: var(--radius-md); padding: 12px; margin: 12px 0; text-align: left; font-size: 12.5px; color: #f8fafc; line-height: 1.4;">
+      <div style="background: rgba(245, 158, 11, 0.15); border: 1px solid rgba(245, 158, 11, 0.4); border-radius: var(--radius-md); padding: 12px; margin: 12px 0; text-align: left; font-size: 12.5px; color: var(--text-body); line-height: 1.4;">
         ⚠️ <strong>Tu teléfono se desconectará del Wi-Fi en unos segundos.</strong><br>
         Para volver a tener internet, conéctate a tu red usando esta nueva clave:
       </div>
@@ -1868,26 +1885,37 @@ export function getClientPortalHtml(): string {
       document.getElementById('contractFolio').innerText = '#' + c.id_servicio;
 
       // Paquete Contratado con Gran Énfasis Visual y Corrección de Discrepancias
-      const rawPlan = (c.plan_internet || data.onu?.speed_profile || '40 Megas').trim();
+      const rawPlan = (c.plan_internet || data.onu?.speed_profile || '').trim();
       let cleanPlan = rawPlan.replace(/^(?:paquete|pakete|plan)\s+/i, '').trim();
+      if (!cleanPlan) cleanPlan = '40 Megas';
       
       // Extraer velocidad en Megas / Mbps / Gigas
-      const speedMatch = cleanPlan.match(/(\d+)\s*(?:m|megas?|mbps|g|gb|gigas?)\b/i) || rawPlan.match(/(\d+)\s*(?:m|megas?|mbps|g|gb|gigas?)\b/i);
-      let speedBig = '40M';
+      let speedBig = '';
+      const speedMatch = rawPlan.match(/(\d+)\s*(?:m|megas?|mbps|g|gb|gigas?)\b/i) || cleanPlan.match(/(\d+)\s*(?:m|megas?|mbps|g|gb|gigas?)\b/i);
       if (speedMatch) {
-        speedBig = speedMatch[1] + 'M';
+        speedBig = speedMatch[1] + (/(?:g|gb|gigas?)/i.test(speedMatch[0]) ? 'G' : 'M');
       } else {
-        const numOnly = cleanPlan.match(/\b(\d{2,4})\b/);
+        const numOnly = rawPlan.match(/\b(\d{2,4})\b/) || cleanPlan.match(/\b(\d{2,4})\b/);
         if (numOnly) {
           speedBig = numOnly[1] + 'M';
-        } else if (cleanPlan.length <= 6) {
-          speedBig = cleanPlan;
+        } else if (cleanPlan.length <= 6 && /\d/.test(cleanPlan)) {
+          speedBig = cleanPlan.toUpperCase();
+        } else {
+          speedBig = '40M';
         }
+      }
+
+      // Nombre completo formateado amigablemente
+      let displayPlanName = '';
+      if (/^(?:paquete|pakete|plan)\s+/i.test(rawPlan)) {
+        displayPlanName = rawPlan.replace(/^pakete\s+/i, 'Paquete ').replace(/^paquete\s+/i, 'Paquete ').replace(/^plan\s+/i, 'Plan ');
+      } else {
+        displayPlanName = 'Paquete ' + cleanPlan;
       }
 
       const planNameEl = document.getElementById('planNameBig');
       if (planNameEl) {
-        planNameEl.innerText = 'Paquete ' + cleanPlan;
+        planNameEl.innerText = displayPlanName;
       }
       const planSpeedEl = document.getElementById('planSpeedBig');
       if (planSpeedEl) {
@@ -1912,24 +1940,26 @@ export function getClientPortalHtml(): string {
         multiCards.innerHTML = currentServices.map((s, idx) => {
           const isActive = String(s.id_servicio) === String(currentContractId);
           const activeClass = isActive ? 'active' : '';
-          const activeBadge = isActive ? '<span class="service-card-badge"><i class="fa-solid fa-circle-check"></i> Activo</span>' : '';
+          const activeBadge = isActive 
+            ? '<span class="service-card-badge active"><i class="fa-solid fa-circle-check"></i> En Pantalla</span>' 
+            : '<span class="service-card-badge inactive"><i class="fa-regular fa-circle"></i> Tocar para ver</span>';
           const dir = s.direccion || s.router || ('Servicio ' + (idx + 1));
-          const plan = (s.plan_internet || 'Internet Fibra').replace(/^(?:paquete|pakete|plan)\s+/i, '');
+          let plan = (s.plan_internet || 'Internet Fibra').replace(/^(?:paquete|pakete|plan)\s+/i, '');
           const saldo = Number(s.saldo || 0);
           const saldoTxt = saldo <= 0 ? 'Al corriente' : ('Debe $' + saldo.toFixed(2));
           const saldoColor = saldo <= 0 ? '#10b981' : '#f59e0b';
 
-          return '<div class="service-card-item ' + activeClass + '" data-service-id="' + s.id_servicio + '" onclick="onSwitchService(this.dataset.serviceId)">' +
+          return '<div class="service-card-item ' + activeClass + '" data-service-id="' + s.id_servicio + '" onclick="onSwitchService(\'' + s.id_servicio + '\')">' +
             '<div style="display:flex; align-items:center; justify-content:space-between; gap:6px;">' +
-              '<span style="font-weight:700; font-size:13px; color:#fff; display:flex; align-items:center; gap:6px;">' +
-                '<i class="fa-solid fa-house-signal" style="color:#0ea5e9;"></i> Folio #' + s.id_servicio +
+              '<span style="font-weight:800; font-size:13.5px; color:var(--text-title); display:flex; align-items:center; gap:6px;">' +
+                '<i class="fa-solid fa-house-signal" style="color:#0284c7;"></i> Folio #' + s.id_servicio +
               '</span>' +
               activeBadge +
             '</div>' +
-            '<div style="font-size:12px; color:var(--text-body); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="' + dir + '">' + dir + '</div>' +
-            '<div style="display:flex; justify-content:space-between; align-items:center; font-size:11px; margin-top:4px; padding-top:4px; border-top:1px solid rgba(255,255,255,0.06);">' +
-              '<span style="color:var(--text-muted);">' + plan + '</span>' +
-              '<span style="font-weight:600; color:' + saldoColor + ';">' + saldoTxt + '</span>' +
+            '<div style="font-size:12px; color:var(--text-body); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px;" title="' + dir + '">' + dir + '</div>' +
+            '<div style="display:flex; justify-content:space-between; align-items:center; font-size:11.5px; margin-top:6px; padding-top:6px; border-top:1px solid var(--border-card);">' +
+              '<span style="color:var(--text-muted); font-weight:600;"><i class="fa-solid fa-bolt" style="color:#0284c7; font-size:10px;"></i> ' + plan + '</span>' +
+              '<span style="font-weight:700; color:' + saldoColor + ';">' + saldoTxt + '</span>' +
             '</div>' +
           '</div>';
         }).join('');
@@ -1998,11 +2028,38 @@ export function getClientPortalHtml(): string {
 
     function onSwitchService(serviceId) {
       if (!serviceId) return;
-      localStorage.setItem('cp_selected_service', serviceId);
+      const sIdStr = String(serviceId);
+      localStorage.setItem('cp_selected_service', sIdStr);
+
+      // 1. Feedback visual instantáneo e inconfundible en las tarjetas
       document.querySelectorAll('.service-card-item').forEach(el => {
-        el.classList.toggle('active', el.getAttribute('data-service-id') === String(serviceId));
+        const isCurrent = el.getAttribute('data-service-id') === sIdStr;
+        el.classList.toggle('active', isCurrent);
+        const badgeEl = el.querySelector('.service-card-badge');
+        if (badgeEl) {
+          if (isCurrent) {
+            badgeEl.className = 'service-card-badge active';
+            badgeEl.innerHTML = '<i class="fa-solid fa-circle-check"></i> En Pantalla';
+          } else {
+            badgeEl.className = 'service-card-badge inactive';
+            badgeEl.innerHTML = '<i class="fa-regular fa-circle"></i> Tocar para ver';
+          }
+        }
       });
-      loadDashboard(serviceId);
+
+      // 2. Feedback visual inmediato en la tarjeta de paquete y velocidad
+      const planNameEl = document.getElementById('planNameBig');
+      if (planNameEl) {
+        planNameEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="font-size:17px; color:#0284c7;"></i> Cambiando al Folio #' + sIdStr + '...';
+      }
+      const planSpeedEl = document.getElementById('planSpeedBig');
+      if (planSpeedEl) {
+        planSpeedEl.innerText = '...';
+      }
+
+      // 3. Forzar carga inmediata del contrato seleccionado
+      isLoadingDashboard = false;
+      loadDashboard(sIdStr);
     }
 
     async function loadInvoicesHistory() {
@@ -2027,13 +2084,13 @@ export function getClientPortalHtml(): string {
 
             return '<div style="display:flex; align-items:center; justify-content:space-between; background:var(--bg-surface); border:1px solid var(--border-card); border-radius:var(--radius-sm); padding:12px 14px; gap:8px;">' +
               '<div style="overflow:hidden;">' +
-                '<div style="font-weight:700; font-size:13px; color:#fff; display:flex; align-items:center; gap:6px;">' +
-                  '<i class="fa-solid fa-file-invoice" style="color:#0ea5e9;"></i> Recibo #' + (inv.folio || inv.id) +
+                '<div style="font-weight:700; font-size:13px; color:var(--text-title); display:flex; align-items:center; gap:6px;">' +
+                  '<i class="fa-solid fa-file-invoice" style="color:#0284c7;"></i> Recibo #' + (inv.folio || inv.id) +
                 '</div>' +
                 '<div style="font-size:11px; color:var(--text-muted); margin-top:2px;">' + fechaLabel + '</div>' +
               '</div>' +
               '<div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">' +
-                '<span style="font-weight:700; font-size:15px; color:#fff;">$' + Number(inv.monto || 0).toFixed(2) + '</span>' +
+                '<span style="font-weight:800; font-size:15px; color:var(--text-title);">$' + Number(inv.monto || 0).toFixed(2) + '</span>' +
                 '<span class="badge-status ' + statusClass + '" style="font-size:11px; padding:3px 8px;">' + inv.estado + '</span>' +
                 pdfBtn +
                 payBtn +
@@ -2165,21 +2222,21 @@ export function getClientPortalHtml(): string {
       if (isStrong) {
         box.style.background = 'rgba(16, 185, 129, 0.12)';
         box.style.borderColor = 'rgba(16, 185, 129, 0.35)';
-        box.style.color = '#34d399';
+        box.style.color = '#059669';
         box.innerHTML = '<div style="display:flex; align-items:center; gap:8px; font-weight:700; font-size:12px;">' +
           '<i class="fa-solid fa-shield-halved"></i> Contraseña de Alta Seguridad (Recomendada)' +
           '</div>' +
-          '<div style="font-size:11px; color:#e2e8f0; margin-top:4px; line-height:1.3;">' +
+          '<div style="font-size:11px; color:var(--text-body); margin-top:4px; line-height:1.3;">' +
           'Cumple con 10 caracteres, mayúsculas, minúsculas, números y símbolo. Tu red estará 100% protegida.' +
           '</div>';
       } else {
         box.style.background = 'rgba(245, 158, 11, 0.12)';
         box.style.borderColor = 'rgba(245, 158, 11, 0.35)';
-        box.style.color = '#fbbf24';
+        box.style.color = '#d97706';
         box.innerHTML = '<div style="display:flex; align-items:center; gap:8px; font-weight:700; font-size:12px;">' +
           '<i class="fa-solid fa-triangle-exclamation"></i> Contraseña manual poco segura' +
           '</div>' +
-          '<div style="font-size:11px; color:#f1f5f9; margin-top:4px; line-height:1.3;">' +
+          '<div style="font-size:11px; color:var(--text-body); margin-top:4px; line-height:1.3;">' +
           'Las contraseñas manuales o sencillas son fáciles de vulnerar por extraños. Te sugerimos tocar <strong>"Generar Contraseña Segura"</strong> para proteger tu Wi-Fi.' +
           '</div>';
       }
