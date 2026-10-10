@@ -1129,9 +1129,9 @@ export function getClientPortalHtml(): string {
               </div>
 
               <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--bg-card); padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-card);">
-                <span id="wifiPassSharedLabel" class="wifi-val mono" style="font-size: 17px; letter-spacing: 2px;">••••••••</span>
+                <span id="wifiPassSharedLabel" class="wifi-val mono" style="font-size: 17px; letter-spacing: 1px;">Cargando...</span>
                 <div class="wifi-actions">
-                  <button class="btn-action-icon" onclick="toggleShowWifiPassShared()" title="Ver u ocultar contraseña"><i id="eyeIconShared" class="fa-solid fa-eye"></i></button>
+                  <button class="btn-action-icon" onclick="toggleShowWifiPassShared()" title="Ocultar o mostrar contraseña"><i id="eyeIconShared" class="fa-solid fa-eye-slash"></i></button>
                   <button class="btn-action-icon" onclick="copyWifiPassShared()" title="Copiar contraseña"><i class="fa-solid fa-copy"></i></button>
                 </div>
               </div>
@@ -1727,7 +1727,7 @@ export function getClientPortalHtml(): string {
       }
     }
 
-    let isPassRevealedShared = false;
+    let isPassRevealedShared = true;
     let currentQrBand = '5g';
 
     // Dashboard Data Loading (Carga Instantánea y Conexión Segura con Soporte Offline)
@@ -1936,6 +1936,10 @@ export function getClientPortalHtml(): string {
 
       const sharedPass = realWifiPassword5g || realWifiPassword24;
       document.getElementById('wifiPassSharedLabel').innerText = isPassRevealedShared ? sharedPass : '••••••••';
+      const eyeIcon = document.getElementById('eyeIconShared');
+      if (eyeIcon) {
+        eyeIcon.className = isPassRevealedShared ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye';
+      }
 
       // Facturación y Saldo
       const balance = Number(c.saldo || 0);
