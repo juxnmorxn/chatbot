@@ -1137,6 +1137,18 @@ export function getClientPortalHtml(): string {
       const identifier = document.getElementById('linkIdentifier').value.trim();
       const phone = currentPhone || localStorage.getItem('cp_phone') || '';
 
+      if (!identifier) {
+        showToast('Ingresa tu folio o nombre completo');
+        return;
+      }
+
+      const submitBtn = e.target.querySelector('button[type="submit"]') || document.querySelector('#viewNotFound button[type="submit"]');
+      const originalText = submitBtn ? submitBtn.innerHTML : '';
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Vinculando...';
+      }
+
       try {
         const res = await fetch('/api/portal/auth/link-phone', {
           method: 'POST',
@@ -1146,15 +1158,33 @@ export function getClientPortalHtml(): string {
         const data = await res.json();
         if (data.success && data.token) {
           localStorage.setItem('cp_token', data.token);
-          localStorage.setItem('cp_phone', phone);
           currentToken = data.token;
+          if (data.client && data.client.telefono) {
+            localStorage.setItem('cp_phone', data.client.telefono);
+            currentPhone = data.client.telefono;
+          } else if (phone) {
+            localStorage.setItem('cp_phone', phone);
+            currentPhone = phone;
+          }
           showToast('✅ ¡WhatsApp vinculado con éxito!');
-          loadDashboard();
+          hideAllViews();
+          showLoading();
+          isLoadingDashboard = false;
+          const targetServiceId = data.client ? data.client.id_servicio : undefined;
+          await loadDashboard(targetServiceId);
         } else {
           showToast(data.message || 'No se encontró el contrato');
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = originalText;
+          }
         }
-      } catch {
+      } catch (err) {
         showToast('Error al vincular servicio');
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = originalText;
+        }
       }
     }
 
@@ -1308,6 +1338,10 @@ export function getClientPortalHtml(): string {
         if (data.token) {
           localStorage.setItem('cp_token', data.token);
           currentToken = data.token;
+        }
+        if (data.client && data.client.telefono) {
+          localStorage.setItem('cp_phone', data.client.telefono);
+          currentPhone = data.client.telefono;
         }
 
         hideAllViews();

@@ -8,6 +8,8 @@ import { WispHubService } from '../services/wisphub.service';
 import { config } from '../config/env';
 import { Logger } from '../utils/logger';
 import { hashPassword, verifyPassword, generateClientPortalToken, verifyClientPortalToken } from '../utils/auth';
+import { cleanPersonName, normalizeText } from '../utils/fuzzy-matcher';
+import { DbService } from '../services/db.service';
 
 const logger = new Logger('ClientPortalController');
 
@@ -279,10 +281,10 @@ self.addEventListener('fetch', (event) => {
       const db = getDbClient();
       const now = new Date().toISOString();
 
-      // 1. Actualizar teléfono en wisphub_clients
+      // 1. Actualizar teléfono en wisphub_clients para todos los contratos del cliente
       await db.execute({
-        sql: `UPDATE wisphub_clients SET telefono = ? WHERE id_servicio = ?`,
-        args: [last10, client.id_servicio],
+        sql: `UPDATE wisphub_clients SET telefono = ? WHERE id_servicio = ? OR nombre = ? OR (nombre_normalized IS NOT NULL AND nombre_normalized = ?)`,
+        args: [last10, client.id_servicio, client.nombre, client.nombre_normalized || client.nombre],
       });
 
       // 2. Registrar en client_portal_accounts
@@ -526,6 +528,8 @@ self.addEventListener('fetch', (event) => {
 
       const passHash = hashPassword(newPassword);
       const now = new Date().toISOString();
+      const services = await ClientPortalController.findClientsByIdentifier(last10);
+      const clientName = (account.nombre as string) || services[0]?.nombre || 'Cliente';
 
       await db.execute({
         sql: `
@@ -538,12 +542,11 @@ self.addEventListener('fetch', (event) => {
             updated_at = excluded.updated_at,
             last_login = excluded.last_login
         `,
-        args: [last10, passHash, (account.nombre as string) || services[0]?.nombre, now, now],
+        args: [last10, passHash, clientName, now, now],
       });
 
-      const services = await ClientPortalController.findClientsByIdentifier(last10);
       const serviceIds = services.map(s => s.id_servicio);
-      const token = generateClientPortalToken(last10, (account.nombre as string) || services[0]?.nombre, serviceIds);
+      const token = generateClientPortalToken(last10, clientName, serviceIds);
 
       res.json({
         success: true,
@@ -570,20 +573,43 @@ self.addEventListener('fetch', (event) => {
       const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : (req.query.token as string || req.query.auth as string || '');
 
       let verifiedPhone = '';
+      let tokenName = '';
+      let tokenServiceIds: (number | string)[] = [];
+
       if (token) {
         const payload = verifyClientPortalToken(token);
         if (payload) {
           verifiedPhone = payload.phone;
+          tokenName = payload.name || '';
+          tokenServiceIds = payload.serviceIds || [];
         }
       }
 
-      const rawId = verifiedPhone || (req.query.id || req.query.phone || req.query.p || '') as string;
-      if (!rawId) {
-        res.status(401).json({ success: false, message: 'Sesión no válida o identificador requerido.' });
-        return;
+      const requestedServiceId = req.query.serviceId ? String(req.query.serviceId).trim() : '';
+      const requestedId = (req.query.id || req.query.phone || req.query.p || '') as string;
+
+      let services: any[] = [];
+
+      if (requestedServiceId) {
+        services = await ClientPortalController.findClientsByIdentifier(requestedServiceId);
       }
 
-      const services = await ClientPortalController.findClientsByIdentifier(rawId);
+      if ((!services || services.length === 0) && verifiedPhone) {
+        services = await ClientPortalController.findClientsByIdentifier(verifiedPhone);
+      }
+
+      if ((!services || services.length === 0) && tokenServiceIds.length > 0) {
+        services = await ClientPortalController.findClientsByIdentifier(String(tokenServiceIds[0]));
+      }
+
+      if ((!services || services.length === 0) && tokenName) {
+        services = await ClientPortalController.findClientsByIdentifier(tokenName);
+      }
+
+      if ((!services || services.length === 0) && requestedId) {
+        services = await ClientPortalController.findClientsByIdentifier(requestedId);
+      }
+
       if (!services || services.length === 0) {
         res.status(404).json({ success: false, message: 'Cliente no localizado en el sistema.' });
         return;
@@ -704,7 +730,7 @@ self.addEventListener('fetch', (event) => {
       };
 
       // 5. Verificar si el cliente ya tiene contraseña registrada
-      const targetPhone10 = (verifiedPhone || rawId || client.telefono || '').replace(/\D/g, '').slice(-10);
+      const targetPhone10 = (verifiedPhone || client.telefono || '').replace(/\D/g, '').slice(-10);
       const clientPhone10 = (client.telefono || '').replace(/\D/g, '').slice(-10);
       let hasPassword = false;
 
@@ -718,7 +744,7 @@ self.addEventListener('fetch', (event) => {
 
       // Generar token permanente e indestructible para auto-autenticación
       const serviceIds = services.map((s: any) => s.id_servicio);
-      const sessionToken = generateClientPortalToken(cleanPhone || client.telefono, client.nombre, serviceIds);
+      const sessionToken = generateClientPortalToken(verifiedPhone || client.telefono || '', client.nombre, serviceIds);
 
       res.json({
         success: true,
@@ -1072,12 +1098,28 @@ self.addEventListener('fetch', (event) => {
       }
     }
 
-    // 4. Búsqueda por Nombre exacto
+    // 4. Búsqueda por Nombre (Normalizado, insensible a mayúsculas y acentos)
+    const norm = normalizeText(cleanPersonName(clean));
     const resName = await db.execute({
-      sql: `SELECT * FROM wisphub_clients WHERE nombre LIKE ? OR nombre_normalized LIKE ? ORDER BY id_servicio ASC LIMIT 10`,
-      args: [`%${clean}%`, `%${clean}%`],
+      sql: `SELECT * FROM wisphub_clients WHERE nombre LIKE ? OR nombre_normalized LIKE ? OR nombre LIKE ? OR nombre_normalized LIKE ? ORDER BY id_servicio ASC LIMIT 15`,
+      args: [`%${clean}%`, `%${clean}%`, `%${norm}%`, `%${norm}%`],
     });
     if (resName.rows.length > 0) return resName.rows as any[];
+
+    // 5. Búsqueda difusa avanzada tolerante a faltas de ortografía o nombres incompletos
+    try {
+      const fuzzyClients = await DbService.searchWisphubClientsFuzzy(clean, 5);
+      if (fuzzyClients && fuzzyClients.length > 0) {
+        const first = fuzzyClients[0];
+        const allClientServices = await db.execute({
+          sql: `SELECT * FROM wisphub_clients WHERE id_servicio = ? OR (nombre = ? OR nombre_normalized = ?) ORDER BY id_servicio ASC LIMIT 20`,
+          args: [first.id_servicio, first.nombre, first.nombre_normalized || first.nombre],
+        });
+        if (allClientServices.rows.length > 0) return allClientServices.rows as any[];
+      }
+    } catch (fuzzyErr) {
+      logger.warn('Error en fuzzy match de findClientsByIdentifier:', fuzzyErr);
+    }
 
     return [];
   }
