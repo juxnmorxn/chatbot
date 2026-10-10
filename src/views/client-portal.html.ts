@@ -1131,7 +1131,6 @@ export function getClientPortalHtml(): string {
               <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--bg-card); padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-card);">
                 <span id="wifiPassSharedLabel" class="wifi-val mono" style="font-size: 17px; letter-spacing: 1px;">Cargando...</span>
                 <div class="wifi-actions">
-                  <button class="btn-action-icon" onclick="toggleShowWifiPassShared()" title="Ocultar o mostrar contraseña"><i id="eyeIconShared" class="fa-solid fa-eye-slash"></i></button>
                   <button class="btn-action-icon" onclick="copyWifiPassShared()" title="Copiar contraseña"><i class="fa-solid fa-copy"></i></button>
                 </div>
               </div>
@@ -1396,13 +1395,42 @@ export function getClientPortalHtml(): string {
     }
 
     function initPortalTheme() {
-      const savedTheme = localStorage.getItem('cw_portal_theme') || (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
-      applyPortalTheme(savedTheme);
+      const isManual = localStorage.getItem('cw_portal_theme_manual') === 'true';
+      let theme = 'dark';
+      
+      if (isManual) {
+        theme = localStorage.getItem('cw_portal_theme') || 'dark';
+      } else {
+        const prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+        theme = prefersLight ? 'light' : 'dark';
+      }
+      
+      applyPortalTheme(theme, isManual);
+
+      // Sincronización automática en vivo con el modo del celular del cliente
+      if (window.matchMedia) {
+        const mediaQuery = window.matchMedia('(prefers-color-scheme: light)');
+        const onSystemThemeChange = (e) => {
+          if (localStorage.getItem('cw_portal_theme_manual') !== 'true') {
+            applyPortalTheme(e.matches ? 'light' : 'dark', false);
+          }
+        };
+        try {
+          if (mediaQuery.addEventListener) {
+            mediaQuery.addEventListener('change', onSystemThemeChange);
+          } else if (mediaQuery.addListener) {
+            mediaQuery.addListener(onSystemThemeChange);
+          }
+        } catch (_) {}
+      }
     }
 
-    function applyPortalTheme(theme) {
+    function applyPortalTheme(theme, isManual = false) {
       document.documentElement.setAttribute('data-theme', theme);
       localStorage.setItem('cw_portal_theme', theme);
+      if (isManual) {
+        localStorage.setItem('cw_portal_theme_manual', 'true');
+      }
       const icon = document.getElementById('themeIcon');
       if (icon) {
         icon.className = theme === 'light' ? 'fa-solid fa-moon' : 'fa-solid fa-sun';
@@ -1412,7 +1440,7 @@ export function getClientPortalHtml(): string {
     function togglePortalTheme() {
       const current = document.documentElement.getAttribute('data-theme') || 'dark';
       const newTheme = current === 'dark' ? 'light' : 'dark';
-      applyPortalTheme(newTheme);
+      applyPortalTheme(newTheme, true);
       showToast(newTheme === 'light' ? '☀️ Tema Claro activado' : '🌙 Tema Oscuro activado');
     }
 
@@ -1935,11 +1963,7 @@ export function getClientPortalHtml(): string {
       }
 
       const sharedPass = realWifiPassword5g || realWifiPassword24;
-      document.getElementById('wifiPassSharedLabel').innerText = isPassRevealedShared ? sharedPass : '••••••••';
-      const eyeIcon = document.getElementById('eyeIconShared');
-      if (eyeIcon) {
-        eyeIcon.className = isPassRevealedShared ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye';
-      }
+      document.getElementById('wifiPassSharedLabel').innerText = sharedPass;
 
       // Facturación y Saldo
       const balance = Number(c.saldo || 0);
@@ -2008,14 +2032,7 @@ export function getClientPortalHtml(): string {
       }
     }
 
-    // Toggle y Copiado Contraseña Única
-    function toggleShowWifiPassShared() {
-      isPassRevealedShared = !isPassRevealedShared;
-      const pass = realWifiPassword5g || realWifiPassword24;
-      document.getElementById('wifiPassSharedLabel').innerText = isPassRevealedShared ? pass : '••••••••';
-      document.getElementById('eyeIconShared').className = isPassRevealedShared ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye';
-    }
-
+    // Copiado de Contraseña Única
     function copyWifiPassShared() {
       const pass = realWifiPassword5g || realWifiPassword24;
       navigator.clipboard.writeText(pass);
@@ -2255,7 +2272,7 @@ export function getClientPortalHtml(): string {
           localStorage.setItem('cp_last_pass', password);
 
           // Actualizar contraseña en el dashboard de inmediato
-          document.getElementById('wifiPassSharedLabel').innerText = isPassRevealedShared ? password : '••••••••';
+          document.getElementById('wifiPassSharedLabel').innerText = password;
 
           closeModal('modalWifi');
 

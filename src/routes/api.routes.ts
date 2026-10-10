@@ -213,6 +213,10 @@ router.post('/api/logs/clear-all', requireAdminAuth(['superadmin']), AdminContro
 router.post('/api/sessions/:phone/toggle-pause', AdminController.toggleBotPause);
 router.delete('/api/sessions/:phone', requireAdminAuth(['superadmin']), AdminController.deleteSession);
 router.post('/api/sessions/:phone/delete', requireAdminAuth(['superadmin']), AdminController.deleteSession);
+router.post('/api/admin/portal/reset-phone', requireAdminAuth(['superadmin', 'soporte']), AdminController.resetPortalUserPhone);
+router.delete('/api/admin/portal/reset-phone', requireAdminAuth(['superadmin', 'soporte']), AdminController.resetPortalUserPhone);
+router.post('/api/admin/portal/reset-phone/:phone', requireAdminAuth(['superadmin', 'soporte']), AdminController.resetPortalUserPhone);
+router.delete('/api/admin/portal/reset-phone/:phone', requireAdminAuth(['superadmin', 'soporte']), AdminController.resetPortalUserPhone);
 
 
 // ==========================================

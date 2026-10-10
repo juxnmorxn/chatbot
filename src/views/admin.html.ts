@@ -4566,8 +4566,22 @@ export function getAdminDashboardHtml(): string {
 
         <!-- Danger Zone (Superadmin Only) -->
         <div id="settings-danger-zone" class="glass-card" style="margin-top: 24px; border-color: rgba(244, 63, 94, 0.3); display: none;">
-          <h3 style="font-size: 15px; font-weight: 700; color: var(--accent-rose); margin-bottom: 12px;">Zona de Pruebas & Reset (Superadmin)</h3>
-          <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">Elimina datos de prueba sin afectar la base de datos de producción. Requiere confirmación.</p>
+          <h3 style="font-size: 15px; font-weight: 700; color: var(--accent-rose); margin-bottom: 12px;">🧪 Zona de Pruebas & Reset (Superadmin)</h3>
+          <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">Herramientas para probar onboarding de clientes, portal y flujos del bot sin basura residual.</p>
+          
+          <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(244, 63, 94, 0.2); border-radius: var(--radius-sm); padding: 14px; margin-bottom: 16px;">
+            <div style="font-size: 13px; font-weight: 700; color: #fff; margin-bottom: 6px;">📱 Restablecer / Limpiar Celular de Pruebas</div>
+            <div style="font-size: 11.5px; color: var(--text-muted); margin-bottom: 12px;">
+              Elimina la cuenta del portal de clientes vinculada al número, reinicia la sesión del bot y borra los cooldowns/caché en memoria para que puedas volver a probar desde cero con tu propio celular.
+            </div>
+            <div style="display: flex; gap: 10px; max-width: 520px; align-items: center; flex-wrap: wrap;">
+              <input type="text" id="input-test-reset-phone" class="form-control" placeholder="Ej: 7711234567 o 527711234567" style="font-size: 13px; flex: 1; min-width: 200px;" onkeypress="if(event.key==='Enter') handleResetTestPhoneAction()">
+              <button class="btn btn-danger" onclick="handleResetTestPhoneAction()" id="btn-reset-test-phone" style="white-space: nowrap; font-size: 12.5px;">
+                🧹 Limpiar Celular
+              </button>
+            </div>
+          </div>
+
           <div style="display: flex; gap: 12px; flex-wrap: wrap;">
             <button class="btn btn-danger btn-sm" onclick="clearSessionsData()">Vaciar Sesiones</button>
             <button class="btn btn-danger btn-sm" onclick="clearLogsData()">Vaciar Historial Logs</button>
@@ -8677,6 +8691,36 @@ export function getAdminDashboardHtml(): string {
 
     async function disconnectWhatsAppSession() {
       return disconnectWhatsAppInstance('isp-soporte');
+    }
+
+    async function handleResetTestPhoneAction() {
+      const input = document.getElementById('input-test-reset-phone');
+      const phone = (input?.value || '').trim();
+      if (!phone) {
+        showToast('Número Requerido', 'Por favor ingresa el número de teléfono que deseas limpiar.', 'warning');
+        return;
+      }
+
+      showConfirmDialog('🧹 Restablecer Celular de Pruebas', '¿Deseas eliminar la cuenta del Portal de Clientes y la sesión del bot para el teléfono ' + phone + '? Esto permitirá registrarte o probar como usuario nuevo.', async () => {
+        const btn = document.getElementById('btn-reset-test-phone');
+        if (btn) btn.disabled = true;
+        try {
+          const res = await apiFetch('/api/admin/portal/reset-phone', {
+            method: 'POST',
+            body: JSON.stringify({ phone }),
+          });
+          if (res.success) {
+            showToast('Celular Restablecido', res.message || ('El teléfono ' + phone + ' fue limpiado con éxito.'), 'success');
+            if (input) input.value = '';
+          } else {
+            showToast('Error', res.error || 'No se pudo restablecer el teléfono.', 'error');
+          }
+        } catch (err) {
+          showToast('Error', err.message || 'Error de conexión', 'error');
+        } finally {
+          if (btn) btn.disabled = false;
+        }
+      });
     }
 
     function clearSessionsData() {

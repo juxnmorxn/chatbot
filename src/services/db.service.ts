@@ -4071,6 +4071,39 @@ export class DbService {
       return { success: false, message: err?.message || 'Error al enviar a WhatsApp' };
     }
   }
+
+  /**
+   * Restablece la cuenta de portal de un cliente y la sesión del bot para pruebas
+   */
+  static async resetPortalUserPhone(phone: string): Promise<{ portalRows: number; sessionRows: number; cleanPhone: string }> {
+    const client = getDbClient();
+    const cleanDigits = (phone || '').replace(/\D/g, '');
+    const cleanPhone = cleanDigits.length >= 10 ? cleanDigits.slice(-10) : cleanDigits;
+
+    if (!cleanPhone) {
+      return { portalRows: 0, sessionRows: 0, cleanPhone: '' };
+    }
+
+    // 1. Eliminar de client_portal_accounts
+    const portalRes = await client.execute({
+      sql: `DELETE FROM client_portal_accounts WHERE telefono = ? OR telefono LIKE ?`,
+      args: [cleanPhone, `%${cleanPhone}`],
+    });
+
+    // 2. Eliminar de sessions (bot)
+    const sessionRes = await client.execute({
+      sql: `DELETE FROM sessions WHERE phone = ? OR phone LIKE ?`,
+      args: [cleanPhone, `%${cleanPhone}`],
+    });
+
+    logger.info(`Teléfono ${cleanPhone} restablecido para pruebas. Eliminadas ${portalRes.rowsAffected || 0} cuenta(s) y ${sessionRes.rowsAffected || 0} sesión(es).`);
+
+    return {
+      portalRows: portalRes.rowsAffected || 0,
+      sessionRows: sessionRes.rowsAffected || 0,
+      cleanPhone,
+    };
+  }
 }
 
 export interface WhatsAppOfficeGroupRecord {

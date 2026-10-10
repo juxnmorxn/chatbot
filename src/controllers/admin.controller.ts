@@ -2550,5 +2550,40 @@ export class AdminController {
       res.status(500).json({ success: false, error: error?.message || error });
     }
   }
+
+  /**
+   * Restablece la cuenta del portal y sesión de bot de un cliente / número de pruebas
+   */
+  static async resetPortalUserPhone(req: Request, res: Response): Promise<void> {
+    try {
+      const rawPhone = req.body?.phone || req.query?.phone || req.params?.phone;
+      const cleanDigits = String(rawPhone || '').replace(/\D/g, '');
+      const cleanPhone = cleanDigits.length >= 10 ? cleanDigits.slice(-10) : cleanDigits;
+
+      if (!cleanPhone || cleanPhone.length < 7) {
+        res.status(400).json({ success: false, error: 'Ingresa un número de teléfono válido (10 dígitos).' });
+        return;
+      }
+
+      const result = await DbService.resetPortalUserPhone(cleanPhone);
+
+      // Limpiar caché de SmartOLT y cooldowns de Wi-Fi/Reinicio
+      try {
+        const { ClientPortalController } = await import('./client-portal.controller');
+        ClientPortalController.clearPortalCache(cleanPhone);
+      } catch (_) {}
+
+      res.json({
+        success: true,
+        message: `Teléfono ${cleanPhone} restablecido exitosamente. Se eliminó la cuenta del portal y la sesión del bot para nuevas pruebas.`,
+        phone: cleanPhone,
+        portalAccountsDeleted: result.portalRows,
+        botSessionsDeleted: result.sessionRows,
+      });
+    } catch (error: any) {
+      logger.error('Error al restablecer teléfono de portal:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
 }
 

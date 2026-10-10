@@ -32,6 +32,21 @@ const WIFI_COOLDOWN_MS = 30 * 1000; // 30 segundos entre cambios de Wi-Fi
 export class ClientPortalController {
 
   /**
+   * Limpia cachés de señales y cooldowns de reinicio/wifi para pruebas
+   */
+  static clearPortalCache(phoneOrOnu?: string): void {
+    if (phoneOrOnu) {
+      signalCache.delete(phoneOrOnu);
+      rebootCooldowns.delete(phoneOrOnu);
+      wifiChangeCooldowns.delete(phoneOrOnu);
+    } else {
+      signalCache.clear();
+      rebootCooldowns.clear();
+      wifiChangeCooldowns.clear();
+    }
+  }
+
+  /**
    * Renderiza la página principal del Portal del Cliente / PWA
    */
   static renderPortalHtml(_req: Request, res: Response): void {
