@@ -763,6 +763,26 @@ export function getClientPortalHtml(): string {
     <!-- 4. DASHBOARD PRINCIPAL DEL CLIENTE -->
     <div id="viewDashboard" class="hidden" style="display: flex; flex-direction: column; gap: 16px;">
 
+      <!-- Banner de Onboarding: Creación de Contraseña Inicial -->
+      <div id="onboardingBanner" class="card hidden" style="background: linear-gradient(135deg, rgba(6, 182, 212, 0.12), rgba(59, 130, 246, 0.12)); border: 1px solid var(--accent-cyan); box-shadow: 0 4px 20px rgba(6, 182, 212, 0.15);">
+        <div style="display: flex; gap: 14px; align-items: flex-start;">
+          <div style="font-size: 26px; color: var(--accent-cyan); margin-top: 2px;"><i class="fa-solid fa-shield-halved"></i></div>
+          <div style="flex: 1; display: flex; flex-direction: column; gap: 6px;">
+            <div style="font-size: 16px; font-weight: 700; color: #fff;">¡Crea tu contraseña de acceso!</div>
+            <div style="font-size: 13px; color: var(--text-muted); line-height: 1.4;">
+              📱 <strong>Tu usuario de acceso es tu número de celular:</strong> <span id="onboardingPhone" style="color: var(--accent-cyan); font-family: 'JetBrains Mono', monospace; font-weight: 700;"></span><br>
+              🔒 Crea una contraseña para ingresar desde cualquier computadora o dispositivo en el futuro:
+            </div>
+            <form onsubmit="handleOnboardingSavePassword(event)" style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px;">
+              <input type="password" id="onboardingPass" class="form-control" style="flex: 1; min-width: 200px; padding-left: 14px;" placeholder="Crea tu contraseña (mín 6 caracteres)" minlength="6" required>
+              <button type="submit" class="btn-primary" style="width: auto; padding: 10px 18px; font-size: 13px;">
+                <i class="fa-solid fa-floppy-disk"></i> Guardar Contraseña
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+
       <!-- Selector Multi-Servicio -->
       <div id="multiServiceContainer" class="service-switcher-wrapper hidden">
         <div class="service-switcher-header">
@@ -990,6 +1010,9 @@ export function getClientPortalHtml(): string {
         loadDashboard();
       } else if (resetCode && p) {
         showForgotStep2(p, resetCode);
+      } else if (p) {
+        currentPhone = p;
+        loadDashboard();
       }
     }
 
@@ -1166,6 +1189,35 @@ export function getClientPortalHtml(): string {
       }
     }
 
+    async function handleOnboardingSavePassword(e) {
+      e.preventDefault();
+      const pass = document.getElementById('onboardingPass').value;
+      if (!pass || pass.length < 6) {
+        showToast('La contraseña debe tener al menos 6 caracteres.');
+        return;
+      }
+      try {
+        const res = await fetch('/api/portal/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: currentPhone, password: pass })
+        });
+        const d = await res.json();
+        if (d.success) {
+          showToast('✅ ¡Contraseña guardada! Tu usuario es ' + currentPhone);
+          document.getElementById('onboardingBanner').classList.add('hidden');
+          if (d.token) {
+            localStorage.setItem('cp_token', d.token);
+            currentToken = d.token;
+          }
+        } else {
+          showToast(d.message || 'Error al guardar contraseña');
+        }
+      } catch {
+        showToast('Error al conectar con el servidor.');
+      }
+    }
+
     document.getElementById('btnLogout').onclick = () => {
       localStorage.removeItem('cp_token');
       localStorage.removeItem('cp_phone');
@@ -1178,7 +1230,7 @@ export function getClientPortalHtml(): string {
     // Dashboard Data Loading
     async function loadDashboard(serviceId) {
       try {
-        const url = '/api/portal/me?token=' + encodeURIComponent(currentToken) + (serviceId ? '&serviceId=' + serviceId : '');
+        const url = '/api/portal/me?token=' + encodeURIComponent(currentToken || '') + '&p=' + encodeURIComponent(currentPhone || '') + (serviceId ? '&serviceId=' + serviceId : '');
         const res = await fetch(url);
         const data = await res.json();
 
@@ -1203,6 +1255,16 @@ export function getClientPortalHtml(): string {
       const c = data.client;
       currentServiceId = String(c.id_servicio);
       currentServices = data.relatedServices || [];
+      currentPhone = c.telefono || currentPhone;
+
+      // Banner de Onboarding si el usuario no tiene contraseña registrada
+      const onbBanner = document.getElementById('onboardingBanner');
+      if (data.hasPassword === false) {
+        onbBanner.classList.remove('hidden');
+        document.getElementById('onboardingPhone').innerText = currentPhone;
+      } else {
+        onbBanner.classList.add('hidden');
+      }
 
       // Titular y Plan
       document.getElementById('clientTitular').innerText = c.nombre;

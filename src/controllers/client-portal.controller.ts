@@ -600,8 +600,20 @@ self.addEventListener('fetch', (event) => {
         password: onuRecord?.sn ? onuRecord.sn.slice(-8) : '********',
       };
 
+      // 5. Verificar si el cliente ya tiene contraseña registrada
+      const cleanPhone = (client.telefono || rawId || '').replace(/\D/g, '').slice(-10);
+      let hasPassword = false;
+      if (cleanPhone) {
+        const accRes = await db.execute({
+          sql: `SELECT id, password_hash FROM client_portal_accounts WHERE telefono = ? LIMIT 1`,
+          args: [cleanPhone],
+        });
+        hasPassword = accRes.rows.length > 0 && Boolean(accRes.rows[0].password_hash);
+      }
+
       res.json({
         success: true,
+        hasPassword,
         client: {
           id_servicio: client.id_servicio,
           nombre: client.nombre,
