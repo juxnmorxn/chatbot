@@ -1,11 +1,13 @@
+import { getCloudWareSphereSvg } from './brand';
+
 export function getAdminDashboardHtml(): string {
   return `<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CloudWareMx - Admin ISP Control Center</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+  <title>CloudWare MX - Admin Control Center</title>
+  <link rel="icon" type="image/svg+xml" href="/portal-icon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -2835,11 +2837,14 @@ export function getAdminDashboardHtml(): string {
   <div id="login-overlay" style="display: none;">
     <div class="login-box">
       <div style="text-align: center;">
-        <div class="brand-logo" style="margin: 0 auto 12px; width: 48px; height: 48px;">
-          <svg class="svg-icon svg-icon-lg" viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"></path></svg>
+        <div style="margin: 0 auto 12px; width: 56px; height: 56px; filter: drop-shadow(0 6px 16px rgba(14, 165, 233, 0.4));">
+          ${getCloudWareSphereSvg({ size: 56, isDark: true })}
         </div>
-        <h2 style="font-size: 20px; font-weight: 800; letter-spacing: -0.5px;">CloudWare ISP</h2>
-        <p style="font-size: 12.5px; color: var(--text-muted); margin-top: 4px;">Acceso al Panel de Administración</p>
+        <h2 style="font-size: 20px; font-weight: 800; letter-spacing: -0.5px; display: flex; align-items: center; justify-content: center; gap: 4px;">
+          <span>CloudWare</span>
+          <span style="font-size: 11px; font-weight: 900; color: #0284c7; background: rgba(14, 165, 233, 0.15); border: 1px solid rgba(14, 165, 233, 0.3); padding: 1px 4px; border-radius: 4px;">MX</span>
+        </h2>
+        <p style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">Cada segundo cuenta · Panel de Control</p>
       </div>
       <form id="login-form" onsubmit="handleLoginSubmit(event)">
         <div class="form-group">
@@ -2871,12 +2876,15 @@ export function getAdminDashboardHtml(): string {
     <aside id="sidebar">
       <div class="sidebar-header">
         <a href="#dashboard" class="sidebar-brand" onclick="navigateTo('dashboard')">
-          <div class="brand-logo">
-            <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"></path></svg>
+          <div class="brand-logo" style="background: transparent; box-shadow: none; width: 32px; height: 32px; filter: drop-shadow(0 2px 8px rgba(14, 165, 233, 0.35));">
+            ${getCloudWareSphereSvg({ size: 32, isDark: true })}
           </div>
           <div class="brand-text">
-            <span class="brand-title">CloudWareMx</span>
-            <span class="brand-subtitle">ISP Control</span>
+            <div style="display: flex; align-items: center; gap: 4px;">
+              <span class="brand-title" style="font-size: 14px; font-weight: 800;">CloudWare</span>
+              <span style="font-size: 9px; font-weight: 900; color: #0284c7; background: rgba(14, 165, 233, 0.15); border: 1px solid rgba(14, 165, 233, 0.3); padding: 0.5px 3.5px; border-radius: 3px;">MX</span>
+            </div>
+            <span class="brand-subtitle" style="font-size: 9.5px; color: var(--text-dim); text-transform: none; letter-spacing: 0;">Cada segundo cuenta</span>
           </div>
         </a>
         <button class="sidebar-toggle-btn" id="btn-sidebar-toggle" onclick="toggleSidebar()" title="Alternar Sidebar">

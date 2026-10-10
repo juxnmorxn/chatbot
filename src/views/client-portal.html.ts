@@ -1,5 +1,6 @@
 import { config } from '../config/env';
 import { SettingsService } from '../services/settings.service';
+import { getCloudWareSphereSvg, getCloudWareFullLogoHtml } from './brand';
 
 /**
  * Genera el HTML completo para el Portal Móvil / PWA de Clientes
@@ -41,7 +42,7 @@ export function getClientPortalHtml(): string {
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
   <style>
-    :root {
+    :root, [data-theme="dark"] {
       --bg-body: #080d1a;
       --bg-surface: #0f172a;
       --bg-card: #131d36;
@@ -59,6 +60,66 @@ export function getClientPortalHtml(): string {
       --warning-bg: rgba(245, 158, 11, 0.12);
       --danger: #ef4444;
       --danger-bg: rgba(239, 68, 68, 0.12);
+      --input-bg: #0f172a;
+      --input-text: #ffffff;
+      --input-border: rgba(255, 255, 255, 0.12);
+      --modal-bg: #0f172a;
+      --modal-text: #ffffff;
+      --btn-header-bg: rgba(255, 255, 255, 0.06);
+      --btn-header-hover: rgba(255, 255, 255, 0.12);
+      --btn-header-text: #cbd5e1;
+      --btn-icon-bg: rgba(255, 255, 255, 0.06);
+      --btn-icon-text: #94a3b8;
+      --btn-outline-bg: rgba(255, 255, 255, 0.05);
+      --btn-outline-text: #f1f5f9;
+      --card-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+      --wifi-band-bg: rgba(15, 23, 42, 0.7);
+      --onboard-bg: linear-gradient(135deg, rgba(14, 165, 233, 0.18) 0%, rgba(37, 99, 235, 0.18) 100%);
+      --onboard-border: rgba(56, 189, 248, 0.4);
+      --plan-card-bg: linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.85) 100%);
+      --slogan-color: #94a3b8;
+      --radius-sm: 12px;
+      --radius-md: 18px;
+      --radius-lg: 24px;
+      --radius-full: 9999px;
+    }
+
+    [data-theme="light"] {
+      --bg-body: #f8fafc;
+      --bg-surface: #ffffff;
+      --bg-card: #ffffff;
+      --bg-card-alt: #f1f5f9;
+      --border-card: rgba(0, 0, 0, 0.08);
+      --border-highlight: rgba(14, 165, 233, 0.4);
+      --text-title: #0f172a;
+      --text-body: #475569;
+      --text-muted: #64748b;
+      --primary: #0284c7;
+      --primary-gradient: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%);
+      --success: #059669;
+      --success-bg: rgba(16, 185, 129, 0.12);
+      --warning: #d97706;
+      --warning-bg: rgba(245, 158, 11, 0.12);
+      --danger: #dc2626;
+      --danger-bg: rgba(239, 68, 68, 0.12);
+      --input-bg: #f8fafc;
+      --input-text: #0f172a;
+      --input-border: #cbd5e1;
+      --modal-bg: #ffffff;
+      --modal-text: #0f172a;
+      --btn-header-bg: rgba(0, 0, 0, 0.05);
+      --btn-header-hover: rgba(0, 0, 0, 0.1);
+      --btn-header-text: #334155;
+      --btn-icon-bg: #f1f5f9;
+      --btn-icon-text: #475569;
+      --btn-outline-bg: #f8fafc;
+      --btn-outline-text: #0f172a;
+      --card-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+      --wifi-band-bg: #f8fafc;
+      --onboard-bg: linear-gradient(135deg, #e0f2fe 0%, #dbeafe 100%);
+      --onboard-border: #7dd3fc;
+      --plan-card-bg: linear-gradient(135deg, #ffffff 0%, #f0f9ff 100%);
+      --slogan-color: #475569;
       --radius-sm: 12px;
       --radius-md: 18px;
       --radius-lg: 24px;
@@ -76,14 +137,15 @@ export function getClientPortalHtml(): string {
       font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
       background-color: var(--bg-body);
       background-image: 
-        radial-gradient(circle at 50% 0%, rgba(14, 165, 233, 0.15) 0%, transparent 60%),
-        radial-gradient(circle at 100% 100%, rgba(37, 99, 235, 0.08) 0%, transparent 50%);
+        radial-gradient(circle at 50% 0%, rgba(14, 165, 233, 0.12) 0%, transparent 60%),
+        radial-gradient(circle at 100% 100%, rgba(37, 99, 235, 0.06) 0%, transparent 50%);
       background-attachment: fixed;
-      color: #f1f5f9;
+      color: var(--text-title);
       min-height: 100vh;
       display: flex;
       justify-content: center;
       padding: 0;
+      transition: background-color 0.25s ease, color 0.25s ease;
     }
 
     /* App Wrapper Móvil / Tablet / Desktop Responsivo */
@@ -144,17 +206,14 @@ export function getClientPortalHtml(): string {
       gap: 10px;
     }
 
-    .brand-icon {
+    .brand-sphere-wrap {
       width: 40px;
       height: 40px;
-      background: var(--primary-gradient);
-      border-radius: var(--radius-sm);
+      flex-shrink: 0;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 19px;
-      color: white;
-      box-shadow: 0 4px 16px rgba(14, 165, 233, 0.35);
+      filter: drop-shadow(0 4px 12px rgba(14, 165, 233, 0.35));
     }
 
     .brand-info h1 {
@@ -166,15 +225,15 @@ export function getClientPortalHtml(): string {
     }
 
     .brand-info span {
-      font-size: 12px;
-      color: #38bdf8;
+      font-size: 11.5px;
+      color: var(--slogan-color);
       font-weight: 600;
     }
 
     .btn-header-action {
-      background: rgba(255, 255, 255, 0.06);
+      background: var(--btn-header-bg);
       border: 1px solid var(--border-card);
-      color: var(--text-body);
+      color: var(--btn-header-text);
       border-radius: var(--radius-full);
       padding: 8px 14px;
       font-size: 13px;
@@ -189,7 +248,7 @@ export function getClientPortalHtml(): string {
 
     .btn-header-action:active {
       transform: scale(0.96);
-      background: rgba(255, 255, 255, 0.12);
+      background: var(--btn-header-hover);
     }
 
     /* Selector de Contratos */
@@ -201,6 +260,7 @@ export function getClientPortalHtml(): string {
       display: flex;
       flex-direction: column;
       gap: 4px;
+      box-shadow: var(--card-shadow);
     }
 
     .service-pill-select label {
@@ -212,9 +272,9 @@ export function getClientPortalHtml(): string {
     }
 
     .select-styled {
-      background: var(--bg-surface);
-      border: 1px solid var(--border-card);
-      color: #fff;
+      background: var(--input-bg);
+      border: 1px solid var(--input-border);
+      color: var(--input-text);
       font-size: 14px;
       font-weight: 600;
       font-family: inherit;
@@ -226,8 +286,8 @@ export function getClientPortalHtml(): string {
 
     /* Banner Onboarding (Crear Contraseña) */
     .onboarding-card {
-      background: linear-gradient(135deg, rgba(14, 165, 233, 0.18) 0%, rgba(37, 99, 235, 0.18) 100%);
-      border: 1px solid rgba(56, 189, 248, 0.4);
+      background: var(--onboard-bg);
+      border: 1px solid var(--onboard-border);
       border-radius: var(--radius-lg);
       padding: 18px 16px;
       display: flex;
@@ -246,7 +306,7 @@ export function getClientPortalHtml(): string {
       font-family: 'Outfit', sans-serif;
       font-size: 16px;
       font-weight: 700;
-      color: #ffffff;
+      color: var(--text-title);
       display: flex;
       align-items: center;
       gap: 8px;
@@ -254,12 +314,12 @@ export function getClientPortalHtml(): string {
 
     .onboarding-desc {
       font-size: 13px;
-      color: #cbd5e1;
+      color: var(--text-body);
       line-height: 1.45;
     }
 
     .onboarding-desc strong {
-      color: #38bdf8;
+      color: #0284c7;
     }
 
     .onboarding-form {
@@ -277,7 +337,8 @@ export function getClientPortalHtml(): string {
       display: flex;
       flex-direction: column;
       gap: 14px;
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+      box-shadow: var(--card-shadow);
+      transition: background-color 0.25s ease, border-color 0.25s ease;
     }
 
     .card-head {
@@ -297,7 +358,7 @@ export function getClientPortalHtml(): string {
     }
 
     .card-head-title i {
-      color: #38bdf8;
+      color: #0284c7;
       font-size: 16px;
     }
 
@@ -341,7 +402,7 @@ export function getClientPortalHtml(): string {
     .status-text-main {
       font-size: 14px;
       font-weight: 700;
-      color: #ffffff;
+      color: var(--text-title);
       line-height: 1.3;
     }
 
@@ -352,8 +413,8 @@ export function getClientPortalHtml(): string {
 
     .status-speed-badge {
       background: rgba(14, 165, 233, 0.15);
-      color: #38bdf8;
-      border: 1px solid rgba(56, 189, 248, 0.3);
+      color: #0284c7;
+      border: 1px solid rgba(56, 189, 248, 0.35);
       padding: 4px 10px;
       border-radius: var(--radius-full);
       font-size: 12px;
@@ -363,12 +424,12 @@ export function getClientPortalHtml(): string {
 
     /* Selector visual de multi-servicio para titulares con varios contratos */
     .multi-service-section {
-      background: rgba(15, 23, 42, 0.7);
+      background: var(--bg-surface);
       border: 1px solid var(--border-highlight);
       border-radius: var(--radius-lg);
       padding: 16px;
       margin-bottom: 20px;
-      backdrop-filter: blur(12px);
+      box-shadow: var(--card-shadow);
     }
 
     .multi-service-header {
@@ -381,7 +442,7 @@ export function getClientPortalHtml(): string {
     .multi-service-title {
       font-size: 13px;
       font-weight: 800;
-      color: #38bdf8;
+      color: #0284c7;
       text-transform: uppercase;
       letter-spacing: 0.5px;
       display: flex;
@@ -396,7 +457,7 @@ export function getClientPortalHtml(): string {
     }
 
     .service-card-item {
-      background: var(--bg-surface);
+      background: var(--bg-card-alt);
       border: 2px solid var(--border-card);
       border-radius: var(--radius-md);
       padding: 12px 14px;
@@ -409,14 +470,13 @@ export function getClientPortalHtml(): string {
     }
 
     .service-card-item:hover {
-      border-color: rgba(56, 189, 248, 0.5);
-      background: rgba(30, 41, 59, 0.8);
+      border-color: rgba(56, 189, 248, 0.6);
       transform: translateY(-2px);
     }
 
     .service-card-item.active {
-      border-color: #38bdf8;
-      background: rgba(14, 165, 233, 0.1);
+      border-color: #0284c7;
+      background: rgba(14, 165, 233, 0.12);
       box-shadow: 0 0 20px rgba(56, 189, 248, 0.25);
     }
 
@@ -434,11 +494,10 @@ export function getClientPortalHtml(): string {
 
     /* Wi-Fi Dual-Band Styling */
     .wifi-band-card {
-      background: rgba(15, 23, 42, 0.7);
+      background: var(--wifi-band-bg);
       border: 1px solid var(--border-card);
       border-radius: var(--radius-md);
       padding: 14px;
-      backdrop-filter: blur(10px);
     }
 
     .wifi-band-head {
@@ -461,13 +520,13 @@ export function getClientPortalHtml(): string {
 
     .wifi-band-tag.tag-24g {
       background: rgba(14, 165, 233, 0.15);
-      color: #38bdf8;
+      color: #0284c7;
       border: 1px solid rgba(56, 189, 248, 0.3);
     }
 
     .wifi-band-tag.tag-5g {
       background: rgba(168, 85, 247, 0.15);
-      color: #c084fc;
+      color: #a855f7;
       border: 1px solid rgba(192, 132, 252, 0.3);
     }
 
@@ -506,7 +565,7 @@ export function getClientPortalHtml(): string {
     .wifi-val {
       font-size: 15px;
       font-weight: 700;
-      color: #ffffff;
+      color: var(--text-title);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -514,7 +573,7 @@ export function getClientPortalHtml(): string {
 
     .wifi-val.mono {
       font-family: 'Outfit', monospace;
-      color: #38bdf8;
+      color: #0284c7;
       letter-spacing: 1px;
     }
 
@@ -527,9 +586,9 @@ export function getClientPortalHtml(): string {
     .btn-action-icon {
       width: 38px;
       height: 38px;
-      background: rgba(255, 255, 255, 0.06);
+      background: var(--btn-icon-bg);
       border: 1px solid var(--border-card);
-      color: var(--text-body);
+      color: var(--btn-icon-text);
       border-radius: var(--radius-sm);
       display: flex;
       align-items: center;
@@ -541,8 +600,8 @@ export function getClientPortalHtml(): string {
 
     .btn-action-icon:active {
       transform: scale(0.92);
-      background: rgba(255, 255, 255, 0.14);
-      color: #fff;
+      background: var(--btn-header-hover);
+      color: var(--text-title);
     }
 
     /* Estado de Cuenta */
@@ -566,7 +625,7 @@ export function getClientPortalHtml(): string {
       font-family: 'Outfit', sans-serif;
       font-size: 28px;
       font-weight: 800;
-      color: #ffffff;
+      color: var(--text-title);
     }
 
     .billing-hero-date {
@@ -621,9 +680,9 @@ export function getClientPortalHtml(): string {
     }
 
     .btn-outline {
-      background: rgba(255, 255, 255, 0.05);
+      background: var(--btn-outline-bg);
       border: 1px solid var(--border-card);
-      color: #f1f5f9;
+      color: var(--btn-outline-text);
       border-radius: var(--radius-md);
       padding: 12px 16px;
       font-size: 14px;
@@ -640,7 +699,7 @@ export function getClientPortalHtml(): string {
     }
 
     .btn-outline:active {
-      background: rgba(255, 255, 255, 0.1);
+      background: var(--btn-header-hover);
       transform: scale(0.98);
     }
 
@@ -674,11 +733,11 @@ export function getClientPortalHtml(): string {
     }
 
     .form-input {
-      background: var(--bg-surface);
-      border: 1px solid var(--border-card);
+      background: var(--input-bg);
+      border: 1px solid var(--input-border);
       border-radius: var(--radius-sm);
       padding: 12px 14px;
-      color: #ffffff;
+      color: var(--input-text);
       font-size: 14px;
       font-family: inherit;
       outline: none;
@@ -700,7 +759,7 @@ export function getClientPortalHtml(): string {
       display: flex;
       flex-direction: column;
       gap: 16px;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+      box-shadow: var(--card-shadow);
       margin-top: 10px;
     }
 
@@ -708,7 +767,7 @@ export function getClientPortalHtml(): string {
       font-family: 'Outfit', sans-serif;
       font-size: 20px;
       font-weight: 800;
-      color: #ffffff;
+      color: var(--text-title);
       text-align: center;
     }
 
@@ -733,7 +792,8 @@ export function getClientPortalHtml(): string {
     }
 
     .modal-sheet {
-      background: #0f172a;
+      background: var(--modal-bg);
+      color: var(--modal-text);
       border: 1px solid var(--border-highlight);
       border-radius: var(--radius-lg);
       padding: 22px 18px;
@@ -742,7 +802,7 @@ export function getClientPortalHtml(): string {
       display: flex;
       flex-direction: column;
       gap: 16px;
-      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7);
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
     }
 
     .modal-sheet-header {
@@ -755,11 +815,11 @@ export function getClientPortalHtml(): string {
       font-family: 'Outfit', sans-serif;
       font-size: 17px;
       font-weight: 700;
-      color: #fff;
+      color: var(--text-title);
     }
 
     .btn-close-modal {
-      background: rgba(255, 255, 255, 0.08);
+      background: var(--btn-header-bg);
       border: none;
       color: var(--text-body);
       width: 32px;
@@ -778,15 +838,15 @@ export function getClientPortalHtml(): string {
       bottom: 24px;
       left: 50%;
       transform: translateX(-50%) translateY(120px);
-      background: #1e293b;
+      background: var(--bg-surface);
       border: 1px solid #38bdf8;
-      color: #fff;
+      color: var(--text-title);
       padding: 12px 20px;
       border-radius: var(--radius-full);
       font-size: 13px;
       font-weight: 600;
       z-index: 200;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.4);
       transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
       display: flex;
       align-items: center;
@@ -809,18 +869,21 @@ export function getClientPortalHtml(): string {
     <!-- Header Móvil -->
     <header class="app-header">
       <div class="brand-group">
-        <div class="brand-icon" style="background: linear-gradient(135deg, #6366f1 0%, #06b6d4 100%);">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/>
-            <path d="M12 12l2 2 4-4"/>
-          </svg>
+        <div class="brand-sphere-wrap">
+          ${getCloudWareSphereSvg({ size: '100%', isDark: true })}
         </div>
         <div class="brand-info">
-          <h1>${ispName}</h1>
-          <span id="headerGreeting">Mi Conexión</span>
+          <div style="display: flex; align-items: center; gap: 4px;">
+            <h1 style="font-family: 'Outfit', sans-serif; font-size: 17px; font-weight: 800; color: var(--text-title); line-height: 1.2;">CloudWare</h1>
+            <span style="font-size: 10px; font-weight: 900; color: #0284c7; background: rgba(14, 165, 233, 0.15); border: 1px solid rgba(14, 165, 233, 0.3); border-radius: 4px; padding: 1px 4px;">MX</span>
+          </div>
+          <span id="headerGreeting" style="font-size: 11.5px; color: var(--slogan-color); font-weight: 600;">Cada segundo cuenta</span>
         </div>
       </div>
-      <div style="display: flex; gap: 8px;">
+      <div style="display: flex; gap: 6px; align-items: center;">
+        <button id="btnThemeToggle" class="btn-header-action" onclick="togglePortalTheme()" title="Cambiar tema claro / oscuro">
+          <i class="fa-solid fa-sun" id="themeIcon"></i>
+        </button>
         <button id="btnPwa" class="btn-header-action hidden"><i class="fa-solid fa-download"></i> App</button>
         <button id="btnLogout" class="btn-header-action hidden" onclick="logoutClient()" title="Cerrar sesión"><i class="fa-solid fa-right-from-bracket"></i></button>
       </div>
@@ -828,16 +891,22 @@ export function getClientPortalHtml(): string {
 
     <!-- 0. VISTA CARGANDO INICIAL (Apertura Instantánea) -->
     <div id="viewLoading" class="auth-box" style="text-align: center; padding: 40px 20px;">
-      <div style="font-size: 38px; color: #38bdf8; margin-bottom: 14px;">
+      <div style="margin-bottom: 16px;">
+        ${getCloudWareFullLogoHtml(true)}
+      </div>
+      <div style="font-size: 28px; color: #0284c7; margin-bottom: 10px;">
         <i class="fa-solid fa-spinner fa-spin"></i>
       </div>
-      <div style="font-size: 17px; font-weight: 700; color: #fff;">Conectando a tu Portal...</div>
-      <p style="font-size: 13px; color: var(--text-muted); margin-top: 6px;">Sincronizando módem y servicios en vivo</p>
+      <div style="font-size: 16px; font-weight: 700; color: var(--text-title);">Conectando a tu Portal...</div>
+      <p style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">Sincronizando módem y servicios en vivo</p>
     </div>
 
     <!-- 1. VISTA DE INICIO DE SESIÓN -->
     <div id="viewLogin" class="auth-box hidden">
-      <div class="auth-title">Iniciar Sesión</div>
+      <div style="margin-bottom: 8px;">
+        ${getCloudWareFullLogoHtml(true)}
+      </div>
+      <div class="auth-title" style="font-size: 18px;">Iniciar Sesión</div>
       <p class="auth-sub">Ingresa tu número celular y tu contraseña para ver tu red, facturas y saldo.</p>
 
       <form onsubmit="handleLogin(event)" style="display: flex; flex-direction: column; gap: 12px;">
@@ -847,19 +916,19 @@ export function getClientPortalHtml(): string {
       </form>
 
       <div style="display: flex; justify-content: space-between; font-size: 13px; margin-top: 4px;">
-        <span style="color: #38bdf8; cursor: pointer;" onclick="showForgot()">¿Olvidaste tu clave?</span>
-        <span style="color: #38bdf8; cursor: pointer;" onclick="showRegister()">Crear contraseña</span>
+        <span style="color: #0284c7; cursor: pointer; font-weight: 600;" onclick="showForgot()">¿Olvidaste tu clave?</span>
+        <span style="color: #0284c7; cursor: pointer; font-weight: 600;" onclick="showRegister()">Crear contraseña</span>
       </div>
     </div>
 
     <!-- 1.5 VISTA VINCULAR WHATSAPP (Si el número no coincide de inicio) -->
     <div id="viewNotFound" class="auth-box hidden">
-      <div style="text-align: center; font-size: 38px; color: #38bdf8; margin-bottom: 2px;">
-        <i class="fa-solid fa-link"></i>
+      <div style="margin-bottom: 8px;">
+        ${getCloudWareFullLogoHtml(true)}
       </div>
-      <div class="auth-title">Vincular mi WhatsApp</div>
+      <div class="auth-title" style="font-size: 18px;">Vincular mi WhatsApp</div>
       <p class="auth-sub">
-        No encontramos un servicio con el celular <strong id="notFoundPhoneLabel" style="color: #38bdf8;"></strong>.<br>
+        No encontramos un servicio con el celular <strong id="notFoundPhoneLabel" style="color: #0284c7;"></strong>.<br>
         Ingresa tu <strong>Folio de servicio</strong> (ej. 696 o 2) o tu <strong>Nombre completo</strong> para vincularlo en 1 clic:
       </p>
 
@@ -869,13 +938,16 @@ export function getClientPortalHtml(): string {
       </form>
 
       <div style="text-align: center; margin-top: 4px;">
-        <span style="color: #94a3b8; font-size: 13px; cursor: pointer;" onclick="showLogin()">Iniciar sesión normal</span>
+        <span style="color: var(--text-muted); font-size: 13px; cursor: pointer;" onclick="showLogin()">Iniciar sesión normal</span>
       </div>
     </div>
 
     <!-- 2. VISTA CREAR CONTRASEÑA -->
     <div id="viewRegister" class="auth-box hidden">
-      <div class="auth-title">Activar mi Contraseña</div>
+      <div style="margin-bottom: 8px;">
+        ${getCloudWareFullLogoHtml(true)}
+      </div>
+      <div class="auth-title" style="font-size: 18px;">Activar mi Contraseña</div>
       <p class="auth-sub">Crea una contraseña segura para entrar a tu cuenta cuando quieras.</p>
 
       <form onsubmit="handleRegister(event)" style="display: flex; flex-direction: column; gap: 12px;">
@@ -885,13 +957,16 @@ export function getClientPortalHtml(): string {
       </form>
 
       <div style="text-align: center; margin-top: 4px;">
-        <span style="color: #38bdf8; font-size: 13px; cursor: pointer;" onclick="showLogin()">Ya tengo contraseña · Entrar</span>
+        <span style="color: #0284c7; font-size: 13px; cursor: pointer; font-weight: 600;" onclick="showLogin()">Ya tengo contraseña · Entrar</span>
       </div>
     </div>
 
     <!-- 3. VISTA RECUPERAR CLAVE -->
     <div id="viewForgot" class="auth-box hidden">
-      <div class="auth-title">Recuperar Contraseña</div>
+      <div style="margin-bottom: 8px;">
+        ${getCloudWareFullLogoHtml(true)}
+      </div>
+      <div class="auth-title" style="font-size: 18px;">Recuperar Contraseña</div>
       <p class="auth-sub">Te enviaremos un código de seguridad de 6 dígitos a tu WhatsApp.</p>
 
       <div id="forgotStep1">
@@ -910,7 +985,7 @@ export function getClientPortalHtml(): string {
       </div>
 
       <div style="text-align: center; margin-top: 6px;">
-        <span style="color: #94a3b8; font-size: 13px; cursor: pointer;" onclick="showLogin()">Regresar al inicio</span>
+        <span style="color: var(--text-muted); font-size: 13px; cursor: pointer;" onclick="showLogin()">Regresar al inicio</span>
       </div>
     </div>
 
@@ -963,36 +1038,36 @@ export function getClientPortalHtml(): string {
         <div class="portal-col">
 
           <!-- TARJETA 1: TU PAQUETE CONTRATADO (ALTO ÉNFASIS) -->
-          <div class="app-card" style="background: linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.8) 100%); border: 1px solid rgba(56, 189, 248, 0.35); box-shadow: 0 8px 30px rgba(14, 165, 233, 0.18);">
+          <div class="app-card" style="background: var(--plan-card-bg); border: 1px solid var(--border-highlight); box-shadow: var(--card-shadow);">
             <div class="card-head" style="margin-bottom: 6px;">
-              <div class="card-head-title" style="color: #38bdf8; font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px;">
+              <div class="card-head-title" style="color: #0284c7; font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px;">
                 <i class="fa-solid fa-bolt"></i> Tu Paquete de Internet
               </div>
-              <span class="status-speed-badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border-color: rgba(16, 185, 129, 0.3); font-size: 11px;">
+              <span class="status-speed-badge" style="background: rgba(16, 185, 129, 0.15); color: #059669; border-color: rgba(16, 185, 129, 0.3); font-size: 11px;">
                 <i class="fa-solid fa-circle-check"></i> Activo
               </span>
             </div>
 
             <!-- Gran Énfasis en Nombre de Paquete y Velocidad -->
-            <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 8px 0 14px 0; padding-bottom: 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.08);">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 8px 0 14px 0; padding-bottom: 12px; border-bottom: 1px solid var(--border-card);">
               <div>
-                <div id="planNameBig" style="font-family: 'Outfit', sans-serif; font-size: 22px; font-weight: 800; color: #ffffff; line-height: 1.15;">
+                <div id="planNameBig" style="font-family: 'Outfit', sans-serif; font-size: 22px; font-weight: 800; color: var(--text-title); line-height: 1.15;">
                   Paquete 40 Megas
                 </div>
                 <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px; display: flex; align-items: center; gap: 6px;">
-                  <i class="fa-solid fa-network-wired" style="color: #38bdf8;"></i> Fibra Óptica Simétrica
+                  <i class="fa-solid fa-network-wired" style="color: #0284c7;"></i> Fibra Óptica Simétrica
                 </div>
               </div>
               <div style="text-align: right; background: rgba(14, 165, 233, 0.1); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 12px; padding: 6px 14px;">
-                <div id="planSpeedBig" style="font-family: 'Outfit', sans-serif; font-size: 28px; font-weight: 800; color: #38bdf8; line-height: 1;">
+                <div id="planSpeedBig" style="font-family: 'Outfit', sans-serif; font-size: 28px; font-weight: 800; color: #0284c7; line-height: 1;">
                   40M
                 </div>
-                <span style="font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px;">Velocidad</span>
+                <span style="font-size: 10px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Velocidad</span>
               </div>
             </div>
 
             <!-- Estado de Conexión en Vivo -->
-            <div class="status-banner-box" style="margin-top: 0; margin-bottom: 12px; background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255, 255, 255, 0.05);">
+            <div class="status-banner-box" style="margin-top: 0; margin-bottom: 12px; background: var(--bg-surface); border: 1px solid var(--border-card);">
               <div class="status-left">
                 <div id="statusPulseDot" class="status-pulse-circle"></div>
                 <div>
@@ -1003,8 +1078,8 @@ export function getClientPortalHtml(): string {
             </div>
 
             <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text-body); padding: 0 4px;">
-              <span>Titular: <strong id="titularName" style="color: #fff;">-</strong></span>
-              <span>Folio: <strong id="contractFolio" style="color: #38bdf8;">#-</strong></span>
+              <span>Titular: <strong id="titularName" style="color: var(--text-title);">-</strong></span>
+              <span>Folio: <strong id="contractFolio" style="color: #0284c7;">#-</strong></span>
             </div>
           </div>
 
@@ -1045,15 +1120,15 @@ export function getClientPortalHtml(): string {
             </div>
 
             <!-- Contraseña Wi-Fi ÚNICA y Compartida -->
-            <div style="background: rgba(15, 23, 42, 0.85); border: 1px solid var(--border-highlight); border-radius: var(--radius-md); padding: 14px; margin-top: 12px; display: flex; flex-direction: column; gap: 10px;">
+            <div style="background: var(--bg-surface); border: 1px solid var(--border-highlight); border-radius: var(--radius-md); padding: 14px; margin-top: 12px; display: flex; flex-direction: column; gap: 10px;">
               <div style="display: flex; justify-content: space-between; align-items: center;">
-                <span class="wifi-label" style="color: #38bdf8; font-size: 11px; display: flex; align-items: center; gap: 6px;">
+                <span class="wifi-label" style="color: #0284c7; font-size: 11px; display: flex; align-items: center; gap: 6px;">
                   <i class="fa-solid fa-key"></i> Contraseña Wi-Fi (Para ambas redes)
                 </span>
                 <span style="font-size: 10px; color: var(--text-muted);">Misma clave en 2.4G y 5G</span>
               </div>
 
-              <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--bg-surface); padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-card);">
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--bg-card); padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-card);">
                 <span id="wifiPassSharedLabel" class="wifi-val mono" style="font-size: 17px; letter-spacing: 2px;">••••••••</span>
                 <div class="wifi-actions">
                   <button class="btn-action-icon" onclick="toggleShowWifiPassShared()" title="Ver u ocultar contraseña"><i id="eyeIconShared" class="fa-solid fa-eye"></i></button>
@@ -1063,7 +1138,7 @@ export function getClientPortalHtml(): string {
 
               <!-- Acciones Rápidas: QR 5 GHz Directo y Cambiar Clave -->
               <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 2px;">
-                <button class="btn-outline" onclick="openQrModal('5g')" style="padding: 10px 12px; font-size: 12.5px; border-color: rgba(168, 85, 247, 0.4); background: rgba(168, 85, 247, 0.12); color: #c084fc; font-weight: 700;">
+                <button class="btn-outline" onclick="openQrModal('5g')" style="padding: 10px 12px; font-size: 12.5px; border-color: rgba(168, 85, 247, 0.4); background: rgba(168, 85, 247, 0.12); color: #a855f7; font-weight: 700;">
                   <i class="fa-solid fa-qrcode"></i> Conectar QR (5G)
                 </button>
                 <button class="btn-main" onclick="openModalWifi()" style="padding: 10px 12px; font-size: 12.5px;">
@@ -1100,7 +1175,7 @@ export function getClientPortalHtml(): string {
             <div style="margin-top: 6px;">
               <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
                 <span>Historial de Facturas (WispHub)</span>
-                <span style="font-size: 10px; color: #38bdf8; cursor: pointer;" onclick="loadInvoicesHistory()"><i class="fa-solid fa-rotate"></i> Actualizar</span>
+                <span style="font-size: 10px; color: #0284c7; cursor: pointer;" onclick="loadInvoicesHistory()"><i class="fa-solid fa-rotate"></i> Actualizar</span>
               </div>
               <div id="invoicesList" style="display: flex; flex-direction: column; gap: 8px;">
                 <div style="text-align: center; color: var(--text-muted); font-size: 13px; padding: 10px;">Consultando facturas...</div>
@@ -1111,7 +1186,7 @@ export function getClientPortalHtml(): string {
           <!-- TARJETA 4: ASISTENCIA Y SOPORTE DIRECTO -->
           <div class="app-card" style="text-align: center; align-items: center; gap: 10px;">
             <i class="fa-brands fa-whatsapp" style="font-size: 36px; color: #10b981;"></i>
-            <div style="font-size: 16px; font-weight: 700; color: #fff;">¿Tienes alguna duda o problema?</div>
+            <div style="font-size: 16px; font-weight: 700; color: var(--text-title);">¿Tienes alguna duda o problema?</div>
             <p style="font-size: 13px; color: var(--text-body); max-width: 320px;">Estamos listos para atenderte por WhatsApp.</p>
             <a id="btnSupportWa" href="https://wa.me/${supportPhone}?text=Hola,%20necesito%20apoyo%20con%20mi%20servicio" target="_blank" class="btn-whatsapp">
               <i class="fa-brands fa-whatsapp"></i> Chatear con Soporte
@@ -1120,6 +1195,17 @@ export function getClientPortalHtml(): string {
 
         </div>
 
+      </div>
+
+      <!-- Footer de Marca Oficial CloudWare -->
+      <div style="text-align: center; margin-top: 24px; padding-bottom: 24px; font-size: 12px; color: var(--text-muted); display: flex; flex-direction: column; align-items: center; gap: 6px;">
+        <div style="display: flex; align-items: center; gap: 7px; font-weight: 700; color: var(--text-title);">
+          <div style="width: 18px; height: 18px;">
+            ${getCloudWareSphereSvg({ size: 18, isDark: true })}
+          </div>
+          <span>CloudWare MX</span>
+        </div>
+        <span style="font-size: 11px; letter-spacing: 0.3px;">Cada segundo cuenta · Portal de Autoservicio</span>
       </div>
 
     </div>
@@ -1299,12 +1385,35 @@ export function getClientPortalHtml(): string {
 
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', () => {
+        initPortalTheme();
         initPwa();
         initPortal();
       });
     } else {
+      initPortalTheme();
       initPwa();
       initPortal();
+    }
+
+    function initPortalTheme() {
+      const savedTheme = localStorage.getItem('cw_portal_theme') || (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+      applyPortalTheme(savedTheme);
+    }
+
+    function applyPortalTheme(theme) {
+      document.documentElement.setAttribute('data-theme', theme);
+      localStorage.setItem('cw_portal_theme', theme);
+      const icon = document.getElementById('themeIcon');
+      if (icon) {
+        icon.className = theme === 'light' ? 'fa-solid fa-moon' : 'fa-solid fa-sun';
+      }
+    }
+
+    function togglePortalTheme() {
+      const current = document.documentElement.getAttribute('data-theme') || 'dark';
+      const newTheme = current === 'dark' ? 'light' : 'dark';
+      applyPortalTheme(newTheme);
+      showToast(newTheme === 'light' ? '☀️ Tema Claro activado' : '🌙 Tema Oscuro activado');
     }
 
     function initPortal() {

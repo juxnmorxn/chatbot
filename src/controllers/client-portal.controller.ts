@@ -10,6 +10,7 @@ import { Logger } from '../utils/logger';
 import { hashPassword, verifyPassword, generateClientPortalToken, verifyClientPortalToken } from '../utils/auth';
 import { cleanPersonName, normalizeText } from '../utils/fuzzy-matcher';
 import { DbService } from '../services/db.service';
+import { getCloudWareSphereSvg } from '../views/brand';
 
 const logger = new Logger('ClientPortalController');
 
@@ -126,21 +127,13 @@ self.addEventListener('fetch', (event) => {
   }
 
   /**
-   * PWA: Ícono dinámico en formato SVG con la identidad CloudWare
+   * PWA: Ícono dinámico en formato SVG con la identidad oficial CloudWare Sphere
    */
   static renderIcon(_req: Request, res: Response): void {
-    const svgIcon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-      <defs>
-        <linearGradient id="cloudGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stop-color="#6366f1"/>
-          <stop offset="100%" stop-color="#06b6d4"/>
-        </linearGradient>
-      </defs>
-      <rect width="512" height="512" rx="120" fill="#090d16"/>
-      <rect x="20" y="20" width="472" height="472" rx="100" fill="none" stroke="url(#cloudGrad)" stroke-width="8" opacity="0.35"/>
-      <path fill="url(#cloudGrad)" d="M384 224a112 112 0 0 0-218.4-38.4A96 96 0 0 0 80 272a96 96 0 0 0 96 96h208a80 80 0 0 0 0-160h-16zm-104 32v64h-48v-64h-40l64-80 64 80h-40z"/>
-    </svg>`;
+    const isDark = _req.query.theme !== 'light';
+    const svgIcon = getCloudWareSphereSvg({ size: 512, withBg: true, isDark });
     res.setHeader('Content-Type', 'image/svg+xml');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
     res.send(svgIcon);
   }
 
