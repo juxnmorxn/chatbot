@@ -1867,15 +1867,27 @@ export function getClientPortalHtml(): string {
       document.getElementById('titularName').innerText = c.nombre;
       document.getElementById('contractFolio').innerText = '#' + c.id_servicio;
 
-      // Paquete Contratado con Gran Énfasis Visual
-      const rawPlan = (c.plan_internet || '40 Megas').trim();
-      const cleanPlan = rawPlan.replace(/^paquete\s+/i, '');
-      const speedMatch = cleanPlan.match(/(\d+)\s*(m|megas?|mbps)/i);
-      const speedBig = speedMatch ? (speedMatch[1] + 'M') : (cleanPlan.length <= 6 ? cleanPlan : '40M');
+      // Paquete Contratado con Gran Énfasis Visual y Corrección de Discrepancias
+      const rawPlan = (c.plan_internet || data.onu?.speed_profile || '40 Megas').trim();
+      let cleanPlan = rawPlan.replace(/^(?:paquete|pakete|plan)\s+/i, '').trim();
+      
+      // Extraer velocidad en Megas / Mbps / Gigas
+      const speedMatch = cleanPlan.match(/(\d+)\s*(?:m|megas?|mbps|g|gb|gigas?)\b/i) || rawPlan.match(/(\d+)\s*(?:m|megas?|mbps|g|gb|gigas?)\b/i);
+      let speedBig = '40M';
+      if (speedMatch) {
+        speedBig = speedMatch[1] + 'M';
+      } else {
+        const numOnly = cleanPlan.match(/\b(\d{2,4})\b/);
+        if (numOnly) {
+          speedBig = numOnly[1] + 'M';
+        } else if (cleanPlan.length <= 6) {
+          speedBig = cleanPlan;
+        }
+      }
 
       const planNameEl = document.getElementById('planNameBig');
       if (planNameEl) {
-        planNameEl.innerText = cleanPlan.toUpperCase().startsWith('PAQUETE') ? cleanPlan : ('Paquete ' + cleanPlan);
+        planNameEl.innerText = 'Paquete ' + cleanPlan;
       }
       const planSpeedEl = document.getElementById('planSpeedBig');
       if (planSpeedEl) {
@@ -1902,7 +1914,7 @@ export function getClientPortalHtml(): string {
           const activeClass = isActive ? 'active' : '';
           const activeBadge = isActive ? '<span class="service-card-badge"><i class="fa-solid fa-circle-check"></i> Activo</span>' : '';
           const dir = s.direccion || s.router || ('Servicio ' + (idx + 1));
-          const plan = (s.plan_internet || 'Internet Fibra').replace(/^paquete\s+/i, '');
+          const plan = (s.plan_internet || 'Internet Fibra').replace(/^(?:paquete|pakete|plan)\s+/i, '');
           const saldo = Number(s.saldo || 0);
           const saldoTxt = saldo <= 0 ? 'Al corriente' : ('Debe $' + saldo.toFixed(2));
           const saldoColor = saldo <= 0 ? '#10b981' : '#f59e0b';
@@ -1985,7 +1997,11 @@ export function getClientPortalHtml(): string {
     }
 
     function onSwitchService(serviceId) {
+      if (!serviceId) return;
       localStorage.setItem('cp_selected_service', serviceId);
+      document.querySelectorAll('.service-card-item').forEach(el => {
+        el.classList.toggle('active', el.getAttribute('data-service-id') === String(serviceId));
+      });
       loadDashboard(serviceId);
     }
 

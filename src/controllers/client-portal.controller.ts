@@ -645,14 +645,25 @@ self.addEventListener('fetch', (event) => {
 
       const db = getDbClient();
 
-      // 1. Obtener registro de SmartOLT (búsqueda multicriterio: SN, Hex-SN, IP, ID Servicio, Nombre)
+      // 1. Obtener registro de SmartOLT (búsqueda multicriterio: ID de Servicio en nombre, SN, IP, Nombre)
       let onuRecord: any = null;
       let cleanSn = (client.sn_onu || '').trim();
       if (/^48575443/i.test(cleanSn)) {
         cleanSn = 'HWTC' + cleanSn.slice(8);
       }
 
-      if (cleanSn) {
+      // Prioridad 1: Por ID exacto de contrato en el nombre de SmartOLT (ej: "1855-Nombre", "1857-Nombre", "1298-...")
+      if (client.id_servicio) {
+        const srvId = String(client.id_servicio).trim();
+        const onuRes = await db.execute({
+          sql: `SELECT * FROM smartolt_onus WHERE name LIKE ? OR name LIKE ? OR name LIKE ? OR raw_data LIKE ? LIMIT 1`,
+          args: [`${srvId}-%`, `${srvId}.%`, `${srvId} %`, `%"${srvId}"%`],
+        });
+        if (onuRes.rows.length > 0) onuRecord = onuRes.rows[0];
+      }
+
+      // Prioridad 2: Por Número de Serie (SN)
+      if (!onuRecord && cleanSn) {
         const onuRes = await db.execute({
           sql: `SELECT * FROM smartolt_onus WHERE sn = ? OR sn = ? OR unique_external_id = ? OR sn LIKE ? LIMIT 1`,
           args: [cleanSn.toUpperCase(), (client.sn_onu || '').toUpperCase(), cleanSn.toUpperCase(), `%${cleanSn.slice(-6)}%`],
@@ -660,6 +671,7 @@ self.addEventListener('fetch', (event) => {
         if (onuRes.rows.length > 0) onuRecord = onuRes.rows[0];
       }
 
+      // Prioridad 3: Por Dirección IP
       if (!onuRecord && client.ip) {
         const onuRes = await db.execute({
           sql: `SELECT * FROM smartolt_onus WHERE ip_address = ? OR raw_data LIKE ? LIMIT 1`,
@@ -668,15 +680,7 @@ self.addEventListener('fetch', (event) => {
         if (onuRes.rows.length > 0) onuRecord = onuRes.rows[0];
       }
 
-      if (!onuRecord && client.id_servicio) {
-        const onuRes = await db.execute({
-          sql: `SELECT * FROM smartolt_onus WHERE name LIKE ? OR name LIKE ? OR raw_data LIKE ? LIMIT 1`,
-          args: [`%${client.id_servicio}%`, `${client.id_servicio}-%`, `%"${client.id_servicio}"%`],
-        });
-        if (onuRes.rows.length > 0) onuRecord = onuRes.rows[0];
-      }
-
-      // Si tiene prefijo de contrato en usuario_rb (ej: 0696)
+      // Prioridad 4: Si tiene prefijo de contrato en usuario_rb (ej: 0696)
       if (!onuRecord && client.raw_data) {
         try {
           const rawParsed = JSON.parse(client.raw_data);
@@ -693,6 +697,7 @@ self.addEventListener('fetch', (event) => {
         } catch (_) {}
       }
 
+      // Prioridad 5: Por coincidencia de Nombre
       if (!onuRecord && client.nombre) {
         const cleanName = cleanPersonName(client.nombre);
         if (cleanName.length > 4) {
@@ -1097,12 +1102,31 @@ self.addEventListener('fetch', (event) => {
   }
 
   /**
+   * Extrae el nombre base de un titular eliminando sufijos de múltiples contratos
+   * Ej: "Idalia Jokabed Chavez Ruiz 3" -> "Idalia Jokabed Chavez Ruiz"
+   * Ej: "1857-Idalia Jokabed Chavez Ruiz-2" -> "Idalia Jokabed Chavez Ruiz"
+   */
+  public static extractBaseCustomerName(name: string): string {
+    if (!name) return '';
+    let clean = name.trim();
+    // Quitar prefijo de número de servicio si viene como "1855-Nombre" o "1855.Nombre"
+    clean = clean.replace(/^\d+[\s\-_.:]+/, '');
+    // Quitar sufijos comunes de servicios múltiples (" 2", " 3", ".2", ".3", "-2", "-3", " Serv.2", " Serv.3", " (2)", etc.)
+    clean = clean.replace(/[\s\-_.:]*(?:serv(?:\.|icio)?\s*\d+|\(\s*\d+\s*\)|-\s*\d+|\.\s*\d+|\b\d+\b)\s*$/i, '');
+    return clean.trim();
+  }
+
+  /**
    * Helper: Localiza TODOS los servicios vinculados a un cliente por Teléfono, Folio o SN
    */
   public static async findClientsByIdentifier(rawId: string): Promise<any[]> {
     const clean = (rawId || '').trim();
     if (!clean) return [];
     const db = getDbClient();
+    const cleanDigits = clean.replace(/\D/g, '');
+    const last10 = cleanDigits.length >= 10 ? cleanDigits.slice(-10) : cleanDigits;
+
+    let initialMatches: any[] = [];
 
     // 1. Por ID numérico de servicio (Folio exacto)
     if (/^\d{1,6}$/.test(clean)) {
@@ -1111,83 +1135,110 @@ self.addEventListener('fetch', (event) => {
         args: [Number(clean)],
       });
       if (res.rows.length > 0) {
-        const main = res.rows[0];
-        const allClientServices = await db.execute({
-          sql: `SELECT * FROM wisphub_clients WHERE (nombre = ? OR nombre_normalized = ?) OR (telefono IS NOT NULL AND telefono != '' AND telefono = ?) ORDER BY id_servicio ASC LIMIT 20`,
-          args: [main.nombre, main.nombre_normalized, main.telefono],
-        });
-        if (allClientServices.rows.length > 0) {
-          const otherServices = (allClientServices.rows as any[]).filter(s => String(s.id_servicio) !== String(main.id_servicio));
-          return [main, ...otherServices];
-        }
-        return [main];
+        initialMatches.push(...(res.rows as any[]));
       }
     }
 
     // 2. Por Teléfono (últimos 10 dígitos o número completo)
-    const cleanDigits = clean.replace(/\D/g, '');
-    const last10 = cleanDigits.length >= 10 ? cleanDigits.slice(-10) : cleanDigits;
-    if (last10 && last10.length >= 7) {
+    if (initialMatches.length === 0 && last10 && last10.length >= 7) {
       const res = await db.execute({
         sql: `SELECT * FROM wisphub_clients WHERE telefono LIKE ? OR telefonos_adicionales LIKE ? ORDER BY id_servicio ASC LIMIT 20`,
         args: [`%${last10}%`, `%${last10}%`],
       });
-      if (res.rows.length > 0) return res.rows as any[];
-
-      // 2.1 Buscar si este teléfono fue vinculado previamente en client_portal_accounts
-      const acc = await db.execute({
-        sql: `SELECT * FROM client_portal_accounts WHERE telefono = ? LIMIT 1`,
-        args: [last10],
-      });
-      if (acc.rows.length > 0 && acc.rows[0].nombre) {
-        const byName = await db.execute({
-          sql: `SELECT * FROM wisphub_clients WHERE nombre LIKE ? OR nombre_normalized LIKE ? ORDER BY id_servicio ASC LIMIT 20`,
-          args: [`%${acc.rows[0].nombre}%`, `%${acc.rows[0].nombre}%`],
+      if (res.rows.length > 0) {
+        initialMatches.push(...(res.rows as any[]));
+      } else {
+        // 2.1 Buscar si este teléfono fue vinculado previamente en client_portal_accounts
+        const acc = await db.execute({
+          sql: `SELECT * FROM client_portal_accounts WHERE telefono = ? LIMIT 1`,
+          args: [last10],
         });
-        if (byName.rows.length > 0) return byName.rows as any[];
+        if (acc.rows.length > 0 && acc.rows[0].nombre) {
+          const byName = await db.execute({
+            sql: `SELECT * FROM wisphub_clients WHERE nombre LIKE ? OR nombre_normalized LIKE ? ORDER BY id_servicio ASC LIMIT 20`,
+            args: [`%${acc.rows[0].nombre}%`, `%${acc.rows[0].nombre}%`],
+          });
+          if (byName.rows.length > 0) initialMatches.push(...(byName.rows as any[]));
+        }
       }
     }
 
     // 3. Por Número de Serie (SN)
-    if (clean.length >= 6) {
+    if (initialMatches.length === 0 && clean.length >= 6) {
       const res = await db.execute({
         sql: `SELECT * FROM wisphub_clients WHERE sn_onu LIKE ? OR sn_onu_normalized LIKE ? LIMIT 10`,
         args: [`%${clean.toUpperCase()}%`, `%${clean.toUpperCase()}%`],
       });
       if (res.rows.length > 0) {
-        const main = res.rows[0];
-        const allClientServices = await db.execute({
-          sql: `SELECT * FROM wisphub_clients WHERE (nombre = ? OR nombre_normalized = ?) OR (telefono IS NOT NULL AND telefono != '' AND telefono = ?) ORDER BY id_servicio ASC LIMIT 20`,
-          args: [main.nombre, main.nombre_normalized, main.telefono],
-        });
-        if (allClientServices.rows.length > 0) return allClientServices.rows as any[];
-        return res.rows as any[];
+        initialMatches.push(...(res.rows as any[]));
       }
     }
 
-    // 4. Búsqueda por Nombre (Normalizado, insensible a mayúsculas y acentos)
-    const norm = normalizeText(cleanPersonName(clean));
-    const resName = await db.execute({
-      sql: `SELECT * FROM wisphub_clients WHERE nombre LIKE ? OR nombre_normalized LIKE ? OR nombre LIKE ? OR nombre_normalized LIKE ? ORDER BY id_servicio ASC LIMIT 15`,
-      args: [`%${clean}%`, `%${clean}%`, `%${norm}%`, `%${norm}%`],
-    });
-    if (resName.rows.length > 0) return resName.rows as any[];
-
-    // 5. Búsqueda difusa avanzada tolerante a faltas de ortografía o nombres incompletos
-    try {
-      const fuzzyClients = await DbService.searchWisphubClientsFuzzy(clean, 5);
-      if (fuzzyClients && fuzzyClients.length > 0) {
-        const first = fuzzyClients[0];
-        const allClientServices = await db.execute({
-          sql: `SELECT * FROM wisphub_clients WHERE id_servicio = ? OR (nombre = ? OR nombre_normalized = ?) ORDER BY id_servicio ASC LIMIT 20`,
-          args: [first.id_servicio, first.nombre, first.nombre_normalized || first.nombre],
-        });
-        if (allClientServices.rows.length > 0) return allClientServices.rows as any[];
+    // 4. Por Nombre
+    if (initialMatches.length === 0) {
+      const norm = normalizeText(cleanPersonName(clean));
+      const resName = await db.execute({
+        sql: `SELECT * FROM wisphub_clients WHERE nombre LIKE ? OR nombre_normalized LIKE ? OR nombre LIKE ? OR nombre_normalized LIKE ? ORDER BY id_servicio ASC LIMIT 15`,
+        args: [`%${clean}%`, `%${clean}%`, `%${norm}%`, `%${norm}%`],
+      });
+      if (resName.rows.length > 0) {
+        initialMatches.push(...(resName.rows as any[]));
       }
-    } catch (fuzzyErr) {
-      logger.warn('Error en fuzzy match de findClientsByIdentifier:', fuzzyErr);
     }
 
-    return [];
+    // 5. Búsqueda difusa de respaldo
+    if (initialMatches.length === 0) {
+      try {
+        const fuzzyClients = await DbService.searchWisphubClientsFuzzy(clean, 5);
+        if (fuzzyClients && fuzzyClients.length > 0) {
+          initialMatches.push(...fuzzyClients);
+        }
+      } catch (fuzzyErr) {
+        logger.warn('Error en fuzzy match de findClientsByIdentifier:', fuzzyErr);
+      }
+    }
+
+    if (initialMatches.length === 0) return [];
+
+    // 🔄 CONSOLIDACIÓN DE MULTI-SERVICIO PARA EL TITULAR
+    // Extraer nombres base y teléfonos de los candidatos encontrados para traer TODOS sus contratos
+    const servicesMap = new Map<string, any>();
+    initialMatches.forEach(m => servicesMap.set(String(m.id_servicio), m));
+
+    for (const match of initialMatches) {
+      const baseName = ClientPortalController.extractBaseCustomerName(match.nombre);
+      const normBase = normalizeText(cleanPersonName(baseName));
+      const matchPhone = (match.telefono || '').replace(/\D/g, '').slice(-10);
+
+      if (normBase && normBase.length >= 5) {
+        const relatedRes = await db.execute({
+          sql: `
+            SELECT * FROM wisphub_clients 
+            WHERE (nombre_normalized LIKE ? OR nombre LIKE ?)
+               OR (telefono IS NOT NULL AND telefono != '' AND (telefono LIKE ? OR telefonos_adicionales LIKE ?))
+            ORDER BY id_servicio ASC LIMIT 30
+          `,
+          args: [`%${normBase}%`, `%${baseName}%`, `%${matchPhone || last10}%`, `%${matchPhone || last10}%`],
+        });
+        (relatedRes.rows as any[]).forEach(s => {
+          if (!servicesMap.has(String(s.id_servicio))) {
+            servicesMap.set(String(s.id_servicio), s);
+          }
+        });
+      }
+    }
+
+    const allServices = Array.from(servicesMap.values());
+
+    // Si se buscó un ID numérico específico, colocar ese contrato al inicio de la lista
+    if (/^\d{1,6}$/.test(clean)) {
+      allServices.sort((a, b) => {
+        if (String(a.id_servicio) === clean) return -1;
+        if (String(b.id_servicio) === clean) return 1;
+        return Number(a.id_servicio) - Number(b.id_servicio);
+      });
+    }
+
+    return allServices;
   }
 }
