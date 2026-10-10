@@ -8577,7 +8577,7 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
         args: [last10, clientName, otp, expires],
       });
 
-      const appUrl = SettingsService.get('APP_URL', 'APP_URL', config.appUrl || 'http://2.25.241.239:3000').replace(/\/+$/, '');
+      const appUrl = SettingsService.get('APP_URL', 'APP_URL', config.appUrl || 'http://2.25.241.239').replace(/\/+$/, '');
       const resetUrl = `${appUrl}/portal?resetCode=${otp}&p=${last10}`;
       const ispName = this.getIspName();
 
@@ -8600,7 +8600,7 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
    * Genera el enlace de acceso directo al Portal Web / PWA del Cliente
    */
   static getClientPortalLink(phone?: string): string {
-    const appUrl = SettingsService.get('APP_URL', 'APP_URL', config.appUrl || 'http://2.25.241.239:3000').replace(/\/+$/, '');
+    const appUrl = SettingsService.get('APP_URL', 'APP_URL', config.appUrl || 'http://2.25.241.239').replace(/\/+$/, '');
     const cleanPhone = (phone || '').replace(/\D/g, '');
     const last10 = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
     return last10 ? `${appUrl}/portal?p=${last10}` : `${appUrl}/portal`;

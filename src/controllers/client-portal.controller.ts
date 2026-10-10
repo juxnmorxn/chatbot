@@ -396,7 +396,7 @@ self.addEventListener('fetch', (event) => {
       });
 
       const ispName = SettingsService.get('ISP_NAME', 'ISP_NAME', config.isp.name || 'CloudWare');
-      const appUrl = SettingsService.get('APP_URL', 'APP_URL', config.appUrl || 'http://2.25.241.239:3000').replace(/\/+$/, '');
+      const appUrl = SettingsService.get('APP_URL', 'APP_URL', config.appUrl || 'http://2.25.241.239').replace(/\/+$/, '');
       const resetUrl = `${appUrl}/portal?resetCode=${otp}&p=${last10}`;
 
       const waMsg = `🔐 *Recuperación de Contraseña - ${ispName}*\n\n` +
