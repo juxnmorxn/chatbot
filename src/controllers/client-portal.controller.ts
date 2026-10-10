@@ -3,13 +3,15 @@ import { getClientPortalHtml } from '../views/client-portal.html';
 import { getDbClient } from '../database/db';
 import { SmartOLTService } from '../services/smartolt.service';
 import { SettingsService } from '../services/settings.service';
+import { EvolutionService } from '../services/evolution.service';
+import { WispHubService } from '../services/wisphub.service';
 import { config } from '../config/env';
 import { Logger } from '../utils/logger';
+import { hashPassword, verifyPassword, generateClientPortalToken, verifyClientPortalToken } from '../utils/auth';
 
 const logger = new Logger('ClientPortalController');
 
 // 🔒 CACHÉ EN MEMORIA Y CONTROL DE CONCURRENCIA PARA PROTEGER LA API DE SMARTOLT
-// Evita que múltiples consultas de clientes saturen la cuota de la OLT
 interface CachedSignal {
   data: any;
   timestamp: number;
@@ -67,7 +69,7 @@ export class ClientPortalController {
    */
   static renderServiceWorker(_req: Request, res: Response): void {
     const swCode = `
-const CACHE_NAME = 'client-portal-v1';
+const CACHE_NAME = 'client-portal-v2';
 const ASSETS_TO_CACHE = [
   '/portal',
   '/manifest.json',
@@ -99,7 +101,6 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // Solo cachear peticiones GET que no sean de API dinámica
   if (event.request.method !== 'GET' || event.request.url.includes('/api/')) {
     return;
   }
@@ -141,55 +142,215 @@ self.addEventListener('fetch', (event) => {
   }
 
   /**
-   * Autenticación de cliente (por Nombre, Teléfono, ID de Servicio o SN de Módem)
-   * Si el nombre o teléfono tiene múltiples servicios, devuelve la lista de todos ellos
+   * Verifica si un teléfono o identificador ya tiene cuenta creada en el portal
    */
-  static async login(req: Request, res: Response): Promise<void> {
+  static async checkAccount(req: Request, res: Response): Promise<void> {
     try {
-      const { identifier } = req.body;
-      if (!identifier || typeof identifier !== 'string') {
-        res.status(400).json({ success: false, message: 'Identificador requerido' });
+      const { phone } = req.body;
+      const cleanDigits = (phone || '').replace(/\D/g, '');
+      const last10 = cleanDigits.length >= 10 ? cleanDigits.slice(-10) : cleanDigits;
+
+      if (!last10 || last10.length < 7) {
+        res.status(400).json({ success: false, message: 'Ingresa un número de teléfono válido (10 dígitos).' });
         return;
       }
 
-      const services = await ClientPortalController.findClientsByIdentifier(identifier);
+      const db = getDbClient();
+
+      // 1. Verificar si existe en tabla de cuentas del portal
+      const accRes = await db.execute({
+        sql: `SELECT * FROM client_portal_accounts WHERE telefono = ? LIMIT 1`,
+        args: [last10],
+      });
+
+      const hasAccount = accRes.rows.length > 0;
+
+      // 2. Verificar servicios en wisphub_clients
+      const services = await ClientPortalController.findClientsByIdentifier(last10);
       if (!services || services.length === 0) {
-        res.status(404).json({ success: false, message: 'No encontramos ningún servicio activo con ese nombre, teléfono o ID.' });
-        return;
-      }
-
-      if (services.length > 1) {
-        res.json({
-          success: true,
-          multiple: true,
-          clientName: services[0].nombre,
-          services: services.map((s: any) => ({
-            id_servicio: s.id_servicio,
-            nombre: s.nombre,
-            direccion: s.direccion || s.router || 'Domicilio registrado',
-            ip: s.ip,
-            router: s.router,
-            plan_internet: s.plan_internet,
-            estado: s.estado,
-            saldo: s.saldo,
-          })),
+        res.status(404).json({
+          success: false,
+          message: 'No encontramos ningún contrato o servicio registrado con este número de teléfono.',
         });
         return;
       }
 
-      const client = services[0];
       res.json({
         success: true,
-        multiple: false,
+        hasAccount,
+        phone: last10,
+        clientName: services[0].nombre,
+        servicesCount: services.length,
+      });
+    } catch (err: any) {
+      logger.error('Error al verificar cuenta de portal:', err?.message || err);
+      res.status(500).json({ success: false, message: 'Error interno al consultar cuenta.' });
+    }
+  }
+
+  /**
+   * Registro / Creación de contraseña inicial para un cliente
+   */
+  static async register(req: Request, res: Response): Promise<void> {
+    try {
+      const { phone, password } = req.body;
+      const cleanDigits = (phone || '').replace(/\D/g, '');
+      const last10 = cleanDigits.length >= 10 ? cleanDigits.slice(-10) : cleanDigits;
+
+      if (!last10 || last10.length < 7) {
+        res.status(400).json({ success: false, message: 'Número de teléfono inválido.' });
+        return;
+      }
+
+      if (!password || password.length < 6) {
+        res.status(400).json({ success: false, message: 'La contraseña debe tener al menos 6 caracteres.' });
+        return;
+      }
+
+      const services = await ClientPortalController.findClientsByIdentifier(last10);
+      if (!services || services.length === 0) {
+        res.status(404).json({ success: false, message: 'No encontramos ningún contrato con ese número de teléfono.' });
+        return;
+      }
+
+      const clientName = services[0].nombre;
+      const serviceIds = services.map(s => s.id_servicio);
+      const passHash = hashPassword(password);
+      const db = getDbClient();
+      const now = new Date().toISOString();
+
+      await db.execute({
+        sql: `
+          INSERT INTO client_portal_accounts (telefono, password_hash, nombre, created_at, updated_at, last_login)
+          VALUES (?, ?, ?, ?, ?, ?)
+          ON CONFLICT(telefono) DO UPDATE SET
+            password_hash = excluded.password_hash,
+            nombre = excluded.nombre,
+            updated_at = excluded.updated_at,
+            last_login = excluded.last_login
+        `,
+        args: [last10, passHash, clientName, now, now, now],
+      });
+
+      const token = generateClientPortalToken(last10, clientName, serviceIds);
+
+      res.json({
+        success: true,
+        message: '¡Cuenta activada con éxito! Bienvenido a tu portal.',
+        token,
         client: {
-          id_servicio: client.id_servicio,
-          nombre: client.nombre,
-          telefono: client.telefono,
-          direccion: client.direccion,
-          ip: client.ip,
-          router: client.router,
-          plan_internet: client.plan_internet,
+          nombre: clientName,
+          telefono: last10,
+          servicesCount: services.length,
         },
+      });
+    } catch (err: any) {
+      logger.error('Error al registrar cuenta en portal:', err?.message || err);
+      res.status(500).json({ success: false, message: 'Error interno al registrar cuenta.' });
+    }
+  }
+
+  /**
+   * Iniciar Sesión con Teléfono y Contraseña
+   */
+  static async login(req: Request, res: Response): Promise<void> {
+    try {
+      const { phone, identifier, password, autoToken } = req.body;
+
+      // 1. Si viene un autoToken / magic link firmado desde WhatsApp
+      if (autoToken && typeof autoToken === 'string') {
+        const payload = verifyClientPortalToken(autoToken);
+        if (payload) {
+          const services = await ClientPortalController.findClientsByIdentifier(payload.phone);
+          res.json({
+            success: true,
+            token: autoToken,
+            client: {
+              nombre: payload.name || services[0]?.nombre || 'Cliente',
+              telefono: payload.phone,
+              servicesCount: services.length,
+            },
+            services: services.map((s: any) => ({
+              id_servicio: s.id_servicio,
+              nombre: s.nombre,
+              direccion: s.direccion || s.router || 'Domicilio registrado',
+              ip: s.ip,
+              router: s.router,
+              plan_internet: s.plan_internet,
+              estado: s.estado,
+              saldo: s.saldo,
+            })),
+          });
+          return;
+        }
+      }
+
+      const inputPhone = (phone || identifier || '').trim();
+      const cleanDigits = inputPhone.replace(/\D/g, '');
+      const last10 = cleanDigits.length >= 10 ? cleanDigits.slice(-10) : cleanDigits;
+
+      if (!last10 || last10.length < 7) {
+        res.status(400).json({ success: false, message: 'Ingresa tu número de teléfono de 10 dígitos.' });
+        return;
+      }
+
+      if (!password) {
+        res.status(400).json({ success: false, message: 'Ingresa tu contraseña de acceso.' });
+        return;
+      }
+
+      const db = getDbClient();
+      const accRes = await db.execute({
+        sql: `SELECT * FROM client_portal_accounts WHERE telefono = ? LIMIT 1`,
+        args: [last10],
+      });
+
+      if (accRes.rows.length === 0) {
+        // No tiene contraseña creada todavía
+        res.status(404).json({
+          success: false,
+          needsRegistration: true,
+          message: 'Aún no has creado tu contraseña para este número. Por favor créala a continuación.',
+        });
+        return;
+      }
+
+      const account = accRes.rows[0];
+      const valid = verifyPassword(password, account.password_hash as string);
+      if (!valid) {
+        res.status(401).json({ success: false, message: 'Contraseña incorrecta. Verifica e intenta de nuevo.' });
+        return;
+      }
+
+      // Actualizar last_login
+      const now = new Date().toISOString();
+      await db.execute({
+        sql: `UPDATE client_portal_accounts SET last_login = ? WHERE telefono = ?`,
+        args: [now, last10],
+      });
+
+      const services = await ClientPortalController.findClientsByIdentifier(last10);
+      const serviceIds = services.map(s => s.id_servicio);
+      const token = generateClientPortalToken(last10, (account.nombre as string) || services[0]?.nombre, serviceIds);
+
+      res.json({
+        success: true,
+        token,
+        client: {
+          nombre: account.nombre || services[0]?.nombre || 'Cliente',
+          telefono: last10,
+          servicesCount: services.length,
+        },
+        services: services.map((s: any) => ({
+          id_servicio: s.id_servicio,
+          nombre: s.nombre,
+          direccion: s.direccion || s.router || 'Domicilio registrado',
+          ip: s.ip,
+          router: s.router,
+          plan_internet: s.plan_internet,
+          estado: s.estado,
+          saldo: s.saldo,
+        })),
       });
     } catch (err: any) {
       logger.error('Error en login de cliente:', err?.message || err);
@@ -198,13 +359,154 @@ self.addEventListener('fetch', (event) => {
   }
 
   /**
+   * Solicitar recuperación de contraseña por WhatsApp
+   */
+  static async forgotPassword(req: Request, res: Response): Promise<void> {
+    try {
+      const { phone } = req.body;
+      const cleanDigits = (phone || '').replace(/\D/g, '');
+      const last10 = cleanDigits.length >= 10 ? cleanDigits.slice(-10) : cleanDigits;
+
+      if (!last10 || last10.length < 7) {
+        res.status(400).json({ success: false, message: 'Ingresa tu número de teléfono registrado.' });
+        return;
+      }
+
+      const services = await ClientPortalController.findClientsByIdentifier(last10);
+      if (!services || services.length === 0) {
+        res.status(404).json({ success: false, message: 'No encontramos ningún contrato con ese número de teléfono.' });
+        return;
+      }
+
+      const clientName = services[0].nombre || 'Cliente';
+      const otp = Math.floor(100000 + Math.random() * 900000).toString(); // Código de 6 dígitos
+      const expires = new Date(Date.now() + 15 * 60 * 1000).toISOString(); // 15 minutos
+
+      const db = getDbClient();
+      await db.execute({
+        sql: `
+          INSERT INTO client_portal_accounts (telefono, password_hash, nombre, reset_token, reset_token_expires, updated_at)
+          VALUES (?, '', ?, ?, ?, CURRENT_TIMESTAMP)
+          ON CONFLICT(telefono) DO UPDATE SET
+            reset_token = excluded.reset_token,
+            reset_token_expires = excluded.reset_token_expires,
+            updated_at = CURRENT_TIMESTAMP
+        `,
+        args: [last10, clientName, otp, expires],
+      });
+
+      const ispName = SettingsService.get('ISP_NAME', 'ISP_NAME', config.isp.name || 'CloudWare');
+      const appUrl = SettingsService.get('APP_URL', 'APP_URL', config.appUrl || 'http://2.25.241.239:3000').replace(/\/+$/, '');
+      const resetUrl = `${appUrl}/portal?resetCode=${otp}&p=${last10}`;
+
+      const waMsg = `🔐 *Recuperación de Contraseña - ${ispName}*\n\n` +
+        `Hola *${clientName}*, recibimos una solicitud para restablecer tu contraseña del Portal del Cliente.\n\n` +
+        `Tu código de seguridad es:\n` +
+        `👉 *${otp}*\n\n` +
+        `O si lo prefieres, ingresa directamente desde este enlace:\n` +
+        `🔗 ${resetUrl}\n\n` +
+        `_Este código es personal y vence en 15 minutos._`;
+
+      const targetDest = `521${last10}`;
+      await EvolutionService.enviarTexto(targetDest, waMsg, { instant: true }).catch((e) => {
+        logger.warn(`No se pudo enviar WhatsApp a ${targetDest}, intentando con ${last10}:`, e?.message || e);
+        return EvolutionService.enviarTexto(last10, waMsg, { instant: true });
+      });
+
+      res.json({
+        success: true,
+        message: 'Te enviamos un código de recuperación a tu WhatsApp.',
+        phone: last10,
+      });
+    } catch (err: any) {
+      logger.error('Error en forgotPassword:', err?.message || err);
+      res.status(500).json({ success: false, message: 'Error al enviar código de recuperación.' });
+    }
+  }
+
+  /**
+   * Restablecer contraseña con código OTP
+   */
+  static async resetPassword(req: Request, res: Response): Promise<void> {
+    try {
+      const { phone, code, newPassword } = req.body;
+      const cleanDigits = (phone || '').replace(/\D/g, '');
+      const last10 = cleanDigits.length >= 10 ? cleanDigits.slice(-10) : cleanDigits;
+
+      if (!last10 || !code || !newPassword || newPassword.length < 6) {
+        res.status(400).json({ success: false, message: 'Datos incompletos o contraseña demasiado corta (mínimo 6 caracteres).' });
+        return;
+      }
+
+      const db = getDbClient();
+      const accRes = await db.execute({
+        sql: `SELECT * FROM client_portal_accounts WHERE telefono = ? AND reset_token = ? LIMIT 1`,
+        args: [last10, code.trim()],
+      });
+
+      if (accRes.rows.length === 0) {
+        res.status(400).json({ success: false, message: 'Código de recuperación incorrecto o vencido.' });
+        return;
+      }
+
+      const account = accRes.rows[0];
+      const expires = account.reset_token_expires as string;
+      if (expires && new Date(expires).getTime() < Date.now()) {
+        res.status(400).json({ success: false, message: 'El código de recuperación ha expirado. Solicita uno nuevo.' });
+        return;
+      }
+
+      const passHash = hashPassword(newPassword);
+      const now = new Date().toISOString();
+
+      await db.execute({
+        sql: `
+          UPDATE client_portal_accounts 
+          SET password_hash = ?, reset_token = NULL, reset_token_expires = NULL, updated_at = ?, last_login = ?
+          WHERE telefono = ?
+        `,
+        args: [passHash, now, now, last10],
+      });
+
+      const services = await ClientPortalController.findClientsByIdentifier(last10);
+      const serviceIds = services.map(s => s.id_servicio);
+      const token = generateClientPortalToken(last10, (account.nombre as string) || services[0]?.nombre, serviceIds);
+
+      res.json({
+        success: true,
+        message: '¡Contraseña actualizada exitosamente! Has iniciado sesión.',
+        token,
+        client: {
+          nombre: account.nombre || services[0]?.nombre || 'Cliente',
+          telefono: last10,
+          servicesCount: services.length,
+        },
+      });
+    } catch (err: any) {
+      logger.error('Error en resetPassword:', err?.message || err);
+      res.status(500).json({ success: false, message: 'Error interno al restablecer contraseña.' });
+    }
+  }
+
+  /**
    * Obtiene todos los datos del cliente, estado del módem, facturación y servicios relacionados
    */
   static async getClientData(req: Request, res: Response): Promise<void> {
     try {
-      const rawId = (req.query.id || req.query.phone || req.query.p || '') as string;
+      const authHeader = req.headers.authorization || '';
+      const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : (req.query.token as string || req.query.auth as string || '');
+
+      let verifiedPhone = '';
+      if (token) {
+        const payload = verifyClientPortalToken(token);
+        if (payload) {
+          verifiedPhone = payload.phone;
+        }
+      }
+
+      const rawId = verifiedPhone || (req.query.id || req.query.phone || req.query.p || '') as string;
       if (!rawId) {
-        res.status(400).json({ success: false, message: 'Identificador requerido en la consulta.' });
+        res.status(401).json({ success: false, message: 'Sesión no válida o identificador requerido.' });
         return;
       }
 
@@ -214,10 +516,11 @@ self.addEventListener('fetch', (event) => {
         return;
       }
 
-      // Si se especificó un ID numérico exacto, seleccionar ese servicio
+      // Si se solicitó un servicio específico dentro de los múltiples contratos del titular
+      const selectedServiceId = req.query.serviceId ? String(req.query.serviceId).trim() : '';
       let client = services[0];
-      if (/^\d+$/.test(rawId.trim())) {
-        const exact = services.find((s: any) => String(s.id_servicio) === rawId.trim());
+      if (selectedServiceId) {
+        const exact = services.find((s: any) => String(s.id_servicio) === selectedServiceId);
         if (exact) client = exact;
       }
 
@@ -229,7 +532,7 @@ self.addEventListener('fetch', (event) => {
         router: s.router,
         plan_internet: s.plan_internet,
         estado: s.estado,
-        saldo: s.saldo,
+        saldo: s.saldo || 0,
       }));
 
       const db = getDbClient();
@@ -271,10 +574,10 @@ self.addEventListener('fetch', (event) => {
         signal = await ClientPortalController.getCachedOrLiveSignal(targetOnuId);
       }
 
-      // 3. Verificar si hay caídas de red activas en la zona del cliente
+      // 3. Verificar caídas de red activas en la zona del cliente
       let activeOutage: any = null;
       try {
-        const clientZone = client.router || onuRecord?.zone_name || 'Actopan';
+        const clientZone = client.router || onuRecord?.zone_name || 'General';
         const outageRes = await db.execute({
           sql: `SELECT * FROM network_outages WHERE status = 'active' AND (zone_name LIKE ? OR LOWER(zone_name) IN ('todas', 'todos', 'general', 'global')) LIMIT 1`,
           args: [`%${clientZone}%`],
@@ -319,7 +622,7 @@ self.addEventListener('fetch', (event) => {
           zone_name: onuRecord.zone_name,
           speed_profile: onuRecord.speed_profile,
         } : null,
-        relatedServices: relatedServices.length > 1 ? relatedServices : [],
+        relatedServices,
         signal,
         wifi,
         outage: activeOutage,
@@ -327,6 +630,63 @@ self.addEventListener('fetch', (event) => {
     } catch (err: any) {
       logger.error('Error al obtener datos de cliente en portal:', err?.message || err);
       res.status(500).json({ success: false, message: 'Error al consultar datos del servicio.' });
+    }
+  }
+
+  /**
+   * Obtiene el historial detallado de facturas y pagos (WispHub / Sipgun)
+   */
+  static async getBillingHistory(req: Request, res: Response): Promise<void> {
+    try {
+      const rawId = (req.query.id || req.query.serviceId || req.query.phone || '') as string;
+      if (!rawId) {
+        res.status(400).json({ success: false, message: 'Identificador de servicio requerido.' });
+        return;
+      }
+
+      const services = await ClientPortalController.findClientsByIdentifier(rawId);
+      if (!services || services.length === 0) {
+        res.status(404).json({ success: false, message: 'Servicio no encontrado.' });
+        return;
+      }
+
+      const client = services[0];
+      let facturas: any[] = [];
+
+      try {
+        facturas = await WispHubService.obtenerFacturasPendientes(client.id_servicio, client.nombre);
+      } catch (fErr: any) {
+        logger.warn(`Error al consultar facturas en WispHub para ${client.id_servicio}:`, fErr?.message || fErr);
+      }
+
+      // Estructurar respuesta con facturas e información de pago bancario
+      res.json({
+        success: true,
+        balance: Number(client.saldo || 0),
+        planPrice: Number(client.precio_plan || 0),
+        dueDate: client.fecha_corte || `Día ${client.dia_corte || 5} de cada mes`,
+        status: client.estado,
+        invoices: facturas.map((f: any) => ({
+          id: f.id_factura || f.id || client.id_servicio,
+          folio: f.folio || `FAC-${f.id_factura || client.id_servicio}`,
+          monto: f.monto || Number(client.saldo || client.precio_plan || 0),
+          estado: f.estado || (Number(client.saldo || 0) > 0 ? 'Pendiente' : 'Pagada'),
+          fecha_emision: f.fecha_emision || new Date().toISOString().slice(0, 10),
+          fecha_vencimiento: f.fecha_vencimiento || client.fecha_corte || 'Próximo corte',
+          link_pago: f.link_pago || (f.id_factura ? `https://wisphub.net/factura/${f.id_factura}/` : 'https://wisphub.net/factura/'),
+          pdf_url: f.pdf_url || (f.id_factura ? `https://wisphub.net/factura/pdf/${f.id_factura}/` : null),
+        })),
+        bankDetails: {
+          bank: SettingsService.get('PAYMENT_BANK_NAME', 'PAYMENT_BANK_NAME', 'BBVA Bancomer'),
+          clabe: SettingsService.get('PAYMENT_BANK_CLABE', 'PAYMENT_BANK_CLABE', '012320001234567890'),
+          account: SettingsService.get('PAYMENT_BANK_ACCOUNT', 'PAYMENT_BANK_ACCOUNT', '0123456789'),
+          beneficiary: SettingsService.get('ISP_NAME', 'ISP_NAME', config.isp.name || 'CloudWareMx'),
+          reference: `SRV-${client.id_servicio}`,
+        },
+      });
+    } catch (err: any) {
+      logger.error('Error al obtener historial de facturas:', err?.message || err);
+      res.status(500).json({ success: false, message: 'Error al consultar historial de facturación.' });
     }
   }
 
@@ -513,8 +873,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   /**
-   * Helper: Localiza TODOS los servicios vinculados a un cliente por Nombre, Teléfono, Folio o SN
-   * Si un titular tiene múltiples servicios/contratos, devuelve todos ellos.
+   * Helper: Localiza TODOS los servicios vinculados a un cliente por Teléfono, Folio o SN
    */
   public static async findClientsByIdentifier(rawId: string): Promise<any[]> {
     const clean = (rawId || '').trim();
@@ -529,13 +888,11 @@ self.addEventListener('fetch', (event) => {
       });
       if (res.rows.length > 0) {
         const main = res.rows[0];
-        // Buscar si este mismo cliente tiene más servicios bajo su nombre o teléfono
         const allClientServices = await db.execute({
           sql: `SELECT * FROM wisphub_clients WHERE (nombre = ? OR nombre_normalized = ?) OR (telefono IS NOT NULL AND telefono != '' AND telefono = ?) ORDER BY id_servicio ASC LIMIT 20`,
           args: [main.nombre, main.nombre_normalized, main.telefono],
         });
         if (allClientServices.rows.length > 0) {
-          // Poner el servicio seleccionado en primer lugar
           const otherServices = (allClientServices.rows as any[]).filter(s => String(s.id_servicio) !== String(main.id_servicio));
           return [main, ...otherServices];
         }
@@ -571,94 +928,12 @@ self.addEventListener('fetch', (event) => {
       }
     }
 
-    // 4. Por Nombre con Búsqueda por Palabras / Tokens Normalizados
-    const { cleanPersonName, normalizeText, computeNameMatchScore } = await import('../utils/fuzzy-matcher');
-    const cleanedQuery = cleanPersonName(clean) || clean;
-    const normalizedQuery = normalizeText(cleanedQuery);
-
-    const stopwords = new Set(['de', 'del', 'la', 'las', 'los', 'el', 'y', 'en', 'san', 'santa', 'sr', 'sra']);
-    const words = normalizedQuery.split(/\s+/).filter(w => w.length >= 2 && !stopwords.has(w));
-
-    if (words.length > 0) {
-      // Coincidencia donde TODAS las palabras significativas estén presentes en el nombre
-      const whereClauses = words.map(() => `(nombre_normalized LIKE ? OR nombre LIKE ?)`).join(' AND ');
-      const sqlArgs: any[] = [];
-      for (const w of words) {
-        sqlArgs.push(`%${w}%`, `%${w}%`);
-      }
-
-      const res = await db.execute({
-        sql: `SELECT * FROM wisphub_clients WHERE ${whereClauses} ORDER BY nombre ASC, id_servicio ASC LIMIT 25`,
-        args: sqlArgs,
-      });
-
-      if (res.rows.length > 0) {
-        return res.rows as any[];
-      }
-
-      // Si eran varias palabras y no hubo coincidencia estricta de todas, probar con CUALQUIERA de las palabras
-      if (words.length > 1) {
-        const anyWhere = words.map(() => `(nombre_normalized LIKE ? OR nombre LIKE ?)`).join(' OR ');
-        const anyArgs: any[] = [];
-        for (const w of words) {
-          anyArgs.push(`%${w}%`, `%${w}%`);
-        }
-
-        const anyRes = await db.execute({
-          sql: `SELECT * FROM wisphub_clients WHERE ${anyWhere} ORDER BY nombre ASC, id_servicio ASC LIMIT 25`,
-          args: anyArgs,
-        });
-
-        if (anyRes.rows.length > 0) {
-          // Filtrar con computeNameMatchScore para mantener solo coincidencias relevantes
-          const scored = (anyRes.rows as any[])
-            .map(row => ({ row, score: computeNameMatchScore(cleanedQuery, row.nombre) }))
-            .filter(item => item.score >= 50)
-            .sort((a, b) => b.score - a.score);
-
-          if (scored.length > 0) {
-            return scored.map(s => s.row);
-          }
-        }
-      }
-    }
-
-    // 5. Búsqueda Difusa en memoria sobre registros locales
-    try {
-      const allRowsRes = await db.execute({
-        sql: `SELECT * FROM wisphub_clients WHERE nombre IS NOT NULL LIMIT 500`,
-      });
-      if (allRowsRes.rows.length > 0) {
-        const scored = (allRowsRes.rows as any[])
-          .map(row => ({ row, score: computeNameMatchScore(cleanedQuery, row.nombre) }))
-          .filter(item => item.score >= 65)
-          .sort((a, b) => b.score - a.score)
-          .slice(0, 20);
-
-        if (scored.length > 0) {
-          return scored.map(s => s.row);
-        }
-      }
-    } catch (_) {}
-
-    // 6. Consulta en tiempo real a la API de WispHub si no está en caché local
-    try {
-      const { WispHubService } = await import('../services/wisphub.service');
-      const whResults = await WispHubService.buscarClientePorNombre(cleanedQuery);
-      if (whResults && whResults.length > 0) {
-        return whResults.map((wh: any) => ({
-          id_servicio: wh.id_servicio || wh.id,
-          nombre: wh.nombre || wh.name,
-          telefono: wh.telefono || wh.phone,
-          direccion: wh.direccion || wh.address,
-          ip: wh.ip,
-          router: wh.router || wh.zone,
-          plan_internet: wh.plan_internet || wh.plan,
-          estado: wh.estado || 'Activo',
-          saldo: wh.saldo || 0,
-        }));
-      }
-    } catch (_) {}
+    // 4. Búsqueda por Nombre exacto
+    const resName = await db.execute({
+      sql: `SELECT * FROM wisphub_clients WHERE nombre LIKE ? OR nombre_normalized LIKE ? ORDER BY id_servicio ASC LIMIT 10`,
+      args: [`%${clean}%`, `%${clean}%`],
+    });
+    if (resName.rows.length > 0) return resName.rows as any[];
 
     return [];
   }

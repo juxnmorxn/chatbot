@@ -548,6 +548,23 @@ export async function initDatabase(): Promise<void> {
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_wag_role ON whatsapp_office_groups(role);`);
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_wag_active ON whatsapp_office_groups(is_active);`);
 
+    // Tabla de Cuentas de Acceso del Portal del Cliente
+    await client.execute(`
+      CREATE TABLE IF NOT EXISTS client_portal_accounts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        telefono TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        nombre TEXT,
+        reset_token TEXT,
+        reset_token_expires TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        last_login TEXT
+      );
+    `);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_cpa_telefono ON client_portal_accounts(telefono);`);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_cpa_reset ON client_portal_accounts(reset_token);`);
+
     try { await client.execute(`ALTER TABLE tickets ADD COLUMN assigned_office TEXT;`); } catch (_) {}
     try { await client.execute(`ALTER TABLE tickets ADD COLUMN whatsapp_group_jid TEXT;`); } catch (_) {}
 

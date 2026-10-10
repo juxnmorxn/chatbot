@@ -554,9 +554,10 @@ export class BotOrchestrator {
     instantOverride?: boolean,
     instanceName?: string
   ): Promise<boolean> {
-    const textoFinal = parseSpintax(mensaje);
+    let textoFinal = parseSpintax(mensaje);
     const dest = targetJid || phone;
     const cleanKey = phone.replace(/\D/g, '');
+    const last10 = cleanKey.length >= 10 ? cleanKey.slice(-10) : cleanKey;
     const instance = instanceName || (targetJid && this.activeInstanceByPhone.get(targetJid)) || this.activeInstanceByPhone.get(cleanKey) || this.activeInstanceByPhone.get(phone) || EvolutionService.getInstanceName();
 
     const esTecnico = instantOverride ?? (
@@ -566,6 +567,18 @@ export class BotOrchestrator {
       (accion || '').includes('ACTIVACION') ||
       (accion || '').includes('CONTRATO')
     );
+
+    // Sugerencia de creación de cuenta para clientes que aún no tengan cuenta registrada en la BD
+    if (!esTecnico && !dest.includes('@g.us') && !textoFinal.includes('/portal') && !textoFinal.includes('portal.')) {
+      try {
+        const tieneCuenta = await this.clienteTieneCuentaPortal(last10);
+        if (!tieneCuenta) {
+          const portalLink = this.getClientPortalLink(last10);
+          textoFinal = `${textoFinal}\n\n💡 _*Crea tu cuenta de cliente en 1 clic para ver tu Wi-Fi, señal y recibos:*_\n👉 ${portalLink}`;
+        }
+      } catch {}
+    }
+
     let ok = false;
     if (botones && botones.length > 0) {
       ok = await EvolutionService.enviarBotones(dest, textoFinal, botones, undefined, { instant: esTecnico, instanceName: instance });
@@ -628,6 +641,9 @@ export class BotOrchestrator {
 
     const esComandoCambioWifi = /^(?:cambiar\s+wifi|cambio\s+de\s+wifi|cambiar\s+contrase[ñn]a\s+wifi|cambiar\s+password|nueva\s+contrase[ñn]a\s+wifi|actualizar\s+wifi)\b/i.test(lowerMsg);
 
+    const esComandoRecuperarClave = /(?:olvid[eé]|recuperar|restablecer|cambiar|mi)\s+(?:mi\s+)?(?:contrase[ñn]a|clave|password|pin|acceso)(?:\s+(?:del\s+)?(?:portal|cuenta|app|web))?/i.test(lowerMsg) ||
+      /^(?:olvide\s+mi\s+clave|recuperar\s+clave|olvide\s+mi\s+contrase[ñn]a|clave\s+portal|contrase[ñn]a\s+portal)\b/i.test(lowerMsg);
+
     const esComandoActivacion = buttonId === 'BTN_ACTIVAR_MODEM' ||
       /^(?:solicitar\s+)?(?:activar|activaci[oó]n|alta|aprovisionar|registrar)\b/i.test(lowerMsg) ||
       (event.imageAnalysis as any)?.tipo === 'CONTRATO_INSTALACION' ||
@@ -647,6 +663,12 @@ export class BotOrchestrator {
     const esComandoTecnicoExplicito = esComandoActivacion || esComandoCambioPaquete || esComandoCambioModem || esComandoCambioDomicilio || esComandoConsultaUbicacion || esComandoCambioWifi;
     const esTecnicoAutorizado = Boolean(await DbService.isAuthorizedTechnician(phone).catch(() => null));
     const esAccionTecnica = esComandoTecnicoExplicito || esPasoTecnicoEnCurso || esTecnicoAutorizado;
+
+    // Si el usuario pide recuperar contraseña del portal
+    if (esComandoRecuperarClave && !targetJid.includes('@g.us') && !esTecnicoAutorizado) {
+      await this.manejarRecuperacionClavePortal(phone, targetJid, instance);
+      return;
+    }
 
     // Si el usuario envía un comando técnico explícito o es técnico autorizado y la sesión estaba en un paso residual residencial, resetear inmediatamente
     if ((esComandoTecnicoExplicito || esTecnicoAutorizado) && session && !esPasoTecnicoEnCurso && session.step !== 'TECNICO_STANDBY') {
@@ -8509,6 +8531,72 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
   }
 
   /**
+   * Verifica si un cliente ya tiene cuenta creada en el portal
+   */
+  public static async clienteTieneCuentaPortal(phone: string): Promise<boolean> {
+    try {
+      const cleanDigits = phone.replace(/\D/g, '');
+      const last10 = cleanDigits.length >= 10 ? cleanDigits.slice(-10) : cleanDigits;
+      if (!last10) return true;
+      const db = (await import('../database/db')).getDbClient();
+      const res = await db.execute({
+        sql: `SELECT id FROM client_portal_accounts WHERE telefono = ? LIMIT 1`,
+        args: [last10],
+      });
+      return res.rows.length > 0;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Maneja la solicitud de recuperación de contraseña del portal enviada por WhatsApp
+   */
+  private static async manejarRecuperacionClavePortal(phone: string, targetJid?: string, instance?: string): Promise<void> {
+    const cleanDigits = phone.replace(/\D/g, '');
+    const last10 = cleanDigits.length >= 10 ? cleanDigits.slice(-10) : cleanDigits;
+    const dest = targetJid || phone;
+
+    try {
+      const { ClientPortalController } = await import('../controllers/client-portal.controller');
+      const services = await ClientPortalController.findClientsByIdentifier(last10);
+      const clientName = services[0]?.nombre || 'Cliente';
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      const expires = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+
+      const db = (await import('../database/db')).getDbClient();
+      await db.execute({
+        sql: `
+          INSERT INTO client_portal_accounts (telefono, password_hash, nombre, reset_token, reset_token_expires, updated_at)
+          VALUES (?, '', ?, ?, ?, CURRENT_TIMESTAMP)
+          ON CONFLICT(telefono) DO UPDATE SET
+            reset_token = excluded.reset_token,
+            reset_token_expires = excluded.reset_token_expires,
+            updated_at = CURRENT_TIMESTAMP
+        `,
+        args: [last10, clientName, otp, expires],
+      });
+
+      const appUrl = SettingsService.get('APP_URL', 'APP_URL', config.appUrl || 'http://2.25.241.239:3000').replace(/\/+$/, '');
+      const resetUrl = `${appUrl}/portal?resetCode=${otp}&p=${last10}`;
+      const ispName = this.getIspName();
+
+      const respMsg = `🔐 *Recuperación de Contraseña del Portal - ${ispName}*\n\n` +
+        `Hola *${clientName}*, recibimos tu solicitud para acceder a tu Portal del Cliente.\n\n` +
+        `Tu código de seguridad es:\n` +
+        `👉 *${otp}*\n\n` +
+        `O entra directamente a definir tu nueva clave aquí:\n` +
+        `🔗 ${resetUrl}\n\n` +
+        `_Este código es personal y vence en 15 minutos._`;
+
+      await this.enviarYLoguear(phone, respMsg, 'RECUPERAR_PASSWORD', 'ENVIO_OTP_PORTAL', dest, undefined, true, instance);
+    } catch (err: any) {
+      logger.error('Error al manejar recuperación de contraseña por WhatsApp:', err?.message || err);
+      await this.enviarYLoguear(phone, 'No pudimos generar tu código de recuperación en este momento. Por favor intenta de nuevo en unos minutos.', 'RECUPERAR_PASSWORD', 'ERROR_OTP_PORTAL', dest, undefined, true, instance);
+    }
+  }
+
+  /**
    * Genera el enlace de acceso directo al Portal Web / PWA del Cliente
    */
   static getClientPortalLink(phone?: string): string {
@@ -8534,3 +8622,4 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
     await DbService.updateStep(phone, 'ESPERANDO_PROBLEMA');
   }
 }
+

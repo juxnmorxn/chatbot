@@ -112,3 +112,56 @@ export function requireAdminAuth(allowedRoles?: AdminRole[]) {
   };
 }
 
+export interface ClientPortalTokenPayload {
+  phone: string;
+  name?: string;
+  serviceIds: (number | string)[];
+  iat: number;
+  exp: number;
+}
+
+/**
+ * Genera un token firmado de sesión para el Portal del Cliente con vigencia de 30 días
+ */
+export function generateClientPortalToken(phone: string, name?: string, serviceIds: (number | string)[] = []): string {
+  const now = Math.floor(Date.now() / 1000);
+  const cleanPhone = phone.replace(/\D/g, '');
+  const last10 = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
+  const payload: ClientPortalTokenPayload = {
+    phone: last10,
+    name: name || '',
+    serviceIds,
+    iat: now,
+    exp: now + 30 * 24 * 60 * 60, // 30 días
+  };
+
+  const payloadB64 = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const signature = crypto.createHmac('sha256', SECRET).update(payloadB64).digest('base64url');
+  return `${payloadB64}.${signature}`;
+}
+
+/**
+ * Valida el token del portal del cliente
+ */
+export function verifyClientPortalToken(token: string): ClientPortalTokenPayload | null {
+  try {
+    if (!token || !token.includes('.')) return null;
+    const [payloadB64, signature] = token.split('.');
+    const expectedSignature = crypto.createHmac('sha256', SECRET).update(payloadB64).digest('base64url');
+
+    if (signature !== expectedSignature) return null;
+
+    const payloadJson = Buffer.from(payloadB64, 'base64url').toString('utf-8');
+    const payload: ClientPortalTokenPayload = JSON.parse(payloadJson);
+
+    const now = Math.floor(Date.now() / 1000);
+    if (payload.exp && payload.exp < now) {
+      return null;
+    }
+
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
