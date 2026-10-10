@@ -1215,10 +1215,15 @@ export function getClientPortalHtml(): string {
     let isPassRevealed5g = false;
     let isLoadingDashboard = false;
 
-    document.addEventListener('DOMContentLoaded', () => {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => {
+        initPwa();
+        initPortal();
+      });
+    } else {
       initPwa();
       initPortal();
-    });
+    }
 
     function initPortal() {
       try {
@@ -1643,7 +1648,7 @@ export function getClientPortalHtml(): string {
           const saldoTxt = saldo <= 0 ? 'Al corriente' : ('Debe $' + saldo.toFixed(2));
           const saldoColor = saldo <= 0 ? '#10b981' : '#f59e0b';
 
-          return '<div class="service-card-item ' + activeClass + '" onclick="onSwitchService(\'' + s.id_servicio + '\')">' +
+          return '<div class="service-card-item ' + activeClass + '" data-service-id="' + s.id_servicio + '" onclick="onSwitchService(this.dataset.serviceId)">' +
             '<div style="display:flex; align-items:center; justify-content:space-between; gap:6px;">' +
               '<span style="font-weight:700; font-size:13px; color:#fff; display:flex; align-items:center; gap:6px;">' +
                 '<i class="fa-solid fa-house-signal" style="color:#0ea5e9;"></i> Folio #' + s.id_servicio +
