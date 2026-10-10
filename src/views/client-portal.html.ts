@@ -1617,7 +1617,7 @@ export function getClientPortalHtml(): string {
                 '<div style="font-size:11px; color:var(--text-muted); margin-top:2px;">' + fechaLabel + '</div>' +
               '</div>' +
               '<div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">' +
-                '<span style="font-family:\'Outfit\',sans-serif; font-weight:700; font-size:15px; color:#fff;">$' + Number(inv.monto || 0).toFixed(2) + '</span>' +
+                '<span style="font-weight:700; font-size:15px; color:#fff;">$' + Number(inv.monto || 0).toFixed(2) + '</span>' +
                 '<span class="badge-status ' + statusClass + '" style="font-size:11px; padding:3px 8px;">' + inv.estado + '</span>' +
                 pdfBtn +
                 payBtn +
