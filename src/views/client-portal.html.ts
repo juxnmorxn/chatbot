@@ -1886,19 +1886,19 @@ export function getClientPortalHtml(): string {
 
       // Paquete Contratado con Gran Énfasis Visual y Corrección de Discrepancias
       const rawPlan = (c.plan_internet || data.onu?.speed_profile || '').trim();
-      let cleanPlan = rawPlan.replace(/^(?:paquete|pakete|plan)\s+/i, '').trim();
+      let cleanPlan = rawPlan.replace(/^(?:paquete|pakete|plan)\\s+/i, '').trim();
       if (!cleanPlan) cleanPlan = '40 Megas';
       
       // Extraer velocidad en Megas / Mbps / Gigas
       let speedBig = '';
-      const speedMatch = rawPlan.match(/(\d+)\s*(?:m|megas?|mbps|g|gb|gigas?)\b/i) || cleanPlan.match(/(\d+)\s*(?:m|megas?|mbps|g|gb|gigas?)\b/i);
+      const speedMatch = rawPlan.match(/(\\d+)\\s*(?:m|megas?|mbps|g|gb|gigas?)\\b/i) || cleanPlan.match(/(\\d+)\\s*(?:m|megas?|mbps|g|gb|gigas?)\\b/i);
       if (speedMatch) {
         speedBig = speedMatch[1] + (/(?:g|gb|gigas?)/i.test(speedMatch[0]) ? 'G' : 'M');
       } else {
-        const numOnly = rawPlan.match(/\b(\d{2,4})\b/) || cleanPlan.match(/\b(\d{2,4})\b/);
+        const numOnly = rawPlan.match(/\\b(\\d{2,4})\\b/) || cleanPlan.match(/\\b(\\d{2,4})\\b/);
         if (numOnly) {
           speedBig = numOnly[1] + 'M';
-        } else if (cleanPlan.length <= 6 && /\d/.test(cleanPlan)) {
+        } else if (cleanPlan.length <= 6 && /\\d/.test(cleanPlan)) {
           speedBig = cleanPlan.toUpperCase();
         } else {
           speedBig = '40M';
@@ -1907,8 +1907,8 @@ export function getClientPortalHtml(): string {
 
       // Nombre completo formateado amigablemente
       let displayPlanName = '';
-      if (/^(?:paquete|pakete|plan)\s+/i.test(rawPlan)) {
-        displayPlanName = rawPlan.replace(/^pakete\s+/i, 'Paquete ').replace(/^paquete\s+/i, 'Paquete ').replace(/^plan\s+/i, 'Plan ');
+      if (/^(?:paquete|pakete|plan)\\s+/i.test(rawPlan)) {
+        displayPlanName = rawPlan.replace(/^pakete\\s+/i, 'Paquete ').replace(/^paquete\\s+/i, 'Paquete ').replace(/^plan\\s+/i, 'Plan ');
       } else {
         displayPlanName = 'Paquete ' + cleanPlan;
       }
@@ -1944,12 +1944,12 @@ export function getClientPortalHtml(): string {
             ? '<span class="service-card-badge active"><i class="fa-solid fa-circle-check"></i> En Pantalla</span>' 
             : '<span class="service-card-badge inactive"><i class="fa-regular fa-circle"></i> Tocar para ver</span>';
           const dir = s.direccion || s.router || ('Servicio ' + (idx + 1));
-          let plan = (s.plan_internet || 'Internet Fibra').replace(/^(?:paquete|pakete|plan)\s+/i, '');
+          let plan = (s.plan_internet || 'Internet Fibra').replace(/^(?:paquete|pakete|plan)\\s+/i, '');
           const saldo = Number(s.saldo || 0);
           const saldoTxt = saldo <= 0 ? 'Al corriente' : ('Debe $' + saldo.toFixed(2));
           const saldoColor = saldo <= 0 ? '#10b981' : '#f59e0b';
 
-          return '<div class="service-card-item ' + activeClass + '" data-service-id="' + s.id_servicio + '" onclick="onSwitchService(\'' + s.id_servicio + '\')">' +
+          return '<div class="service-card-item ' + activeClass + '" data-service-id="' + s.id_servicio + '" onclick="onSwitchService(' + s.id_servicio + ')">' +
             '<div style="display:flex; align-items:center; justify-content:space-between; gap:6px;">' +
               '<span style="font-weight:800; font-size:13.5px; color:var(--text-title); display:flex; align-items:center; gap:6px;">' +
                 '<i class="fa-solid fa-house-signal" style="color:#0284c7;"></i> Folio #' + s.id_servicio +
