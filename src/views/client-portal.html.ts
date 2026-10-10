@@ -673,8 +673,17 @@ export function getClientPortalHtml(): string {
       </div>
     </header>
 
+    <!-- 0. VISTA CARGANDO INICIAL (Apertura Instantánea) -->
+    <div id="viewLoading" class="auth-box" style="text-align: center; padding: 40px 20px;">
+      <div style="font-size: 38px; color: #38bdf8; margin-bottom: 14px;">
+        <i class="fa-solid fa-spinner fa-spin"></i>
+      </div>
+      <div style="font-size: 17px; font-weight: 700; color: #fff;">Conectando a tu Portal...</div>
+      <p style="font-size: 13px; color: var(--text-muted); margin-top: 6px;">Sincronizando módem y servicios en vivo</p>
+    </div>
+
     <!-- 1. VISTA DE INICIO DE SESIÓN -->
-    <div id="viewLogin" class="auth-box">
+    <div id="viewLogin" class="auth-box hidden">
       <div class="auth-title">Iniciar Sesión</div>
       <p class="auth-sub">Ingresa tu número celular y tu contraseña para ver tu red, facturas y saldo.</p>
 
@@ -950,40 +959,47 @@ export function getClientPortalHtml(): string {
     let currentServices = [];
     let realWifiPassword = '';
     let isPassRevealed = false;
+    let isLoadingDashboard = false;
 
     document.addEventListener('DOMContentLoaded', () => {
       initPwa();
-      checkParams();
-      if (currentToken || currentPhone) {
-        loadDashboard();
-      } else {
-        showLogin();
-      }
+      initPortal();
     });
 
-    function checkParams() {
-      const url = new URL(window.location.href);
-      const autoAuth = url.searchParams.get('auth') || url.searchParams.get('token');
-      const resetCode = url.searchParams.get('resetCode');
-      const p = url.searchParams.get('p') || url.searchParams.get('phone');
+    function initPortal() {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const autoAuth = params.get('auth') || params.get('token') || '';
+        const resetCode = params.get('resetCode') || '';
+        const rawP = params.get('p') || params.get('phone') || '';
+        const cleanP = rawP.replace(/[^0-9]/g, '').slice(-10);
 
-      if (p) {
-        const cleanP = p.replace(/\\D/g, '').slice(-10);
-        currentPhone = cleanP;
-        localStorage.setItem('cp_phone', cleanP);
-        document.getElementById('loginPhone').value = cleanP;
-        document.getElementById('regPhone').value = cleanP;
-        document.getElementById('forgotPhone').value = cleanP;
-      }
+        if (cleanP) {
+          currentPhone = cleanP;
+          localStorage.setItem('cp_phone', cleanP);
+          const lPhone = document.getElementById('loginPhone');
+          if (lPhone) lPhone.value = cleanP;
+          const rPhone = document.getElementById('regPhone');
+          if (rPhone) rPhone.value = cleanP;
+          const fPhone = document.getElementById('forgotPhone');
+          if (fPhone) fPhone.value = cleanP;
+        }
 
-      if (autoAuth) {
-        localStorage.setItem('cp_token', autoAuth);
-        currentToken = autoAuth;
-        loadDashboard();
-      } else if (resetCode && p) {
-        showForgotStep2(p, resetCode);
-      } else if (p) {
-        loadDashboard();
+        if (autoAuth) {
+          localStorage.setItem('cp_token', autoAuth);
+          currentToken = autoAuth;
+        }
+
+        if (resetCode && cleanP) {
+          showForgotStep2(cleanP, resetCode);
+        } else if (currentToken || currentPhone) {
+          loadDashboard();
+        } else {
+          showLogin();
+        }
+      } catch (err) {
+        console.warn('[Portal] Error initPortal:', err);
+        showLogin();
       }
     }
 
@@ -1011,11 +1027,19 @@ export function getClientPortalHtml(): string {
     }
 
     function hideAllViews() {
+      const vLoad = document.getElementById('viewLoading');
+      if (vLoad) vLoad.classList.add('hidden');
       document.getElementById('viewLogin').classList.add('hidden');
       document.getElementById('viewNotFound').classList.add('hidden');
       document.getElementById('viewRegister').classList.add('hidden');
       document.getElementById('viewForgot').classList.add('hidden');
       document.getElementById('viewDashboard').classList.add('hidden');
+    }
+
+    function showLoading() {
+      hideAllViews();
+      const vLoad = document.getElementById('viewLoading');
+      if (vLoad) vLoad.classList.remove('hidden');
     }
 
     function showLogin() {
@@ -1223,20 +1247,50 @@ export function getClientPortalHtml(): string {
       }
     }
 
-    // Dashboard Data Loading
+    // Dashboard Data Loading (Carga Instantánea y Conexión Segura)
     async function loadDashboard(serviceId) {
+      if (isLoadingDashboard) return;
+      isLoadingDashboard = true;
+
+      const targetPhone = currentPhone || localStorage.getItem('cp_phone') || '';
+      const targetToken = currentToken || localStorage.getItem('cp_token') || '';
+
+      if (!targetPhone && !targetToken) {
+        isLoadingDashboard = false;
+        showLogin();
+        return;
+      }
+
+      // Si el dashboard no está visible todavía, mostrar spinner
+      const isDashVisible = !document.getElementById('viewDashboard').classList.contains('hidden');
+      if (!isDashVisible) {
+        showLoading();
+      }
+
       try {
-        const url = '/api/portal/me?token=' + encodeURIComponent(currentToken || '') + '&p=' + encodeURIComponent(currentPhone || '') + (serviceId ? '&serviceId=' + serviceId : '');
-        const res = await fetch(url);
+        const url = '/api/portal/me?token=' + encodeURIComponent(targetToken) + '&p=' + encodeURIComponent(targetPhone) + (serviceId ? '&serviceId=' + encodeURIComponent(serviceId) : '');
+        
+        // AbortController para que jamás se quede congelado
+        const controller = new AbortController();
+        const timeoutTimer = setTimeout(() => controller.abort(), 9000);
+
+        const res = await fetch(url, { signal: controller.signal });
+        clearTimeout(timeoutTimer);
+
         const data = await res.json();
 
         if (!data.success || !data.client) {
-          if (currentPhone) {
-            showNotFound(currentPhone);
+          if (targetPhone) {
+            showNotFound(targetPhone);
           } else {
             showLogin();
           }
           return;
+        }
+
+        if (data.token) {
+          localStorage.setItem('cp_token', data.token);
+          currentToken = data.token;
         }
 
         hideAllViews();
@@ -1244,8 +1298,18 @@ export function getClientPortalHtml(): string {
         document.getElementById('btnLogout').classList.remove('hidden');
 
         renderDashboard(data);
-      } catch {
-        showToast('Error al cargar información');
+      } catch (err) {
+        console.warn('[Portal] Error al cargar datos:', err);
+        if (!isDashVisible) {
+          if (targetPhone) {
+            showNotFound(targetPhone);
+          } else {
+            showLogin();
+          }
+        }
+        showToast('Verificando conexión...');
+      } finally {
+        isLoadingDashboard = false;
       }
     }
 

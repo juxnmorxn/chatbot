@@ -117,11 +117,11 @@ export interface ClientPortalTokenPayload {
   name?: string;
   serviceIds: (number | string)[];
   iat: number;
-  exp: number;
+  exp?: number;
 }
 
 /**
- * Genera un token firmado de sesión para el Portal del Cliente con vigencia de 30 días
+ * Genera un token firmado de sesión para el Portal del Cliente permanente e indefinido
  */
 export function generateClientPortalToken(phone: string, name?: string, serviceIds: (number | string)[] = []): string {
   const now = Math.floor(Date.now() / 1000);
@@ -132,7 +132,7 @@ export function generateClientPortalToken(phone: string, name?: string, serviceI
     name: name || '',
     serviceIds,
     iat: now,
-    exp: now + 30 * 24 * 60 * 60, // 30 días
+    exp: now + (100 * 365 * 24 * 60 * 60), // Permanente (100 años de vigencia)
   };
 
   const payloadB64 = Buffer.from(JSON.stringify(payload)).toString('base64url');
@@ -155,7 +155,7 @@ export function verifyClientPortalToken(token: string): ClientPortalTokenPayload
     const payload: ClientPortalTokenPayload = JSON.parse(payloadJson);
 
     const now = Math.floor(Date.now() / 1000);
-    if (payload.exp && payload.exp < now) {
+    if (payload.exp && payload.exp > 0 && payload.exp < now) {
       return null;
     }
 

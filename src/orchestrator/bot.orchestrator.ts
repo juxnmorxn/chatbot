@@ -10,6 +10,7 @@ import { SettingsService } from '../services/settings.service';
 import { Logger } from '../utils/logger';
 import { parseSpintax } from '../utils/spintax';
 import { cleanPersonName, computeNameMatchScore, normalizeText } from '../utils/fuzzy-matcher';
+import { generateClientPortalToken } from '../utils/auth';
 
 const logger = new Logger('BotOrchestrator');
 
@@ -8577,11 +8578,7 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
         args: [last10, clientName, otp, expires],
       });
 
-      const defaultDomain = 'http://srv2002262.hstgr.cloud';
-      let appUrl = SettingsService.get('APP_URL', 'APP_URL', config.appUrl || defaultDomain).replace(/\/+$/, '');
-      if (!appUrl || appUrl.includes('localhost') || appUrl.includes('2.25.241.239')) {
-        appUrl = defaultDomain;
-      }
+      const appUrl = this.getClientPortalBaseUrl();
       const resetUrl = `${appUrl}/portal?resetCode=${otp}&p=${last10}`;
       const ispName = this.getIspName();
 
@@ -8601,19 +8598,28 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
   }
 
   /**
-   * Genera el enlace de acceso directo y seguro (Magic Link) al Portal Web / PWA del Cliente
+   * Obtiene la URL pública del servidor para el Portal del Cliente
    */
-  static getClientPortalLink(phone?: string, _clientName?: string): string {
-    const defaultDomain = 'http://srv2002262.hstgr.cloud';
-    let appUrl = SettingsService.get('APP_URL', 'APP_URL', config.appUrl || defaultDomain).replace(/\/+$/, '');
-    if (!appUrl || appUrl.includes('localhost') || appUrl.includes('2.25.241.239')) {
-      appUrl = defaultDomain;
+  static getClientPortalBaseUrl(): string {
+    const rawUrl = SettingsService.get('APP_URL', 'APP_URL', config.appUrl || '').replace(/\/+$/, '');
+    if (rawUrl && rawUrl.startsWith('http') && !rawUrl.includes('localhost')) {
+      return rawUrl;
     }
+    return 'http://2.25.241.239';
+  }
+
+  /**
+   * Genera el enlace de acceso directo permanente y seguro (Magic Link de por vida) al Portal Web / PWA del Cliente
+   */
+  static getClientPortalLink(phone?: string, clientName?: string): string {
+    const baseUrl = this.getClientPortalBaseUrl();
     const cleanPhone = (phone || '').replace(/\D/g, '');
     const last10 = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
-    if (!last10) return `${appUrl}/portal`;
+    if (!last10) return `${baseUrl}/portal`;
 
-    return `${appUrl}/portal?p=${last10}`;
+    // Generar token permanente e indestructible firmado para este teléfono
+    const permanentToken = generateClientPortalToken(last10, clientName || '');
+    return `${baseUrl}/portal?p=${last10}&auth=${permanentToken}`;
   }
 
   /**

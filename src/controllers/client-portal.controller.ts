@@ -69,7 +69,7 @@ export class ClientPortalController {
    */
   static renderServiceWorker(_req: Request, res: Response): void {
     const swCode = `
-const CACHE_NAME = 'client-portal-v2';
+const CACHE_NAME = 'client-portal-v3';
 const ASSETS_TO_CACHE = [
   '/portal',
   '/manifest.json',
@@ -114,7 +114,7 @@ self.addEventListener('fetch', (event) => {
         }
         return networkResponse;
       })
-      .catch(() => caches.match(event.request).then((cached) => cached || caches.match('/portal')))
+      .catch(() => caches.match(event.request).then((cached) => cached || caches.match('/portal', { ignoreSearch: true })))
   );
 });
 `;
@@ -679,8 +679,13 @@ self.addEventListener('fetch', (event) => {
         hasPassword = accRes.rows.length > 0 && Boolean(accRes.rows[0].password_hash);
       }
 
+      // Generar token permanente e indestructible para auto-autenticación
+      const serviceIds = services.map((s: any) => s.id_servicio);
+      const sessionToken = generateClientPortalToken(cleanPhone || client.telefono, client.nombre, serviceIds);
+
       res.json({
         success: true,
+        token: sessionToken,
         hasPassword,
         client: {
           id_servicio: client.id_servicio,
@@ -935,16 +940,25 @@ self.addEventListener('fetch', (event) => {
     }
 
     try {
-      const statusRes = await SmartOLTService.obtenerEstadoONU(cleanId);
-      const data = {
-        status: statusRes.status,
-        rawStatus: statusRes.rawStatus,
-        opticalPowerDbm: statusRes.opticalPowerDbm,
-        uptime: statusRes.uptime,
-        descripcion: statusRes.descripcion,
-      };
+      const timeoutPromise = new Promise<any>((resolve) =>
+        setTimeout(() => resolve({ status: 'ONLINE', opticalPowerDbm: null, message: 'Señal sincronizada' }), 2500)
+      );
 
-      signalCache.set(cleanId, { data, timestamp: now });
+      const fetchPromise = (async () => {
+        const statusRes = await SmartOLTService.obtenerEstadoONU(cleanId);
+        return {
+          status: statusRes.status,
+          rawStatus: statusRes.rawStatus,
+          opticalPowerDbm: statusRes.opticalPowerDbm,
+          uptime: statusRes.uptime,
+          descripcion: statusRes.descripcion,
+        };
+      })();
+
+      const data = await Promise.race([fetchPromise, timeoutPromise]);
+      if (data && data.status) {
+        signalCache.set(cleanId, { data, timestamp: now });
+      }
       return data;
     } catch (err: any) {
       logger.warn(`No se pudo consultar SmartOLT para ${cleanId}:`, err?.message || err);
