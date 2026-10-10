@@ -122,6 +122,7 @@ router.get('/api/smartolt/search', AdminController.searchClients);
 // WISPHUB Y AUDITORÍA DE CRUCE DE IPS
 // ==========================================
 router.post('/api/wisphub/sync', AdminController.syncWisphub);
+router.post('/api/wisphub/sync-invoices', AdminController.syncWisphubInvoices);
 router.get('/api/wisphub/stats', AdminController.getWisphubStats);
 router.get('/api/audit/ip-cross', AdminController.getAuditIpCross);
 

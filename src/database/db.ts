@@ -387,6 +387,34 @@ export async function initDatabase(): Promise<void> {
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_wh_sn_onu ON wisphub_clients(sn_onu);`);
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_wh_sn_norm ON wisphub_clients(sn_onu_normalized);`);
 
+    // Tabla de Facturas y Recibos sincronizados desde WispHub
+    await client.execute(`
+      CREATE TABLE IF NOT EXISTS wisphub_invoices (
+        id_factura INTEGER PRIMARY KEY,
+        id_servicio INTEGER,
+        folio TEXT,
+        cliente_nombre TEXT,
+        cliente_usuario TEXT,
+        cliente_telefono TEXT,
+        total REAL,
+        sub_total REAL,
+        descuento REAL,
+        estado TEXT,
+        fecha_emision TEXT,
+        fecha_vencimiento TEXT,
+        fecha_pago TEXT,
+        descripcion TEXT,
+        link_pago TEXT,
+        pdf_url TEXT,
+        raw_data TEXT,
+        updated_at TEXT
+      );
+    `);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_wh_inv_service ON wisphub_invoices(id_servicio);`);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_wh_inv_usuario ON wisphub_invoices(cliente_usuario);`);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_wh_inv_estado ON wisphub_invoices(estado);`);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_wh_inv_fecha ON wisphub_invoices(fecha_emision);`);
+
     // Tabla de Tickets para modificaciones manuales en SmartOLT y seguimiento
     await client.execute(`
       CREATE TABLE IF NOT EXISTS tickets (

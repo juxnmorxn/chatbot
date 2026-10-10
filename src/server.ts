@@ -87,6 +87,21 @@ async function startServer() {
           logger.info(`Clientes WispHub listos en Base de Datos Local: ${whStats.count} clientes (Última sync: ${whStats.lastSync || 'Previa'})`);
         }
 
+        // Sincronización inicial de facturas de WispHub si la tabla está vacía
+        try {
+          const { getDbClient } = await import('./database/db');
+          const invCheck = await getDbClient().execute({ sql: `SELECT COUNT(*) as c FROM wisphub_invoices`, args: [] });
+          const invCount = Number((invCheck.rows[0] as any)?.c || 0);
+          if (invCount === 0) {
+            logger.info('Tabla wisphub_invoices vacía en Base de Datos Local. Iniciando sincronización de facturas recientes...');
+            await WispHubService.syncInvoicesToLocalDb(15).catch((e) => logger.warn('Aviso en sync de facturas:', e?.message || e));
+          } else {
+            logger.info(`Facturas WispHub listas en Base de Datos Local: ${invCount} facturas.`);
+          }
+        } catch (err: any) {
+          logger.warn('Aviso al comprobar facturas locales:', err?.message || err);
+        }
+
         // Reconciliación cruzada de datos SmartOLT <-> WispHub <-> GPS y normalización de SN
         await DbService.syncClientDataAndGps().catch((err) => {
           logger.warn('Aviso: syncClientDataAndGps inicial falló:', err?.message || err);
@@ -112,6 +127,7 @@ async function startServer() {
       try {
         logger.info('Ejecutando sincronización periódica de WispHub (cada 12 horas)...');
         await WispHubService.syncAllClientesToLocalDb();
+        await WispHubService.syncInvoicesToLocalDb(10).catch(() => {});
       } catch (err: any) {
         logger.warn('Error en sincronización periódica de WispHub:', err?.message || err);
       }

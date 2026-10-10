@@ -1024,12 +1024,58 @@ export class SmartOLTService {
 
   /**
    * Obtiene los detalles de configuración Wi-Fi actuales de la ONU desde SmartOLT
+   * Consulta /onu/get_onu_details/{externalId} y extrae los puertos wifi_0/1 (2.4 GHz) y wifi_0/5 (5 GHz)
    */
   static async getOnuWifiDetails(onuIdOrExternalId: string): Promise<any> {
+    const cleanId = String(onuIdOrExternalId || '').trim();
+    if (!cleanId) return null;
+
     try {
+      let externalId = cleanId;
+      const onuRecord = await DbService.getOnuById(cleanId);
+      if (onuRecord?.unique_external_id) {
+        externalId = onuRecord.unique_external_id;
+      }
+
       const api = this.getApi();
-      const res = await api.get(`/onu/get_onu_wifi_details/${onuIdOrExternalId}`);
-      return res.data;
+      const res = await api.get(`/onu/get_onu_details/${encodeURIComponent(externalId)}`);
+      const det = res.data?.onu_details || res.data;
+      if (!det) return null;
+
+      const wifiPorts = Array.isArray(det.wifi_ports) ? det.wifi_ports : [];
+      const port24 = wifiPorts.find((p: any) => p.port === 'wifi_0/1' || p.port === '1' || p.wlan_id === '1') || wifiPorts[0];
+      const port5 = wifiPorts.find((p: any) => p.port === 'wifi_0/5' || p.port === '5' || p.wlan_id === '5');
+
+      const ssid24 = (port24?.ssid || '').trim();
+      const pass24 = (port24?.password || '').trim();
+      const ssid5 = (port5?.ssid || '').trim();
+      const pass5 = (port5?.password || pass24 || '').trim();
+      const has5g = !!(port5 && (port5.ssid || port5.admin_state === 'Enabled' || port5.admin_state === 'enabled'));
+
+      return {
+        has5g,
+        ssid24: ssid24 || (ssid5 ? ssid5.replace(/-5g$/i, '') : ''),
+        password24: pass24,
+        ssid5g: ssid5 || (has5g && ssid24 ? `${ssid24}-5G` : ''),
+        password5g: pass5 || pass24,
+        ssid: ssid24 || ssid5,
+        password: pass24 || pass5,
+        wlan1: {
+          ssid: ssid24,
+          password: pass24,
+          admin_state: port24?.admin_state || 'Enabled',
+          mode: port24?.mode || 'LAN',
+          auth_mode: port24?.auth_mode || 'wpa2',
+        },
+        wlan5: has5g ? {
+          ssid: ssid5,
+          password: pass5,
+          admin_state: port5?.admin_state || 'Enabled',
+          mode: port5?.mode || 'LAN',
+          auth_mode: port5?.auth_mode || 'wpa2',
+        } : null,
+        raw: wifiPorts,
+      };
     } catch (e: any) {
       logger.warn(`No se pudieron obtener detalles WiFi de ${onuIdOrExternalId}:`, e?.message);
       return null;

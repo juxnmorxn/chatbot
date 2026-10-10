@@ -636,34 +636,73 @@ self.addEventListener('fetch', (event) => {
 
       const db = getDbClient();
 
-      // 1. Obtener registro de SmartOLT (si existe vinculado)
+      // 1. Obtener registro de SmartOLT (búsqueda multicriterio: SN, Hex-SN, IP, ID Servicio, Nombre)
       let onuRecord: any = null;
-      if (client.sn_onu) {
+      let cleanSn = (client.sn_onu || '').trim();
+      if (/^48575443/i.test(cleanSn)) {
+        cleanSn = 'HWTC' + cleanSn.slice(8);
+      }
+
+      if (cleanSn) {
         const onuRes = await db.execute({
-          sql: `SELECT * FROM smartolt_onus WHERE sn = ? OR sn = ? LIMIT 1`,
-          args: [client.sn_onu.toUpperCase(), client.sn_onu],
+          sql: `SELECT * FROM smartolt_onus WHERE sn = ? OR sn = ? OR unique_external_id = ? OR sn LIKE ? LIMIT 1`,
+          args: [cleanSn.toUpperCase(), (client.sn_onu || '').toUpperCase(), cleanSn.toUpperCase(), `%${cleanSn.slice(-6)}%`],
         });
         if (onuRes.rows.length > 0) onuRecord = onuRes.rows[0];
       }
 
       if (!onuRecord && client.ip) {
         const onuRes = await db.execute({
-          sql: `SELECT * FROM smartolt_onus WHERE ip_address = ? LIMIT 1`,
-          args: [client.ip],
+          sql: `SELECT * FROM smartolt_onus WHERE ip_address = ? OR raw_data LIKE ? LIMIT 1`,
+          args: [client.ip, `%"${client.ip}"%`],
         });
         if (onuRes.rows.length > 0) onuRecord = onuRes.rows[0];
       }
 
       if (!onuRecord && client.id_servicio) {
         const onuRes = await db.execute({
-          sql: `SELECT * FROM smartolt_onus WHERE name LIKE ? LIMIT 1`,
-          args: [`%${client.id_servicio}%`],
+          sql: `SELECT * FROM smartolt_onus WHERE name LIKE ? OR name LIKE ? OR raw_data LIKE ? LIMIT 1`,
+          args: [`%${client.id_servicio}%`, `${client.id_servicio}-%`, `%"${client.id_servicio}"%`],
         });
         if (onuRes.rows.length > 0) onuRecord = onuRes.rows[0];
       }
 
+      // Si tiene prefijo de contrato en usuario_rb (ej: 0696)
+      if (!onuRecord && client.raw_data) {
+        try {
+          const rawParsed = JSON.parse(client.raw_data);
+          const uStr = rawParsed.usuario || '';
+          const matchU = uStr.match(/^\d+/);
+          if (matchU) {
+            const numPref = matchU[0].replace(/^0+/, '');
+            const onuRes = await db.execute({
+              sql: `SELECT * FROM smartolt_onus WHERE name LIKE ? OR name LIKE ? LIMIT 1`,
+              args: [`%${matchU[0]}%`, `%${numPref}%`],
+            });
+            if (onuRes.rows.length > 0) onuRecord = onuRes.rows[0];
+          }
+        } catch (_) {}
+      }
+
+      if (!onuRecord && client.nombre) {
+        const cleanName = cleanPersonName(client.nombre);
+        if (cleanName.length > 4) {
+          const parts = cleanName.split(' ').filter(p => p.length >= 4);
+          for (const p of parts) {
+            const onuRes = await db.execute({
+              sql: `SELECT * FROM smartolt_onus WHERE name_normalized LIKE ? OR name LIKE ? LIMIT 1`,
+              args: [`%${p}%`, `%${p}%`],
+            });
+            if (onuRes.rows.length > 0) {
+              onuRecord = onuRes.rows[0];
+              break;
+            }
+          }
+        }
+      }
+
       // 2. Obtener estado de señal (desde caché o OLT de forma controlada)
-      const targetOnuId = onuRecord?.unique_external_id || onuRecord?.sn || client.sn_onu;
+      const targetOnuId = onuRecord?.unique_external_id || onuRecord?.sn || cleanSn || client.sn_onu;
       let signal: any = {
         status: client.estado === 'activo' ? 'ONLINE' : 'OFFLINE',
         opticalPowerDbm: null,
@@ -693,41 +732,52 @@ self.addEventListener('fetch', (event) => {
         logger.warn('Error al verificar network_outages:', outageErr?.message || outageErr);
       }
 
-      // 4. Datos Wi-Fi reales desde SmartOLT o Base de Datos
-      let wifiSsid = '';
-      let wifiPass = '';
+      // 4. Datos Wi-Fi reales Dual-Band (2.4 GHz y 5 GHz) desde SmartOLT
+      let wifiInfo: any = {
+        ssid24: '',
+        password24: '',
+        ssid5g: '',
+        password5g: '',
+        has5g: false,
+        ssid: '',
+        password: '',
+      };
 
       if (targetOnuId) {
         try {
-          const timeoutPromise = new Promise<any>((resolve) => setTimeout(() => resolve(null), 1800));
+          const timeoutPromise = new Promise<any>((resolve) => setTimeout(() => resolve(null), 3000));
           const wifiPromise = SmartOLTService.getOnuWifiDetails(targetOnuId);
           const wifiDetails = await Promise.race([wifiPromise, timeoutPromise]);
           if (wifiDetails) {
-            const wlan1 = wifiDetails?.wlan1 || wifiDetails?.wlan_1 || wifiDetails?.wireless_lan_1 || 
-                          (Array.isArray(wifiDetails?.wifi) ? wifiDetails.wifi.find((w: any) => String(w.index || w.wlan_id) === '1') : null);
-            wifiSsid = wlan1?.ssid || wifiDetails?.ssid || wifiDetails?.wifi_ssid || '';
-            wifiPass = wlan1?.password || wlan1?.key || wifiDetails?.password || wifiDetails?.wifi_password || '';
+            wifiInfo = {
+              ssid24: wifiDetails.ssid24 || wifiDetails.ssid || '',
+              password24: wifiDetails.password24 || wifiDetails.password || '',
+              ssid5g: wifiDetails.ssid5g || '',
+              password5g: wifiDetails.password5g || wifiDetails.password24 || '',
+              has5g: !!wifiDetails.has5g,
+              ssid: wifiDetails.ssid24 || wifiDetails.ssid || '',
+              password: wifiDetails.password24 || wifiDetails.password || '',
+            };
           }
         } catch (wErr) {
           logger.warn(`No se pudo obtener WiFi de SmartOLT para ${targetOnuId}:`, wErr);
         }
       }
 
+      // Si la OLT no traía SSIDs configurados todavía, fallback con marca de servicio
       const ispName = SettingsService.get('ISP_NAME', 'ISP_NAME', config.isp.name || 'CloudWareMx');
-      if (!wifiSsid) {
-        const rawOnuName = (onuRecord?.name || '').replace(/^[\d\s\-#_.]+/, '').trim();
-        const clientFirstName = (client.nombre || '').replace(/^[\d\s\-#_.]+/, '').split(' ')[0] || 'Cliente';
-        wifiSsid = rawOnuName || `${ispName}_${clientFirstName}`;
+      if (!wifiInfo.ssid24) {
+        wifiInfo.ssid24 = `${ispName}-${client.id_servicio}`;
+        wifiInfo.password24 = onuRecord?.sn ? onuRecord.sn.slice(-8) : '12345678';
+        wifiInfo.ssid = wifiInfo.ssid24;
+        wifiInfo.password = wifiInfo.password24;
+      }
+      if (wifiInfo.has5g && !wifiInfo.ssid5g) {
+        wifiInfo.ssid5g = `${wifiInfo.ssid24}-5G`;
+        wifiInfo.password5g = wifiInfo.password24;
       }
 
-      if (!wifiPass) {
-        wifiPass = onuRecord?.sn ? onuRecord.sn.slice(-8) : '********';
-      }
-
-      const wifi = {
-        ssid24: wifiSsid,
-        password: wifiPass,
-      };
+      const wifi = wifiInfo;
 
       // 5. Verificar si el cliente ya tiene contraseña registrada
       const targetPhone10 = (verifiedPhone || client.telefono || '').replace(/\D/g, '').slice(-10);
@@ -800,11 +850,16 @@ self.addEventListener('fetch', (event) => {
 
       const client = services[0];
       let facturas: any[] = [];
+      let rawUserData: any = {};
+      try { rawUserData = JSON.parse(client.raw_data || '{}'); } catch (_) {}
 
       try {
-        facturas = await WispHubService.obtenerFacturasPendientes(client.id_servicio, client.nombre);
+        facturas = await WispHubService.getInvoicesForClient(client.id_servicio, {
+          usuario: rawUserData.usuario || client.usuario_rb,
+          nombre: client.nombre,
+        });
       } catch (fErr: any) {
-        logger.warn(`Error al consultar facturas en WispHub para ${client.id_servicio}:`, fErr?.message || fErr);
+        logger.warn(`Error al consultar facturas para ${client.id_servicio}:`, fErr?.message || fErr);
       }
 
       // Estructurar respuesta con facturas e información de pago bancario
@@ -817,11 +872,13 @@ self.addEventListener('fetch', (event) => {
         invoices: facturas.map((f: any) => ({
           id: f.id_factura || f.id || client.id_servicio,
           folio: f.folio || `FAC-${f.id_factura || client.id_servicio}`,
-          monto: f.monto || Number(client.saldo || client.precio_plan || 0),
+          monto: Number(f.total || f.monto || client.saldo || client.precio_plan || 0),
           estado: f.estado || (Number(client.saldo || 0) > 0 ? 'Pendiente' : 'Pagada'),
           fecha_emision: f.fecha_emision || new Date().toISOString().slice(0, 10),
           fecha_vencimiento: f.fecha_vencimiento || client.fecha_corte || 'Próximo corte',
-          link_pago: f.link_pago || (f.id_factura ? `https://wisphub.net/factura/${f.id_factura}/` : 'https://wisphub.net/factura/'),
+          fecha_pago: f.fecha_pago || null,
+          descripcion: f.descripcion || '',
+          link_pago: f.link_pago || (f.id_factura ? `https://wisphub.net/factura/${f.id_factura}/` : null),
           pdf_url: f.pdf_url || (f.id_factura ? `https://wisphub.net/factura/pdf/${f.id_factura}/` : null),
         })),
         bankDetails: {
@@ -890,7 +947,7 @@ self.addEventListener('fetch', (event) => {
    */
   static async changeWifi(req: Request, res: Response): Promise<void> {
     try {
-      const { clientId, ssid, password } = req.body;
+      const { clientId, ssid, ssid24, ssid5g, password } = req.body;
       if (!clientId || !password || password.length < 8) {
         res.status(400).json({ success: false, message: 'Contraseña inválida (mínimo 8 caracteres).' });
         return;
@@ -919,7 +976,8 @@ self.addEventListener('fetch', (event) => {
       const targetId = client.sn_onu || client.ip || client.nombre;
       const result = await SmartOLTService.updateOnuWifiPassword(targetId, {
         password,
-        ssid24: ssid || undefined,
+        ssid24: ssid24 || ssid || undefined,
+        ssid5g: ssid5g || undefined,
       });
 
       if (result.success) {

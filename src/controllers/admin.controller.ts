@@ -1508,6 +1508,38 @@ export class AdminController {
   }
 
   /**
+   * Dispara la sincronización de facturas de WispHub hacia la base de datos local
+   */
+  static async syncWisphubInvoices(req: Request, res: Response): Promise<void> {
+    try {
+      const maxPages = parseInt(req.query.pages as string, 10) || 15;
+      logger.info(`Iniciando sincronización manual de facturas WispHub (máx ${maxPages} páginas)...`);
+      res.json({
+        success: true,
+        message: 'Sincronización de facturas iniciada en segundo plano.',
+        background: true,
+      });
+
+      WispHubService.syncInvoicesToLocalDb(maxPages)
+        .then((result) => {
+          logger.info(`Sincronización de facturas completada: ${result.count} facturas guardadas.`);
+          AdminController.broadcastSSE('wisphub:invoices_synced', {
+            success: result.success,
+            count: result.count,
+            message: result.message,
+            timestamp: new Date().toISOString(),
+          });
+        })
+        .catch((err) => {
+          logger.error('Error en sincronización de facturas:', err?.message || err);
+        });
+    } catch (error: any) {
+      logger.error('Error al iniciar sincronización de facturas:', error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
    * Obtiene estadísticas de sincronización de WispHub en Base de Datos Local
    */
   static async getWisphubStats(_req: Request, res: Response): Promise<void> {

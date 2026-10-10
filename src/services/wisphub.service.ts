@@ -5,6 +5,7 @@ import { Logger } from '../utils/logger';
 import { normalizePhone10 } from '../utils/spintax';
 import { cleanPersonName, computeNameMatchScore } from '../utils/fuzzy-matcher';
 import { DbService, WisphubClientRecord } from './db.service';
+import { getDbClient } from '../database/db';
 
 const logger = new Logger('WispHubService');
 
@@ -1114,4 +1115,195 @@ export class WispHubService {
       this.isSyncing = false;
     }
   }
+
+  /**
+   * Guarda o actualiza un lote de facturas en la tabla local wisphub_invoices
+   */
+  static async saveInvoicesToDb(invoices: any[]): Promise<number> {
+    if (!Array.isArray(invoices) || invoices.length === 0) return 0;
+    const db = getDbClient();
+    let saved = 0;
+    const now = new Date().toISOString();
+
+    for (const f of invoices) {
+      try {
+        const idFactura = f.id_factura || f.id;
+        if (!idFactura) continue;
+
+        let idServicio: number | null = null;
+        if (Array.isArray(f.articulos) && f.articulos.length > 0) {
+          const srv = f.articulos[0]?.servicio?.id_servicio;
+          if (srv) idServicio = Number(srv);
+        }
+        if (!idServicio && f.cliente?.id_servicio) {
+          idServicio = Number(f.cliente.id_servicio);
+        }
+
+        const folio = f.folio ? String(f.folio) : `FAC-${idFactura}`;
+        const clienteNombre = f.cliente?.nombre ? String(f.cliente.nombre) : '';
+        const clienteUsuario = f.cliente?.usuario ? String(f.cliente.usuario) : '';
+        const clienteTel = f.cliente?.telefono ? String(f.cliente.telefono) : '';
+        const total = Number(f.total || 0);
+        const subTotal = Number(f.sub_total || total);
+        const descuento = Number(f.descuento || 0);
+        const estado = String(f.estado || 'Pendiente de Pago');
+        const fechaEmision = f.fecha_emision ? String(f.fecha_emision) : null;
+        const fechaVencimiento = f.fecha_vencimiento ? String(f.fecha_vencimiento) : null;
+        const fechaPago = f.fecha_pago ? String(f.fecha_pago) : null;
+        const descripcion = Array.isArray(f.articulos) && f.articulos[0]?.descripcion ? String(f.articulos[0].descripcion) : '';
+        const linkPago = f.url_pasarela || f.url_payu || (idFactura ? `https://wisphub.net/factura/${idFactura}/` : null);
+        const pdfUrl = f.url_pdf || (idFactura ? `https://wisphub.net/factura/pdf/${idFactura}/` : null);
+
+        await db.execute({
+          sql: `
+            INSERT INTO wisphub_invoices (
+              id_factura, id_servicio, folio, cliente_nombre, cliente_usuario, cliente_telefono,
+              total, sub_total, descuento, estado, fecha_emision, fecha_vencimiento, fecha_pago,
+              descripcion, link_pago, pdf_url, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id_factura) DO UPDATE SET
+              id_servicio = excluded.id_servicio,
+              folio = excluded.folio,
+              cliente_nombre = excluded.cliente_nombre,
+              cliente_usuario = excluded.cliente_usuario,
+              cliente_telefono = excluded.cliente_telefono,
+              total = excluded.total,
+              sub_total = excluded.sub_total,
+              descuento = excluded.descuento,
+              estado = excluded.estado,
+              fecha_emision = excluded.fecha_emision,
+              fecha_vencimiento = excluded.fecha_vencimiento,
+              fecha_pago = excluded.fecha_pago,
+              descripcion = excluded.descripcion,
+              link_pago = excluded.link_pago,
+              pdf_url = excluded.pdf_url,
+              updated_at = excluded.updated_at
+          `,
+          args: [
+            idFactura, idServicio, folio, clienteNombre, clienteUsuario, clienteTel,
+            total, subTotal, descuento, estado, fechaEmision, fechaVencimiento, fechaPago,
+            descripcion, linkPago, pdfUrl, now
+          ],
+        });
+        saved++;
+      } catch (err: any) {
+        logger.warn(`Error guardando factura ${f.id_factura}:`, err?.message);
+      }
+    }
+    return saved;
+  }
+
+  /**
+   * Sincroniza facturas masivamente desde WispHub a la base de datos local
+   */
+  static async syncInvoicesToLocalDb(maxPages: number = 20): Promise<{ success: boolean; count: number; message: string }> {
+    const apiKey = this.getApiKey();
+    if (!apiKey || apiKey.includes('tu_token')) {
+      return { success: false, count: 0, message: 'WISPHUB_API_KEY no configurada.' };
+    }
+
+    try {
+      logger.info('Iniciando sincronización masiva de facturas desde WispHub (/facturas/?limit=300)...');
+      const api = this.getApi();
+      let nextUrl: string | null = '/facturas/?limit=300';
+      let page = 0;
+      let totalSaved = 0;
+
+      while (nextUrl && page < maxPages) {
+        page++;
+        const res: any = await api.get(nextUrl);
+        const results = res.data?.results || [];
+        if (!Array.isArray(results) || results.length === 0) break;
+
+        const count = await this.saveInvoicesToDb(results);
+        totalSaved += count;
+        logger.info(`Página ${page} de facturas sincronizada: ${count} guardadas (Total: ${totalSaved})`);
+
+        if (res.data?.next) {
+          const nextFull = res.data.next;
+          const match = nextFull.match(/\/facturas\/\?.*$/);
+          nextUrl = match ? match[0] : null;
+        } else {
+          nextUrl = null;
+        }
+      }
+
+      logger.info(`Sincronización de facturas finalizada: ${totalSaved} procesadas en ${page} páginas.`);
+      return { success: true, count: totalSaved, message: `${totalSaved} facturas sincronizadas localmente.` };
+    } catch (err: any) {
+      logger.error('Error al sincronizar facturas de WispHub:', err?.message || err);
+      return { success: false, count: 0, message: `Error: ${err?.message}` };
+    }
+  }
+
+  /**
+   * Obtiene todas las facturas de un cliente específico desde la base de datos local
+   * Si no hay registros locales, realiza una búsqueda rápida en las páginas recientes de WispHub
+   */
+  static async getInvoicesForClient(
+    idServicio: number | string,
+    options?: { usuario?: string; nombre?: string }
+  ): Promise<any[]> {
+    const db = getDbClient();
+    const cleanId = Number(idServicio);
+
+    // 1. Buscar en tabla local por id_servicio
+    let rows: any[] = [];
+    if (!isNaN(cleanId) && cleanId > 0) {
+      const res = await db.execute({
+        sql: `SELECT * FROM wisphub_invoices WHERE id_servicio = ? ORDER BY fecha_emision DESC, id_factura DESC LIMIT 20`,
+        args: [cleanId],
+      });
+      rows = res.rows as any[];
+    }
+
+    // 2. Si no hay por id_servicio, buscar por usuario o nombre
+    if (rows.length === 0 && options?.usuario) {
+      const uPrefix = options.usuario.split('@')[0].split('-')[0];
+      const res = await db.execute({
+        sql: `SELECT * FROM wisphub_invoices WHERE cliente_usuario LIKE ? OR cliente_usuario LIKE ? ORDER BY fecha_emision DESC, id_factura DESC LIMIT 20`,
+        args: [`%${options.usuario}%`, `%${uPrefix}%`],
+      });
+      rows = res.rows as any[];
+    }
+
+    if (rows.length === 0 && options?.nombre) {
+      const nameParts = options.nombre.split(' ').filter(p => p.length >= 4);
+      for (const part of nameParts) {
+        const res = await db.execute({
+          sql: `SELECT * FROM wisphub_invoices WHERE cliente_nombre LIKE ? ORDER BY fecha_emision DESC, id_factura DESC LIMIT 20`,
+          args: [`%${part}%`],
+        });
+        if (res.rows.length > 0) {
+          rows = res.rows as any[];
+          break;
+        }
+      }
+    }
+
+    // 3. Si aún no hay registros locales, sincronizar las primeras 3 páginas de WispHub
+    if (rows.length === 0) {
+      logger.info(`No se encontraron facturas locales para servicio ${idServicio}. Consultando páginas recientes de WispHub...`);
+      await this.syncInvoicesToLocalDb(3);
+
+      if (!isNaN(cleanId) && cleanId > 0) {
+        const res2 = await db.execute({
+          sql: `SELECT * FROM wisphub_invoices WHERE id_servicio = ? ORDER BY fecha_emision DESC, id_factura DESC LIMIT 20`,
+          args: [cleanId],
+        });
+        rows = res2.rows as any[];
+      }
+      if (rows.length === 0 && options?.usuario) {
+        const uPrefix = options.usuario.split('@')[0].split('-')[0];
+        const res2 = await db.execute({
+          sql: `SELECT * FROM wisphub_invoices WHERE cliente_usuario LIKE ? OR cliente_usuario LIKE ? ORDER BY fecha_emision DESC, id_factura DESC LIMIT 20`,
+          args: [`%${options.usuario}%`, `%${uPrefix}%`],
+        });
+        rows = res2.rows as any[];
+      }
+    }
+
+    return rows;
+  }
 }
+
