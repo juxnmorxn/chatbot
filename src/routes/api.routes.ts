@@ -74,8 +74,8 @@ router.post('/api/admin/chats/send', AdminController.sendManualChatMessage);
 router.post('/api/admin/chats/takeover', AdminController.toggleHumanTakeover);
 router.post('/api/admin/chats/:phone/close', AdminController.closeChatCase);
 router.post('/api/admin/chats/close', AdminController.closeChatCase);
-router.delete('/api/admin/chats/:phone', requireAdminAuth(['superadmin']), AdminController.deleteChatConversation);
-router.post('/api/admin/chats/:phone/delete', requireAdminAuth(['superadmin']), AdminController.deleteChatConversation);
+router.delete('/api/admin/chats/:phone', requireAdminAuth(['superadmin', 'soporte']), AdminController.deleteChatConversation);
+router.post('/api/admin/chats/:phone/delete', requireAdminAuth(['superadmin', 'soporte']), AdminController.deleteChatConversation);
 router.post('/api/admin/chats/:phone/department', AdminController.transferChatDepartment);
 router.post('/api/notifications/run-billing-cycle', AdminController.runBillingNotifications);
 
@@ -172,14 +172,14 @@ router.post('/api/technicians/:id/toggle', AdminController.toggleTechnician);
 // ==========================================
 router.get('/api/tickets', AdminController.getTickets);
 router.get('/api/tickets/stats', AdminController.getTicketStats);
-router.delete('/api/tickets/clear-all', requireAdminAuth(['superadmin']), AdminController.clearAllTickets);
-router.post('/api/tickets/clear-all', requireAdminAuth(['superadmin']), AdminController.clearAllTickets);
+router.delete('/api/tickets/clear-all', requireAdminAuth(['superadmin', 'soporte']), AdminController.clearAllTickets);
+router.post('/api/tickets/clear-all', requireAdminAuth(['superadmin', 'soporte']), AdminController.clearAllTickets);
 router.patch('/api/tickets/:folio/status', AdminController.updateTicketStatus);
 router.post('/api/tickets/:folio/status', AdminController.updateTicketStatus);
 router.post('/api/tickets/:folio/assign', AdminController.assignTicketTechnician);
 router.post('/api/tickets/:folio/forward-group', AdminController.forwardTicketToOffice);
-router.delete('/api/tickets/:folio', requireAdminAuth(['superadmin']), AdminController.deleteTicket);
-router.post('/api/tickets/:folio/delete', requireAdminAuth(['superadmin']), AdminController.deleteTicket);
+router.delete('/api/tickets/:folio', requireAdminAuth(['superadmin', 'soporte']), AdminController.deleteTicket);
+router.post('/api/tickets/:folio/delete', requireAdminAuth(['superadmin', 'soporte']), AdminController.deleteTicket);
 
 // ==========================================
 // GRUPOS DE WHATSAPP Y OFICINAS (RUTEO DE TICKETS Y ACTIVACIONES)
@@ -206,13 +206,13 @@ router.post('/api/admin/database/auto-migrate', requireAdminAuth(['superadmin'])
 // ==========================================
 // RUTAS DE LIMPIEZA Y REINICIO DE PRUEBAS (SOLO SUPERADMIN)
 // ==========================================
-router.delete('/api/sessions/clear-all', requireAdminAuth(['superadmin']), AdminController.clearAllSessions);
-router.post('/api/sessions/clear-all', requireAdminAuth(['superadmin']), AdminController.clearAllSessions);
-router.delete('/api/logs/clear-all', requireAdminAuth(['superadmin']), AdminController.clearAllLogs);
-router.post('/api/logs/clear-all', requireAdminAuth(['superadmin']), AdminController.clearAllLogs);
+router.delete('/api/sessions/clear-all', requireAdminAuth(['superadmin', 'soporte']), AdminController.clearAllSessions);
+router.post('/api/sessions/clear-all', requireAdminAuth(['superadmin', 'soporte']), AdminController.clearAllSessions);
+router.delete('/api/logs/clear-all', requireAdminAuth(['superadmin', 'soporte']), AdminController.clearAllLogs);
+router.post('/api/logs/clear-all', requireAdminAuth(['superadmin', 'soporte']), AdminController.clearAllLogs);
 router.post('/api/sessions/:phone/toggle-pause', AdminController.toggleBotPause);
-router.delete('/api/sessions/:phone', requireAdminAuth(['superadmin']), AdminController.deleteSession);
-router.post('/api/sessions/:phone/delete', requireAdminAuth(['superadmin']), AdminController.deleteSession);
+router.delete('/api/sessions/:phone', requireAdminAuth(['superadmin', 'soporte']), AdminController.deleteSession);
+router.post('/api/sessions/:phone/delete', requireAdminAuth(['superadmin', 'soporte']), AdminController.deleteSession);
 router.post('/api/admin/portal/reset-phone', requireAdminAuth(['superadmin', 'soporte']), AdminController.resetPortalUserPhone);
 router.delete('/api/admin/portal/reset-phone', requireAdminAuth(['superadmin', 'soporte']), AdminController.resetPortalUserPhone);
 router.post('/api/admin/portal/reset-phone/:phone', requireAdminAuth(['superadmin', 'soporte']), AdminController.resetPortalUserPhone);

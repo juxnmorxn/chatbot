@@ -3225,7 +3225,10 @@ export function getAdminDashboardHtml(): string {
                     <button class="chat-dropdown-item" onclick="closeCurrentChatCase(); closeChatActionsMenu();">
                       <span>✕</span> <span>Cerrar caso y reactivar bot</span>
                     </button>
-                    <button id="btn-delete-active-chat" class="chat-dropdown-item item-danger" style="display: none;" onclick="deleteCurrentChat(); closeChatActionsMenu();">
+                    <button class="chat-dropdown-item" onclick="resetActiveChatPortalAndBot(); closeChatActionsMenu();">
+                      <span>🧹</span> <span>Resetear Portal y Bot (Limpiar pruebas)</span>
+                    </button>
+                    <button id="btn-delete-active-chat" class="chat-dropdown-item item-danger" onclick="deleteCurrentChat(); closeChatActionsMenu();">
                       <span>🗑️</span> <span>Eliminar conversación</span>
                     </button>
                   </div>
@@ -3395,14 +3398,14 @@ export function getAdminDashboardHtml(): string {
             </div>
             <span id="tickets-count-label" class="badge badge-info" style="font-size: 11px;">0 tickets</span>
           </div>
-          <div class="subnav-actions">
-            <button class="btn btn-secondary btn-xs" onclick="loadTicketsData()">
+          <div class="subnav-actions" style="display: flex; gap: 8px; align-items: center;">
+            <button class="btn btn-secondary btn-sm" onclick="loadTicketsData()">
               <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"></path></svg>
               <span>Recargar</span>
             </button>
-            <button id="btn-clear-all-tickets" class="btn btn-danger btn-xs" style="display: none;" onclick="confirmClearAllTickets()">
+            <button id="btn-clear-all-tickets" class="btn btn-danger btn-sm" onclick="confirmClearAllTickets()" title="Eliminar permanentemente todos los tickets de prueba">
               <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-              <span>Vaciar</span>
+              <span>🧹 Limpiar Todos los Tickets</span>
             </button>
           </div>
         </div>
@@ -4564,28 +4567,46 @@ export function getAdminDashboardHtml(): string {
           </button>
         </div>
 
-        <!-- Danger Zone (Superadmin Only) -->
-        <div id="settings-danger-zone" class="glass-card" style="margin-top: 24px; border-color: rgba(244, 63, 94, 0.3); display: none;">
-          <h3 style="font-size: 15px; font-weight: 700; color: var(--accent-rose); margin-bottom: 12px;">🧪 Zona de Pruebas & Reset (Superadmin)</h3>
-          <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">Herramientas para probar onboarding de clientes, portal y flujos del bot sin basura residual.</p>
+        <!-- Danger & Testing Zone -->
+        <div id="settings-danger-zone" class="glass-card" style="margin-top: 28px; border-color: rgba(244, 63, 94, 0.35); background: rgba(244, 63, 94, 0.03);">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+            <span style="font-size: 20px;">🛠️</span>
+            <h3 style="font-size: 16px; font-weight: 700; color: var(--accent-rose); margin: 0;">Herramientas de Limpieza & Reset (WhatsApp y Portal de Clientes)</h3>
+          </div>
+          <p style="font-size: 12.5px; color: var(--text-muted); margin-bottom: 16px; line-height: 1.5;">
+            Herramientas administrativas para restablecer teléfonos de prueba, desvincular cuentas del Portal de Clientes, eliminar tickets generados por el bot y vaciar sesiones en memoria.
+          </p>
           
-          <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(244, 63, 94, 0.2); border-radius: var(--radius-sm); padding: 14px; margin-bottom: 16px;">
-            <div style="font-size: 13px; font-weight: 700; color: #fff; margin-bottom: 6px;">📱 Restablecer / Limpiar Celular de Pruebas</div>
-            <div style="font-size: 11.5px; color: var(--text-muted); margin-bottom: 12px;">
-              Elimina la cuenta del portal de clientes vinculada al número, reinicia la sesión del bot y borra los cooldowns/caché en memoria para que puedas volver a probar desde cero con tu propio celular.
+          <!-- Card de Reset de Teléfono / Portal -->
+          <div style="background: rgba(0,0,0,0.35); border: 1px solid rgba(244, 63, 94, 0.25); border-radius: var(--radius-sm); padding: 16px; margin-bottom: 18px;">
+            <div style="font-size: 13.5px; font-weight: 700; color: #fff; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+              <span>📱</span> <span>Restablecer / Desvincular Teléfono (Portal & WhatsApp)</span>
             </div>
-            <div style="display: flex; gap: 10px; max-width: 520px; align-items: center; flex-wrap: wrap;">
-              <input type="text" id="input-test-reset-phone" class="form-control" placeholder="Ej: 7711234567 o 527711234567" style="font-size: 13px; flex: 1; min-width: 200px;" onkeypress="if(event.key==='Enter') handleResetTestPhoneAction()">
-              <button class="btn btn-danger" onclick="handleResetTestPhoneAction()" id="btn-reset-test-phone" style="white-space: nowrap; font-size: 12.5px;">
-                🧹 Limpiar Celular
+            <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px; line-height: 1.5;">
+              Elimina la cuenta del portal vinculada al número, reinicia la sesión del bot y borra cooldowns en memoria para que puedas probar desde cero con tu propio celular o el de un cliente.
+            </div>
+            <div style="display: flex; gap: 10px; max-width: 540px; align-items: center; flex-wrap: wrap;">
+              <input type="text" id="input-test-reset-phone" class="form-control" placeholder="Ej: 7711234567 o 527711234567" style="font-size: 13px; flex: 1; min-width: 220px;" onkeypress="if(event.key==='Enter') handleResetTestPhoneAction()">
+              <button class="btn btn-danger" onclick="handleResetTestPhoneAction()" id="btn-reset-test-phone" style="white-space: nowrap; font-size: 12.5px; display: inline-flex; align-items: center; gap: 6px;">
+                <span>🧹</span> <span>Limpiar Celular & Portal</span>
               </button>
             </div>
           </div>
 
-          <div style="display: flex; gap: 12px; flex-wrap: wrap;">
-            <button class="btn btn-danger btn-sm" onclick="clearSessionsData()">Vaciar Sesiones</button>
-            <button class="btn btn-danger btn-sm" onclick="clearLogsData()">Vaciar Historial Logs</button>
-            <button class="btn btn-danger btn-sm" onclick="confirmClearAllTickets()">Vaciar Tickets</button>
+          <!-- Acciones de Vaciado Global -->
+          <div>
+            <div style="font-size: 12px; font-weight: 700; color: var(--text-dim); text-transform: uppercase; margin-bottom: 10px; letter-spacing: 0.5px;">Acciones Globales de Limpieza</div>
+            <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: center;">
+              <button class="btn btn-danger btn-sm" onclick="confirmClearAllTickets()" style="display: inline-flex; align-items: center; gap: 6px;">
+                <span>🎫</span> <span>Vaciar Todos los Tickets de WhatsApp</span>
+              </button>
+              <button class="btn btn-secondary btn-sm" onclick="clearSessionsData()" style="display: inline-flex; align-items: center; gap: 6px; border-color: rgba(244, 63, 94, 0.4);">
+                <span>💬</span> <span>Vaciar Sesiones del Bot</span>
+              </button>
+              <button class="btn btn-secondary btn-sm" onclick="clearLogsData()" style="display: inline-flex; align-items: center; gap: 6px; border-color: rgba(244, 63, 94, 0.4);">
+                <span>📜</span> <span>Vaciar Historial de Logs</span>
+              </button>
+            </div>
           </div>
         </div>
       </section>
@@ -4820,17 +4841,17 @@ export function getAdminDashboardHtml(): string {
 
       const btnClearTickets = document.getElementById('btn-clear-all-tickets');
       if (btnClearTickets) {
-        btnClearTickets.style.display = isSuper ? 'inline-flex' : 'none';
+        btnClearTickets.style.display = 'inline-flex';
       }
 
       const dangerZone = document.getElementById('settings-danger-zone');
       if (dangerZone) {
-        dangerZone.style.display = isSuper ? 'block' : 'none';
+        dangerZone.style.display = 'block';
       }
 
       const btnDeleteActive = document.getElementById('btn-delete-active-chat');
       if (btnDeleteActive) {
-        btnDeleteActive.style.display = isSuper ? 'inline-flex' : 'none';
+        btnDeleteActive.style.display = 'inline-flex';
       }
 
       // Preseleccionar pestaña de departamento según el rol del usuario
@@ -6665,7 +6686,7 @@ export function getAdminDashboardHtml(): string {
               \${formatShortDate(t.created_at)}
             </td>
             <td style="text-align: right;">
-              <div style="display: flex; gap: 6px; justify-content: flex-end;">
+              <div style="display: flex; gap: 6px; justify-content: flex-end; align-items: center;">
                 <button class="btn btn-secondary btn-xs" onclick='openTicketDetailModal(\${JSON.stringify(t).replace(/'/g, "&apos;")})' title="Ver expediente y cambiar estado">
                   Gestionar
                 </button>
@@ -6677,6 +6698,9 @@ export function getAdminDashboardHtml(): string {
                     Chat
                   </button>
                 \` : ''}
+                <button class="btn btn-danger btn-xs" onclick="confirmDeleteSingleTicket('\${escapeHtml(t.folio || t.id)}')" title="Eliminar este ticket permanentemente" style="padding: 3px 6px;">
+                  <svg class="svg-icon svg-icon-xs" viewBox="0 0 24 24" style="width: 12px; height: 12px;"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                </button>
               </div>
             </td>
           </tr>
@@ -6834,15 +6858,13 @@ export function getAdminDashboardHtml(): string {
             <label class="form-label">Notas de Resolución</label>
             <textarea id="modal-ticket-notes" class="form-control" rows="2" placeholder="Detalle de solución...">\${escapeHtml(t.resolution_notes || '')}</textarea>
           </div>
-          \${state.user?.role === 'superadmin' ? \`
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--card-border);">
-              <span style="font-size: 11.5px; color: var(--text-dim);">Zona Superadmin</span>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--card-border);">
+              <span style="font-size: 11.5px; color: var(--text-dim);">Acciones de ticket</span>
               <button type="button" class="btn btn-danger btn-sm" onclick="confirmDeleteSingleTicket('\${t.folio}')">
                 <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                 <span>Eliminar Ticket</span>
               </button>
             </div>
-          \` : ''}
         </div>
       \`;
 
@@ -8693,6 +8715,31 @@ export function getAdminDashboardHtml(): string {
       return disconnectWhatsAppInstance('isp-soporte');
     }
 
+    async function handleResetTestPhoneWithNumber(phone) {
+      const cleanDigits = String(phone || '').replace(/\D/g, '');
+      const cleanPhone = cleanDigits.length >= 10 ? cleanDigits.slice(-10) : cleanDigits;
+      if (!cleanPhone) {
+        showToast('Número Inválido', 'Ingresa un número de teléfono válido de 10 dígitos.', 'warning');
+        return;
+      }
+
+      showConfirmDialog('🧹 Restablecer Celular y Portal', '¿Deseas eliminar la cuenta del Portal de Clientes y la sesión del bot para el teléfono ' + cleanPhone + '? Esto permitirá registrarse o probar como cliente nuevo.', async () => {
+        try {
+          const res = await apiFetch('/api/admin/portal/reset-phone', {
+            method: 'POST',
+            body: JSON.stringify({ phone: cleanPhone }),
+          });
+          if (res.success) {
+            showToast('Celular Restablecido', res.message || ('El teléfono ' + cleanPhone + ' fue limpiado con éxito.'), 'success');
+          } else {
+            showToast('Error', res.error || 'No se pudo restablecer el teléfono.', 'error');
+          }
+        } catch (err) {
+          showToast('Error', err.message || 'Error de conexión', 'error');
+        }
+      });
+    }
+
     async function handleResetTestPhoneAction() {
       const input = document.getElementById('input-test-reset-phone');
       const phone = (input?.value || '').trim();
@@ -8723,12 +8770,16 @@ export function getAdminDashboardHtml(): string {
       });
     }
 
-    function clearSessionsData() {
-      if (state.user?.role !== 'superadmin') {
-        showToast('Acceso Denegado', 'Solo el superadmin puede vaciar sesiones.', 'error');
+    async function resetActiveChatPortalAndBot() {
+      if (!state.activeChatPhone) {
+        showToast('Atención', 'No hay ninguna conversación seleccionada.', 'warning');
         return;
       }
-      showConfirmDialog('⚠️ Vaciar Sesiones de Clientes', '¿Estás seguro de que deseas eliminar todas las sesiones activas en Base de Datos Local? El bot reiniciará el flujo con los clientes.', async () => {
+      handleResetTestPhoneWithNumber(state.activeChatPhone);
+    }
+
+    function clearSessionsData() {
+      showConfirmDialog('⚠️ Vaciar Sesiones de Clientes', '¿Estás seguro de que deseas eliminar todas las sesiones activas del bot? El bot reiniciará el flujo con los clientes en su próximo mensaje.', async () => {
         const res = await apiFetch('/api/sessions/clear-all', { method: 'DELETE' });
         if (res.success) {
           showToast('Sesiones Vaciadas', res.message || 'Sesiones eliminadas correctamente.', 'success');
@@ -8740,10 +8791,6 @@ export function getAdminDashboardHtml(): string {
     }
 
     function clearLogsData() {
-      if (state.user?.role !== 'superadmin') {
-        showToast('Acceso Denegado', 'Solo el superadmin puede vaciar historiales.', 'error');
-        return;
-      }
       showConfirmDialog('⚠️ Vaciar Historial de Logs', '¿Estás seguro de que deseas eliminar todos los mensajes y registros de conversación?', async () => {
         const res = await apiFetch('/api/logs/clear-all', { method: 'DELETE' });
         if (res.success) {
@@ -8756,11 +8803,7 @@ export function getAdminDashboardHtml(): string {
     }
 
     function confirmClearAllTickets() {
-      if (state.user?.role !== 'superadmin') {
-        showToast('Acceso Denegado', 'Solo el superadmin puede vaciar tickets.', 'error');
-        return;
-      }
-      showConfirmDialog('⚠️ Vaciar Todos los Tickets', '¿Estás seguro de que deseas eliminar permanentemente TODOS los tickets de prueba? Esta acción es irreversible.', async () => {
+      showConfirmDialog('⚠️ Vaciar Todos los Tickets', '¿Estás seguro de que deseas eliminar permanentemente TODOS los tickets de prueba? Esta acción no se puede deshacer.', async () => {
         const res = await apiFetch('/api/tickets/clear-all', { method: 'DELETE' });
         if (res.success) {
           showToast('Tickets Vaciados', res.message || 'Todos los tickets han sido eliminados.', 'success');
@@ -8777,10 +8820,6 @@ export function getAdminDashboardHtml(): string {
     }
 
     function confirmDeleteSingleTicket(folio) {
-      if (state.user?.role !== 'superadmin') {
-        showToast('Acceso Denegado', 'Solo el superadmin puede eliminar tickets.', 'error');
-        return;
-      }
       closeModal();
       showConfirmDialog('Eliminar Ticket', \`¿Deseas eliminar permanentemente el ticket \${folio}? Esta acción no se puede deshacer.\`, async () => {
         const res = await apiFetch(\`/api/tickets/\${encodeURIComponent(folio)}\`, { method: 'DELETE' });
@@ -9710,9 +9749,16 @@ export function getAdminDashboardHtml(): string {
               \` : ''}
             </div>
 
-            <!-- Teléfonos de Contacto -->
+            <!-- Teléfonos de Contacto & Acceso Portal -->
             <div class="glass-card" style="padding: 12px;">
-              <div style="font-size: 11px; color: var(--text-dim); text-transform: uppercase; font-weight: 700; margin-bottom: 6px;">📱 Teléfonos Vinculados</div>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <div style="font-size: 11px; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">📱 Teléfonos & Acceso Portal</div>
+                \${c.telefono_principal ? \`
+                  <button type="button" class="btn btn-danger btn-xs" onclick="handleResetTestPhoneWithNumber('\${escapeHtml(c.telefono_principal)}')" style="font-size: 11px; padding: 3px 8px;" title="Desvincular cuenta del portal y reiniciar bot para este número">
+                    🧹 Reset Portal / Bot
+                  </button>
+                \` : ''}
+              </div>
               <div style="display: flex; flex-wrap: wrap; gap: 8px;">
                 \${c.telefono_principal ? \`
                   <span class="badge badge-success" style="font-family: var(--font-mono); font-size: 12px; padding: 4px 10px;">
