@@ -8602,10 +8602,10 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
    */
   static getClientPortalBaseUrl(): string {
     const rawUrl = SettingsService.get('APP_URL', 'APP_URL', config.appUrl || '').replace(/\/+$/, '');
-    if (rawUrl && rawUrl.startsWith('http') && !rawUrl.includes('localhost')) {
+    if (rawUrl && rawUrl.startsWith('http') && !rawUrl.includes('localhost') && !rawUrl.includes('2.25.241.239')) {
       return rawUrl;
     }
-    return 'http://2.25.241.239:3000';
+    return 'https://portal.cloudwaremx.com';
   }
 
   /**
