@@ -30,6 +30,8 @@ router.get('/api/portal/billing-history', ClientPortalController.getBillingHisto
 router.get('/api/portal/signal', ClientPortalController.getLiveSignal);
 router.post('/api/portal/wifi', ClientPortalController.changeWifi);
 router.post('/api/portal/reboot', ClientPortalController.rebootModem);
+router.get('/api/portal/invoice/:id/receipt', ClientPortalController.renderInvoiceReceipt);
+router.get('/recibo/:id', ClientPortalController.renderInvoiceReceipt);
 
 // ==========================================
 // PANEL WEB DE ADMINISTRACIÓN (UI SPA)

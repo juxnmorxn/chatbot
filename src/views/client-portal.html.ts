@@ -9,9 +9,10 @@ import { getCloudWareSphereSvg, getCloudWareFullLogoHtml } from './brand';
 export function getClientPortalHtml(): string {
   const ispName = SettingsService.get('ISP_NAME', 'ISP_NAME', config.isp.name || 'CloudWareMx');
   const supportPhone = SettingsService.get('SUPPORT_PHONE', 'SUPPORT_PHONE', config.isp.soporteHumanoPhone || '7721284398');
-  const bankName = SettingsService.get('PAYMENT_BANK_NAME', 'PAYMENT_BANK_NAME', 'BBVA Bancomer');
-  const bankClabe = SettingsService.get('PAYMENT_BANK_CLABE', 'PAYMENT_BANK_CLABE', '012320001234567890');
-  const bankAccount = SettingsService.get('PAYMENT_BANK_ACCOUNT', 'PAYMENT_BANK_ACCOUNT', '0123456789');
+  const bankName = SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK_NAME', 'BBVA Bancomer');
+  const bankAccount = SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_BANK_ACCOUNT', '012 180 0152433212 90');
+  const bankClabe = SettingsService.get('PAYMENT_CLABE', 'PAYMENT_BANK_CLABE', bankAccount || '012 180 0152433212 90');
+  const bankBeneficiary = SettingsService.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', ispName || 'CloudWare Telecomunicaciones');
 
   return `<!DOCTYPE html>
 <html lang="es">
@@ -169,16 +170,145 @@ export function getClientPortalHtml(): string {
 
     @media (min-width: 880px) {
       .app-screen {
-        max-width: 1140px;
+        max-width: 1180px;
         padding: 24px 32px 100px 32px;
         gap: 20px;
       }
 
       .dashboard-cols {
         display: grid !important;
-        grid-template-columns: 1fr 1fr;
-        gap: 20px;
+        grid-template-columns: 1.05fr 0.95fr;
+        gap: 24px;
         align-items: start;
+      }
+
+      .app-card {
+        padding: 22px;
+      }
+    }
+
+    /* Tarjeta Perfil Ejecutivo del Titular */
+    .titular-profile-card {
+      background: linear-gradient(135deg, rgba(14, 165, 233, 0.12) 0%, rgba(30, 41, 59, 0.75) 100%);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      border-radius: var(--radius-lg);
+      padding: 16px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      margin-bottom: 2px;
+    }
+
+    [data-theme="light"] .titular-profile-card {
+      background: linear-gradient(135deg, rgba(2, 132, 199, 0.08) 0%, rgba(241, 245, 249, 0.95) 100%);
+      border: 1px solid rgba(2, 132, 199, 0.25);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+    }
+
+    .titular-profile-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      min-width: 0;
+    }
+
+    .titular-avatar {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #0284c7 0%, #2563eb 100%);
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      flex-shrink: 0;
+      box-shadow: 0 4px 14px rgba(2, 132, 199, 0.35);
+    }
+
+    .titular-info {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      min-width: 0;
+    }
+
+    .titular-badge-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .titular-verified-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #38bdf8;
+      background: rgba(14, 165, 233, 0.15);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      padding: 2px 8px;
+      border-radius: 999px;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+
+    .titular-folio-badge {
+      display: inline-flex;
+      align-items: center;
+      font-size: 11px;
+      font-weight: 700;
+      color: #10b981;
+      background: rgba(16, 185, 129, 0.12);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      padding: 2px 8px;
+      border-radius: 999px;
+    }
+
+    .titular-hero-name {
+      font-family: 'Outfit', sans-serif;
+      font-size: 19px;
+      font-weight: 800;
+      color: var(--text-title);
+      letter-spacing: -0.3px;
+      line-height: 1.2;
+      word-break: break-word;
+    }
+
+    .titular-sub-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--text-muted);
+      flex-wrap: wrap;
+    }
+
+    .titular-profile-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    @media (max-width: 768px) {
+      .titular-profile-card {
+        flex-direction: column;
+        align-items: flex-start;
+        padding: 14px 16px;
+      }
+      .titular-profile-right {
+        width: 100%;
+        margin-top: 6px;
+      }
+      .titular-profile-right .btn-outline {
+        width: 100%;
       }
     }
 
@@ -1049,6 +1179,32 @@ export function getClientPortalHtml(): string {
         <p id="outageDesc" style="font-size: 13px; color: var(--text-body); line-height: 1.4;"></p>
       </div>
 
+      <!-- TARJETA EJECUTIVA DE PERFIL DEL TITULAR (MÁXIMO ÉNFASIS) -->
+      <div class="titular-profile-card">
+        <div class="titular-profile-left">
+          <div class="titular-avatar">
+            <i class="fa-solid fa-user-check"></i>
+          </div>
+          <div class="titular-info">
+            <div class="titular-badge-row">
+              <span class="titular-verified-badge"><i class="fa-solid fa-circle-check"></i> Titular Verificado</span>
+              <span id="titularContractBadge" class="titular-folio-badge">Contrato <strong id="titularHeroFolio" style="margin-left: 2px;">#715</strong></span>
+            </div>
+            <div id="titularHeroName" class="titular-hero-name">Cargando titular...</div>
+            <div class="titular-sub-meta">
+              <span><i class="fa-solid fa-phone"></i> <span id="titularHeroPhone">Teléfono registrado</span></span>
+              <span>•</span>
+              <span style="color: #10b981; font-weight: 600;"><i class="fa-solid fa-circle" style="font-size: 8px;"></i> Servicio Activo</span>
+            </div>
+          </div>
+        </div>
+        <div class="titular-profile-right">
+          <button class="btn-outline" onclick="openModalBank()" style="padding: 10px 16px; font-size: 13px; border-color: rgba(14, 165, 233, 0.45); background: rgba(14, 165, 233, 0.12); color: #38bdf8; font-weight: 700;">
+            <i class="fa-solid fa-building-columns"></i> Datos de Pago SPEI
+          </button>
+        </div>
+      </div>
+
       <!-- Contenedor responsivo: 2 columnas en pantallas grandes / 1 columna fluida en móvil -->
       <div class="dashboard-cols">
 
@@ -1105,9 +1261,7 @@ export function getClientPortalHtml(): string {
           <div class="app-card">
             <div class="card-head">
               <div class="card-head-title"><i class="fa-solid fa-wifi"></i> Tu Red Wi-Fi (Doble Banda)</div>
-              <button class="btn-header-action" onclick="openModalWifi()" style="padding: 6px 12px; font-size: 12px;">
-                <i class="fa-solid fa-pen"></i> Cambiar Clave
-              </button>
+              <span class="wifi-band-tag tag-5g" style="font-size: 11px;"><i class="fa-solid fa-shield-halved"></i> 2.4G & 5G</span>
             </div>
 
             <!-- Nombres de Red (2.4 GHz y 5 GHz) -->
@@ -1370,17 +1524,84 @@ export function getClientPortalHtml(): string {
   <div id="modalBank" class="modal-overlay">
     <div class="modal-sheet">
       <div class="modal-sheet-header">
-        <div class="modal-sheet-title">Datos para Pago por Transferencia</div>
+        <div class="modal-sheet-title" style="display: flex; align-items: center; gap: 8px;">
+          <i class="fa-solid fa-building-columns" style="color: #38bdf8;"></i> Datos de Pago por Transferencia (SPEI)
+        </div>
         <button class="btn-close-modal" onclick="closeModal('modalBank')">&times;</button>
       </div>
-      <div style="background: var(--bg-surface); padding: 14px; border-radius: var(--radius-md); font-size: 13px; display: flex; flex-direction: column; gap: 8px;">
-        <div><strong>Banco:</strong> ${bankName}</div>
-        <div><strong>CLABE Interbancaria:</strong> <span id="bankClabeText" style="color: #38bdf8; font-family: monospace; font-weight: 700;">${bankClabe}</span></div>
-        <div><strong>Cuenta:</strong> ${bankAccount}</div>
-        <div><strong>Beneficiario:</strong> ${ispName}</div>
-        <div><strong>Concepto / Referencia:</strong> <strong id="bankRefText" style="color: #10b981;">SRV-100</strong></div>
+
+      <!-- Tarjeta Detallada de Cuenta y Titular -->
+      <div style="background: var(--bg-surface); border: 1px solid var(--border-card); padding: 16px; border-radius: var(--radius-md); font-size: 13px; display: flex; flex-direction: column; gap: 12px;">
+        
+        <!-- Titular de la Cuenta del Servicio -->
+        <div style="padding-bottom: 10px; border-bottom: 1px solid var(--border-card);">
+          <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 2px;">
+            Titular del Servicio
+          </div>
+          <div id="bankTitularName" style="color: #38bdf8; font-size: 16px; font-weight: 800; font-family: 'Outfit', sans-serif;">
+            Cargando...
+          </div>
+        </div>
+
+        <!-- Banco Receptor -->
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span style="color: var(--text-body);">Banco:</span>
+          <strong id="bankNameDisplay" style="color: var(--text-title); font-size: 14px;">${bankName}</strong>
+        </div>
+
+        <!-- Beneficiario -->
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span style="color: var(--text-body);">Beneficiario:</span>
+          <strong id="bankBeneficiaryText" style="color: var(--text-title); font-size: 14px;">${bankBeneficiary}</strong>
+        </div>
+
+        <!-- CLABE Interbancaria (18 dígitos) -->
+        <div style="background: var(--bg-card); padding: 10px 12px; border-radius: var(--radius-sm); border: 1px solid rgba(56, 189, 248, 0.25);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+            <span style="font-size: 11px; color: #38bdf8; font-weight: 700; text-transform: uppercase;">CLABE Interbancaria (SPEI):</span>
+            <button class="btn-action-icon" onclick="copyClabe()" title="Copiar CLABE" style="width: 28px; height: 28px; font-size: 12px;"><i class="fa-solid fa-copy"></i></button>
+          </div>
+          <div id="bankClabeText" style="color: var(--text-title); font-family: monospace; font-size: 16px; font-weight: 800; letter-spacing: 1px; word-break: break-all;">
+            ${bankClabe}
+          </div>
+        </div>
+
+        <!-- Número de Cuenta -->
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span style="color: var(--text-body);">Cuenta:</span>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <strong id="bankAccountText" style="font-family: monospace; font-size: 14px; color: var(--text-title);">${bankAccount}</strong>
+            <button class="btn-action-icon" onclick="copyBankAccount()" title="Copiar Cuenta" style="width: 26px; height: 26px; font-size: 11px;"><i class="fa-solid fa-copy"></i></button>
+          </div>
+        </div>
+
+        <!-- Folio y Concepto de Pago -->
+        <div style="background: rgba(16, 185, 129, 0.08); padding: 10px 12px; border-radius: var(--radius-sm); border: 1px solid rgba(16, 185, 129, 0.25);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+            <span style="font-size: 11px; color: #10b981; font-weight: 700; text-transform: uppercase;">Concepto / Referencia SPEI:</span>
+            <button class="btn-action-icon" onclick="copyBankConcept()" title="Copiar Concepto" style="width: 28px; height: 28px; font-size: 12px; color: #10b981;"><i class="fa-solid fa-copy"></i></button>
+          </div>
+          <div id="bankConceptText" style="font-family: monospace; font-size: 14px; font-weight: 700; color: #10b981;">
+            -
+          </div>
+          <span style="font-size: 10.5px; color: var(--text-muted); margin-top: 3px; display: block;">
+            Folio del Contrato: <strong id="bankRefText" style="color: var(--text-title);">-</strong>
+          </span>
+        </div>
+
+        <div style="font-size: 11.5px; color: var(--text-muted); line-height: 1.4; background: rgba(255, 255, 255, 0.03); padding: 8px 10px; border-radius: 8px;">
+          💡 <strong>Importante:</strong> Al transferir desde tu app bancaria (BBVA, Banamex, Santander, etc.), escribe tu Folio o Nombre en el campo <em>Concepto</em> para identificación inmediata.
+        </div>
       </div>
-      <button class="btn-main" onclick="copyClabe()"><i class="fa-solid fa-copy"></i> Copiar CLABE Interbancaria</button>
+
+      <div style="display: flex; gap: 8px; margin-top: 4px;">
+        <button class="btn-main" onclick="copyClabe()" style="flex: 1;">
+          <i class="fa-solid fa-copy"></i> Copiar CLABE Interbancaria
+        </button>
+        <button class="btn-outline" onclick="closeModal('modalBank')" style="width: auto; padding: 10px 16px;">
+          Cerrar
+        </button>
+      </div>
     </div>
   </div>
 
@@ -1881,17 +2102,55 @@ export function getClientPortalHtml(): string {
       }
     }
 
+    function cleanTitularName(raw) {
+      if (!raw) return 'Cliente CloudWare';
+      let str = String(raw).trim();
+      // Limpiar prefijos de OLT/WispHub como "696 - ", "696-", "#715 ", "001: "
+      str = str.replace(/^\s*#?\d+\s*[-_.:/|]+\s*/, '').trim();
+      // Limpiar números iniciales sueltos como "696 Maria..."
+      str = str.replace(/^\s*\d{2,}\s+/, '').trim();
+      return str || String(raw).trim();
+    }
+
     function renderDashboard(data) {
       const c = data.client;
       currentContractId = String(c.id_servicio);
       currentServices = data.relatedServices || [];
       currentPhone = c.telefono || currentPhone;
 
-      // Header Saludo
-      const firstName = (c.nombre || '').split(' ')[0] || 'Cliente';
+      // Header Saludo y Perfil Ejecutivo del Titular
+      const rawTitular = data.onu?.name || c.smartolt_name || c.nombre || 'Cliente';
+      const cleanTitular = cleanTitularName(rawTitular);
+      const firstName = cleanTitular.split(' ')[0] || 'Cliente';
+
       document.getElementById('headerGreeting').innerText = 'Hola, ' + firstName;
-      document.getElementById('titularName').innerText = data.onu?.name || c.smartolt_name || c.nombre;
+
+      // 1. Tarjeta Perfil Ejecutivo Superior
+      const heroNameEl = document.getElementById('titularHeroName');
+      if (heroNameEl) heroNameEl.innerText = cleanTitular;
+
+      const heroFolioEl = document.getElementById('titularHeroFolio');
+      if (heroFolioEl) heroFolioEl.innerText = '#' + c.id_servicio;
+
+      const heroPhoneEl = document.getElementById('titularHeroPhone');
+      if (heroPhoneEl) heroPhoneEl.innerText = c.telefono || currentPhone || 'Registrado';
+
+      // 2. Tarjeta de Paquete
+      document.getElementById('titularName').innerText = cleanTitular;
       document.getElementById('contractFolio').innerText = '#' + c.id_servicio;
+
+      // 3. Modal Datos de Pago Bancario
+      const bankTitularEl = document.getElementById('bankTitularName');
+      if (bankTitularEl) bankTitularEl.innerText = cleanTitular;
+
+      const bankRefEl = document.getElementById('bankRefText');
+      if (bankRefEl) bankRefEl.innerText = 'SRV-' + c.id_servicio;
+
+      const bankConceptEl = document.getElementById('bankConceptText');
+      if (bankConceptEl) {
+        const shortName = cleanTitular.split(' ').slice(0, 2).join(' ');
+        bankConceptEl.innerText = c.id_servicio + ' ' + shortName;
+      }
 
       // Paquete Contratado con Gran Énfasis Visual y Corrección de Discrepancias
       const rawPlan = (c.plan_internet || data.onu?.speed_profile || '').trim();
@@ -2077,6 +2336,8 @@ export function getClientPortalHtml(): string {
       loadDashboard(sIdStr);
     }
 
+    let cachedBankDetails = null;
+
     async function loadInvoicesHistory() {
       if (!currentContractId) return;
       try {
@@ -2084,11 +2345,40 @@ export function getClientPortalHtml(): string {
         const data = await res.json();
         const container = document.getElementById('invoicesList');
 
+        if (data.bankDetails) {
+          cachedBankDetails = data.bankDetails;
+          if (data.bankDetails.bank) {
+            const el = document.getElementById('bankNameDisplay');
+            if (el) el.innerText = data.bankDetails.bank;
+          }
+          if (data.bankDetails.clabe) {
+            const el = document.getElementById('bankClabeText');
+            if (el) el.innerText = data.bankDetails.clabe;
+          }
+          if (data.bankDetails.account) {
+            const el = document.getElementById('bankAccountText');
+            if (el) el.innerText = data.bankDetails.account;
+          }
+          if (data.bankDetails.beneficiary) {
+            const el = document.getElementById('bankBeneficiaryText');
+            if (el) el.innerText = data.bankDetails.beneficiary;
+          }
+        }
+
         if (data.success && data.invoices && data.invoices.length > 0) {
           container.innerHTML = data.invoices.map(inv => {
             const isPaid = String(inv.estado || '').toLowerCase().includes('pagad');
             const statusClass = isPaid ? 'paid' : 'pending';
-            const pdfBtn = inv.pdf_url ? '<a href="' + inv.pdf_url + '" target="_blank" class="btn-action-icon" style="width:34px; height:34px; color:#38bdf8;" title="Ver Recibo PDF"><i class="fa-solid fa-file-pdf"></i></a>' : '';
+            
+            // Redirigir siempre a nuestro generador de recibos oficial para evitar error 404 de WispHub
+            let receiptUrl = inv.pdf_url || ('/api/portal/invoice/' + (inv.id_factura || inv.id || currentContractId) + '/receipt');
+            if (receiptUrl.includes('wisphub.net/factura/pdf/')) {
+              const match = receiptUrl.match(/\/factura\/pdf\/(\d+)/);
+              const factId = match ? match[1] : (inv.id_factura || inv.id || currentContractId);
+              receiptUrl = '/api/portal/invoice/' + factId + '/receipt';
+            }
+
+            const pdfBtn = '<a href="' + receiptUrl + '" target="_blank" class="btn-action-icon" style="width:34px; height:34px; color:#38bdf8; display:flex; align-items:center; justify-content:center; text-decoration:none;" title="Ver e Imprimir Recibo Oficial"><i class="fa-solid fa-file-pdf"></i></a>';
             const payBtn = (!isPaid && inv.link_pago) ? '<a href="' + inv.link_pago + '" target="_blank" class="btn-main" style="width:auto; padding:6px 12px; font-size:12px; height:34px;" title="Pagar Factura"><i class="fa-solid fa-credit-card"></i> Pagar</a>' : '';
             
             const emision = inv.fecha_emision ? inv.fecha_emision.slice(0, 10) : '';
@@ -2144,8 +2434,21 @@ export function getClientPortalHtml(): string {
     }
 
     function copyClabe() {
-      navigator.clipboard.writeText(document.getElementById('bankClabeText').innerText);
-      showToast('CLABE copiada al portapapeles');
+      const val = (document.getElementById('bankClabeText')?.innerText || '').replace(/\s+/g, '');
+      navigator.clipboard.writeText(val);
+      showToast('CLABE copiada: ' + val);
+    }
+
+    function copyBankAccount() {
+      const val = (document.getElementById('bankAccountText')?.innerText || '').replace(/\s+/g, '');
+      navigator.clipboard.writeText(val);
+      showToast('Número de cuenta copiado: ' + val);
+    }
+
+    function copyBankConcept() {
+      const val = (document.getElementById('bankConceptText')?.innerText || '').trim();
+      navigator.clipboard.writeText(val);
+      showToast('Concepto de pago copiado: ' + val);
     }
 
     function openModalWifi() {
@@ -2315,6 +2618,24 @@ export function getClientPortalHtml(): string {
     }
 
     function openModalBank() {
+      if (cachedBankDetails) {
+        if (cachedBankDetails.bank) {
+          const el = document.getElementById('bankNameDisplay');
+          if (el) el.innerText = cachedBankDetails.bank;
+        }
+        if (cachedBankDetails.clabe) {
+          const el = document.getElementById('bankClabeText');
+          if (el) el.innerText = cachedBankDetails.clabe;
+        }
+        if (cachedBankDetails.account) {
+          const el = document.getElementById('bankAccountText');
+          if (el) el.innerText = cachedBankDetails.account;
+        }
+        if (cachedBankDetails.beneficiary) {
+          const el = document.getElementById('bankBeneficiaryText');
+          if (el) el.innerText = cachedBankDetails.beneficiary;
+        }
+      }
       document.getElementById('modalBank').style.display = 'flex';
     }
 

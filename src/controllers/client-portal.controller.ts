@@ -1137,14 +1137,16 @@ self.addEventListener('fetch', (event) => {
           fecha_pago: f.fecha_pago || null,
           descripcion: f.descripcion || '',
           link_pago: f.link_pago || (f.id_factura ? `https://wisphub.net/factura/${f.id_factura}/` : null),
-          pdf_url: f.pdf_url || (f.id_factura ? `https://wisphub.net/factura/pdf/${f.id_factura}/` : null),
+          pdf_url: `/api/portal/invoice/${f.id_factura || f.id || client.id_servicio}/receipt`,
         })),
         bankDetails: {
-          bank: SettingsService.get('PAYMENT_BANK_NAME', 'PAYMENT_BANK_NAME', 'BBVA Bancomer'),
-          clabe: SettingsService.get('PAYMENT_BANK_CLABE', 'PAYMENT_BANK_CLABE', '012320001234567890'),
-          account: SettingsService.get('PAYMENT_BANK_ACCOUNT', 'PAYMENT_BANK_ACCOUNT', '0123456789'),
-          beneficiary: SettingsService.get('ISP_NAME', 'ISP_NAME', config.isp.name || 'CloudWareMx'),
+          bank: SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK_NAME', 'BBVA Bancomer'),
+          clabe: SettingsService.get('PAYMENT_CLABE', 'PAYMENT_BANK_CLABE', '012 180 0152433212 90'),
+          account: SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_BANK_ACCOUNT', '012 180 0152433212 90'),
+          beneficiary: SettingsService.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', config.isp.name || 'CloudWareMx'),
           reference: `SRV-${client.id_servicio}`,
+          titular: cleanPersonName(client.nombre || ''),
+          concept: `${cleanPersonName(client.nombre || 'Servicio')} (SRV-${client.id_servicio})`,
         },
       });
     } catch (err: any) {
@@ -1526,7 +1528,7 @@ self.addEventListener('fetch', (event) => {
           args: [last10],
         });
         if (acc.rows.length > 0 && acc.rows[0].nombre) {
-          const accName = cleanPersonName(acc.rows[0].nombre);
+          const accName = cleanPersonName(String(acc.rows[0].nombre));
           if (accName && accName.length >= 6 && !accName.toLowerCase().includes('revocado')) {
             const byName = await db.execute({
               sql: `SELECT * FROM wisphub_clients WHERE nombre LIKE ? OR nombre_normalized LIKE ? ORDER BY id_servicio ASC LIMIT 10`,
@@ -1686,5 +1688,160 @@ self.addEventListener('fetch', (event) => {
     }
 
     return allServices;
+  }
+
+  /**
+   * Renderiza un recibo oficial en HTML listo para imprimir o guardar como PDF (sin errores de WispHub)
+   */
+  static async renderInvoiceReceipt(req: Request, res: Response): Promise<void> {
+    try {
+      const invoiceId = String(req.params.id || req.query.id || '').trim();
+      if (!invoiceId) {
+        res.status(400).send('<h1>Folio de recibo requerido</h1>');
+        return;
+      }
+
+      const db = getDbClient();
+      let invoice: any = null;
+
+      const invRes = await db.execute({
+        sql: `SELECT * FROM wisphub_invoices WHERE id_factura = ? OR folio = ? LIMIT 1`,
+        args: [invoiceId, invoiceId],
+      });
+      if (invRes.rows.length > 0) invoice = invRes.rows[0];
+
+      let client: any = null;
+      if (invoice?.id_servicio) {
+        const cRes = await db.execute({
+          sql: `SELECT * FROM wisphub_clients WHERE id_servicio = ? LIMIT 1`,
+          args: [invoice.id_servicio],
+        });
+        if (cRes.rows.length > 0) client = cRes.rows[0];
+      } else if (!invoice) {
+        // Fallback: Si invoiceId corresponde a un id_servicio o teléfono
+        const cleanNum = invoiceId.replace(/\D/g, '');
+        const cRes = await db.execute({
+          sql: `SELECT * FROM wisphub_clients WHERE id_servicio = ? OR id_servicio = ? OR telefono LIKE ? LIMIT 1`,
+          args: [invoiceId, cleanNum || '0', `%${invoiceId}%`],
+        });
+        if (cRes.rows.length > 0) {
+          client = cRes.rows[0];
+          invoice = {
+            id_factura: invoiceId,
+            id_servicio: client.id_servicio,
+            folio: `REC-${invoiceId}`,
+            cliente_nombre: client.nombre,
+            total: client.precio_plan || 250,
+            estado: 'Pagada',
+            fecha_emision: new Date().toISOString().slice(0, 10),
+            fecha_pago: new Date().toISOString().slice(0, 10),
+            descripcion: client.plan_internet || 'Internet Fibra Óptica Simétrica',
+          };
+        }
+      }
+
+      const ispName = SettingsService.get('ISP_NAME', 'ISP_NAME', config.isp.name || 'CloudWareMx');
+      const titular = client?.nombre || invoice?.cliente_nombre || 'Cliente';
+      const cleanTitular = titular.replace(/^0*\d+[\s\-_.:]+/, '').trim();
+      const folio = invoice?.folio || `FAC-${invoiceId}`;
+      const total = Number(invoice?.total || 250).toFixed(2);
+      const isPaid = String(invoice?.estado || 'Pagada').toLowerCase().includes('pagad');
+      const statusLabel = isPaid ? 'PAGADA' : 'PENDIENTE DE PAGO';
+      const statusColor = isPaid ? '#10b981' : '#f59e0b';
+      const fechaEmision = invoice?.fecha_emision ? invoice.fecha_emision.slice(0, 10) : new Date().toISOString().slice(0, 10);
+      const fechaPago = invoice?.fecha_pago ? invoice.fecha_pago.slice(0, 10) : fechaEmision;
+      const planDesc = invoice?.descripcion || client?.plan_internet || 'Internet Fibra Óptica Simétrica';
+
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.send(`<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Recibo ${folio} - ${ispName}</title>
+  <style>
+    @page { size: A4; margin: 15mm; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 20px; color: #1e293b; background: #f8fafc; }
+    .receipt-box { max-width: 650px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 32px; box-shadow: 0 4px 16px rgba(0,0,0,0.06); }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 20px; border-bottom: 2px solid #0284c7; }
+    .brand-title { font-size: 26px; font-weight: 800; color: #0284c7; letter-spacing: -0.5px; }
+    .brand-sub { font-size: 12px; color: #64748b; margin-top: 3px; }
+    .badge { padding: 6px 14px; border-radius: 999px; font-weight: 800; font-size: 12.5px; color: #ffffff; background: ${statusColor}; text-align: center; display: inline-block; }
+    .folio { font-size: 15px; font-weight: 800; color: #0f172a; margin-top: 6px; }
+    .client-card { background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 10px; padding: 16px; margin: 20px 0; }
+    .table-data { width: 100%; border-collapse: collapse; margin: 20px 0; }
+    .table-data th, .table-data td { padding: 12px; text-align: left; border-bottom: 1px solid #e2e8f0; font-size: 13.5px; }
+    .table-data th { background: #f8fafc; color: #64748b; font-weight: 700; text-transform: uppercase; font-size: 11px; }
+    .total-row { display: flex; justify-content: space-between; align-items: center; padding-top: 16px; border-top: 2px dashed #cbd5e1; margin-top: 15px; }
+    .total-amount { font-size: 26px; font-weight: 800; color: #10b981; }
+    .actions { display: flex; gap: 12px; margin-top: 28px; }
+    .btn { padding: 12px 20px; border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; border: none; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; }
+    .btn-print { background: #0284c7; color: #ffffff; box-shadow: 0 2px 8px rgba(2, 132, 199, 0.35); }
+    .btn-back { background: #e2e8f0; color: #334155; }
+    @media print {
+      body { background: #ffffff; padding: 0; }
+      .receipt-box { box-shadow: none; border: none; padding: 0; max-width: 100%; }
+      .actions { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="receipt-box">
+    <div class="header">
+      <div>
+        <div class="brand-title">${ispName}</div>
+        <div class="brand-sub">Comprobante Oficial de Pago de Servicio</div>
+        <div class="brand-sub">Actopan, Hidalgo, México</div>
+      </div>
+      <div style="text-align: right;">
+        <span class="badge">${statusLabel}</span>
+        <div class="folio">${folio}</div>
+      </div>
+    </div>
+
+    <div class="client-card">
+      <div style="font-size: 11px; font-weight: 700; color: #0369a1; text-transform: uppercase;">TITULAR DEL SERVICIO</div>
+      <div style="font-size: 18px; font-weight: 800; color: #0f172a; margin-top: 3px;">${cleanTitular}</div>
+      <div style="display: flex; gap: 20px; font-size: 12.5px; margin-top: 6px; color: #334155;">
+        <span>Folio de Contrato: <strong>#${client?.id_servicio || invoice?.id_servicio || '715'}</strong></span>
+        <span>Teléfono: <strong>${client?.telefono || invoice?.cliente_telefono || '-'}</strong></span>
+      </div>
+    </div>
+
+    <table class="table-data">
+      <thead>
+        <tr>
+          <th>Descripción</th>
+          <th>Periodo / Fechas</th>
+          <th style="text-align: right;">Importe</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>
+            <strong>${planDesc}</strong>
+            <div style="font-size: 12px; color: #64748b; margin-top: 3px;">Conexión de Fibra Óptica Residencial / Comercial</div>
+          </td>
+          <td>Emisión: ${fechaEmision}<br>Pago: ${fechaPago}</td>
+          <td style="text-align: right; font-weight: 700; font-size: 15px;">$${total}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="total-row">
+      <span style="font-size: 15px; font-weight: 700;">TOTAL RECIBIDO:</span>
+      <span class="total-amount">$${total} MXN</span>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-print" onclick="window.print()">🖨️ Imprimir o Guardar en PDF</button>
+      <a href="/portal" class="btn btn-back">Volver al Portal</a>
+    </div>
+  </div>
+</body>
+</html>`);
+    } catch (err: any) {
+      logger.error('Error al generar recibo HTML:', err);
+      res.status(500).send('<h1>Error al generar comprobante</h1>');
+    }
   }
 }

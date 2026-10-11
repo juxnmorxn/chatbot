@@ -1248,7 +1248,7 @@ export class SmartOLTService {
         // Fallback: Si el puerto estuviese en modo Access, intentar con set_wifi_port_access
         if (existingWifi?.wlan1?.mode === 'Access' || err24?.response?.data?.error?.includes('Access')) {
           try {
-            const vlan = existingWifi?.wlan1?.vlan || onuRecord?.vlan || '100';
+            const vlan = existingWifi?.wlan1?.vlan || (onuRecord as any)?.vlan || '100';
             const paramsAcc = new URLSearchParams();
             paramsAcc.append('wifi_port', 'wifi_0/1');
             paramsAcc.append('vlan_id', String(vlan));

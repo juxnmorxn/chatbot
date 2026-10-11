@@ -575,7 +575,7 @@ export class BotOrchestrator {
       try {
         const tieneCuenta = await this.clienteTieneCuentaPortal(last10);
         if (!tieneCuenta) {
-          const portalLink = await this.getClientPortalLinkAsync(last10, session?.client_name || undefined);
+          const portalLink = await this.getClientPortalLinkAsync(last10);
           textoFinal = `${textoFinal}\n\n💡 _*Puedes consultar tu conexión, Wi-Fi y recibos en tu Portal Web:*_\n👉 ${portalLink}`;
         }
       } catch {}
