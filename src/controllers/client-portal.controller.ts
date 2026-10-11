@@ -1539,7 +1539,7 @@ self.addEventListener('fetch', (event) => {
         // 2.2 Buscar si el usuario interactuó por WhatsApp y tiene sesión vinculada a un cliente
         if (initialMatches.length === 0) {
           const sessRes = await db.execute({
-            sql: `SELECT client_id, client_name FROM sessions WHERE phone LIKE ? AND (client_id IS NOT NULL OR client_name IS NOT NULL) ORDER BY updated_at DESC LIMIT 1`,
+            sql: `SELECT client_id, client_name FROM sessions WHERE phone LIKE ? AND (client_id IS NOT NULL OR client_name IS NOT NULL) ORDER BY last_interaction DESC LIMIT 1`,
             args: [`%${last10}%`],
           });
           if (sessRes.rows.length > 0) {
