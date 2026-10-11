@@ -4569,9 +4569,9 @@ export class BotOrchestrator {
 
     const facturas = estadoFinanciero.facturas.length > 0
       ? estadoFinanciero.facturas
-      : (session?.client_id ? await WispHubService.obtenerFacturasPendientes(session.client_id) : []);
+      : (session?.client_id && estadoFinanciero.tieneDeudaReal ? await WispHubService.obtenerFacturasPendientes(session.client_id, session?.client_name, session?.client_name) : []);
 
-    const tieneDeudaReal = estadoFinanciero.tieneDeudaReal || estadoFinanciero.totalDeuda > 0 || facturas.length > 0;
+    const tieneDeudaReal = estadoFinanciero.tieneDeudaReal && (estadoFinanciero.totalDeuda > 0 || facturas.length > 0);
 
     if (!tieneDeudaReal) {
       const ficha = this.getFichaBancaria(session);

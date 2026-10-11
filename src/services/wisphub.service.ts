@@ -602,10 +602,11 @@ export class WispHubService {
    */
   static async obtenerFacturasPendientes(
     clienteId: string | number,
-    searchTerm?: string | null
+    searchTerm?: string | null,
+    clientName?: string | null
   ): Promise<WispHubFactura[]> {
     const idClean = String(clienteId).replace(/\D/g, '') || String(clienteId);
-    logger.info(`Consultando facturas pendientes en tiempo real para cliente WispHub ID: ${idClean} (Search: "${searchTerm || 'N/A'}")`);
+    logger.info(`Consultando facturas pendientes en tiempo real para cliente WispHub ID: ${idClean} (Search: "${searchTerm || 'N/A'}", Name: "${clientName || 'N/A'}")`);
     const apiKey = this.getApiKey();
 
     if (!apiKey || apiKey.includes('tu_token')) {
@@ -615,6 +616,39 @@ export class WispHubService {
     try {
       const api = this.getApi();
       let facturasEncontradas: any[] = [];
+
+      // Helper para validar si una factura pertenece ESTRICTAMENTE a este cliente específico
+      const perteneceACliente = (f: any): boolean => {
+        const fEstado = String(f.estado || '').toLowerCase();
+        const noEstaPagada = !fEstado.includes('pagada') && !fEstado.includes('cancelad') && !fEstado.includes('anulad');
+        if (!noEstaPagada) return false;
+
+        // 1. Validar por id_servicio en los artículos o en la factura
+        const fArticulos = Array.isArray(f.articulos) ? f.articulos : [];
+        const matchArticuloServicio = fArticulos.length > 0 && fArticulos.some((a: any) => String(a?.servicio?.id_servicio) === idClean);
+        const matchDirectService = String(f.id_servicio || f.cliente?.id_servicio || '') === idClean;
+        if (matchArticuloServicio || matchDirectService) return true;
+
+        // 2. Validar prefijo exacto en usuario (ej: "0696-" o "715-") - NUNCA coincidencia parcial como "2715"
+        const uUser = String(f.cliente?.usuario || '').toLowerCase();
+        const uPrefixMatch = uUser.match(/^0*(\d+)[-_]/);
+        const searchNumMatch = (searchTerm || '').match(/^0*(\d+)/);
+        const expectedPrefix = searchNumMatch ? searchNumMatch[1] : idClean;
+
+        const targetName = clientName || searchTerm || '';
+        const uNombre = String(f.cliente?.nombre || '');
+        const scoreNombre = targetName ? computeNameMatchScore(uNombre, targetName) : 0;
+
+        if (uPrefixMatch && (uPrefixMatch[1] === idClean || uPrefixMatch[1] === expectedPrefix)) {
+          // Si coincide el prefijo exacto de contrato, verificar que el nombre no sea de otra persona
+          if (scoreNombre >= 75 || !targetName) return true;
+        }
+
+        // 3. Validar coincidencia de nombre completo con alta confianza
+        if (scoreNombre >= 88) return true;
+
+        return false;
+      };
 
       // 1. Intento por ID de cliente con estado pendiente
       try {
@@ -626,42 +660,26 @@ export class WispHubService {
         });
         const results = response.data?.results || response.data;
         if (Array.isArray(results) && results.length > 0) {
-          facturasEncontradas = results;
+          facturasEncontradas = results.filter(perteneceACliente);
         }
       } catch (err) {}
 
-      // 2. Si no arrojó resultados y tenemos término de búsqueda (ej: nombre o prefijo de contrato)
-      if (facturasEncontradas.length === 0 && (searchTerm || idClean)) {
+      // 2. Solo si no arrojó resultados y tenemos un nombre o usuario específico NO PURAMENTE NUMÉRICO
+      // (NUNCA buscar un número como "715" en search porque WispHub devuelve facturas de usuarios con subcadenas como "2715")
+      const searchClean = (searchTerm || '').trim();
+      const esBusquedaValida = searchClean.length >= 4 && !/^\d+$/.test(searchClean);
+
+      if (facturasEncontradas.length === 0 && esBusquedaValida) {
         try {
-          const sQuery = searchTerm || idClean;
           const searchRes = await api.get('/facturas/', {
             params: {
-              search: sQuery,
+              search: searchClean,
+              estado: 1,
             },
           });
           const sResults = searchRes.data?.results || searchRes.data;
           if (Array.isArray(sResults)) {
-            // Filtrar facturas que correspondan ESTRICTAMENTE al cliente y que NO estén pagadas ni canceladas
-            const cleanSearch = (searchTerm || idClean || '').toLowerCase();
-            const numMatch = cleanSearch.match(/\d+/);
-            const numPrefix = numMatch ? numMatch[0] : null;
-
-            facturasEncontradas = sResults.filter((f: any) => {
-              const fEstado = String(f.estado || '').toLowerCase();
-              const noEstaPagada = !fEstado.includes('pagada') && !fEstado.includes('cancelad') && !fEstado.includes('anulad');
-              if (!noEstaPagada) return false;
-
-              // Validar que pertenezca a este cliente específico
-              const uUser = String(f.cliente?.usuario || '').toLowerCase();
-              const uNombre = String(f.cliente?.nombre || '').toLowerCase();
-              const fArticulos = Array.isArray(f.articulos) ? f.articulos : [];
-              const matchServicio = fArticulos.some((a: any) => String(a?.servicio?.id_servicio) === idClean);
-
-              const matchUser = (numPrefix && uUser.includes(numPrefix)) || (cleanSearch.length > 4 && uUser.includes(cleanSearch));
-              const matchName = (cleanSearch.length > 5 && uNombre.includes(cleanSearch)) || (uNombre.length > 5 && cleanSearch.includes(uNombre));
-
-              return matchServicio || matchUser || matchName;
-            });
+            facturasEncontradas = sResults.filter(perteneceACliente);
           }
         } catch (err) {}
       }
@@ -790,23 +808,47 @@ export class WispHubService {
             saldo: liveData.saldo || clienteEncontrado?.saldo || 0,
           };
 
-          // Consultar facturas pendientes en vivo
-          facturas = await this.obtenerFacturasPendientes(targetId, liveData.nombre || nombre || idNum);
+          // Si WispHub en vivo indica que las facturas están pagadas y el saldo es 0, la cuenta está al corriente
+          const saldoLive = Number(liveData.saldo || clienteEncontrado?.saldo || 0);
+          if (liveData.facturas_pagadas === true && saldoLive <= 0) {
+            logger.info(`[WispHub Live] Cliente ${targetId} tiene facturas_pagadas=true y saldo=$${saldoLive}. Cuenta al corriente.`);
+            facturas = [];
+          } else {
+            // Consultar facturas pendientes en vivo solo si tiene facturas pendientes o saldo > 0
+            facturas = await this.obtenerFacturasPendientes(targetId, liveData.usuario_rb || liveData.nombre || nombre, liveData.nombre || nombre);
+          }
         }
       } catch (err: any) {
         logger.warn(`Error al consultar /clientes/${targetId}/ en vivo:`, err?.response?.data || err?.message || err);
       }
     }
 
-    // 4. Si aún no tenemos facturas pero tenemos cliente, consultar facturas
-    if (clienteEncontrado?.id && facturas.length === 0) {
-      facturas = await this.obtenerFacturasPendientes(clienteEncontrado.id, clienteEncontrado.nombre || nombre || idNum);
+    // 4. Si aún no tenemos facturas pero tenemos cliente, y no está marcado como pagado
+    const livePagadas = liveData?.facturas_pagadas;
+    const saldoCheck = Number(clienteEncontrado?.saldo || liveData?.saldo || 0);
+    if (clienteEncontrado?.id && facturas.length === 0 && livePagadas !== true && saldoCheck > 0) {
+      facturas = await this.obtenerFacturasPendientes(clienteEncontrado.id, clienteEncontrado.nombre || nombre || idNum, clienteEncontrado.nombre || nombre);
     }
 
     // 5. Análisis Exhaustivo y Cruzado de Morosidad
     const estadoFacturasStr = String(clienteEncontrado?.estado_facturas || '').toLowerCase().trim();
     const liveFacturasPagadas = liveData?.facturas_pagadas; // boolean | undefined
     
+    // Si WispHub explícitamente reporta facturas pagadas y saldo 0, la cuenta está al corriente (sin adeudos)
+    const saldoNum = Number(clienteEncontrado?.saldo || liveData?.saldo || 0);
+    if (liveFacturasPagadas === true && saldoNum <= 0 && facturas.length === 0) {
+      const estadoActual = (clienteEncontrado?.estado || liveData?.estado || '').toLowerCase().trim();
+      const esSusp = estadoActual === 'suspendido' || estadoActual === 'cortado' || estadoActual === 'desactivado';
+      return {
+        suspendido: esSusp,
+        tieneDeudaReal: false,
+        yaPagoPeroNoActivo: esSusp,
+        totalDeuda: 0,
+        facturas: [],
+        cliente: clienteEncontrado,
+      };
+    }
+
     const tieneFacturaPendientePorTexto = 
       estadoFacturasStr.includes('pendiente') || 
       estadoFacturasStr.includes('vencid') || 
@@ -816,7 +858,6 @@ export class WispHubService {
       estadoFacturasStr.includes('debe');
 
     const liveIndicaFacturasPendientes = liveFacturasPagadas === false;
-    const saldoNum = Number(clienteEncontrado?.saldo || liveData?.saldo || 0);
     const saldoIndicaDeuda = saldoNum > 0;
     const facturasListIndicaDeuda = facturas.length > 0;
 
@@ -835,7 +876,7 @@ export class WispHubService {
     // Si tiene deuda real detectada por WispHub pero totalDeuda aún es 0, asignar el valor del plan mensual
     if (tieneDeudaReal && totalDeuda === 0) {
       const precioPlanEstimado = Number(clienteEncontrado?.precio_plan || liveData?.precio_plan || liveData?.plan_internet?.precio || 0);
-      totalDeuda = precioPlanEstimado > 0 ? precioPlanEstimado : 400.0;
+      totalDeuda = precioPlanEstimado > 0 ? precioPlanEstimado : 250.0;
     }
 
     // Si tiene deuda real pero no se pudieron desglosar facturas individuales, generar el recibo pendiente
@@ -1257,16 +1298,18 @@ export class WispHubService {
       rows = res.rows as any[];
     }
 
-    // 2. Si no hay por id_servicio, buscar por usuario o nombre
+    // 2. Si no hay por id_servicio, buscar por usuario con prefijo exacto
     if (rows.length === 0 && options?.usuario) {
-      const uPrefix = options.usuario.split('@')[0].split('-')[0];
-      const res = await db.execute({
-        sql: `SELECT * FROM wisphub_invoices WHERE cliente_usuario LIKE ? OR cliente_usuario LIKE ? ORDER BY fecha_emision DESC, id_factura DESC LIMIT 20`,
-        args: [`%${options.usuario}%`, `%${uPrefix}%`],
-      });
-      rows = res.rows as any[];
+      const uPrefix = options.usuario.split('@')[0].split('-')[0].replace(/\D/g, '');
+      const rawUser = options.usuario.toLowerCase().trim();
+      if (uPrefix) {
+        const res = await db.execute({
+          sql: `SELECT * FROM wisphub_invoices WHERE LOWER(cliente_usuario) = ? OR LOWER(cliente_usuario) LIKE ? OR cliente_usuario LIKE ? ORDER BY fecha_emision DESC, id_factura DESC LIMIT 20`,
+          args: [rawUser, `${rawUser}%`, `${uPrefix}-%`],
+        });
+        rows = res.rows as any[];
+      }
     }
-
 
     // 3. Si aún no hay registros locales, sincronizar las primeras 3 páginas de WispHub
     if (rows.length === 0) {
@@ -1281,12 +1324,15 @@ export class WispHubService {
         rows = res2.rows as any[];
       }
       if (rows.length === 0 && options?.usuario) {
-        const uPrefix = options.usuario.split('@')[0].split('-')[0];
-        const res2 = await db.execute({
-          sql: `SELECT * FROM wisphub_invoices WHERE cliente_usuario LIKE ? OR cliente_usuario LIKE ? ORDER BY fecha_emision DESC, id_factura DESC LIMIT 20`,
-          args: [`%${options.usuario}%`, `%${uPrefix}%`],
-        });
-        rows = res2.rows as any[];
+        const uPrefix = options.usuario.split('@')[0].split('-')[0].replace(/\D/g, '');
+        const rawUser = options.usuario.toLowerCase().trim();
+        if (uPrefix) {
+          const res2 = await db.execute({
+            sql: `SELECT * FROM wisphub_invoices WHERE LOWER(cliente_usuario) = ? OR LOWER(cliente_usuario) LIKE ? OR cliente_usuario LIKE ? ORDER BY fecha_emision DESC, id_factura DESC LIMIT 20`,
+            args: [rawUser, `${rawUser}%`, `${uPrefix}-%`],
+          });
+          rows = res2.rows as any[];
+        }
       }
     }
 
