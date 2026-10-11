@@ -490,7 +490,7 @@ export class BotOrchestrator {
       (officeAddress ? `🏢 *Pago en Oficina Física:*\n• *Horario:* Lun-Vie ${officeWeekday}, Sáb ${officeSaturday}\n• *Dirección:* ${officeAddress}\n\n` : '') +
       `📸 *Envío de Comprobante:*\n` +
       `Al realizar tu transferencia, por favor envíanos la foto o captura de tu comprobante por aquí para aplicarlo de inmediato a tu cuenta.\n\n` +
-      `💡 _*Tip:* También puedes consultar tu saldo en tu Portal Web: ${this.getClientPortalLink(session?.phone || undefined)}_`;
+      `💡 _*Tip:* También puedes consultar tu saldo en tu Portal Web: ${this.getClientPortalLink(session?.phone || undefined, session?.client_name || undefined)}_`;
 
     return txt;
   }
@@ -575,7 +575,7 @@ export class BotOrchestrator {
       try {
         const tieneCuenta = await this.clienteTieneCuentaPortal(last10);
         if (!tieneCuenta) {
-          const portalLink = await this.getClientPortalLinkAsync(last10);
+          const portalLink = await this.getClientPortalLinkAsync(last10, session?.client_name || undefined);
           textoFinal = `${textoFinal}\n\n💡 _*Puedes consultar tu conexión, Wi-Fi y recibos en tu Portal Web:*_\n👉 ${portalLink}`;
         }
       } catch {}

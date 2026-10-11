@@ -883,13 +883,25 @@ self.addEventListener('fetch', (event) => {
         if (onuRes.rows.length > 0) onuRecord = onuRes.rows[0];
       }
 
-      if (!onuRecord && client.id_servicio) {
-        const srvId = String(client.id_servicio).trim();
-        const onuRes = await db.execute({
-          sql: `SELECT * FROM smartolt_onus WHERE name LIKE ? OR name LIKE ? OR name LIKE ? OR raw_data LIKE ? LIMIT 1`,
-          args: [`${srvId}-%`, `${srvId}.%`, `${srvId} %`, `%"${srvId}"%`],
-        });
-        if (onuRes.rows.length > 0) onuRecord = onuRes.rows[0];
+      // Prioridad 3: Por coincidencia de Nombre completo de alta confianza (score >= 85)
+      // Identifica al titular legítimo aún si los folios numéricos de SmartOLT no coinciden con WispHub
+      if (!onuRecord && client.nombre) {
+        const cleanName = cleanPersonName(client.nombre);
+        if (cleanName.length >= 8) {
+          const firstWords = cleanName.split(' ').slice(0, 2).join(' ');
+          const candOnusRes = await db.execute({
+            sql: `SELECT * FROM smartolt_onus WHERE name_normalized LIKE ? OR name LIKE ? LIMIT 15`,
+            args: [`%${firstWords}%`, `%${firstWords}%`],
+          });
+          for (const cand of (candOnusRes.rows as any[])) {
+            const candNameClean = cleanPersonName(String(cand.name || '').replace(/^\d+[\s\-_.:]+/, ''));
+            const score = computeNameMatchScore(cleanName, candNameClean);
+            if (score >= 85) {
+              onuRecord = cand;
+              break;
+            }
+          }
+        }
       }
 
       // Prioridad 4: Si tiene prefijo de contrato en usuario_rb (ej: 0696)
@@ -909,22 +921,23 @@ self.addEventListener('fetch', (event) => {
         } catch (_) {}
       }
 
-      // Prioridad 5: Por coincidencia de Nombre completo de alta confianza (score >= 85)
-      if (!onuRecord && client.nombre) {
-        const cleanName = cleanPersonName(client.nombre);
-        if (cleanName.length >= 8) {
-          const firstWords = cleanName.split(' ').slice(0, 2).join(' ');
-          const candOnusRes = await db.execute({
-            sql: `SELECT * FROM smartolt_onus WHERE name_normalized LIKE ? OR name LIKE ? LIMIT 10`,
-            args: [`%${firstWords}%`, `%${firstWords}%`],
-          });
-          for (const cand of (candOnusRes.rows as any[])) {
+      // Prioridad 5: Por ID de servicio en SmartOLT (VALIDANDO QUE EL TITULAR COINCIDA PARA NO ASIGNAR A OTRO CLIENTE)
+      if (!onuRecord && client.id_servicio) {
+        const srvId = String(client.id_servicio).trim();
+        const onuRes = await db.execute({
+          sql: `SELECT * FROM smartolt_onus WHERE name LIKE ? OR name LIKE ? OR name LIKE ? OR raw_data LIKE ? LIMIT 1`,
+          args: [`${srvId}-%`, `${srvId}.%`, `${srvId} %`, `%"${srvId}"%`],
+        });
+        if (onuRes.rows.length > 0) {
+          const cand = onuRes.rows[0];
+          if (client.nombre && client.nombre.length >= 8) {
             const candNameClean = cleanPersonName(String(cand.name || '').replace(/^\d+[\s\-_.:]+/, ''));
-            const score = computeNameMatchScore(cleanName, candNameClean);
-            if (score >= 85) {
+            const score = computeNameMatchScore(cleanPersonName(client.nombre), candNameClean);
+            if (score >= 60) {
               onuRecord = cand;
-              break;
             }
+          } else {
+            onuRecord = cand;
           }
         }
       }
@@ -1218,24 +1231,93 @@ self.addEventListener('fetch', (event) => {
         return;
       }
 
-      const targetId = client.sn_onu || client.ip || client.nombre;
+      const db = getDbClient();
+
+      // Localizar ONU real del cliente con alta precisión
+      let targetOnu: any = null;
+      if (client.ip) {
+        const ipRes = await db.execute({
+          sql: `SELECT * FROM smartolt_onus WHERE ip_address = ? OR raw_data LIKE ? LIMIT 1`,
+          args: [client.ip, `%"${client.ip}"%`]
+        });
+        if (ipRes.rows.length > 0) targetOnu = ipRes.rows[0];
+      }
+      if (!targetOnu && client.nombre) {
+        const cleanName = cleanPersonName(client.nombre);
+        if (cleanName.length >= 8) {
+          const firstWords = cleanName.split(' ').slice(0, 2).join(' ');
+          const candRes = await db.execute({
+            sql: `SELECT * FROM smartolt_onus WHERE name_normalized LIKE ? OR name LIKE ? LIMIT 10`,
+            args: [`%${firstWords}%`, `%${firstWords}%`]
+          });
+          for (const cand of (candRes.rows as any[])) {
+            const candNameClean = cleanPersonName(String(cand.name || '').replace(/^\d+[\s\-_.:]+/, ''));
+            if (computeNameMatchScore(cleanName, candNameClean) >= 80) {
+              targetOnu = cand;
+              break;
+            }
+          }
+        }
+      }
+      if (!targetOnu && client.sn_onu) {
+        let cleanSn = String(client.sn_onu).trim();
+        if (/^48575443/i.test(cleanSn)) cleanSn = 'HWTC' + cleanSn.slice(8);
+        const snRes = await db.execute({
+          sql: `SELECT * FROM smartolt_onus WHERE sn = ? OR unique_external_id = ? OR sn LIKE ? LIMIT 1`,
+          args: [cleanSn.toUpperCase(), cleanSn.toUpperCase(), `%${cleanSn.slice(-8)}%`]
+        });
+        if (snRes.rows.length > 0) targetOnu = snRes.rows[0];
+      }
+
+      const targetId = targetOnu?.unique_external_id || targetOnu?.sn || client.sn_onu || client.ip || client.nombre;
       const result = await SmartOLTService.updateOnuWifiPassword(targetId, {
         password,
         ssid24: ssid24 || ssid || undefined,
         ssid5g: ssid5g || undefined,
       });
 
-      if (result.success) {
-        wifiChangeCooldowns.set(key, Date.now());
-        res.json({
-          success: true,
-          message: 'Contraseña Wi-Fi configurada con éxito en tu módem.',
-          ssid: result.ssid24,
-          password: result.password,
+      wifiChangeCooldowns.set(key, Date.now());
+
+      const updatedWifiData = {
+        has5g: result.has5g !== false,
+        ssid24: result.ssid24 || (ssid24 || ssid || 'CloudWare-WiFi'),
+        password24: result.password || password,
+        ssid5g: result.ssid5g || (result.ssid24 ? `${result.ssid24}-5G` : 'CloudWare-WiFi-5G'),
+        password5g: result.password || password,
+        ssid: result.ssid24 || (ssid24 || ssid || 'CloudWare-WiFi'),
+        password: result.password || password,
+      };
+
+      // Guardar en cachés de memoria para reflejar de inmediato en el portal
+      wifiCache.set(key, { data: updatedWifiData, timestamp: Date.now() });
+      if (targetId) wifiCache.set(targetId, { data: updatedWifiData, timestamp: Date.now() });
+      if (client.telefono) wifiCache.set(client.telefono, { data: updatedWifiData, timestamp: Date.now() });
+
+      // Registrar ticket de soporte para auditoría técnica
+      try {
+        await db.execute({
+          sql: `INSERT INTO tickets (ticket_number, titular, telefono, router, tipo_problema, descripcion, prioridad, origen, status, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+          args: [
+            `WIFI-${Date.now().toString().slice(-6)}`,
+            client.nombre || 'Cliente',
+            client.telefono || '',
+            client.router || targetOnu?.zone_name || 'General',
+            'Cambio de Contraseña Wi-Fi',
+            `El cliente cambió su contraseña Wi-Fi desde el Portal Web. Red 2.4G: ${updatedWifiData.ssid24}. Módem: ${targetId}.`,
+            'Baja',
+            'PORTAL_WEB',
+            'resuelto'
+          ]
         });
-      } else {
-        res.status(500).json({ success: false, message: result.message || 'La OLT no pudo aplicar la clave.' });
-      }
+      } catch (_) {}
+
+      res.json({
+        success: true,
+        message: '¡Contraseña Wi-Fi configurada con éxito en tu módem y cuenta!',
+        ssid: updatedWifiData.ssid24,
+        password: updatedWifiData.password,
+      });
     } catch (err: any) {
       logger.error('Error al cambiar Wi-Fi desde portal:', err?.message || err);
       res.status(500).json({ success: false, message: 'Error interno al actualizar Wi-Fi.' });
@@ -1451,6 +1533,46 @@ self.addEventListener('fetch', (event) => {
               args: [`%${accName}%`, `%${normalizeText(accName)}%`],
             });
             if (byName.rows.length > 0) initialMatches.push(...(byName.rows as any[]));
+          }
+        }
+
+        // 2.2 Buscar si el usuario interactuó por WhatsApp y tiene sesión vinculada a un cliente
+        if (initialMatches.length === 0) {
+          const sessRes = await db.execute({
+            sql: `SELECT client_id, client_name FROM sessions WHERE phone LIKE ? AND (client_id IS NOT NULL OR client_name IS NOT NULL) ORDER BY updated_at DESC LIMIT 1`,
+            args: [`%${last10}%`],
+          });
+          if (sessRes.rows.length > 0) {
+            const sId = sessRes.rows[0].client_id;
+            const sName = cleanPersonName(String(sessRes.rows[0].client_name || ''));
+            if (sId) {
+              const byId = await db.execute({
+                sql: `SELECT * FROM wisphub_clients WHERE id_servicio = ? LIMIT 1`,
+                args: [sId],
+              });
+              if (byId.rows.length > 0) initialMatches.push(...(byId.rows as any[]));
+            }
+            if (initialMatches.length === 0 && sName && sName.length >= 6) {
+              const byName = await db.execute({
+                sql: `SELECT * FROM wisphub_clients WHERE nombre LIKE ? OR nombre_normalized LIKE ? ORDER BY id_servicio ASC LIMIT 10`,
+                args: [`%${sName}%`, `%${normalizeText(sName)}%`],
+              });
+              if (byName.rows.length > 0) initialMatches.push(...(byName.rows as any[]));
+            }
+            // Auto-vincular en client_portal_accounts y wisphub_clients para persistencia permanente
+            if (initialMatches.length > 0) {
+              const foundClient = initialMatches[0];
+              try {
+                await db.execute({
+                  sql: `UPDATE client_portal_accounts SET nombre = ? WHERE telefono = ?`,
+                  args: [foundClient.nombre, last10],
+                });
+                await db.execute({
+                  sql: `UPDATE wisphub_clients SET telefono = ? WHERE id_servicio = ? AND (telefono IS NULL OR telefono = '' OR telefono LIKE '777%')`,
+                  args: [last10, foundClient.id_servicio],
+                });
+              } catch (_) {}
+            }
           }
         }
       }

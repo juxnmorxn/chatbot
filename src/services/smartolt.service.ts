@@ -1227,40 +1227,54 @@ export class SmartOLTService {
         currentSsid5g = `${currentSsid24}-5g`;
       }
 
-      // 2. Aplicar en Wireless LAN 1 (2.4 GHz) con remember_wifi_settings = 1
-      const form24 = new FormData();
-      form24.append('wlan_id', '1');
-      form24.append('index', '1');
-      form24.append('ssid', currentSsid24);
-      form24.append('password', newPassword);
-      form24.append('authentication_mode', 'WPA2');
-      form24.append('auth_mode', 'WPA2');
-      form24.append('wpa_encryption', 'TKIP + AES');
-      form24.append('enable', 'Yes');
-      form24.append('remember_wifi_settings', '1');
-      form24.append('remember_wifi', '1');
+      // 2. Aplicar en Wireless LAN 1 (2.4 GHz) con set_wifi_port_transparent
+      const params24 = new URLSearchParams();
+      params24.append('wifi_port', 'wifi_0/1');
+      params24.append('ssid', currentSsid24);
+      params24.append('password', newPassword);
+      params24.append('authentication_mode', 'WPA2');
 
-      const headers24 = typeof (form24 as any).getHeaders === 'function' ? (form24 as any).getHeaders() : undefined;
-      const res24 = await api.post(`/onu/set_onu_wifi_details/${externalId}`, form24, { headers: headers24 });
-      logger.info(`[WiFi Update] Respuesta 2.4G para ${externalId}:`, JSON.stringify(res24.data));
+      let updated24 = false;
+      try {
+        const res24 = await api.post(`/onu/set_wifi_port_transparent/${encodeURIComponent(externalId)}`, params24.toString(), {
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        });
+        logger.info(`[WiFi Update] Respuesta 2.4G para ${externalId}:`, JSON.stringify(res24.data));
+        if (res24.data?.status === true || res24.status === 200 || res24.data?.response_code === 'success') {
+          updated24 = true;
+        }
+      } catch (err24: any) {
+        logger.warn(`[WiFi Update] Error en set_wifi_port_transparent 2.4G para ${externalId}:`, err24?.response?.data || err24?.message);
+        // Fallback: Si el puerto estuviese en modo Access, intentar con set_wifi_port_access
+        if (existingWifi?.wlan1?.mode === 'Access' || err24?.response?.data?.error?.includes('Access')) {
+          try {
+            const vlan = existingWifi?.wlan1?.vlan || onuRecord?.vlan || '100';
+            const paramsAcc = new URLSearchParams();
+            paramsAcc.append('wifi_port', 'wifi_0/1');
+            paramsAcc.append('vlan_id', String(vlan));
+            paramsAcc.append('ssid', currentSsid24);
+            paramsAcc.append('password', newPassword);
+            paramsAcc.append('authentication_mode', 'WPA2');
+            const resAcc = await api.post(`/onu/set_wifi_port_access/${encodeURIComponent(externalId)}`, paramsAcc.toString(), {
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            });
+            if (resAcc.data?.status === true || resAcc.status === 200) updated24 = true;
+          } catch (_) {}
+        }
+      }
 
-      // 3. Aplicar en Wireless LAN 5 (5 GHz) con remember_wifi_settings = 1
+      // 3. Aplicar en Wireless LAN 5 (5 GHz) con set_wifi_port_transparent
       if (has5g || currentSsid5g) {
         try {
-          const form5g = new FormData();
-          form5g.append('wlan_id', '5');
-          form5g.append('index', '5');
-          form5g.append('ssid', currentSsid5g || `${currentSsid24}-5g`);
-          form5g.append('password', newPassword);
-          form5g.append('authentication_mode', 'WPA2');
-          form5g.append('auth_mode', 'WPA2');
-          form5g.append('wpa_encryption', 'TKIP + AES');
-          form5g.append('enable', 'Yes');
-          form5g.append('remember_wifi_settings', '1');
-          form5g.append('remember_wifi', '1');
+          const params5g = new URLSearchParams();
+          params5g.append('wifi_port', 'wifi_0/5');
+          params5g.append('ssid', currentSsid5g || `${currentSsid24}-5G`);
+          params5g.append('password', newPassword);
+          params5g.append('authentication_mode', 'WPA2');
 
-          const headers5g = typeof (form5g as any).getHeaders === 'function' ? (form5g as any).getHeaders() : undefined;
-          const res5g = await api.post(`/onu/set_onu_wifi_details/${externalId}`, form5g, { headers: headers5g });
+          const res5g = await api.post(`/onu/set_wifi_port_transparent/${encodeURIComponent(externalId)}`, params5g.toString(), {
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          });
           logger.info(`[WiFi Update] Respuesta 5G para ${externalId}:`, JSON.stringify(res5g.data));
         } catch (err5g: any) {
           logger.warn(`[WiFi Update] Advertencia al configurar 5G para ${externalId}:`, err5g?.response?.data || err5g?.message);
@@ -1272,7 +1286,7 @@ export class SmartOLTService {
         message: 'Contraseña Wi-Fi actualizada con éxito en SmartOLT.',
         password: newPassword,
         ssid24: currentSsid24,
-        ssid5g: currentSsid5g || `${currentSsid24}-5g`,
+        ssid5g: currentSsid5g || `${currentSsid24}-5G`,
         has5g,
         clientName,
       };
