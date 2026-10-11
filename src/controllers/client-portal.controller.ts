@@ -1578,39 +1578,39 @@ self.addEventListener('fetch', (event) => {
       }
     }
 
-    // 3. SI ES UN IDENTIFICADOR NUMÉRICO CORTO (ej. 696 o 715)
+    // 3. SI ES UN IDENTIFICADOR NUMÉRICO CORTO (ej. 715 o 696)
     if (initialMatches.length === 0 && /^\d{1,6}$/.test(clean)) {
-      // 3.1 Cruzar con SmartOLT por prefijo de ONU (ej: "696-Maria del Pilar") para obtener el nombre real del titular
-      try {
-        const smartMatch = await db.execute({
-          sql: `SELECT name, ip_address, sn FROM smartolt_onus WHERE name LIKE ? OR name LIKE ? OR name LIKE ? LIMIT 5`,
-          args: [`${clean}-%`, `${clean} %`, `0${clean}-%`],
-        });
-        for (const row of smartMatch.rows) {
-          const titularSmart = cleanPersonName(String(row.name || ''));
-          if (titularSmart && titularSmart.length >= 6) {
-            const byTitular = await db.execute({
-              sql: `SELECT * FROM wisphub_clients WHERE nombre LIKE ? OR nombre_normalized LIKE ? OR ip = ? LIMIT 5`,
-              args: [`%${titularSmart}%`, `%${normalizeText(titularSmart)}%`, String(row.ip_address || '')],
-            });
-            if (byTitular.rows.length > 0) {
-              initialMatches.push(...(byTitular.rows as any[]));
-              break;
-            }
-          }
-        }
-      } catch (errSmart) {
-        logger.warn('Error al cruzar prefijo numérico en smartolt_onus:', errSmart);
+      // 3.1 Buscar PRIMERO por ID de servicio directo en WispHub (el folio oficial del contrato)
+      const res = await db.execute({
+        sql: `SELECT * FROM wisphub_clients WHERE id_servicio = ? LIMIT 1`,
+        args: [Number(clean)],
+      });
+      if (res.rows.length > 0) {
+        initialMatches.push(...(res.rows as any[]));
       }
 
-      // 3.2 Buscar por ID de servicio directo en WispHub
+      // 3.2 Si no existe en WispHub como folio directo, cruzar con SmartOLT por prefijo de ONU (ej: "696-Maria del Pilar")
       if (initialMatches.length === 0) {
-        const res = await db.execute({
-          sql: `SELECT * FROM wisphub_clients WHERE id_servicio = ? LIMIT 1`,
-          args: [Number(clean)],
-        });
-        if (res.rows.length > 0) {
-          initialMatches.push(...(res.rows as any[]));
+        try {
+          const smartMatch = await db.execute({
+            sql: `SELECT name, ip_address, sn FROM smartolt_onus WHERE name LIKE ? OR name LIKE ? OR name LIKE ? LIMIT 5`,
+            args: [`${clean}-%`, `${clean} %`, `0${clean}-%`],
+          });
+          for (const row of smartMatch.rows) {
+            const titularSmart = cleanPersonName(String(row.name || ''));
+            if (titularSmart && titularSmart.length >= 6) {
+              const byTitular = await db.execute({
+                sql: `SELECT * FROM wisphub_clients WHERE nombre LIKE ? OR nombre_normalized LIKE ? OR ip = ? LIMIT 5`,
+                args: [`%${titularSmart}%`, `%${normalizeText(titularSmart)}%`, String(row.ip_address || '')],
+              });
+              if (byTitular.rows.length > 0) {
+                initialMatches.push(...(byTitular.rows as any[]));
+                break;
+              }
+            }
+          }
+        } catch (errSmart) {
+          logger.warn('Error al cruzar prefijo numérico en smartolt_onus:', errSmart);
         }
       }
     }
