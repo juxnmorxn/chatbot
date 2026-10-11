@@ -795,31 +795,47 @@ self.addEventListener('fetch', (event) => {
         const srvIp = String(srv.ip || '').trim();
         const srvName = cleanPersonName(String(srv.nombre || ''));
 
-        return allOnus.find((o: any) => {
-          const oName = String(o.name || '');
-          const oSn = String(o.sn || '').toUpperCase();
-          const oIp = String(o.ip_address || '').trim();
+        // Prioridad 1: Por SN completo o sufijo (8 caracteres)
+        if (srvSnSuffix && srvSnSuffix.length >= 6) {
+          const bySn = allOnus.find((o: any) => {
+            const oSn = String(o.sn || '').toUpperCase();
+            return oSn === srvSn || oSn.endsWith(srvSnSuffix) || (srvSn.length >= 8 && oSn.includes(srvSnSuffix));
+          });
+          if (bySn) return bySn;
+        }
 
-          // Coincidencia 1: Por SN completo o terminación (8 caracteres)
-          if (srvSnSuffix && srvSnSuffix.length >= 6 && (oSn === srvSn || oSn.endsWith(srvSnSuffix) || (srvSn.length >= 8 && oSn.includes(srvSnSuffix)))) {
-            return true;
-          }
-          // Coincidencia 2: Por IP fija exacta (única y fiable entre WispHub y SmartOLT)
-          if (srvIp && oIp && oIp === srvIp && oIp !== 'N/A' && oIp !== '0.0.0.0') {
-            return true;
-          }
-          // Coincidencia 3: Por ID de servicio en el nombre de SmartOLT (ej: "696-Nombre", "715-Nombre")
-          if (srvId && (oName.startsWith(`${srvId}-`) || oName.startsWith(`${srvId}.`) || oName.startsWith(`${srvId} `) || oName.startsWith(`${srvId}_`))) {
-            return true;
-          }
-          // Coincidencia 4: Por coincidencia de alta confianza del nombre completo del titular (score >= 85)
-          if (srvName && srvName.length >= 10 && oName) {
+        // Prioridad 2: Por IP fija asignada exacta (única y fiable entre WispHub y SmartOLT)
+        if (srvIp && srvIp !== 'N/A' && srvIp !== '0.0.0.0') {
+          const byIp = allOnus.find((o: any) => String(o.ip_address || '').trim() === srvIp);
+          if (byIp) return byIp;
+        }
+
+        // Prioridad 3: Por coincidencia de alta confianza del nombre completo del titular (score >= 85)
+        if (srvName && srvName.length >= 10) {
+          const byName = allOnus.find((o: any) => {
+            const oName = String(o.name || '');
             const cleanOName = cleanPersonName(oName.replace(/^\d+[\s\-_.:]+/, ''));
-            const score = computeNameMatchScore(srvName, cleanOName);
-            if (score >= 85) return true;
-          }
-          return false;
-        });
+            return computeNameMatchScore(srvName, cleanOName) >= 85;
+          });
+          if (byName) return byName;
+        }
+
+        // Prioridad 4: Por ID de servicio en el nombre de SmartOLT (SOLO si el nombre también coincide con confianza >= 65)
+        if (srvId) {
+          const byId = allOnus.find((o: any) => {
+            const oName = String(o.name || '');
+            const matchPrefix = oName.startsWith(`${srvId}-`) || oName.startsWith(`${srvId}.`) || oName.startsWith(`${srvId} `) || oName.startsWith(`${srvId}_`);
+            if (!matchPrefix) return false;
+            if (srvName && srvName.length >= 8) {
+              const cleanOName = cleanPersonName(oName.replace(/^\d+[\s\-_.:]+/, ''));
+              return computeNameMatchScore(srvName, cleanOName) >= 65;
+            }
+            return true;
+          });
+          if (byId) return byId;
+        }
+
+        return null;
       };
 
       const relatedServices = services.map((s: any) => {
