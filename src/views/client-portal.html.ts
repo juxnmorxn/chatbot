@@ -945,13 +945,14 @@ export function getClientPortalHtml(): string {
       </div>
       <div class="auth-title" style="font-size: 18px;">Vincular mi WhatsApp</div>
       <p class="auth-sub">
-        No encontramos un servicio con el celular <strong id="notFoundPhoneLabel" style="color: #0284c7;"></strong>.<br>
-        Ingresa tu <strong>Folio de servicio</strong> (ej. 696 o 2) o tu <strong>Nombre completo</strong> para vincularlo en 1 clic:
+        No encontramos un servicio registrado con el celular <strong id="notFoundPhoneLabel" style="color: #0284c7;"></strong>.<br>
+        Ingresa el <strong>Nombre completo del titular</strong> tal como aparece en tu contrato para vincular tu WhatsApp:
       </p>
 
       <form onsubmit="handleLinkContract(event)" style="display: flex; flex-direction: column; gap: 12px;">
-        <input type="text" id="linkIdentifier" class="form-input" placeholder="Folio (ej. 696) o Nombre completo" required>
-        <button type="submit" class="btn-main"><i class="fa-solid fa-check-circle"></i> Vincular y Entrar</button>
+        <input type="text" id="linkIdentifier" class="form-input" placeholder="Nombre completo del titular (ej. María del Pilar)" required>
+        <span style="font-size: 11.5px; color: var(--text-muted); margin-top: -6px; line-height: 1.3;">Buscamos por el nombre del titular para asegurar que se enlace el servicio correcto.</span>
+        <button type="submit" class="btn-main"><i class="fa-solid fa-user-check"></i> Vincular mi WhatsApp</button>
       </form>
 
       <div style="text-align: center; margin-top: 4px;">
@@ -1616,7 +1617,7 @@ export function getClientPortalHtml(): string {
       const phone = currentPhone || localStorage.getItem('cp_phone') || '';
 
       if (!identifier) {
-        showToast('Ingresa tu folio o nombre completo');
+        showToast('Ingresa el nombre completo del titular');
         return;
       }
 
@@ -1624,7 +1625,7 @@ export function getClientPortalHtml(): string {
       const originalText = submitBtn ? submitBtn.innerHTML : '';
       if (submitBtn) {
         submitBtn.disabled = true;
-        submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Vinculando...';
+        submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Buscando y vinculando...';
       }
 
       try {

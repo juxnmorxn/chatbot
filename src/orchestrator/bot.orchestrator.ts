@@ -1392,7 +1392,7 @@ export class BotOrchestrator {
         if (clasif.intencion === 'SALUDO' || clasif.intencion === 'DESCONOCIDO') {
           await this.enviarYLoguear(
             phone,
-            `¡Hola! 👋 Bienvenido al centro de atención y soporte de *${this.getIspName()}*.\n\nPara poder ayudarte y revisar tu conexión a detalle, ¿me indicas tu *Nombre completo* (con apellidos) o tu número de contrato?`,
+            `¡Hola! 👋 Bienvenido al centro de atención y soporte de *${this.getIspName()}*.\n\nPara poder ayudarte y revisar tu conexión a detalle, ¿me indicas tu *Nombre completo* (con apellidos) tal como está registrado el titular?`,
             'SALUDO',
             'SOLICITAR_IDENTIFICACION',
             targetJid
@@ -1415,7 +1415,7 @@ export class BotOrchestrator {
         const queja = clasif.resumen_queja ? ` sobre: _"${clasif.resumen_queja}"_` : '';
         await this.enviarYLoguear(
           phone,
-          `Entendido tu reporte${queja}. Para poder revisar tu servicio a detalle y ver qué sucede, ¿me indicas tu *Nombre completo* (con apellidos) o número de contrato?`,
+          `Entendido tu reporte${queja}. Para poder revisar tu servicio a detalle y ver qué sucede, ¿me indicas tu *Nombre completo* (con apellidos) tal como está registrado el titular?`,
           'FALLA_INTERNET',
           'SOLICITAR_NOMBRE_PARA_DIAGNOSTICO',
           targetJid
@@ -1620,7 +1620,7 @@ export class BotOrchestrator {
           // Cliente nuevo / no registrado: solicitamos nombre o contrato para ubicarlo
           await this.enviarYLoguear(
             phone,
-            `¡Hola! 👋 Bienvenido al centro de atención y soporte técnico de *${this.getIspName()}*.\n\nPara poder ubicar tu cuenta en nuestro sistema y brindarte una mejor atención, ¿podrías indicarme tu *Nombre completo* o tu *Número de contrato / teléfono*?`,
+            `¡Hola! 👋 Bienvenido al centro de atención y soporte técnico de *${this.getIspName()}*.\n\nPara poder ubicar tu cuenta en nuestro sistema y brindarte una mejor atención, ¿podrías indicarme el *Nombre completo del titular* (con apellidos) de tu servicio?`,
             'SALUDO',
             'SOLICITAR_IDENTIFICACION',
             targetJid
@@ -1785,7 +1785,7 @@ export class BotOrchestrator {
           const intro = c.resumen_queja ? `Entendido sobre: _"${c.resumen_queja}"_.\n\n` : '';
           await this.enviarYLoguear(
             phone,
-            `${intro}¡Hola! Bienvenido al centro de atención de *${this.getIspName()}*.\n\nPara poder ubicar tu cuenta y darte una atención ágil, ¿podrías indicarme tu *Nombre completo* o *Número de contrato*?`,
+            `${intro}¡Hola! Bienvenido al centro de atención de *${this.getIspName()}*.\n\nPara poder ubicar tu cuenta y darte una atención ágil, ¿podrías indicarme tu *Nombre completo* (con apellidos) tal como está registrado el titular?`,
             'DESCONOCIDO',
             'SOLICITAR_IDENTIFICACION'
           );
@@ -1873,7 +1873,7 @@ export class BotOrchestrator {
       const queja = c.resumen_queja ? ` sobre: _"${c.resumen_queja}"_` : '';
       await this.enviarYLoguear(
         phone,
-        `Entendido tu reporte${queja}. Veo que presentas inconvenientes con tu conexión de internet.\n\nPara poder verificar tu línea y ayudarte de inmediato, ¿podrías indicarme tu *Nombre completo* o número de contrato?`,
+        `Entendido tu reporte${queja}. Veo que presentas inconvenientes con tu conexión de internet.\n\nPara poder verificar tu línea y ayudarte de inmediato, ¿podrías indicarme tu *Nombre completo* (con apellidos) del titular del servicio?`,
         'FALLA_INTERNET',
         'SOLICITAR_NOMBRE_PARA_DIAGNOSTICO',
         targetJid
@@ -2963,7 +2963,7 @@ export class BotOrchestrator {
       }),
     });
 
-    const msj = `¡Claro! Con gusto podemos consultar otro servicio.\n\nPor favor indícame el *Nombre completo del titular* o número de contrato del servicio que deseas consultar.`;
+    const msj = `¡Claro! Con gusto podemos consultar otro servicio.\n\nPor favor indícame el *Nombre completo del titular* (con apellidos) del servicio que deseas consultar.`;
     await this.enviarYLoguear(phone, msj, 'IDENTIFICAR_CLIENTE', 'SOLICITUD_OTRO_CLIENTE', targetJid);
   }
 
@@ -3840,7 +3840,7 @@ export class BotOrchestrator {
         `📍 *Recibimos tu ubicación GPS:*\n` +
         `• *Coordenadas:* \`${coordsStr || 'GPS'}\`\n` +
         `• *Maps:* ${url || 'https://maps.google.com'}\n\n` +
-        `Para poder vincularla a tu expediente y optimizar las visitas técnicas de soporte, por favor escribe tu *Nombre completo* o tu *Número de contrato / ID de cliente*:`;
+        `Para poder vincularla a tu expediente y optimizar las visitas técnicas de soporte, por favor escribe el *Nombre completo del titular* (con apellidos):`;
 
       await this.enviarYLoguear(phone, msjDesconocido, 'UBICACION_REGISTRADA', 'GPS_CLIENTE_DESCONOCIDO', targetJid);
       return;
@@ -4125,7 +4125,7 @@ export class BotOrchestrator {
     if (!targetClient) {
       await this.enviarYLoguear(
         phone,
-        `No pudimos localizar tu registro con "*${cleanInput}*". Por favor escribe tu *Nombre completo* (tal como aparece en tu contrato) o tu *Número de contrato*:`,
+        `No pudimos localizar tu registro con "*${cleanInput}*". Por favor escribe tu *Nombre completo* (tal como aparece en tu contrato con apellidos):`,
         'UBICACION_REGISTRADA',
         'GPS_CLIENTE_NO_LOCALIZADO',
         targetJid
@@ -4231,7 +4231,7 @@ export class BotOrchestrator {
     } else {
       // Si no hubo coincidencia clara, pedir aclaración amablemente
       const msj =
-        `Gracias por los datos. Para localizar tu contrato en el sistema con exactitud, ¿nos podrías confirmar tu *Nombre completo* (con apellidos) o tu *número de contrato*?`;
+        `Gracias por los datos. Para localizar tu contrato en el sistema con exactitud, ¿nos podrías confirmar el *Nombre completo del titular* (con apellidos)?`;
       await this.enviarYLoguear(phone, msj, 'REPORTAR_PAGO', 'COMPROBANTE_DATOS_AMBIGUOS', targetJid);
     }
   }
@@ -4298,7 +4298,7 @@ export class BotOrchestrator {
     if (!onuId) {
       await this.enviarYLoguear(
         phone,
-        `Para verificar tu línea en el sistema, por favor indícame tu *Nombre completo* o número de contrato:`,
+        `Para verificar tu línea en el sistema, por favor indícame tu *Nombre completo* (con apellidos) tal como aparece en tu contrato:`,
         'CONSULTAR_NIVELES',
         'SOLICITAR_IDENTIFICACION_NIVELES',
         targetJid
@@ -4547,7 +4547,7 @@ export class BotOrchestrator {
     if (!session?.client_id && !session?.client_name) {
       await this.enviarYLoguear(
         phone,
-        `Para consultar tu estado de cuenta requerimos tu número de contrato o nombre. Por favor escribe tu *Nombre completo* o *ID de contrato*:`,
+        `Para consultar tu estado de cuenta con exactitud, por favor escribe el *Nombre completo del titular* (con apellidos) registrado en el servicio:`,
         'CONSULTAR_SALDO',
         'SOLICITAR_CONTRATO_SALDO',
         targetJid
@@ -4656,7 +4656,7 @@ export class BotOrchestrator {
     if (!session?.client_id && !session?.client_name) {
       await this.enviarYLoguear(
         phone,
-        `Para consultar los datos de tu paquete y velocidad contratada, por favor indícame tu *Nombre completo* o número de contrato:`,
+        `Para consultar los datos de tu paquete y velocidad contratada, por favor indícame tu *Nombre completo* (con apellidos) del titular del servicio:`,
         'CONSULTAR_PLAN',
         'SOLICITAR_IDENTIFICACION_PLAN',
         targetJid
@@ -5286,7 +5286,7 @@ export class BotOrchestrator {
       const queja = clasificacion.resumen_queja ? ` sobre: _"${clasificacion.resumen_queja}"_` : '';
       await this.enviarYLoguear(
         phone,
-        `Entendido tu reporte${queja}. Veo que presentas inconvenientes con tu conexión.\n\nPara poder verificar tu línea y ayudarte de inmediato, ¿podrías indicarme tu *Nombre completo* o número de contrato?`,
+        `Entendido tu reporte${queja}. Veo que presentas inconvenientes con tu conexión.\n\nPara poder verificar tu línea y ayudarte de inmediato, ¿podrías indicarme tu *Nombre completo* (con apellidos) del titular del servicio?`,
         'FALLA_INTERNET',
         'SOLICITAR_NOMBRE_PARA_DIAGNOSTICO',
         targetJid
@@ -6051,7 +6051,7 @@ ${techInfo}───────────────────────
     if (!onuRecord) {
       await this.enviarYLoguear(
         phone,
-        `No logramos localizar el módem de tu servicio para actualizar la contraseña Wi-Fi.\n\nPor favor indícanos tu *Nombre completo* o número de contrato para ubicar tu conexión en el sistema.`,
+        `No logramos localizar el módem de tu servicio para actualizar la contraseña Wi-Fi.\n\nPor favor indícanos el *Nombre completo del titular* (con apellidos) para ubicar tu conexión en el sistema.`,
         'DATOS_WIFI',
         'CLIENTE_NO_ENCONTRADO_WIFI',
         targetJid

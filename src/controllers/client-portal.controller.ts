@@ -804,20 +804,21 @@ self.addEventListener('fetch', (event) => {
           if (bySn) return bySn;
         }
 
-        // Prioridad 2: Por IP fija asignada exacta (única y fiable entre WispHub y SmartOLT)
-        if (srvIp && srvIp !== 'N/A' && srvIp !== '0.0.0.0') {
-          const byIp = allOnus.find((o: any) => String(o.ip_address || '').trim() === srvIp);
-          if (byIp) return byIp;
-        }
-
-        // Prioridad 3: Por coincidencia de alta confianza del nombre completo del titular (score >= 85)
-        if (srvName && srvName.length >= 10) {
+        // Prioridad 2: Por coincidencia de alta confianza del NOMBRE COMPLETO del titular (score >= 85)
+        // El nombre del titular es la identidad humana real y evita errores cuando los folios de SmartOLT difieren de WispHub
+        if (srvName && srvName.length >= 8) {
           const byName = allOnus.find((o: any) => {
             const oName = String(o.name || '');
             const cleanOName = cleanPersonName(oName.replace(/^\d+[\s\-_.:]+/, ''));
             return computeNameMatchScore(srvName, cleanOName) >= 85;
           });
           if (byName) return byName;
+        }
+
+        // Prioridad 3: Por IP fija asignada exacta (única y fiable entre WispHub y SmartOLT)
+        if (srvIp && srvIp !== 'N/A' && srvIp !== '0.0.0.0') {
+          const byIp = allOnus.find((o: any) => String(o.ip_address || '').trim() === srvIp);
+          if (byIp) return byIp;
         }
 
         // Prioridad 4: Por ID de servicio en el nombre de SmartOLT (SOLO si el nombre también coincide con confianza >= 65)
@@ -1358,18 +1359,77 @@ self.addEventListener('fetch', (event) => {
 
     let initialMatches: any[] = [];
 
-    // 1. Por ID numérico de servicio (Folio exacto)
-    if (/^\d{1,6}$/.test(clean)) {
-      const res = await db.execute({
-        sql: `SELECT * FROM wisphub_clients WHERE id_servicio = ? LIMIT 1`,
-        args: [Number(clean)],
+    const hasLetters = /[a-zA-ZáéíóúÁÉÍÓÚñÑ]/.test(clean);
+
+    // 1. SI CONTIENE LETRAS: Búsqueda PRIORITARIA por Nombre del Titular (evita errores de folios duplicados)
+    if (hasLetters) {
+      const cleanName = cleanPersonName(clean);
+      const normName = normalizeText(cleanName || clean);
+
+      // 1.1 Coincidencia directa por nombre / normalizado
+      const resName = await db.execute({
+        sql: `SELECT * FROM wisphub_clients WHERE nombre LIKE ? OR nombre_normalized LIKE ? OR nombre LIKE ? OR nombre_normalized LIKE ? ORDER BY id_servicio ASC LIMIT 15`,
+        args: [`%${clean}%`, `%${clean}%`, `%${normName}%`, `%${normName}%`],
       });
-      if (res.rows.length > 0) {
-        initialMatches.push(...(res.rows as any[]));
+      if (resName.rows.length > 0) {
+        initialMatches.push(...(resName.rows as any[]));
+      }
+
+      // 1.2 Búsqueda por palabras clave individuales (AND) para nombres con apellidos
+      if (initialMatches.length === 0 && normName) {
+        const STOP = new Set(['de', 'del', 'la', 'las', 'el', 'los', 'y', 'en', 'casa', 'soy', 'me', 'llamo']);
+        const words = normName.split(' ').filter(w => w.length >= 3 && !STOP.has(w));
+        if (words.length >= 2) {
+          const andClauses = words.map(() => '(nombre LIKE ? OR nombre_normalized LIKE ?)').join(' AND ');
+          const args = words.flatMap(w => [`%${w}%`, `%${w}%`]);
+          const andRes = await db.execute({
+            sql: `SELECT * FROM wisphub_clients WHERE ${andClauses} ORDER BY id_servicio ASC LIMIT 15`,
+            args,
+          });
+          if (andRes.rows.length > 0) {
+            initialMatches.push(...(andRes.rows as any[]));
+          }
+        }
+      }
+
+      // 1.3 Búsqueda difusa avanzada (Levenshtein + fonética) en WispHub
+      if (initialMatches.length === 0) {
+        try {
+          const fuzzyClients = await DbService.searchWisphubClientsFuzzy(clean, 10);
+          if (fuzzyClients && fuzzyClients.length > 0) {
+            initialMatches.push(...fuzzyClients);
+          }
+        } catch (fuzzyErr) {
+          logger.warn('Error en fuzzy match de findClientsByIdentifier:', fuzzyErr);
+        }
+      }
+
+      // 1.4 Respaldo: Buscar en SmartOLT por nombre y cruzar con WispHub
+      if (initialMatches.length === 0) {
+        try {
+          const onus = await DbService.searchOnusFuzzy(clean, 5);
+          for (const o of onus) {
+            if (o.matchScore >= 80) {
+              const titularOnu = cleanPersonName(o.name);
+              if (titularOnu && titularOnu.length >= 6) {
+                const whMatch = await db.execute({
+                  sql: `SELECT * FROM wisphub_clients WHERE nombre LIKE ? OR nombre_normalized LIKE ? OR ip = ? LIMIT 5`,
+                  args: [`%${titularOnu}%`, `%${normalizeText(titularOnu)}%`, o.ip_address || ''],
+                });
+                if (whMatch.rows.length > 0) {
+                  initialMatches.push(...(whMatch.rows as any[]));
+                  break;
+                }
+              }
+            }
+          }
+        } catch (oltErr) {
+          logger.warn('Error al cruzar SmartOLT por nombre en findClientsByIdentifier:', oltErr);
+        }
       }
     }
 
-    // 2. Por Teléfono (últimos 10 dígitos o número completo)
+    // 2. SI ES NÚMERO DE TELÉFONO (10 dígitos o número móvil)
     if (initialMatches.length === 0 && last10 && last10.length >= 7) {
       const res = await db.execute({
         sql: `SELECT * FROM wisphub_clients WHERE telefono LIKE ? OR telefonos_adicionales LIKE ? ORDER BY id_servicio ASC LIMIT 20`,
@@ -1385,10 +1445,10 @@ self.addEventListener('fetch', (event) => {
         });
         if (acc.rows.length > 0 && acc.rows[0].nombre) {
           const accName = cleanPersonName(acc.rows[0].nombre);
-          if (accName && accName.length >= 10 && !accName.toLowerCase().includes('revocado')) {
+          if (accName && accName.length >= 6 && !accName.toLowerCase().includes('revocado')) {
             const byName = await db.execute({
               sql: `SELECT * FROM wisphub_clients WHERE nombre LIKE ? OR nombre_normalized LIKE ? ORDER BY id_servicio ASC LIMIT 10`,
-              args: [`%${accName}%`, `%${accName}%`],
+              args: [`%${accName}%`, `%${normalizeText(accName)}%`],
             });
             if (byName.rows.length > 0) initialMatches.push(...(byName.rows as any[]));
           }
@@ -1396,7 +1456,44 @@ self.addEventListener('fetch', (event) => {
       }
     }
 
-    // 3. Por Número de Serie (SN)
+    // 3. SI ES UN IDENTIFICADOR NUMÉRICO CORTO (ej. 696 o 715)
+    if (initialMatches.length === 0 && /^\d{1,6}$/.test(clean)) {
+      // 3.1 Cruzar con SmartOLT por prefijo de ONU (ej: "696-Maria del Pilar") para obtener el nombre real del titular
+      try {
+        const smartMatch = await db.execute({
+          sql: `SELECT name, ip_address, sn FROM smartolt_onus WHERE name LIKE ? OR name LIKE ? OR name LIKE ? LIMIT 5`,
+          args: [`${clean}-%`, `${clean} %`, `0${clean}-%`],
+        });
+        for (const row of smartMatch.rows) {
+          const titularSmart = cleanPersonName(String(row.name || ''));
+          if (titularSmart && titularSmart.length >= 6) {
+            const byTitular = await db.execute({
+              sql: `SELECT * FROM wisphub_clients WHERE nombre LIKE ? OR nombre_normalized LIKE ? OR ip = ? LIMIT 5`,
+              args: [`%${titularSmart}%`, `%${normalizeText(titularSmart)}%`, String(row.ip_address || '')],
+            });
+            if (byTitular.rows.length > 0) {
+              initialMatches.push(...(byTitular.rows as any[]));
+              break;
+            }
+          }
+        }
+      } catch (errSmart) {
+        logger.warn('Error al cruzar prefijo numérico en smartolt_onus:', errSmart);
+      }
+
+      // 3.2 Buscar por ID de servicio directo en WispHub
+      if (initialMatches.length === 0) {
+        const res = await db.execute({
+          sql: `SELECT * FROM wisphub_clients WHERE id_servicio = ? LIMIT 1`,
+          args: [Number(clean)],
+        });
+        if (res.rows.length > 0) {
+          initialMatches.push(...(res.rows as any[]));
+        }
+      }
+    }
+
+    // 4. POR NÚMERO DE SERIE (SN de la ONU)
     if (initialMatches.length === 0 && clean.length >= 6) {
       const res = await db.execute({
         sql: `SELECT * FROM wisphub_clients WHERE sn_onu LIKE ? OR sn_onu_normalized LIKE ? LIMIT 10`,
@@ -1404,30 +1501,6 @@ self.addEventListener('fetch', (event) => {
       });
       if (res.rows.length > 0) {
         initialMatches.push(...(res.rows as any[]));
-      }
-    }
-
-    // 4. Por Nombre
-    if (initialMatches.length === 0) {
-      const norm = normalizeText(cleanPersonName(clean));
-      const resName = await db.execute({
-        sql: `SELECT * FROM wisphub_clients WHERE nombre LIKE ? OR nombre_normalized LIKE ? OR nombre LIKE ? OR nombre_normalized LIKE ? ORDER BY id_servicio ASC LIMIT 15`,
-        args: [`%${clean}%`, `%${clean}%`, `%${norm}%`, `%${norm}%`],
-      });
-      if (resName.rows.length > 0) {
-        initialMatches.push(...(resName.rows as any[]));
-      }
-    }
-
-    // 5. Búsqueda difusa de respaldo
-    if (initialMatches.length === 0) {
-      try {
-        const fuzzyClients = await DbService.searchWisphubClientsFuzzy(clean, 5);
-        if (fuzzyClients && fuzzyClients.length > 0) {
-          initialMatches.push(...fuzzyClients);
-        }
-      } catch (fuzzyErr) {
-        logger.warn('Error en fuzzy match de findClientsByIdentifier:', fuzzyErr);
       }
     }
 
