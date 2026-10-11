@@ -8,7 +8,7 @@ import { WispHubService } from '../services/wisphub.service';
 import { config } from '../config/env';
 import { Logger } from '../utils/logger';
 import { hashPassword, verifyPassword, generateClientPortalToken, verifyClientPortalToken } from '../utils/auth';
-import { cleanPersonName, normalizeText } from '../utils/fuzzy-matcher';
+import { cleanPersonName, normalizeText, computeNameMatchScore } from '../utils/fuzzy-matcher';
 import { DbService } from '../services/db.service';
 import { getCloudWareSphereSvg } from '../views/brand';
 

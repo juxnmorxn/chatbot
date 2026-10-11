@@ -1815,10 +1815,11 @@ export function getClientPortalHtml(): string {
           sessionStorage.clear();
           if (data?.sessionRevoked || res.status === 401 || res.status === 403) {
             showToast(data?.message || 'Tu enlace o sesión ha sido revocado. Ingresa de nuevo.', 'warning');
-          }
-          if (targetPhone && !data?.sessionRevoked && res.status !== 401 && res.status !== 403) {
+            showLogin();
+          } else if (res.status === 404 && targetPhone) {
             showNotFound(targetPhone);
           } else {
+            if (data?.message) showToast(data.message, 'error');
             showLogin();
           }
           return;
