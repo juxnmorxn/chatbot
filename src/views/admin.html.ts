@@ -3225,8 +3225,8 @@ export function getAdminDashboardHtml(): string {
                     <button class="chat-dropdown-item" onclick="closeCurrentChatCase(); closeChatActionsMenu();">
                       <span>✕</span> <span>Cerrar caso y reactivar bot</span>
                     </button>
-                    <button class="chat-dropdown-item" onclick="resetActiveChatPortalAndBot(); closeChatActionsMenu();">
-                      <span>🧹</span> <span>Resetear Portal y Bot (Limpiar pruebas)</span>
+                    <button class="chat-dropdown-item item-danger" onclick="unlinkActiveChatClientAndReset(); closeChatActionsMenu();" title="Eliminar enlaces mágicos, desvincular el cliente de este teléfono y reiniciar la conversación">
+                      <span>🔗</span> <span>Desvincular Cliente & Revocar Enlaces</span>
                     </button>
                     <button id="btn-delete-active-chat" class="chat-dropdown-item item-danger" onclick="deleteCurrentChat(); closeChatActionsMenu();">
                       <span>🗑️</span> <span>Eliminar conversación</span>
@@ -8773,12 +8773,45 @@ export function getAdminDashboardHtml(): string {
       });
     }
 
-    async function resetActiveChatPortalAndBot() {
+    async function unlinkActiveChatClientAndReset() {
       if (!state.activeChatPhone) {
         showToast('Atención', 'No hay ninguna conversación seleccionada.', 'warning');
         return;
       }
-      handleResetTestPhoneWithNumber(state.activeChatPhone);
+      const cleanDigits = String(state.activeChatPhone || '').replace(/\D/g, '');
+      const cleanPhone = cleanDigits.length >= 10 ? cleanDigits.slice(-10) : cleanDigits;
+
+      showConfirmDialog(
+        '🔗 Desvincular Cliente & Revocar Enlaces',
+        '¿Deseas desvincular el teléfono ' + cleanPhone + ' de su cliente actual, eliminar sus enlaces de acceso al portal y reiniciar la sesión del bot? El número quedará totalmente libre para vincularse limpiamente.',
+        async () => {
+          try {
+            const res = await apiFetch('/api/admin/portal/reset-phone', {
+              method: 'POST',
+              body: JSON.stringify({ phone: cleanPhone }),
+            });
+            if (res.success) {
+              showToast('Desvinculado con Éxito', 'El número ' + cleanPhone + ' fue desvinculado y sus enlaces quedaron eliminados.', 'success');
+              if (state.activeChatPhone) {
+                const chat = state.chats.find(c => c.phone === state.activeChatPhone);
+                if (chat) {
+                  chat.client_name = cleanPhone;
+                  const nameEl = document.getElementById('active-chat-name');
+                  if (nameEl) nameEl.textContent = cleanPhone;
+                }
+              }
+            } else {
+              showToast('Error', res.error || 'No se pudo desvincular el número.', 'error');
+            }
+          } catch (err) {
+            showToast('Error', err.message || 'Error de conexión', 'error');
+          }
+        }
+      );
+    }
+
+    async function resetActiveChatPortalAndBot() {
+      return unlinkActiveChatClientAndReset();
     }
 
     async function handleRevokeAllPortalLinks() {

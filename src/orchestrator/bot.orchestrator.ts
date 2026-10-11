@@ -569,13 +569,14 @@ export class BotOrchestrator {
       (accion || '').includes('CONTRATO')
     );
 
-    // Sugerencia de creación de cuenta para clientes que aún no tengan cuenta registrada en la BD
-    if (!esTecnico && !dest.includes('@g.us') && !textoFinal.includes('/portal') && !textoFinal.includes('portal.')) {
+    // Sugerencia contextual del portal solo en saludos o consultas de saldo/cuenta para no saturar en soporte técnico
+    const esMomentoApropiado = intencion === 'SALUDO' || intencion === 'CONSULTAR_SALDO' || intencion === 'CONSULTAR_PLAN' || (accion || '').includes('SALUDO') || (accion || '').includes('SALDO');
+    if (!esTecnico && esMomentoApropiado && !dest.includes('@g.us') && !textoFinal.includes('/portal') && !textoFinal.includes('portal.')) {
       try {
         const tieneCuenta = await this.clienteTieneCuentaPortal(last10);
         if (!tieneCuenta) {
-          const portalLink = this.getClientPortalLink(last10);
-          textoFinal = `${textoFinal}\n\n💡 _*Crea tu cuenta de cliente en 1 clic para ver tu Wi-Fi, señal y recibos:*_\n👉 ${portalLink}`;
+          const portalLink = await this.getClientPortalLinkAsync(last10);
+          textoFinal = `${textoFinal}\n\n💡 _*Puedes consultar tu conexión, Wi-Fi y recibos en tu Portal Web:*_\n👉 ${portalLink}`;
         }
       } catch {}
     }
@@ -1092,7 +1093,20 @@ export class BotOrchestrator {
       return;
     }
 
-    // 2.3 DETECCIÓN DE CAMBIO DE INTENCIÓN (SALUDOS Y CONSULTAS DE PAGO PRIORITARIAS):
+    // 2.3 DETECCIÓN DIRECTA DE CONSULTA DEL PORTAL / SOLICITUD DE ENLACE DE CLIENTE
+    const esConsultaPortal = /\b(portal|mi\s*portal|link\s*(del?\s*portal|de\s*acceso)?|enlace\s*(del?\s*portal|de\s*acceso)?|mi\s*cuenta\s*(web|en\s*l[ií]nea|portal)?|entrar\s*al\s*portal|acceso\s*al\s*portal|app\s*del?\s*portal|p[aá]gina\s*(web|del?\s*portal))\b/i.test(lowerMsg);
+    if (esConsultaPortal) {
+      const portalUrl = await this.getClientPortalLinkAsync(phone, session?.client_name || undefined);
+      const nombre = session?.client_name ? ` *${session.client_name}*` : '';
+      const textoPortal = `¡Hola${nombre}! 👋 Aquí tienes el acceso directo a tu *Portal de Cliente*:\n\n` +
+        `👉 ${portalUrl}\n\n` +
+        `💡 _*Tip:* Solo toca el enlace para entrar automáticamente sin contraseñas. Desde allí puedes ver tu conexión de fibra, nombre y clave de Wi-Fi, recibos y alternar entre tus domicilios si tienes varios contratos._`;
+      await this.enviarYLoguear(phone, textoPortal, 'CONSULTAR_PORTAL', 'LINK_PORTAL_ENVIADO', targetJid);
+      await DbService.updateStep(phone, 'CONVERSACIONAL');
+      return;
+    }
+
+    // 2.4 DETECCIÓN DE CAMBIO DE INTENCIÓN (SALUDOS Y CONSULTAS DE PAGO PRIORITARIAS):
     // Si el usuario escribe un saludo o pregunta por pagos/facturas/contraseña, NUNCA debe
     // tratarse como respuesta técnica a un reporte previo ni generar tickets de falla.
     const esSaludo = /^(hola|buen\s*(dia|día)|buenas\s*(tardes|noches)?|saludos|que\s*tal|hey|hi)\b/i.test(lowerMsg);
@@ -8609,17 +8623,29 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
   }
 
   /**
-   * Genera el enlace de acceso directo permanente y seguro (Magic Link de por vida) al Portal Web / PWA del Cliente
+   * Genera el enlace de acceso directo al Portal Web / PWA del Cliente
    */
-  static getClientPortalLink(phone?: string, clientName?: string): string {
+  static getClientPortalLink(phone?: string, clientName?: string, tokenVer: number = 1): string {
     const baseUrl = this.getClientPortalBaseUrl();
     const cleanPhone = (phone || '').replace(/\D/g, '');
     const last10 = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
     if (!last10) return `${baseUrl}/portal`;
 
-    // Generar token permanente e indestructible firmado para este teléfono
-    const permanentToken = generateClientPortalToken(last10, clientName || '');
+    // Generar token permanente firmado para este teléfono con la versión correspondiente
+    const permanentToken = generateClientPortalToken(last10, clientName || '', [], tokenVer);
     return `${baseUrl}/portal?p=${last10}&auth=${permanentToken}`;
+  }
+
+  /**
+   * Genera el enlace asegurando que la cuenta exista en la base de datos para que sea inmediatamente válido
+   */
+  static async getClientPortalLinkAsync(phone?: string, clientName?: string): Promise<string> {
+    const cleanPhone = (phone || '').replace(/\D/g, '');
+    const last10 = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
+    if (!last10) return `${this.getClientPortalBaseUrl()}/portal`;
+
+    const tokenVer = await DbService.ensurePortalAccount(last10, clientName || undefined);
+    return this.getClientPortalLink(phone, clientName, tokenVer);
   }
 
   /**
@@ -8628,7 +8654,7 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
   static async enviarMenuPrincipal(phone: string, clientName?: string | null): Promise<void> {
     const nombreLimpio = formatDisplayName(clientName, true);
     const saludo = nombreLimpio ? `¡Hola, *${nombreLimpio}*! 👋` : `¡Hola! 👋`;
-    const portalUrl = this.getClientPortalLink(phone);
+    const portalUrl = await this.getClientPortalLinkAsync(phone, clientName || undefined);
     const texto = `${saludo} Bienvenido al centro de atención y soporte de *${this.getIspName()}*.\n\n` +
       `¿En qué podemos ayudarte el día de hoy? Cuéntame tu duda o si presentas alguna falla con tu internet.\n\n` +
       `💡 _*Tip:* También puedes consultar tu conexión, potencia y facturas en tu Portal Web:_\n` +

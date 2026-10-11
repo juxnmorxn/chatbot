@@ -4104,27 +4104,19 @@ export class DbService {
 
     const now = new Date().toISOString();
 
-    // 1. Invalidar y revocar permanentemente enlaces y tokens anteriores
+    // 1. Eliminar permanentemente la cuenta en client_portal_accounts para desvincular el teléfono y revocar sus enlaces
     const portalRes = await client.execute({
-      sql: `
-        INSERT INTO client_portal_accounts (telefono, password_hash, nombre, is_active, token_version, tokens_revoked_at, updated_at)
-        VALUES (?, '', 'Revocado', 1, 2, ?, ?)
-        ON CONFLICT(telefono) DO UPDATE SET
-          password_hash = '',
-          token_version = client_portal_accounts.token_version + 1,
-          tokens_revoked_at = excluded.tokens_revoked_at,
-          updated_at = excluded.updated_at
-      `,
-      args: [cleanPhone, now, now],
+      sql: `DELETE FROM client_portal_accounts WHERE telefono = ?`,
+      args: [cleanPhone],
     });
 
-    // 2. Eliminar de sessions (bot de WhatsApp)
+    // 2. Eliminar la sesión del bot de WhatsApp para reiniciar la conversación
     const sessionRes = await client.execute({
       sql: `DELETE FROM sessions WHERE phone = ? OR phone LIKE ?`,
       args: [cleanPhone, `%${cleanPhone}`],
     });
 
-    logger.info(`Teléfono ${cleanPhone} restablecido y enlaces revocados. Eliminadas ${portalRes.rowsAffected || 0} cuenta(s) y ${sessionRes.rowsAffected || 0} sesión(es).`);
+    logger.info(`Teléfono ${cleanPhone} desvinculado y enlaces eliminados. Cuentas eliminadas: ${portalRes.rowsAffected || 0}, sesiones eliminadas: ${sessionRes.rowsAffected || 0}.`);
 
     return {
       portalRows: portalRes.rowsAffected || 0,
@@ -4175,7 +4167,52 @@ export class DbService {
     logger.info(`Todas las sesiones y enlaces mágicos del portal han sido revocados globalmente.`);
     return res.rowsAffected || 0;
   }
+
+  /**
+   * Obtiene la versión actual del token de portal para un teléfono
+   */
+  static async getPortalTokenVersion(phone: string): Promise<number> {
+    const cleanPhone = (phone || '').replace(/\D/g, '').slice(-10);
+    if (!cleanPhone) return 1;
+    try {
+      const client = getDbClient();
+      const res = await client.execute({
+        sql: `SELECT token_version FROM client_portal_accounts WHERE telefono = ? LIMIT 1`,
+        args: [cleanPhone],
+      });
+      if (res.rows.length > 0 && res.rows[0].token_version) {
+        return Number(res.rows[0].token_version);
+      }
+    } catch (_) {}
+    return 1;
+  }
+
+  /**
+   * Asegura que exista el registro en client_portal_accounts para que el enlace mágico sea inmediatamente válido
+   */
+  static async ensurePortalAccount(phone: string, name?: string): Promise<number> {
+    const cleanPhone = (phone || '').replace(/\D/g, '').slice(-10);
+    if (!cleanPhone) return 1;
+    try {
+      const client = getDbClient();
+      const res = await client.execute({
+        sql: `SELECT token_version, is_active FROM client_portal_accounts WHERE telefono = ? LIMIT 1`,
+        args: [cleanPhone],
+      });
+      if (res.rows.length > 0) {
+        return Number(res.rows[0].token_version || 1);
+      }
+      await client.execute({
+        sql: `INSERT OR IGNORE INTO client_portal_accounts (telefono, password_hash, nombre, is_active, token_version) VALUES (?, '', ?, 1, 1)`,
+        args: [cleanPhone, name || ''],
+      });
+      return 1;
+    } catch (_) {
+      return 1;
+    }
+  }
 }
+
 
 export interface WhatsAppOfficeGroupRecord {
   id?: number;

@@ -1267,19 +1267,6 @@ export class WispHubService {
       rows = res.rows as any[];
     }
 
-    if (rows.length === 0 && options?.nombre) {
-      const nameParts = options.nombre.split(' ').filter(p => p.length >= 4);
-      for (const part of nameParts) {
-        const res = await db.execute({
-          sql: `SELECT * FROM wisphub_invoices WHERE cliente_nombre LIKE ? ORDER BY fecha_emision DESC, id_factura DESC LIMIT 20`,
-          args: [`%${part}%`],
-        });
-        if (res.rows.length > 0) {
-          rows = res.rows as any[];
-          break;
-        }
-      }
-    }
 
     // 3. Si aún no hay registros locales, sincronizar las primeras 3 páginas de WispHub
     if (rows.length === 0) {

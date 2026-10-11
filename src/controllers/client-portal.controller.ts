@@ -354,9 +354,23 @@ self.addEventListener('fetch', (event) => {
             sql: `SELECT * FROM client_portal_accounts WHERE telefono = ? LIMIT 1`,
             args: [payload.phone],
           });
-          const account = accRes.rows[0];
+          let account = accRes.rows[0];
 
-          // Validación estricta de Existencia y Revocación / Desactivación
+          // Si el enlace fue legítimamente firmado pero aún no se había registrado en client_portal_accounts:
+          if (!account) {
+            try {
+              await db.execute({
+                sql: `INSERT OR IGNORE INTO client_portal_accounts (telefono, password_hash, nombre, is_active, token_version) VALUES (?, '', ?, 1, ?)`,
+                args: [payload.phone, payload.name || '', payload.ver || 1],
+              });
+              const freshAcc = await db.execute({
+                sql: `SELECT * FROM client_portal_accounts WHERE telefono = ? LIMIT 1`,
+                args: [payload.phone],
+              });
+              account = freshAcc.rows[0];
+            } catch (_) {}
+          }
+
           if (!account) {
             res.status(401).json({
               success: false,
@@ -374,6 +388,8 @@ self.addEventListener('fetch', (event) => {
             });
             return;
           }
+
+          // Solo revocar si el token fue emitido ANTES de la fecha de revocación
           if (account.tokens_revoked_at && payload.iat < Math.floor(new Date(account.tokens_revoked_at as string).getTime() / 1000)) {
             res.status(401).json({
               success: false,
@@ -382,13 +398,18 @@ self.addEventListener('fetch', (event) => {
             });
             return;
           }
+
           if (account.token_version && payload.ver && payload.ver < Number(account.token_version)) {
-            res.status(401).json({
-              success: false,
-              sessionRevoked: true,
-              message: 'Este enlace de acceso fue reemplazado por uno nuevo.',
-            });
-            return;
+            // Si el token es posterior a la revocación, sincronizar versión
+            const isFresh = account.tokens_revoked_at ? (payload.iat >= Math.floor(new Date(account.tokens_revoked_at as string).getTime() / 1000)) : false;
+            if (!isFresh) {
+              res.status(401).json({
+                success: false,
+                sessionRevoked: true,
+                message: 'Este enlace de acceso fue reemplazado por uno nuevo.',
+              });
+              return;
+            }
           }
 
           const services = await ClientPortalController.findClientsByIdentifier(payload.phone);
@@ -656,10 +677,24 @@ self.addEventListener('fetch', (event) => {
             sql: `SELECT * FROM client_portal_accounts WHERE telefono = ? LIMIT 1`,
             args: [payload.phone],
           });
-          const account = accRes.rows[0];
+          let account = accRes.rows[0];
+
+          // Si el enlace fue legítimamente firmado pero aún no se había registrado en client_portal_accounts:
+          if (!account) {
+            try {
+              await db.execute({
+                sql: `INSERT OR IGNORE INTO client_portal_accounts (telefono, password_hash, nombre, is_active, token_version) VALUES (?, '', ?, 1, ?)`,
+                args: [payload.phone, payload.name || '', payload.ver || 1],
+              });
+              const freshAcc = await db.execute({
+                sql: `SELECT * FROM client_portal_accounts WHERE telefono = ? LIMIT 1`,
+                args: [payload.phone],
+              });
+              account = freshAcc.rows[0];
+            } catch (_) {}
+          }
 
           if (!account) {
-            // Si el usuario fue eliminado de client_portal_accounts, el enlace/sesión queda revocado de inmediato
             res.status(401).json({
               success: false,
               sessionRevoked: true,
@@ -676,6 +711,8 @@ self.addEventListener('fetch', (event) => {
             });
             return;
           }
+
+          // Solo revocar si el token fue emitido ANTES de la fecha de revocación
           if (account.tokens_revoked_at && payload.iat < Math.floor(new Date(account.tokens_revoked_at as string).getTime() / 1000)) {
             res.status(401).json({
               success: false,
@@ -684,13 +721,17 @@ self.addEventListener('fetch', (event) => {
             });
             return;
           }
+
           if (account.token_version && payload.ver && payload.ver < Number(account.token_version)) {
-            res.status(401).json({
-              success: false,
-              sessionRevoked: true,
-              message: 'Tu sesión ha sido renovada. Por favor ingresa nuevamente.',
-            });
-            return;
+            const isFresh = account.tokens_revoked_at ? (payload.iat >= Math.floor(new Date(account.tokens_revoked_at as string).getTime() / 1000)) : false;
+            if (!isFresh) {
+              res.status(401).json({
+                success: false,
+                sessionRevoked: true,
+                message: 'Tu sesión ha sido renovada. Por favor ingresa nuevamente.',
+              });
+              return;
+            }
           }
 
           verifiedPhone = payload.phone;
@@ -712,24 +753,13 @@ self.addEventListener('fetch', (event) => {
 
       let services: any[] = [];
 
-      if (requestedServiceId) {
-        services = await ClientPortalController.findClientsByIdentifier(requestedServiceId);
-      }
-
-      if ((!services || services.length === 0) && verifiedPhone) {
+      // 1. Obtener los servicios legítimos del titular autenticado
+      if (verifiedPhone) {
         services = await ClientPortalController.findClientsByIdentifier(verifiedPhone);
-      }
-
-      if ((!services || services.length === 0) && tokenServiceIds.length > 0) {
-        services = await ClientPortalController.findClientsByIdentifier(String(tokenServiceIds[0]));
-      }
-
-      if ((!services || services.length === 0) && tokenName) {
-        services = await ClientPortalController.findClientsByIdentifier(tokenName);
-      }
-
-      if ((!services || services.length === 0) && requestedId) {
+      } else if (requestedId) {
         services = await ClientPortalController.findClientsByIdentifier(requestedId);
+      } else if (requestedServiceId) {
+        services = await ClientPortalController.findClientsByIdentifier(requestedServiceId);
       }
 
       if (!services || services.length === 0) {
@@ -737,12 +767,17 @@ self.addEventListener('fetch', (event) => {
         return;
       }
 
-      // Si se solicitó un servicio específico dentro de los múltiples contratos del titular
-      const selectedServiceId = req.query.serviceId ? String(req.query.serviceId).trim() : '';
+      // 2. Control estricto de servicio activo (Tenant Isolation / Multi-Servicio):
+      // Si el usuario especificó un serviceId, debe existir DENTRO de sus contratos legítimos
       let client = services[0];
-      if (selectedServiceId) {
-        const exact = services.find((s: any) => String(s.id_servicio) === selectedServiceId);
-        if (exact) client = exact;
+      if (requestedServiceId) {
+        const exact = services.find((s: any) => String(s.id_servicio) === requestedServiceId);
+        if (exact) {
+          client = exact;
+        } else if (!verifiedPhone) {
+          const directMatch = await ClientPortalController.findClientsByIdentifier(requestedServiceId);
+          if (directMatch && directMatch.length > 0) client = directMatch[0];
+        }
       }
 
       const db = getDbClient();
@@ -766,21 +801,22 @@ self.addEventListener('fetch', (event) => {
           const oIp = String(o.ip_address || '').trim();
 
           // Coincidencia 1: Por SN completo o terminación (8 caracteres)
-          if (srvSnSuffix && (oSn === srvSn || oSn.endsWith(srvSnSuffix) || (srvSn.length >= 8 && oSn.includes(srvSnSuffix)))) {
+          if (srvSnSuffix && srvSnSuffix.length >= 6 && (oSn === srvSn || oSn.endsWith(srvSnSuffix) || (srvSn.length >= 8 && oSn.includes(srvSnSuffix)))) {
             return true;
           }
-          // Coincidencia 2: Por IP exacta
-          if (srvIp && oIp && oIp === srvIp && oIp !== 'N/A') {
+          // Coincidencia 2: Por IP fija exacta (única y fiable entre WispHub y SmartOLT)
+          if (srvIp && oIp && oIp === srvIp && oIp !== 'N/A' && oIp !== '0.0.0.0') {
             return true;
           }
           // Coincidencia 3: Por ID de servicio en el nombre de SmartOLT (ej: "696-Nombre", "715-Nombre")
           if (srvId && (oName.startsWith(`${srvId}-`) || oName.startsWith(`${srvId}.`) || oName.startsWith(`${srvId} `) || oName.startsWith(`${srvId}_`))) {
             return true;
           }
-          // Coincidencia 4: Por nombre del cliente
-          if (srvName && srvName.length >= 6 && oName) {
-            const score = computeNameMatchScore(srvName, oName);
-            if (score >= 45) return true;
+          // Coincidencia 4: Por coincidencia de alta confianza del nombre completo del titular (score >= 85)
+          if (srvName && srvName.length >= 10 && oName) {
+            const cleanOName = cleanPersonName(oName.replace(/^\d+[\s\-_.:]+/, ''));
+            const score = computeNameMatchScore(srvName, cleanOName);
+            if (score >= 85) return true;
           }
           return false;
         });
@@ -856,18 +892,20 @@ self.addEventListener('fetch', (event) => {
         } catch (_) {}
       }
 
-      // Prioridad 5: Por coincidencia de Nombre
+      // Prioridad 5: Por coincidencia de Nombre completo de alta confianza (score >= 85)
       if (!onuRecord && client.nombre) {
         const cleanName = cleanPersonName(client.nombre);
-        if (cleanName.length > 4) {
-          const parts = cleanName.split(' ').filter(p => p.length >= 4);
-          for (const p of parts) {
-            const onuRes = await db.execute({
-              sql: `SELECT * FROM smartolt_onus WHERE name_normalized LIKE ? OR name LIKE ? LIMIT 1`,
-              args: [`%${p}%`, `%${p}%`],
-            });
-            if (onuRes.rows.length > 0) {
-              onuRecord = onuRes.rows[0];
+        if (cleanName.length >= 8) {
+          const firstWords = cleanName.split(' ').slice(0, 2).join(' ');
+          const candOnusRes = await db.execute({
+            sql: `SELECT * FROM smartolt_onus WHERE name_normalized LIKE ? OR name LIKE ? LIMIT 10`,
+            args: [`%${firstWords}%`, `%${firstWords}%`],
+          });
+          for (const cand of (candOnusRes.rows as any[])) {
+            const candNameClean = cleanPersonName(String(cand.name || '').replace(/^\d+[\s\-_.:]+/, ''));
+            const score = computeNameMatchScore(cleanName, candNameClean);
+            if (score >= 85) {
+              onuRecord = cand;
               break;
             }
           }
@@ -1033,7 +1071,12 @@ self.addEventListener('fetch', (event) => {
         return;
       }
 
-      const client = services[0];
+      let client = services[0];
+      const targetServiceId = req.query.serviceId ? String(req.query.serviceId).trim() : '';
+      if (targetServiceId) {
+        const exact = services.find((s: any) => String(s.id_servicio) === targetServiceId);
+        if (exact) client = exact;
+      }
       let facturas: any[] = [];
       let rawUserData: any = {};
       try { rawUserData = JSON.parse(client.raw_data || '{}'); } catch (_) {}
@@ -1325,11 +1368,14 @@ self.addEventListener('fetch', (event) => {
           args: [last10],
         });
         if (acc.rows.length > 0 && acc.rows[0].nombre) {
-          const byName = await db.execute({
-            sql: `SELECT * FROM wisphub_clients WHERE nombre LIKE ? OR nombre_normalized LIKE ? ORDER BY id_servicio ASC LIMIT 20`,
-            args: [`%${acc.rows[0].nombre}%`, `%${acc.rows[0].nombre}%`],
-          });
-          if (byName.rows.length > 0) initialMatches.push(...(byName.rows as any[]));
+          const accName = cleanPersonName(acc.rows[0].nombre);
+          if (accName && accName.length >= 10 && !accName.toLowerCase().includes('revocado')) {
+            const byName = await db.execute({
+              sql: `SELECT * FROM wisphub_clients WHERE nombre LIKE ? OR nombre_normalized LIKE ? ORDER BY id_servicio ASC LIMIT 10`,
+              args: [`%${accName}%`, `%${accName}%`],
+            });
+            if (byName.rows.length > 0) initialMatches.push(...(byName.rows as any[]));
+          }
         }
       }
     }
@@ -1372,30 +1418,48 @@ self.addEventListener('fetch', (event) => {
     if (initialMatches.length === 0) return [];
 
     // 🔄 CONSOLIDACIÓN DE MULTI-SERVICIO PARA EL TITULAR
-    // Extraer nombres base y teléfonos de los candidatos encontrados para traer TODOS sus contratos
     const servicesMap = new Map<string, any>();
     initialMatches.forEach(m => servicesMap.set(String(m.id_servicio), m));
 
     for (const match of initialMatches) {
-      const baseName = ClientPortalController.extractBaseCustomerName(match.nombre);
-      const normBase = normalizeText(cleanPersonName(baseName));
       const matchPhone = (match.telefono || '').replace(/\D/g, '').slice(-10);
+      const effectivePhone = matchPhone || last10;
 
-      if (normBase && normBase.length >= 5) {
-        const relatedRes = await db.execute({
-          sql: `
-            SELECT * FROM wisphub_clients 
-            WHERE (nombre_normalized LIKE ? OR nombre LIKE ?)
-               OR (telefono IS NOT NULL AND telefono != '' AND (telefono LIKE ? OR telefonos_adicionales LIKE ?))
-            ORDER BY id_servicio ASC LIMIT 30
-          `,
-          args: [`%${normBase}%`, `%${baseName}%`, `%${matchPhone || last10}%`, `%${matchPhone || last10}%`],
+      // A. Contratos adicionales que comparten el mismo número de teléfono (100% seguros)
+      if (effectivePhone && effectivePhone.length >= 7) {
+        const phoneRes = await db.execute({
+          sql: `SELECT * FROM wisphub_clients WHERE telefono LIKE ? OR telefonos_adicionales LIKE ? ORDER BY id_servicio ASC LIMIT 15`,
+          args: [`%${effectivePhone}%`, `%${effectivePhone}%`],
         });
-        (relatedRes.rows as any[]).forEach(s => {
+        (phoneRes.rows as any[]).forEach(s => {
           if (!servicesMap.has(String(s.id_servicio))) {
             servicesMap.set(String(s.id_servicio), s);
           }
         });
+      }
+
+      // B. Contratos adicionales donde el nombre completo del titular coincide con alta confianza (score >= 88)
+      // Ejemplo: "Maria del Pilar Perez Mendoza" y "Maria del Pilar Perez Mendoza 2"
+      const baseName = ClientPortalController.extractBaseCustomerName(match.nombre);
+      const cleanBase = cleanPersonName(baseName);
+      if (cleanBase && cleanBase.length >= 12) {
+        const nameParts = cleanBase.split(' ');
+        const searchPrefix = nameParts.slice(0, 2).join(' ');
+        if (searchPrefix.length >= 6) {
+          const candRes = await db.execute({
+            sql: `SELECT * FROM wisphub_clients WHERE nombre LIKE ? ORDER BY id_servicio ASC LIMIT 15`,
+            args: [`%${searchPrefix}%`],
+          });
+          for (const cand of (candRes.rows as any[])) {
+            if (!servicesMap.has(String(cand.id_servicio))) {
+              const candBase = cleanPersonName(ClientPortalController.extractBaseCustomerName(cand.nombre));
+              const score = computeNameMatchScore(cleanBase, candBase);
+              if (score >= 88) {
+                servicesMap.set(String(cand.id_servicio), cand);
+              }
+            }
+          }
+        }
       }
     }
 
