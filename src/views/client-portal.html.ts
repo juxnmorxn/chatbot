@@ -138,6 +138,11 @@ export function getClientPortalHtml(): string {
       -webkit-tap-highlight-color: transparent;
     }
     
+    html, body {
+      max-width: 100%;
+      overflow-x: hidden;
+    }
+
     body {
       font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
       background-color: var(--bg-body);
@@ -165,6 +170,8 @@ export function getClientPortalHtml(): string {
       padding: 16px 16px 80px 16px;
       gap: 16px;
       position: relative;
+      min-width: 0;
+      box-sizing: border-box;
       transition: max-width 0.25s ease;
     }
 
@@ -373,17 +380,13 @@ export function getClientPortalHtml(): string {
       width: 100%;
     }
 
-    /* Subgrid compacta para bandas Wi-Fi 2.4G y 5G */
+    /* Lista de bandas Wi-Fi 2.4G y 5G (Siempre contenida sin desbordamiento) */
     .wifi-networks-grid {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 8px;
-    }
-
-    @media (min-width: 460px) {
-      .wifi-networks-grid {
-        grid-template-columns: 1fr 1fr;
-      }
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      width: 100%;
+      min-width: 0;
     }
 
     /* Scrollbar estilizada y límite de altura para historial de facturas */
@@ -629,6 +632,9 @@ export function getClientPortalHtml(): string {
       flex-direction: column;
       gap: 14px;
       box-shadow: var(--card-shadow);
+      min-width: 0;
+      box-sizing: border-box;
+      overflow: hidden;
       transition: background-color 0.25s ease, border-color 0.25s ease;
     }
 
@@ -844,18 +850,23 @@ export function getClientPortalHtml(): string {
       background: var(--bg-surface);
       border: 1px solid var(--border-card);
       border-radius: var(--radius-md);
-      padding: 12px 14px;
+      padding: 9px 12px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 10px;
+      gap: 8px;
+      min-width: 0;
+      width: 100%;
+      box-sizing: border-box;
     }
 
     .wifi-item-info {
       display: flex;
       flex-direction: column;
       gap: 2px;
+      min-width: 0;
       overflow: hidden;
+      flex: 1;
     }
 
     .wifi-label {
@@ -867,12 +878,13 @@ export function getClientPortalHtml(): string {
     }
 
     .wifi-val {
-      font-size: 15px;
+      font-size: 14px;
       font-weight: 700;
       color: var(--text-title);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      min-width: 0;
     }
 
     .wifi-val.mono {
@@ -1421,26 +1433,28 @@ export function getClientPortalHtml(): string {
             <span class="wifi-band-tag tag-5g" style="font-size: 11px;"><i class="fa-solid fa-shield-halved"></i> 2.4G & 5G</span>
           </div>
 
-          <!-- Nombres de Red (2.4 GHz y 5 GHz) en subgrid compacta -->
+          <!-- Nombres de Red (2.4 GHz y 5 GHz) -->
           <div class="wifi-networks-grid">
             <!-- 2.4 GHz -->
-            <div class="wifi-item" style="padding: 10px 12px;">
+            <div class="wifi-item">
               <div class="wifi-item-info">
-                <div style="display: flex; align-items: center; gap: 5px;">
+                <div style="display: flex; align-items: center; gap: 6px;">
                   <span class="wifi-band-tag tag-24g" style="font-size: 10px; padding: 2px 7px;"><i class="fa-solid fa-tower-broadcast"></i> 2.4 GHz</span>
+                  <span style="font-size: 10.5px; color: var(--text-muted);">Mayor cobertura</span>
                 </div>
-                <span id="wifiSsid24Label" class="wifi-val" style="margin-top: 3px; font-size: 13.5px;">Cargando...</span>
+                <span id="wifiSsid24Label" class="wifi-val" style="margin-top: 2px;">Cargando...</span>
               </div>
               <button class="btn-action-icon" style="width: 32px; height: 32px; font-size: 13px;" onclick="copyWifiSsid24()" title="Copiar nombre de red 2.4G"><i class="fa-solid fa-copy"></i></button>
             </div>
 
             <!-- 5 GHz -->
-            <div id="boxWifi5g" class="wifi-item" style="padding: 10px 12px;">
+            <div id="boxWifi5g" class="wifi-item">
               <div class="wifi-item-info">
-                <div style="display: flex; align-items: center; gap: 5px;">
+                <div style="display: flex; align-items: center; gap: 6px;">
                   <span class="wifi-band-tag tag-5g" style="font-size: 10px; padding: 2px 7px;"><i class="fa-solid fa-bolt"></i> 5 GHz</span>
+                  <span style="font-size: 10.5px; color: var(--text-muted);">Ultra velocidad</span>
                 </div>
-                <span id="wifiSsid5gLabel" class="wifi-val" style="margin-top: 3px; font-size: 13.5px;">Cargando...</span>
+                <span id="wifiSsid5gLabel" class="wifi-val" style="margin-top: 2px;">Cargando...</span>
               </div>
               <button class="btn-action-icon" style="width: 32px; height: 32px; font-size: 13px;" onclick="copyWifiSsid5g()" title="Copiar nombre de red 5G"><i class="fa-solid fa-copy"></i></button>
             </div>
