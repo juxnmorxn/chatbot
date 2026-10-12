@@ -29,6 +29,7 @@ export interface AppSettings {
   paymentAccount?: string;
   paymentConvenio?: string;
   paymentBeneficiary?: string;
+  paymentOfficePhone?: string;
   paymentNotes?: string;
   paymentMercadopagoUrl?: string;
   mercadopagoAccessToken?: string;
@@ -172,6 +173,7 @@ export class SettingsService {
       paymentAccount: this.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', ''),
       paymentConvenio: this.get('PAYMENT_CONVENIO', 'PAYMENT_CONVENIO', ''),
       paymentBeneficiary: this.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', ''),
+      paymentOfficePhone: this.get('PAYMENT_OFFICE_PHONE', 'PAYMENT_OFFICE_PHONE', this.get('OFFICE_PHONE', 'OFFICE_PHONE', this.get('SOPORTE_HUMANO_PHONE', 'SOPORTE_HUMANO_PHONE', '7721284398'))),
       paymentNotes: this.get('PAYMENT_NOTES', 'PAYMENT_NOTES', ''),
       paymentMercadopagoUrl: this.get('PAYMENT_MERCADOPAGO_URL', 'MERCADOPAGO_URL', ''),
       mercadopagoAccessToken: this.get('MERCADOPAGO_ACCESS_TOKEN', 'MERCADOPAGO_ACCESS_TOKEN', ''),

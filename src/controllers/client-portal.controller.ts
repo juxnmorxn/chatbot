@@ -1077,6 +1077,16 @@ self.addEventListener('fetch', (event) => {
         signal,
         wifi,
         outage: activeOutage,
+        bankDetails: {
+          bank: SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK_NAME', 'BBVA Bancomer'),
+          clabe: SettingsService.get('PAYMENT_CLABE', 'PAYMENT_BANK_CLABE', '012 180 0152433212 90'),
+          account: SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_BANK_ACCOUNT', '012 180 0152433212 90'),
+          beneficiary: SettingsService.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', config.isp.name || 'CloudWareMx'),
+          reference: `SRV-${client.id_servicio}`,
+          titular: cleanPersonName(client.nombre || ''),
+          concept: cleanPersonName(client.nombre || ''),
+          officePhone: SettingsService.get('PAYMENT_OFFICE_PHONE', 'OFFICE_PHONE', SettingsService.get('SOPORTE_HUMANO_PHONE', 'SOPORTE_HUMANO_PHONE', '7721284398')),
+        },
       });
     } catch (err: any) {
       logger.error('Error al obtener datos de cliente en portal:', err?.message || err);
@@ -1146,7 +1156,8 @@ self.addEventListener('fetch', (event) => {
           beneficiary: SettingsService.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', config.isp.name || 'CloudWareMx'),
           reference: `SRV-${client.id_servicio}`,
           titular: cleanPersonName(client.nombre || ''),
-          concept: `${cleanPersonName(client.nombre || 'Servicio')} (SRV-${client.id_servicio})`,
+          concept: cleanPersonName(client.nombre || ''),
+          officePhone: SettingsService.get('PAYMENT_OFFICE_PHONE', 'OFFICE_PHONE', SettingsService.get('SOPORTE_HUMANO_PHONE', 'SOPORTE_HUMANO_PHONE', '7721284398')),
         },
       });
     } catch (err: any) {

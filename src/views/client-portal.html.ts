@@ -13,6 +13,7 @@ export function getClientPortalHtml(): string {
   const bankAccount = SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_BANK_ACCOUNT', '012 180 0152433212 90');
   const bankClabe = SettingsService.get('PAYMENT_CLABE', 'PAYMENT_BANK_CLABE', bankAccount || '012 180 0152433212 90');
   const bankBeneficiary = SettingsService.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', ispName || 'CloudWare Telecomunicaciones');
+  const officePhone = SettingsService.get('PAYMENT_OFFICE_PHONE', 'OFFICE_PHONE', SettingsService.get('SOPORTE_HUMANO_PHONE', 'SOPORTE_HUMANO_PHONE', '7721284398'));
 
   return `<!DOCTYPE html>
 <html lang="es">
@@ -1700,75 +1701,111 @@ export function getClientPortalHtml(): string {
         <button class="btn-close-modal" onclick="closeModal('modalBank')">&times;</button>
       </div>
 
-      <!-- Tarjeta Detallada de Cuenta y Titular -->
-      <div style="background: var(--bg-surface); border: 1px solid var(--border-card); padding: 16px; border-radius: var(--radius-md); font-size: 13px; display: flex; flex-direction: column; gap: 12px;">
+      <div style="display: none;" id="bankTitularName"></div>
+
+      <!-- Tarjetas de Cuentas y Datos para Copiar -->
+      <div style="display: flex; flex-direction: column; gap: 10px; font-size: 13px;">
         
-        <!-- Titular de la Cuenta del Servicio -->
-        <div style="padding-bottom: 10px; border-bottom: 1px solid var(--border-card);">
-          <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 700; margin-bottom: 2px;">
-            Titular del Servicio
+        <!-- Tarjeta: Banco y Beneficiario -->
+        <div style="background: var(--bg-surface); border: 1px solid var(--border-card); padding: 12px 14px; border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 8px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 11px; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Banco:</span>
+            <strong id="bankNameDisplay" style="color: var(--text-title); font-size: 13.5px; font-weight: 700;">${bankName}</strong>
           </div>
-          <div id="bankTitularName" style="color: #38bdf8; font-size: 16px; font-weight: 800; font-family: 'Outfit', sans-serif;">
-            Cargando...
-          </div>
-        </div>
-
-        <!-- Banco Receptor -->
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <span style="color: var(--text-body);">Banco:</span>
-          <strong id="bankNameDisplay" style="color: var(--text-title); font-size: 14px;">${bankName}</strong>
-        </div>
-
-        <!-- Beneficiario -->
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <span style="color: var(--text-body);">Beneficiario:</span>
-          <strong id="bankBeneficiaryText" style="color: var(--text-title); font-size: 14px;">${bankBeneficiary}</strong>
-        </div>
-
-        <!-- CLABE Interbancaria (18 dígitos) -->
-        <div style="background: var(--bg-card); padding: 10px 12px; border-radius: var(--radius-sm); border: 1px solid rgba(56, 189, 248, 0.25);">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-            <span style="font-size: 11px; color: #38bdf8; font-weight: 700; text-transform: uppercase;">CLABE Interbancaria (SPEI):</span>
-            <button class="btn-action-icon" onclick="copyClabe()" title="Copiar CLABE" style="width: 28px; height: 28px; font-size: 12px;"><i class="fa-solid fa-copy"></i></button>
-          </div>
-          <div id="bankClabeText" style="color: var(--text-title); font-family: monospace; font-size: 16px; font-weight: 800; letter-spacing: 1px; word-break: break-all;">
-            ${bankClabe}
+          <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-card); padding-top: 8px;">
+            <span style="font-size: 11px; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Beneficiario:</span>
+            <strong id="bankBeneficiaryText" style="color: var(--text-title); font-size: 13px; font-weight: 700;">${bankBeneficiary}</strong>
           </div>
         </div>
 
-        <!-- Número de Cuenta -->
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <span style="color: var(--text-body);">Cuenta:</span>
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <strong id="bankAccountText" style="font-family: monospace; font-size: 14px; color: var(--text-title);">${bankAccount}</strong>
-            <button class="btn-action-icon" onclick="copyBankAccount()" title="Copiar Cuenta" style="width: 26px; height: 26px; font-size: 11px;"><i class="fa-solid fa-copy"></i></button>
+        <!-- Tarjeta: CLABE Interbancaria (SPEI) -->
+        <div style="background: var(--bg-surface); border: 1.5px solid rgba(56, 189, 248, 0.35); padding: 12px 14px; border-radius: var(--radius-md);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <span style="font-size: 11px; color: #38bdf8; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">
+              <i class="fa-solid fa-shield-halved"></i> CLABE Interbancaria (SPEI)
+            </span>
+            <button class="btn-action-icon" onclick="copyClabe()" title="Copiar CLABE" style="width: 28px; height: 28px; font-size: 12px; color: #38bdf8;">
+              <i class="fa-solid fa-copy"></i>
+            </button>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+            <div id="bankClabeText" style="color: var(--text-title); font-family: monospace; font-size: 15.5px; font-weight: 800; letter-spacing: 0.8px; word-break: break-all;">
+              ${bankClabe}
+            </div>
+            <button class="btn-outline" onclick="copyClabe()" style="width: auto; padding: 4px 10px; font-size: 11px; height: 28px; flex-shrink: 0;">
+              <i class="fa-solid fa-copy"></i> Copiar
+            </button>
           </div>
         </div>
 
-        <!-- Folio y Concepto de Pago -->
-        <div style="background: rgba(16, 185, 129, 0.08); padding: 10px 12px; border-radius: var(--radius-sm); border: 1px solid rgba(16, 185, 129, 0.25);">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-            <span style="font-size: 11px; color: #10b981; font-weight: 700; text-transform: uppercase;">Concepto / Referencia SPEI:</span>
-            <button class="btn-action-icon" onclick="copyBankConcept()" title="Copiar Concepto" style="width: 28px; height: 28px; font-size: 12px; color: #10b981;"><i class="fa-solid fa-copy"></i></button>
+        <!-- Tarjeta: Número de Cuenta -->
+        <div style="background: var(--bg-surface); border: 1px solid var(--border-card); padding: 12px 14px; border-radius: var(--radius-md);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <span style="font-size: 11px; color: var(--text-muted); font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">
+              <i class="fa-solid fa-credit-card"></i> Número de Cuenta
+            </span>
+            <button class="btn-action-icon" onclick="copyBankAccount()" title="Copiar Cuenta" style="width: 28px; height: 28px; font-size: 12px;">
+              <i class="fa-solid fa-copy"></i>
+            </button>
           </div>
-          <div id="bankConceptText" style="font-family: monospace; font-size: 14px; font-weight: 700; color: #10b981;">
-            -
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+            <div id="bankAccountText" style="color: var(--text-title); font-family: monospace; font-size: 14.5px; font-weight: 700;">
+              ${bankAccount}
+            </div>
+            <button class="btn-outline" onclick="copyBankAccount()" style="width: auto; padding: 4px 10px; font-size: 11px; height: 28px; flex-shrink: 0;">
+              <i class="fa-solid fa-copy"></i> Copiar
+            </button>
           </div>
-          <span style="font-size: 10.5px; color: var(--text-muted); margin-top: 3px; display: block;">
-            Folio del Contrato: <strong id="bankRefText" style="color: var(--text-title);">-</strong>
-          </span>
         </div>
 
-        <div style="font-size: 11.5px; color: var(--text-muted); line-height: 1.4; background: rgba(255, 255, 255, 0.03); padding: 8px 10px; border-radius: 8px;">
-          💡 <strong>Importante:</strong> Al transferir desde tu app bancaria (BBVA, Banamex, Santander, etc.), escribe tu Folio o Nombre en el campo <em>Concepto</em> para identificación inmediata.
+        <!-- Tarjeta: Concepto (Nombre del Titular de la Cuenta) -->
+        <div style="background: rgba(16, 185, 129, 0.08); border: 1.5px solid rgba(16, 185, 129, 0.4); padding: 12px 14px; border-radius: var(--radius-md);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <span style="font-size: 11px; color: #10b981; font-weight: 800; text-transform: uppercase; letter-spacing: 0.3px;">
+              <i class="fa-solid fa-pen-to-square"></i> En concepto escribe el nombre del titular de la cuenta:
+            </span>
+            <button class="btn-action-icon" onclick="copyBankConcept()" title="Copiar Nombre" style="width: 28px; height: 28px; font-size: 12px; color: #10b981;">
+              <i class="fa-solid fa-copy"></i>
+            </button>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+            <div id="bankConceptText" style="font-family: 'Outfit', sans-serif; font-size: 15px; font-weight: 800; color: #10b981; line-height: 1.3;">
+              Cargando...
+            </div>
+            <button class="btn-outline" onclick="copyBankConcept()" style="width: auto; padding: 4px 10px; font-size: 11px; height: 28px; flex-shrink: 0; color: #10b981; border-color: rgba(16, 185, 129, 0.4);">
+              <i class="fa-solid fa-copy"></i> Copiar
+            </button>
+          </div>
+          <div style="font-size: 10.5px; color: var(--text-muted); margin-top: 5px;">
+            Folio de contrato: <strong id="bankRefText" style="color: var(--text-title);">-</strong>
+          </div>
         </div>
+
+        <!-- Tarjeta: Instrucción de Reenviar Comprobante / Captura al WhatsApp de Oficina -->
+        <div style="background: rgba(37, 211, 102, 0.08); border: 1.5px solid rgba(37, 211, 102, 0.35); padding: 12px 14px; border-radius: var(--radius-md);">
+          <div style="display: flex; align-items: flex-start; gap: 10px;">
+            <i class="fa-brands fa-whatsapp" style="font-size: 24px; color: #25d366; margin-top: 2px; flex-shrink: 0;"></i>
+            <div style="flex: 1;">
+              <div style="font-weight: 800; font-size: 12.5px; color: #ffffff; margin-bottom: 3px;">
+                📸 Paso obligatorio al terminar tu pago:
+              </div>
+              <div style="font-size: 11.5px; color: var(--text-body); line-height: 1.45; margin-bottom: 8px;">
+                Mandar captura de tu transferencia y escribir tu nombre al número de oficina para confirmar y reactivar tu servicio de inmediato.
+              </div>
+              <a id="btnOfficePaymentWa" href="https://wa.me/52${officePhone}" target="_blank" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: #25d366; color: #0b1329; font-weight: 800; font-size: 12.5px; padding: 8px 14px; border-radius: 8px; text-decoration: none; width: 100%; box-sizing: border-box;">
+                <i class="fa-brands fa-whatsapp" style="font-size: 16px;"></i> Mandar Captura y Nombre (<span id="bankOfficePhoneText">${officePhone}</span>)
+              </a>
+            </div>
+          </div>
+        </div>
+
       </div>
 
-      <div style="display: flex; gap: 8px; margin-top: 4px;">
+      <div style="display: flex; gap: 8px; margin-top: 12px;">
         <button class="btn-main" onclick="copyClabe()" style="flex: 1;">
           <i class="fa-solid fa-copy"></i> Copiar CLABE Interbancaria
         </button>
-        <button class="btn-outline" onclick="closeModal('modalBank')" style="width: auto; padding: 10px 16px;">
+        <button class="btn-outline" onclick="closeModal('modalBank')" style="width: auto; padding: 10px 18px;">
           Cerrar
         </button>
       </div>
@@ -2318,9 +2355,12 @@ export function getClientPortalHtml(): string {
 
       const bankConceptEl = document.getElementById('bankConceptText');
       if (bankConceptEl) {
-        const shortName = cleanTitular.split(' ').slice(0, 2).join(' ');
-        bankConceptEl.innerText = c.id_servicio + ' ' + shortName;
+        // En concepto el nombre del titular de la cuenta
+        bankConceptEl.innerText = cleanTitular;
       }
+
+      const officePhoneVal = (data.bankDetails && data.bankDetails.officePhone) || '${officePhone}';
+      updateOfficePaymentLink(officePhoneVal, cleanTitular, c.id_servicio);
 
       // Paquete Contratado con Gran Énfasis Visual y Corrección de Discrepancias
       const rawPlan = (c.plan_internet || data.onu?.speed_profile || '').trim();
@@ -2533,22 +2573,15 @@ export function getClientPortalHtml(): string {
             const el = document.getElementById('bankBeneficiaryText');
             if (el) el.innerText = data.bankDetails.beneficiary;
           }
+          if (data.bankDetails.officePhone) {
+            updateOfficePaymentLink(data.bankDetails.officePhone);
+          }
         }
 
         if (data.success && data.invoices && data.invoices.length > 0) {
           container.innerHTML = data.invoices.map(inv => {
             const isPaid = String(inv.estado || '').toLowerCase().includes('pagad');
             const statusClass = isPaid ? 'paid' : 'pending';
-            
-            // Redirigir siempre a nuestro generador de recibos oficial para evitar error 404 de WispHub
-            let receiptUrl = inv.pdf_url || ('/api/portal/invoice/' + (inv.id_factura || inv.id || currentContractId) + '/receipt');
-            if (receiptUrl.includes('wisphub.net/factura/pdf/')) {
-              const parts = receiptUrl.split('/factura/pdf/');
-              const factId = (parts[1] ? parts[1].split('/')[0].split('?')[0] : '') || (inv.id_factura || inv.id || currentContractId);
-              receiptUrl = '/api/portal/invoice/' + factId + '/receipt';
-            }
-
-            const pdfBtn = '<a href="' + receiptUrl + '" target="_blank" class="btn-action-icon" style="width:34px; height:34px; color:#38bdf8; display:flex; align-items:center; justify-content:center; text-decoration:none;" title="Ver e Imprimir Recibo Oficial"><i class="fa-solid fa-file-pdf"></i></a>';
             const payBtn = (!isPaid && inv.link_pago) ? '<a href="' + inv.link_pago + '" target="_blank" class="btn-main" style="width:auto; padding:6px 12px; font-size:12px; height:34px;" title="Pagar Factura"><i class="fa-solid fa-credit-card"></i> Pagar</a>' : '';
             
             const emision = inv.fecha_emision ? inv.fecha_emision.slice(0, 10) : '';
@@ -2567,7 +2600,6 @@ export function getClientPortalHtml(): string {
               '<div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">' +
                 '<span style="font-weight:800; font-size:15px; color:var(--text-title);">$' + Number(inv.monto || 0).toFixed(2) + '</span>' +
                 '<span class="badge-status ' + statusClass + '" style="font-size:11px; padding:3px 8px;">' + inv.estado + '</span>' +
-                pdfBtn +
                 payBtn +
               '</div>' +
             '</div>';
@@ -2578,6 +2610,20 @@ export function getClientPortalHtml(): string {
       } catch (err) {
         console.warn('Error al cargar facturas:', err);
       }
+    }
+
+    function updateOfficePaymentLink(rawPhone, titularName, contractId) {
+      if (!rawPhone) return;
+      const cleanDigits = String(rawPhone).replace(/\\D/g, '');
+      const phoneDigits = cleanDigits.length === 10 ? ('52' + cleanDigits) : cleanDigits;
+      const titular = titularName || document.getElementById('bankConceptText')?.innerText || document.getElementById('titularHeroName')?.innerText || 'Cliente';
+      const folio = contractId || currentContractId || '';
+      const textMsg = 'Hola, envío comprobante de pago de mi servicio.\\nTitular: ' + titular + (folio ? ('\\nContrato: #' + folio) : '');
+      const waUrl = 'https://wa.me/' + phoneDigits + '?text=' + encodeURIComponent(textMsg);
+      const btn = document.getElementById('btnOfficePaymentWa');
+      if (btn) btn.href = waUrl;
+      const span = document.getElementById('bankOfficePhoneText');
+      if (span) span.innerText = rawPhone;
     }
 
     // Copiado de Contraseña Única
@@ -2618,7 +2664,7 @@ export function getClientPortalHtml(): string {
     function copyBankConcept() {
       const val = (document.getElementById('bankConceptText')?.innerText || '').trim();
       navigator.clipboard.writeText(val);
-      showToast('Concepto de pago copiado: ' + val);
+      showToast('Nombre de titular copiado: ' + val);
     }
 
     function openModalWifi() {

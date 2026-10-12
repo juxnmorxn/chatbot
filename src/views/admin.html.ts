@@ -4544,6 +4544,13 @@ export function getAdminDashboardHtml(): string {
               <label class="form-label">Nombre del Titular / Beneficiario</label>
               <input type="text" id="setting-PAYMENT_BENEFICIARY" class="form-control" placeholder="CloudWare Telecomunicaciones" value="CloudWare Telecomunicaciones">
             </div>
+            <div class="form-group">
+              <label class="form-label">WhatsApp de Oficina / Cobranza (Recepción de Comprobantes)</label>
+              <input type="text" id="setting-PAYMENT_OFFICE_PHONE" class="form-control" placeholder="7721284398" value="7721284398">
+              <span style="font-size: 11px; color: var(--text-muted); display: block; margin-top: 4px;">
+                Número al que los clientes reenviarán su captura de pago y nombre tras transferir.
+              </span>
+            </div>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
               <div class="form-group">
                 <label class="form-label">Horario Lunes a Viernes</label>
@@ -8114,6 +8121,8 @@ export function getAdminDashboardHtml(): string {
             PAYMENT_BANK: 'setting-PAYMENT_BANK',
             PAYMENT_ACCOUNT: 'setting-PAYMENT_ACCOUNT',
             PAYMENT_BENEFICIARY: 'setting-PAYMENT_BENEFICIARY',
+            PAYMENT_OFFICE_PHONE: 'setting-PAYMENT_OFFICE_PHONE',
+            paymentOfficePhone: 'setting-PAYMENT_OFFICE_PHONE',
             OFFICE_HOURS_WEEKDAY: 'setting-OFFICE_HOURS_WEEKDAY',
             OFFICE_HOURS_SATURDAY: 'setting-OFFICE_HOURS_SATURDAY',
             OFFICE_ADDRESS: 'setting-OFFICE_ADDRESS',
@@ -8170,6 +8179,7 @@ export function getAdminDashboardHtml(): string {
         PAYMENT_BANK: document.getElementById('setting-PAYMENT_BANK')?.value.trim() || 'BBVA Bancomer',
         PAYMENT_ACCOUNT: document.getElementById('setting-PAYMENT_ACCOUNT')?.value.trim() || '',
         PAYMENT_BENEFICIARY: document.getElementById('setting-PAYMENT_BENEFICIARY')?.value.trim() || '',
+        PAYMENT_OFFICE_PHONE: document.getElementById('setting-PAYMENT_OFFICE_PHONE')?.value.trim() || '7721284398',
         OFFICE_HOURS_WEEKDAY: document.getElementById('setting-OFFICE_HOURS_WEEKDAY')?.value.trim() || '9:00 a 18:00 hrs',
         OFFICE_HOURS_SATURDAY: document.getElementById('setting-OFFICE_HOURS_SATURDAY')?.value.trim() || '9:00 a 15:00 hrs',
         OFFICE_ADDRESS: document.getElementById('setting-OFFICE_ADDRESS')?.value.trim() || '',
