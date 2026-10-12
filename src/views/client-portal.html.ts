@@ -2106,9 +2106,9 @@ export function getClientPortalHtml(): string {
       if (!raw) return 'Cliente CloudWare';
       let str = String(raw).trim();
       // Limpiar prefijos de OLT/WispHub como "696 - ", "696-", "#715 ", "001: "
-      str = str.replace(/^\s*#?\d+\s*[-_.:/|]+\s*/, '').trim();
+      str = str.replace(/^\\s*#?\\d+\\s*[-_.:|]+\\s*/, '').trim();
       // Limpiar números iniciales sueltos como "696 Maria..."
-      str = str.replace(/^\s*\d{2,}\s+/, '').trim();
+      str = str.replace(/^\\s*\\d{2,}\\s+/, '').trim();
       return str || String(raw).trim();
     }
 
@@ -2373,8 +2373,8 @@ export function getClientPortalHtml(): string {
             // Redirigir siempre a nuestro generador de recibos oficial para evitar error 404 de WispHub
             let receiptUrl = inv.pdf_url || ('/api/portal/invoice/' + (inv.id_factura || inv.id || currentContractId) + '/receipt');
             if (receiptUrl.includes('wisphub.net/factura/pdf/')) {
-              const match = receiptUrl.match(/\/factura\/pdf\/(\d+)/);
-              const factId = match ? match[1] : (inv.id_factura || inv.id || currentContractId);
+              const parts = receiptUrl.split('/factura/pdf/');
+              const factId = (parts[1] ? parts[1].split('/')[0].split('?')[0] : '') || (inv.id_factura || inv.id || currentContractId);
               receiptUrl = '/api/portal/invoice/' + factId + '/receipt';
             }
 
@@ -2434,13 +2434,13 @@ export function getClientPortalHtml(): string {
     }
 
     function copyClabe() {
-      const val = (document.getElementById('bankClabeText')?.innerText || '').replace(/\s+/g, '');
+      const val = (document.getElementById('bankClabeText')?.innerText || '').replace(/\\s+/g, '');
       navigator.clipboard.writeText(val);
       showToast('CLABE copiada: ' + val);
     }
 
     function copyBankAccount() {
-      const val = (document.getElementById('bankAccountText')?.innerText || '').replace(/\s+/g, '');
+      const val = (document.getElementById('bankAccountText')?.innerText || '').replace(/\\s+/g, '');
       navigator.clipboard.writeText(val);
       showToast('Número de cuenta copiado: ' + val);
     }
