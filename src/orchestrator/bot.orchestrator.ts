@@ -4956,10 +4956,12 @@ export class BotOrchestrator {
     // Extraer el nombre si fue mencionado en el mensaje
     let candidateName = clasificacion.nombre_mencionado || '';
     if (!candidateName) {
-      const cleaned = cleanPersonName(rawInput)
-        .replace(/^(me llamo|soy|mi nombre es|mi nombre|nombre:?)\s+/i, '')
+      // Limpiar frases conversacionales como "quiero pagar", "necesito saldo", etc.
+      let cleaned = cleanPersonName(rawInput)
+        .replace(/^(?:quiero|deseo|necesito|favor de|podria|pueden|ayuda para|pago de|pagar)\s+(?:pagar|consultar|reportar|revisar|saldo)?\s*/i, '')
+        .replace(/^(?:me llamo|soy|mi nombre es|mi nombre|nombre:?)\s+/i, '')
         .trim();
-      if (cleaned.length >= 2 && (clasificacion.intencion === 'IDENTIFICAR_CLIENTE' || clasificacion.intencion === 'DESCONOCIDO')) {
+      if (cleaned.length >= 3 && (clasificacion.intencion === 'IDENTIFICAR_CLIENTE' || clasificacion.intencion === 'DESCONOCIDO' || clasificacion.intencion === 'CONSULTAR_SALDO')) {
         candidateName = cleaned;
       }
     }
@@ -4986,7 +4988,11 @@ export class BotOrchestrator {
     }
 
     const searchTerm = candidateName || cleanPersonName(rawInput) || rawInput;
-    const cleanSearchTerm = cleanPersonName(searchTerm) || searchTerm;
+    let cleanSearchTerm = cleanPersonName(searchTerm) || searchTerm;
+    cleanSearchTerm = cleanSearchTerm
+      .replace(/^(?:quiero|deseo|necesito|favor de|podria|pueden|ayuda para|pago de|pagar)\s+(?:pagar|consultar|reportar|revisar|saldo)?\s*/i, '')
+      .trim();
+
     logger.info(`Buscando coincidencias para identificación de ${phone}: "${rawInput}" (Término búsqueda: "${searchTerm}", Limpio: "${cleanSearchTerm}")`);
 
     // 1. Intentar búsqueda flexible en Base de Datos Local (Caché local de SmartOLT y WispHub)
@@ -5056,8 +5062,9 @@ export class BotOrchestrator {
 
       if (listaUnificada.length > 0) {
         const mejorScore = listaUnificada[0].matchScore;
+        // Exigir al menos score >= 75 para considerar un candidato como relevante y evitar falsos positivos
         const candidatosRelevantes = listaUnificada.filter(
-          c => c.matchScore >= 65 && c.matchScore >= (mejorScore - 15)
+          c => c.matchScore >= 75 && c.matchScore >= (mejorScore - 15)
         );
 
         // A. Verificar si hay una COINCIDENCIA EXACTA DIRECTA de Nombre Completo
@@ -5139,7 +5146,7 @@ export class BotOrchestrator {
           await this.enviarYLoguear(
             phone,
             `Encontramos varias cuentas registradas con ese nombre en nuestro sistema.\n\n` +
-            `Para poder ubicar tu módem con exactitud, por favor indícame tu *Nombre con al menos un apellido* (ejemplo: _${ejemplosNombres}_) o tu *Localidad / Zona*.`,
+            `Para poder ubicar tu servicio con exactitud, por favor indícame tu *Nombre con al menos un apellido* (ejemplo: _${ejemplosNombres}_) o tu *Localidad / Zona*.`,
             'IDENTIFICAR_CLIENTE',
             'SOLICITAR_APELLIDOS_AMBIGUEDAD',
             targetJid
@@ -5151,7 +5158,7 @@ export class BotOrchestrator {
         const personaUnica = gruposPorPersona[0];
         const serviciosPersona = personaUnica?.servicios || candidatosRelevantes;
 
-        if (serviciosPersona.length > 1) {
+        if (serviciosPersona.length > 1 && personaUnica) {
           const primerNombre = serviciosPersona[0].name;
           logger.info(`Se detectaron ${serviciosPersona.length} servicios reales para "${primerNombre}". Solicitando selección.`);
 
@@ -5198,9 +5205,9 @@ export class BotOrchestrator {
           return;
         }
 
-        // CASO 3: Coincidencia única sólida de una sola persona
+        // CASO 3: Coincidencia única sólida de una sola persona (Score >= 75)
         const mejor = serviciosPersona[0] || listaUnificada[0];
-        if (mejor.matchScore >= 65) {
+        if (mejor && mejor.matchScore >= 75) {
           const meta = {
             ...metaPre,
             speed_profile: mejor.speed_profile,
@@ -5291,62 +5298,25 @@ export class BotOrchestrator {
       logger.warn(`Error al consultar WispHub durante identificación:`, err?.message || err);
     }
 
-    // 3. Si no hubo coincidencia y el usuario envió SOLO un problema/intención sin nombre
-    if (!candidateName && clasificacion.intencion !== 'IDENTIFICAR_CLIENTE' && clasificacion.intencion !== 'DESCONOCIDO' && clasificacion.intencion !== 'SALUDO') {
-      logger.info(`El usuario envió la intención "${clasificacion.intencion}" sin nombre identificable. Solicitando nombre y guardando intención.`);
-      const queja = clasificacion.resumen_queja ? ` sobre: _"${clasificacion.resumen_queja}"_` : '';
-      await this.enviarYLoguear(
-        phone,
-        `Entendido tu reporte${queja}. Veo que presentas inconvenientes con tu conexión.\n\nPara poder verificar tu línea y ayudarte de inmediato, ¿podrías indicarme tu *Nombre completo* (con apellidos) del titular del servicio?`,
-        'FALLA_INTERNET',
-        'SOLICITAR_NOMBRE_PARA_DIAGNOSTICO',
-        targetJid
-      );
-      await DbService.upsertSession({
-        phone,
-        step: 'ESPERANDO_IDENTIFICACION',
-        metadata: JSON.stringify(metaPre),
-      });
-      return;
-    }
-
-    // 4. Extraer y limpiar el nombre (si se detectó formato de nombre pero no estaba en BD)
-    let nombreLimpio = candidateName || cleanPersonName(rawInput) || rawInput;
-    nombreLimpio = cleanPersonName(nombreLimpio)
-      .replace(/^(me llamo|soy|mi nombre es|mi nombre|nombre:?)\s+/i, '')
-      .replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]/g, '')
-      .replace(/\s+/g, ' ')
-      .trim();
-
-    if (nombreLimpio.length >= 2) {
-      nombreLimpio = nombreLimpio
-        .split(/\s+/)
-        .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-        .join(' ');
-    }
-
-    // Si tiene un formato de nombre creíble (2 a 45 caracteres)
-    if (nombreLimpio.length >= 2 && nombreLimpio.length <= 45) {
-      const sessionActualizada = await DbService.upsertSession({
-        phone,
-        client_name: nombreLimpio,
-        metadata: JSON.stringify(metaPre),
-        step: 'IDENTIFICADO',
-      });
-
-      await this.finalizarIdentificacionYContinuarFlujo(phone, sessionActualizada, metaPre, targetJid);
-      return;
-    }
-
-    // 5. Si lo escrito es incomprensible, avanzamos al problema amablemente
+    // 3. Si no hubo coincidencia en la base de datos (WispHub/SmartOLT):
+    // REGLA ESTRICTA: NUNCA vincular a ciegas ni inventar un titular si no existe en el sistema.
+    // Se le pide amablemente verificar el nombre o proporcionar folio/contrato.
+    logger.info(`No se encontró cliente en la base de datos para "${cleanSearchTerm}". Solicitando rectificación sin vincular.`);
     await this.enviarYLoguear(
       phone,
-      `No te preocupes. ¿Cuál es el problema o consulta que tienes con tu servicio? Estoy aquí para ayudarte.`,
-      'DESCONOCIDO',
-      'CONTINUAR_SIN_NOMBRE',
+      `No logramos localizar un servicio activo a nombre de *"${cleanSearchTerm || rawInput}"* en nuestro sistema.\n\n` +
+      `¿Podrías verificar que esté escrito tal como aparece en tu contrato, o bien compartirnos tu *Folio de servicio / Número de contrato* o *Dirección de instalación*?`,
+      'IDENTIFICAR_CLIENTE',
+      'NO_ENCONTRADO_PEDIR_RECTIFICACION',
       targetJid
     );
-    await DbService.updateStep(phone, 'ESPERANDO_PROBLEMA');
+
+    await DbService.upsertSession({
+      phone,
+      step: 'ESPERANDO_IDENTIFICACION',
+      metadata: JSON.stringify(metaPre),
+    });
+    return;
   }
 
   /**

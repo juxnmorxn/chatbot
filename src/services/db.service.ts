@@ -2922,6 +2922,35 @@ export class DbService {
   }
 
   /**
+   * Desvincula TODOS los clientes asociados de todas las sesiones de la base de datos
+   * (deja los teléfonos registrados pero sin titular asignado, en paso INICIO)
+   */
+  static async unlinkAllClientsFromSessions(): Promise<number> {
+    try {
+      const client = getDbClient();
+      const now = new Date().toISOString();
+      const res = await client.execute({
+        sql: `
+          UPDATE sessions 
+          SET client_name = NULL, 
+              client_id = NULL, 
+              service_id = NULL, 
+              onu_id = NULL, 
+              step = 'INICIO', 
+              metadata = NULL, 
+              last_interaction = ?
+        `,
+        args: [now],
+      });
+      logger.info(`Todos los clientes han sido desvinculados de todas las sesiones (${res.rowsAffected} actualizadas).`);
+      return res.rowsAffected || 0;
+    } catch (error: any) {
+      logger.error('Error al desvincular todos los clientes de sesiones:', error?.message || error);
+      return 0;
+    }
+  }
+
+  /**
    * Elimina todo el historial de conversaciones de Base de Datos Local (Modo Pruebas)
    */
   static async clearAllLogs(): Promise<number> {

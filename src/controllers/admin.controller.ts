@@ -644,6 +644,20 @@ export class AdminController {
   }
 
   /**
+   * Desvincula TODOS los clientes asociados de todas las sesiones
+   * (limpia titulares y resetea a paso INICIO para que el bot pida nombre a todos los usuarios)
+   */
+  static async unlinkAllSessions(req: Request, res: Response): Promise<void> {
+    try {
+      const count = await DbService.unlinkAllClientsFromSessions();
+      AdminController.broadcastSSE('chat:status', { client_name: null, client_id: null, step: 'INICIO' });
+      res.json({ success: true, message: `Se desvincularon los clientes de ${count} sesiones correctamente.` });
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
    * Vacía todo el historial de conversaciones (Modo Pruebas)
    */
   static async clearAllLogs(req: Request, res: Response): Promise<void> {

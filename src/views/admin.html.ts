@@ -3214,6 +3214,9 @@ export function getAdminDashboardHtml(): string {
                 <button id="btn-toggle-takeover" class="btn btn-secondary btn-xs" onclick="toggleCurrentChatTakeover()" title="Alternar modo de atención Bot / Humano">
                   🤖 <span>Bot Activo • Pausar 4h</span>
                 </button>
+                <button id="btn-unlink-current-chat" class="btn btn-secondary btn-xs" onclick="unlinkActiveChatClientAndReset()" style="color: #f87171; border-color: rgba(248, 113, 113, 0.35);" title="Desvincular cliente de este número y reiniciar bot a pedir nombre">
+                  🔗 <span>Desvincular</span>
+                </button>
                 <div class="chat-menu-dropdown-wrap" style="position: relative;">
                   <button class="btn btn-secondary btn-xs" style="padding: 5px 8px;" onclick="toggleChatActionsMenu(event)" title="Más opciones de conversación">
                     <svg class="svg-icon" style="width: 15px; height: 15px;" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1.5"></circle><circle cx="12" cy="5" r="1.5"></circle><circle cx="12" cy="19" r="1.5"></circle></svg>
@@ -4617,6 +4620,9 @@ export function getAdminDashboardHtml(): string {
               </button>
               <button class="btn btn-secondary btn-sm" onclick="clearSessionsData()" style="display: inline-flex; align-items: center; gap: 6px; border-color: rgba(244, 63, 94, 0.4);">
                 <span>💬</span> <span>Vaciar Sesiones del Bot</span>
+              </button>
+              <button class="btn btn-secondary btn-sm" onclick="unlinkAllClientsData()" style="display: inline-flex; align-items: center; gap: 6px; border-color: rgba(244, 63, 94, 0.5); color: #fca5a5;">
+                <span>🔗</span> <span>Desvincular Todos los Clientes</span>
               </button>
               <button class="btn btn-secondary btn-sm" onclick="clearLogsData()" style="display: inline-flex; align-items: center; gap: 6px; border-color: rgba(244, 63, 94, 0.4);">
                 <span>📜</span> <span>Vaciar Historial de Logs</span>
@@ -8945,6 +8951,24 @@ export function getAdminDashboardHtml(): string {
           loadDashboardData();
         } else {
           showToast('Error', res.error || 'Error al vaciar sesiones.', 'error');
+        }
+      });
+    }
+
+    function unlinkAllClientsData() {
+      showConfirmDialog('🔗 Desvincular Todos los Clientes', '¿Estás seguro de que deseas desvincular a todos los clientes de las conversaciones? Todos los números continuarán existiendo en la bandeja pero ninguno tendrá titular asociado, obligando al bot a pedir Nombre o Folio cuando escriban.', async () => {
+        try {
+          const res = await apiFetch('/api/sessions/unlink-all', { method: 'POST' });
+          if (res.success) {
+            showToast('Clientes Desvinculados', res.message || 'Todos los clientes han sido desvinculados.', 'success');
+            if (typeof loadSessions === 'function') loadSessions();
+            if (typeof loadChats === 'function') loadChats();
+            loadDashboardData();
+          } else {
+            showToast('Error', res.error || 'Error al desvincular clientes.', 'error');
+          }
+        } catch (err) {
+          showToast('Error', err.message || 'Error de conexión', 'error');
         }
       });
     }
