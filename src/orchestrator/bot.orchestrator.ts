@@ -629,6 +629,52 @@ export class BotOrchestrator {
     const inputContent = rawText || (buttonId ? `[Botón: ${buttonId}]` : (event.isMedia ? '[Foto/Comprobante]' : '[Desconocido]'));
     const lowerMsg = rawText.toLowerCase().trim();
 
+    // Protección de números de Staff / Administración (evitar que queden atrapados como clientes)
+    const cleanPhoneDigits = phone.replace(/\D/g, '');
+    const phone10 = cleanPhoneDigits.slice(-10);
+    const soportePhone10 = SettingsService.get('SOPORTE_HUMANO_PHONE', '').replace(/\D/g, '').slice(-10);
+    const officePhone10 = SettingsService.get('PAYMENT_OFFICE_PHONE', '').replace(/\D/g, '').slice(-10);
+    const esStaffAdmin = (soportePhone10 && phone10 === soportePhone10) || (officePhone10 && phone10 === officePhone10);
+
+    if (esStaffAdmin && session?.client_name && !session.step?.startsWith('TECNICO_')) {
+      logger.info(`[Staff Protection] Limpiando cliente asignado erróneamente a número de staff/admin: ${phone}`);
+      await DbService.unlinkClientFromSession(phone);
+      session = await DbService.getSession(phone);
+    }
+
+    if (esStaffAdmin && (lowerMsg === 'reiniciar' || lowerMsg === 'reset' || lowerMsg === 'desvincular')) {
+      await DbService.unlinkClientFromSession(phone);
+      await this.enviarYLoguear(
+        phone,
+        `*Panel de Soporte / Administración CloudWareMx*\n\nSesión de pruebas reiniciada exitosamente. Tu número de staff está libre.\n\nPuedes simular un cliente escribiendo: *probar cliente [Nombre o Folio]* o escribir *menu tecnico* para comandos de campo.`,
+        'STAFF',
+        'RESET_CONFIRMADO',
+        targetJid
+      );
+      return;
+    }
+
+    // Detección de comandos para desvincular o cambiar de titular en cualquier momento
+    const esComandoDesvincular = /^(?:cambiar\s+titular|cambiar\s+nombre|cambiar\s+cliente|no\s+soy\s+ese\s+cliente|no\s+soy\s+yo|desvincular|desvincular\s+cuenta|desvincular\s+numero|reiniciar\s+cuenta|reiniciar\s+cliente)\b/i.test(lowerMsg) ||
+      lowerMsg === 'cambiar titular' ||
+      lowerMsg === 'cambiar cliente' ||
+      lowerMsg === 'desvincular' ||
+      lowerMsg === 'reiniciar cliente';
+
+    if (esComandoDesvincular) {
+      logger.info(`[Desvinculación Manual] Usuario ${phone} solicitó desvincular la cuenta actual (${session?.client_name || 'Sin nombre'}).`);
+      await DbService.unlinkClientFromSession(phone);
+      await this.enviarYLoguear(
+        phone,
+        `He desvinculado la cuenta previa de este chat. 👍\n\nPara identificarte con tu servicio, por favor indícame tu *Nombre completo* (tal como aparece en tu contrato) o tu *Folio de servicio*.`,
+        'DESVINCULAR_CLIENTE',
+        'SESION_DESVINCULADA',
+        targetJid
+      );
+      await DbService.updateStep(phone, 'ESPERANDO_IDENTIFICACION');
+      return;
+    }
+
     // Detección anticipada de comandos y flujos de técnicos de campo
     const esComandoCambioPaquete = /(?:cambiar|modificar|actualizar|subir|bajar)\s+(?:de\s+)?(?:paquete|plan|velocidad|megas)\b/i.test(rawText) ||
       /^cambiar\s+(?:paquete|plan)\b/i.test(lowerMsg);
@@ -1297,132 +1343,33 @@ export class BotOrchestrator {
     }
 
     // Si el cliente NO está identificado en absoluto (ni por SmartOLT ni por nombre en Base de Datos Local)
+    // REGLA FUNDAMENTAL: NO vincular a ciegas por teléfono. Solo se vincula tras identificar explícitamente al cliente 1 a 1.
     if (!session?.onu_id && !session?.client_name) {
-      // 1. Intentar vinculación rápida automática si el teléfono coincide con alguna ONU en Base de Datos Local
-      const onusPorTel = await DbService.searchOnusFuzzy(phone, 5);
-      const coincidentesTel = onusPorTel.filter(o => o.matchScore >= 90);
+      // 1. Clasificamos el mensaje con Groq para detectar nombre, folio, queja o saludo
+      const clasif = await GroqService.clasificarMensaje(rawText, {
+        clientName: null,
+        currentStep: 'INICIO',
+      });
 
-      if (coincidentesTel.length > 1) {
-        // El cliente tiene 2 o más servicios registrados con este mismo número
-        let textoOpciones = `¡Hola, *${coincidentesTel[0].name}*! 👋 Detectamos que tu número tiene *${coincidentesTel.length} servicios* registrados:\n\n`;
-        coincidentesTel.slice(0, 4).forEach((c, idx) => {
-          const ubicacion = c.address || c.zone_name ? `\n📍 *Ubicación:* ${c.address || c.zone_name}` : '';
-          const plan = c.speed_profile ? `\n📦 *Plan:* ${c.speed_profile}` : '';
-          textoOpciones += `*${idx + 1}️⃣ Opción ${idx + 1}:*${ubicacion}${plan}\n\n`;
-        });
-        textoOpciones += `¿Con cuál de tus servicios necesitas apoyo el día de hoy?\n👉 *Por favor responde con el número de tu opción (ejemplo: 1 ó 2).*`;
+      // Si el usuario pregunta por canales de TV o televisión por cable (incluso antes de identificarse)
+      if (clasif.intencion === 'CONSULTAR_TV_CANALES' || clasif.consulta_canales_cable) {
+        const msjTv =
+          `¡Hola! 👋 Te informamos con mucho gusto: en *${this.getIspName()}* nos dedicamos de forma exclusiva a proveer *servicio de internet de alta velocidad* (fibra óptica e inalámbrico). 🌐\n\n` +
+          `📺 *Nosotros no vendemos ni manejamos servicio de televisión por cable ni canales de TV.* Por ello, la señal o sintonización de canales tradicionales no depende de nuestro servicio.\n\n` +
+          `💡 *Si tu televisor es Smart TV:* Puedes utilizar nuestro internet para ver plataformas de video y streaming (como YouTube, Netflix, Disney+, etc.). Para que tus videos carguen rápido y sin pausas, te sugerimos conectar tu pantalla a la red Wi-Fi *5G* (con tu misma contraseña de siempre).\n\n` +
+          `¿Hay alguna consulta sobre tu conexión de internet en la que te podamos apoyar? 😊`;
 
-        await DbService.upsertSession({
-          phone,
-          client_name: coincidentesTel[0].name,
-          step: 'ESPERANDO_SELECCION_SERVICIO',
-          metadata: JSON.stringify({
-            registeredServices: coincidentesTel.slice(0, 4).map(c => ({
-              unique_external_id: c.unique_external_id,
-              sn: c.sn,
-              name: c.name,
-              speed_profile: c.speed_profile,
-              zone_name: c.zone_name,
-              address: c.address,
-            })),
-            pendingServices: coincidentesTel.slice(0, 4).map(c => ({
-              unique_external_id: c.unique_external_id,
-              sn: c.sn,
-              name: c.name,
-              speed_profile: c.speed_profile,
-              zone_name: c.zone_name,
-              address: c.address,
-            })),
-            initialQuery: rawText,
-            serviceHistory: [],
-            consultaFinalizada: false,
-          }),
-        });
-
-        await this.enviarYLoguear(phone, textoOpciones, 'IDENTIFICAR_CLIENTE', 'AUTO_SELECCION_MULTISERVICIO', targetJid);
+        await this.enviarYLoguear(phone, msjTv, 'CONSULTAR_TV_CANALES', 'ACLARACION_SOLO_INTERNET_NO_TV', targetJid);
         return;
-      } else if (coincidentesTel.length === 1) {
-        const o = coincidentesTel[0];
-        session = await DbService.upsertSession({
+      }
+
+      const matchFolioDirecto = rawText.match(/\b(?:folio|contrato|servicio|srv|id)?\s*[:#-]?\s*(\d{2,7})\b/i);
+      const matchIpDirecto = rawText.match(/\b(172\.\d{1,3}\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3})\b/);
+
+      // Si el mensaje entrante ya menciona su nombre, folio o IP, lo identificamos directamente contra la BD interna
+      if (clasif.nombre_mencionado || (matchFolioDirecto && !clasif.intencion?.includes('PAGO')) || matchIpDirecto) {
+        const sesionConMeta = await DbService.upsertSession({
           phone,
-          client_id: o.unique_external_id,
-          service_id: o.sn,
-          client_name: o.name,
-          onu_id: o.unique_external_id,
-          metadata: JSON.stringify({ speed_profile: o.speed_profile, zone: o.zone_name, address: o.address, sn: o.sn }),
-          step: 'IDENTIFICADO',
-        });
-        logger.info(`Cliente ${phone} auto-vinculado a ONU única ${o.unique_external_id}`);
-      } else {
-        // Si no está identificado, clasificamos el mensaje con Groq para ver si trae nombre o es saludo/queja
-        const clasif = await GroqService.clasificarMensaje(rawText, {
-          clientName: null,
-          currentStep: 'INICIO',
-        });
-
-        // Si el usuario pregunta por canales de TV o televisión por cable (incluso antes de identificarse)
-        if (clasif.intencion === 'CONSULTAR_TV_CANALES' || clasif.consulta_canales_cable) {
-          const msjTv =
-            `¡Hola! 👋 Te informamos con mucho gusto: en *${this.getIspName()}* nos dedicamos de forma exclusiva a proveer *servicio de internet de alta velocidad* (fibra óptica e inalámbrico). 🌐\n\n` +
-            `📺 *Nosotros no vendemos ni manejamos servicio de televisión por cable ni canales de TV.* Por ello, la señal o sintonización de canales tradicionales no depende de nuestro servicio.\n\n` +
-            `💡 *Si tu televisor es Smart TV:* Puedes utilizar nuestro internet para ver plataformas de video y streaming (como YouTube, Netflix, Disney+, etc.). Para que tus videos carguen rápido y sin pausas, te sugerimos conectar tu pantalla a la red Wi-Fi *5G* (con tu misma contraseña de siempre).\n\n` +
-            `¿Hay alguna consulta sobre tu conexión de internet en la que te podamos apoyar? 😊`;
-
-          await this.enviarYLoguear(phone, msjTv, 'CONSULTAR_TV_CANALES', 'ACLARACION_SOLO_INTERNET_NO_TV', targetJid);
-          return;
-        }
-
-        if (clasif.nombre_mencionado) {
-          // Preservar la queja o intención inicial para no preguntar doble tras identificarse
-          const sesionConMeta = await DbService.upsertSession({
-            phone,
-            metadata: JSON.stringify({
-              ...metaObjPre,
-              initialQuery: rawText,
-              initialIntent: clasif.intencion,
-              initialClasif: clasif,
-              resumen_queja: clasif.resumen_queja,
-            }),
-          });
-          await this.procesarIdentificacion(phone, rawText, sesionConMeta, targetJid);
-          return;
-        }
-
-        // Si es un saludo o no dio su nombre, le solicitamos amablemente su nombre completo preservando la consulta original
-        if (clasif.intencion === 'SALUDO' || clasif.intencion === 'DESCONOCIDO') {
-          await this.enviarYLoguear(
-            phone,
-            `¡Hola! 👋 Bienvenido al centro de atención y soporte de *${this.getIspName()}*.\n\nPara poder ayudarte y revisar tu conexión a detalle, ¿me indicas tu *Nombre completo* (con apellidos) tal como está registrado el titular?`,
-            'SALUDO',
-            'SOLICITAR_IDENTIFICACION',
-            targetJid
-          );
-          await DbService.upsertSession({
-            phone,
-            step: 'ESPERANDO_IDENTIFICACION',
-            metadata: JSON.stringify({
-              ...metaObjPre,
-              initialQuery: rawText,
-              initialIntent: clasif.intencion,
-              initialClasif: clasif,
-              resumen_queja: clasif.resumen_queja,
-            }),
-          });
-          return;
-        }
-
-        // Si reporta falla o cualquier consulta directamente sin estar registrado, guardamos su intención y le pedimos el nombre
-        const queja = clasif.resumen_queja ? ` sobre: _"${clasif.resumen_queja}"_` : '';
-        await this.enviarYLoguear(
-          phone,
-          `Entendido tu reporte${queja}. Para poder revisar tu servicio a detalle y ver qué sucede, ¿me indicas tu *Nombre completo* (con apellidos) tal como está registrado el titular?`,
-          'FALLA_INTERNET',
-          'SOLICITAR_NOMBRE_PARA_DIAGNOSTICO',
-          targetJid
-        );
-        await DbService.upsertSession({
-          phone,
-          step: 'ESPERANDO_IDENTIFICACION',
           metadata: JSON.stringify({
             ...metaObjPre,
             initialQuery: rawText,
@@ -1431,8 +1378,36 @@ export class BotOrchestrator {
             resumen_queja: clasif.resumen_queja,
           }),
         });
+        await this.procesarIdentificacion(phone, rawText, sesionConMeta, targetJid);
         return;
       }
+
+      // Si es un saludo o no dio su nombre, le solicitamos amablemente sus datos preservando su consulta
+      const queja = clasif.resumen_queja ? ` sobre: _"${clasif.resumen_queja}"_` : '';
+      const textoSolicitud = (clasif.intencion === 'SALUDO' || clasif.intencion === 'DESCONOCIDO')
+        ? `¡Hola! 👋 Bienvenido al centro de atención y soporte de *${this.getIspName()}*.\n\nPara poder ayudarte y consultar tu servicio en nuestro sistema, ¿me indicas tu *Nombre completo* (tal como aparece en tu contrato) o tu *Folio de servicio*?`
+        : `Entendido tu reporte${queja}. Para poder revisar tu servicio en nuestro sistema y verificar qué sucede, ¿me indicas tu *Nombre completo* (tal como aparece en tu contrato) o tu *Folio de servicio*?`;
+
+      await this.enviarYLoguear(
+        phone,
+        textoSolicitud,
+        'SOLICITAR_IDENTIFICACION',
+        'PEDIR_NOMBRE_O_FOLIO',
+        targetJid
+      );
+
+      await DbService.upsertSession({
+        phone,
+        step: 'ESPERANDO_IDENTIFICACION',
+        metadata: JSON.stringify({
+          ...metaObjPre,
+          initialQuery: rawText,
+          initialIntent: clasif.intencion,
+          initialClasif: clasif,
+          resumen_queja: clasif.resumen_queja,
+        }),
+      });
+      return;
     }
 
     // 3. Cliente ya conocido / identificado: Clasificamos con Groq para ejecutar acciones en SmartOLT / WispHub
@@ -4842,6 +4817,42 @@ export class BotOrchestrator {
           service_id: String(whPorIp.id_servicio),
           client_name: whPorIp.nombre,
           onu_id: whPorIp.sn_onu || `ONU-${whPorIp.id_servicio}`,
+          metadata: JSON.stringify(meta),
+          step: 'IDENTIFICADO',
+        });
+
+        await this.finalizarIdentificacionYContinuarFlujo(phone, sessionActualizada, metaPre, targetJid);
+        return;
+      }
+    }
+
+    // =========================================================================
+    // 0.0b IDENTIFICACIÓN DIRECTA POR FOLIO / CONTRATO / SERVICIO (ej: "folio 715", "contrato 715", "srv 715", "715")
+    // =========================================================================
+    const matchFolio = rawInput.match(/\b(?:folio|contrato|servicio|srv|id)?\s*[:#-]?\s*(\d{2,7})\b/i);
+    const cleanDigitsPre = rawInput.replace(/\D/g, '');
+    if (matchFolio && cleanDigitsPre.length < 10 && cleanDigitsPre.length > 0) {
+      const folioBuscado = matchFolio[1];
+      logger.info(`[Identificación por Folio/Contrato] Entrada contiene folio/ID "${folioBuscado}". Buscando en Base de Datos Local...`);
+      const whPorFolio = await DbService.getWisphubClientByAny({ id: folioBuscado });
+      if (whPorFolio) {
+        logger.info(`[Identificación por Folio] Cliente localizado en WispHub por Folio/Contrato ${folioBuscado}: ID=${whPorFolio.id_servicio}, Nombre="${whPorFolio.nombre}"`);
+        const meta = {
+          ...metaPre,
+          ip: whPorFolio.ip,
+          wisphub_id: whPorFolio.id_servicio,
+          speed_profile: whPorFolio.plan_internet,
+          zone: whPorFolio.router,
+          address: whPorFolio.direccion,
+          sn: whPorFolio.sn_onu,
+        };
+
+        const sessionActualizada = await DbService.upsertSession({
+          phone,
+          client_id: whPorFolio.sn_onu || `WH-${whPorFolio.id_servicio}`,
+          service_id: String(whPorFolio.id_servicio),
+          client_name: whPorFolio.nombre,
+          onu_id: whPorFolio.sn_onu || `ONU-${whPorFolio.id_servicio}`,
           metadata: JSON.stringify(meta),
           step: 'IDENTIFICADO',
         });

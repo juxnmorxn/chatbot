@@ -8891,6 +8891,7 @@ export function getAdminDashboardHtml(): string {
               method: 'POST',
               body: JSON.stringify({ phone: cleanPhone }),
             });
+            await apiFetch('/api/sessions/' + cleanPhone + '/unlink', { method: 'POST' }).catch(() => {});
             if (res.success) {
               showToast('Desvinculado con Éxito', 'El número ' + cleanPhone + ' fue desvinculado y sus enlaces quedaron eliminados.', 'success');
               if (state.activeChatPhone) {
@@ -8901,6 +8902,8 @@ export function getAdminDashboardHtml(): string {
                   if (nameEl) nameEl.textContent = cleanPhone;
                 }
               }
+              if (typeof loadSessions === 'function') loadSessions();
+              if (typeof loadChats === 'function') loadChats();
             } else {
               showToast('Error', res.error || 'No se pudo desvincular el número.', 'error');
             }

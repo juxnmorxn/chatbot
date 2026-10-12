@@ -630,6 +630,20 @@ export class AdminController {
   }
 
   /**
+   * Desvincula el cliente de una sesión (limpia titular, IDs y resetea a paso INICIO)
+   */
+  static async unlinkSession(req: Request, res: Response): Promise<void> {
+    try {
+      const phone = String(req.params.phone || req.body?.phone || req.query?.phone || '');
+      await DbService.unlinkClientFromSession(phone);
+      AdminController.broadcastSSE('chat:status', { phone, client_name: null, client_id: null, step: 'INICIO' });
+      res.json({ success: true, message: `Cliente desvinculado de ${phone} exitosamente.` });
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
    * Vacía todo el historial de conversaciones (Modo Pruebas)
    */
   static async clearAllLogs(req: Request, res: Response): Promise<void> {

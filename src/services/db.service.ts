@@ -211,13 +211,13 @@ export class DbService {
     const merged: Session = {
       phone: data.phone,
       step: data.step ?? existing?.step ?? 'INICIO',
-      client_id: data.client_id ?? existing?.client_id ?? null,
-      service_id: data.service_id ?? existing?.service_id ?? null,
-      client_name: data.client_name ?? existing?.client_name ?? null,
-      onu_id: data.onu_id ?? existing?.onu_id ?? null,
+      client_id: data.client_id !== undefined ? data.client_id : (existing?.client_id ?? null),
+      service_id: data.service_id !== undefined ? data.service_id : (existing?.service_id ?? null),
+      client_name: data.client_name !== undefined ? data.client_name : (existing?.client_name ?? null),
+      onu_id: data.onu_id !== undefined ? data.onu_id : (existing?.onu_id ?? null),
       opt_out: data.opt_out ?? existing?.opt_out ?? 0,
       last_interaction: now,
-      metadata: data.metadata ?? existing?.metadata ?? null,
+      metadata: data.metadata !== undefined ? data.metadata : (existing?.metadata ?? null),
       human_takeover_until: data.human_takeover_until !== undefined ? data.human_takeover_until : (existing?.human_takeover_until ?? null),
       human_takeover_status: data.human_takeover_status ?? existing?.human_takeover_status ?? 'BOT',
       department: data.department ?? existing?.department ?? 'SOPORTE',
@@ -232,17 +232,17 @@ export class DbService {
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           ON CONFLICT(phone) DO UPDATE SET
             step = excluded.step,
-            client_id = COALESCE(excluded.client_id, sessions.client_id),
-            service_id = COALESCE(excluded.service_id, sessions.service_id),
-            client_name = COALESCE(excluded.client_name, sessions.client_name),
-            onu_id = COALESCE(excluded.onu_id, sessions.onu_id),
+            client_id = excluded.client_id,
+            service_id = excluded.service_id,
+            client_name = excluded.client_name,
+            onu_id = excluded.onu_id,
             opt_out = excluded.opt_out,
             last_interaction = excluded.last_interaction,
-            metadata = COALESCE(excluded.metadata, sessions.metadata),
+            metadata = excluded.metadata,
             human_takeover_until = excluded.human_takeover_until,
             human_takeover_status = excluded.human_takeover_status,
-            department = COALESCE(excluded.department, sessions.department),
-            last_instance = COALESCE(excluded.last_instance, sessions.last_instance)
+            department = excluded.department,
+            last_instance = excluded.last_instance
         `,
         args: [
           merged.phone,
@@ -2855,10 +2855,17 @@ export class DbService {
   /**
    * Elimina la sesión de un teléfono específico
    */
+  /**
+   * Elimina la sesión de un teléfono específico (coincide con o sin prefijo de país 52/521)
+   */
   static async deleteSession(phone: string): Promise<boolean> {
     const client = getDbClient();
     const cleanPhone = phone.replace(/\D/g, '');
-    await client.execute({ sql: 'DELETE FROM sessions WHERE phone = ? OR phone = ?', args: [phone, cleanPhone] });
+    const phone10 = cleanPhone.slice(-10);
+    await client.execute({
+      sql: 'DELETE FROM sessions WHERE phone = ? OR phone = ? OR phone LIKE ?',
+      args: [phone, cleanPhone, `%${phone10}`],
+    });
     logger.info(`Sesión del teléfono ${phone} eliminada.`);
     return true;
   }
@@ -2869,10 +2876,49 @@ export class DbService {
   static async deleteChatAndLogs(phone: string): Promise<boolean> {
     const client = getDbClient();
     const cleanPhone = phone.replace(/\D/g, '');
-    await client.execute({ sql: 'DELETE FROM sessions WHERE phone = ? OR phone = ?', args: [phone, cleanPhone] });
-    await client.execute({ sql: 'DELETE FROM conversation_logs WHERE phone = ? OR phone = ?', args: [phone, cleanPhone] });
+    const phone10 = cleanPhone.slice(-10);
+    await client.execute({
+      sql: 'DELETE FROM sessions WHERE phone = ? OR phone = ? OR phone LIKE ?',
+      args: [phone, cleanPhone, `%${phone10}`],
+    });
+    await client.execute({
+      sql: 'DELETE FROM conversation_logs WHERE phone = ? OR phone = ? OR phone LIKE ?',
+      args: [phone, cleanPhone, `%${phone10}`],
+    });
     logger.info(`Sesión e historial de chat eliminados para ${phone}`);
     return true;
+  }
+
+  /**
+   * Desvincula completamente a un cliente de una sesión (limpia client_name, client_id, service_id, onu_id)
+   * y reinicia la conversación a paso INICIO
+   */
+  static async unlinkClientFromSession(phone: string): Promise<boolean> {
+    try {
+      const client = getDbClient();
+      const cleanPhone = phone.replace(/\D/g, '');
+      const phone10 = cleanPhone.slice(-10);
+      const now = new Date().toISOString();
+      await client.execute({
+        sql: `
+          UPDATE sessions 
+          SET client_name = NULL, 
+              client_id = NULL, 
+              service_id = NULL, 
+              onu_id = NULL, 
+              step = 'INICIO', 
+              metadata = NULL, 
+              last_interaction = ? 
+          WHERE phone = ? OR phone = ? OR phone LIKE ?
+        `,
+        args: [now, phone, cleanPhone, `%${phone10}`],
+      });
+      logger.info(`Sesión de ${phone} desvinculada exitosamente.`);
+      return true;
+    } catch (error: any) {
+      logger.error(`Error al desvincular sesión de ${phone}:`, error?.message || error);
+      return false;
+    }
   }
 
   /**
@@ -2886,25 +2932,31 @@ export class DbService {
   }
 
   /**
-   * Elimina todos los tickets registrados en Base de Datos Local (Modo Pruebas)
+   * Elimina todos los tickets registrados en Base de Datos Local (Modo Pruebas) y reinicia sesiones de prueba
    */
   static async clearAllTickets(): Promise<number> {
     const client = getDbClient();
     const res = await client.execute('DELETE FROM tickets');
-    logger.info('Todos los tickets han sido eliminados de Base de Datos Local.');
+    await client.execute("UPDATE sessions SET client_name = NULL, client_id = NULL, service_id = NULL, onu_id = NULL, step = 'INICIO', metadata = NULL");
+    logger.info('Todos los tickets y sesiones vinculadas han sido reseteados de Base de Datos Local.');
     return res.rowsAffected || 0;
   }
 
   /**
-   * Elimina un ticket individual por folio
+   * Elimina un ticket individual por folio y desvincula la sesión asociada a ese reporte
    */
   static async deleteTicket(folio: string): Promise<boolean> {
     try {
       const client = getDbClient();
+      const ticketRes = await client.execute({ sql: 'SELECT phone FROM tickets WHERE folio = ?', args: [folio] });
+      const phone = ticketRes.rows[0]?.phone ? String(ticketRes.rows[0].phone) : null;
       const res = await client.execute({
         sql: 'DELETE FROM tickets WHERE folio = ?',
         args: [folio],
       });
+      if (phone) {
+        await this.unlinkClientFromSession(phone).catch(() => {});
+      }
       logger.info(`Ticket ${folio} eliminado de Base de Datos Local.`);
       return (res.rowsAffected || 0) > 0;
     } catch (error: any) {
@@ -4149,8 +4201,8 @@ export class DbService {
 
     // 1. Eliminar permanentemente la cuenta en client_portal_accounts para desvincular el teléfono y revocar sus enlaces
     const portalRes = await client.execute({
-      sql: `DELETE FROM client_portal_accounts WHERE telefono = ?`,
-      args: [cleanPhone],
+      sql: `DELETE FROM client_portal_accounts WHERE telefono = ? OR telefono LIKE ?`,
+      args: [cleanPhone, `%${cleanPhone}`],
     });
 
     // 2. Eliminar la sesión del bot de WhatsApp para reiniciar la conversación
