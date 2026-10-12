@@ -168,22 +168,69 @@ export function getClientPortalHtml(): string {
       transition: max-width 0.25s ease;
     }
 
-    @media (min-width: 880px) {
+    /* Breakpoint Tablets y Pantallas Medianas (768px - 1059px) */
+    @media (min-width: 768px) and (max-width: 1059px) {
       .app-screen {
-        max-width: 1180px;
-        padding: 24px 32px 100px 32px;
-        gap: 20px;
+        max-width: 960px;
+        padding: 20px 24px 80px 24px;
+        gap: 18px;
       }
 
-      .dashboard-cols {
+      .dashboard-grid {
         display: grid !important;
-        grid-template-columns: 1.05fr 0.95fr;
-        gap: 24px;
-        align-items: start;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 18px;
+        align-items: stretch;
+      }
+
+      .card-billing-box {
+        grid-column: 1 / -1;
+      }
+
+      .support-banner-card {
+        grid-column: 1 / -1;
+      }
+
+      .app-card {
+        padding: 20px;
+      }
+    }
+
+    /* Breakpoint Pantallas Grandes / Desktop (>= 1060px) */
+    @media (min-width: 1060px) {
+      .app-screen {
+        max-width: 1280px;
+        padding: 24px 32px 90px 32px;
+        gap: 22px;
+      }
+
+      .dashboard-grid {
+        display: grid !important;
+        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+        gap: 22px;
+        align-items: stretch;
+      }
+
+      .card-plan-box, .card-wifi-box, .card-billing-box {
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .support-banner-card {
+        grid-column: 1 / -1;
       }
 
       .app-card {
         padding: 22px;
+      }
+    }
+
+    /* Breakpoint Pantallas Extra Grandes / Monitores Ultra-Wide (>= 1400px) */
+    @media (min-width: 1400px) {
+      .app-screen {
+        max-width: 1380px;
+        padding: 28px 40px 100px 40px;
       }
     }
 
@@ -312,18 +359,122 @@ export function getClientPortalHtml(): string {
       }
     }
 
-    .dashboard-cols {
+    /* Cuadrícula Adaptativa del Dashboard */
+    .dashboard-grid {
       display: flex;
       flex-direction: column;
       gap: 16px;
       width: 100%;
     }
 
-    .portal-col {
+    /* Subgrid compacta para bandas Wi-Fi 2.4G y 5G */
+    .wifi-networks-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+
+    @media (min-width: 460px) {
+      .wifi-networks-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    /* Scrollbar estilizada y límite de altura para historial de facturas */
+    #invoicesList {
+      max-height: 220px;
+      overflow-y: auto;
       display: flex;
       flex-direction: column;
+      gap: 8px;
+      padding-right: 4px;
+    }
+
+    #invoicesList::-webkit-scrollbar {
+      width: 5px;
+    }
+
+    #invoicesList::-webkit-scrollbar-track {
+      background: rgba(255, 255, 255, 0.03);
+      border-radius: 4px;
+    }
+
+    #invoicesList::-webkit-scrollbar-thumb {
+      background: rgba(14, 165, 233, 0.3);
+      border-radius: 4px;
+    }
+
+    /* Banner VIP Horizontal de Asistencia y Soporte WhatsApp */
+    .support-banner-card {
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(15, 23, 42, 0.85) 100%);
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      border-radius: var(--radius-lg);
+      padding: 16px 22px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
       gap: 16px;
-      width: 100%;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+      transition: all 0.25s ease;
+    }
+
+    [data-theme="light"] .support-banner-card {
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(240, 253, 244, 0.95) 100%);
+      border-color: rgba(16, 185, 129, 0.35);
+      box-shadow: 0 4px 16px rgba(16, 185, 129, 0.08);
+    }
+
+    .support-banner-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      min-width: 0;
+    }
+
+    .support-icon-circle {
+      width: 46px;
+      height: 46px;
+      border-radius: 50%;
+      background: rgba(16, 185, 129, 0.18);
+      border: 1px solid rgba(16, 185, 129, 0.45);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 26px;
+      color: #10b981;
+      flex-shrink: 0;
+      box-shadow: 0 2px 10px rgba(16, 185, 129, 0.3);
+    }
+
+    .support-banner-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-title);
+    }
+
+    .support-banner-sub {
+      font-size: 12.5px;
+      color: var(--text-body);
+      margin-top: 2px;
+    }
+
+    @media (max-width: 680px) {
+      .support-banner-card {
+        flex-direction: column;
+        align-items: stretch;
+        text-align: center;
+        padding: 18px 16px;
+      }
+      .support-banner-left {
+        flex-direction: column;
+        text-align: center;
+        gap: 10px;
+      }
+      .support-banner-card .btn-whatsapp {
+        width: 100%;
+        justify-content: center;
+      }
     }
 
     /* Barra Superior */
@@ -1205,165 +1356,164 @@ export function getClientPortalHtml(): string {
         </div>
       </div>
 
-      <!-- Contenedor responsivo: 2 columnas en pantallas grandes / 1 columna fluida en móvil -->
-      <div class="dashboard-cols">
+      <!-- Contenedor adaptativo: 3 columnas en pantallas grandes, 2 columnas en tablets, 1 columna en móvil -->
+      <div class="dashboard-grid">
 
-        <!-- COLUMNA 1: TU PAQUETE CONTRATADO Y RED WI-FI SIMPLIFICADA -->
-        <div class="portal-col">
-
-          <!-- TARJETA 1: TU PAQUETE CONTRATADO (ALTO ÉNFASIS) -->
-          <div class="app-card" style="background: var(--plan-card-bg); border: 1px solid var(--border-highlight); box-shadow: var(--card-shadow);">
-            <div class="card-head" style="margin-bottom: 6px;">
-              <div class="card-head-title" style="color: #0284c7; font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px;">
-                <i class="fa-solid fa-bolt"></i> Tu Paquete de Internet
-              </div>
-              <span class="status-speed-badge" style="background: rgba(16, 185, 129, 0.15); color: #059669; border-color: rgba(16, 185, 129, 0.3); font-size: 11px;">
-                <i class="fa-solid fa-circle-check"></i> Activo
-              </span>
+        <!-- TARJETA 1: TU PAQUETE CONTRATADO (ALTO ÉNFASIS Y VELOCIDAD) -->
+        <div class="app-card card-plan-box" style="background: var(--plan-card-bg); border: 1px solid var(--border-highlight); box-shadow: var(--card-shadow);">
+          <div class="card-head" style="margin-bottom: 4px;">
+            <div class="card-head-title" style="color: #0284c7; font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px;">
+              <i class="fa-solid fa-bolt"></i> Tu Paquete de Internet
             </div>
+            <span class="status-speed-badge" style="background: rgba(16, 185, 129, 0.15); color: #059669; border-color: rgba(16, 185, 129, 0.3); font-size: 11px;">
+              <i class="fa-solid fa-circle-check"></i> Activo
+            </span>
+          </div>
 
-            <!-- Gran Énfasis en Nombre de Paquete y Velocidad -->
-            <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 8px 0 14px 0; padding-bottom: 12px; border-bottom: 1px solid var(--border-card);">
+          <!-- Énfasis en Nombre de Paquete y Velocidad Simétrica -->
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 4px 0 10px 0; padding-bottom: 12px; border-bottom: 1px solid var(--border-card);">
+            <div>
+              <div id="planNameBig" style="font-family: 'Outfit', sans-serif; font-size: 21px; font-weight: 800; color: var(--text-title); line-height: 1.15;">
+                Paquete 40 Megas
+              </div>
+              <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px; display: flex; align-items: center; gap: 6px;">
+                <i class="fa-solid fa-network-wired" style="color: #0284c7;"></i> Fibra Óptica Simétrica
+              </div>
+            </div>
+            <div style="text-align: right; background: rgba(14, 165, 233, 0.1); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 12px; padding: 6px 12px; flex-shrink: 0;">
+              <div id="planSpeedBig" style="font-family: 'Outfit', sans-serif; font-size: 26px; font-weight: 800; color: #0284c7; line-height: 1;">
+                40M
+              </div>
+              <span style="font-size: 9.5px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Velocidad</span>
+            </div>
+          </div>
+
+          <!-- Estado de Conexión en Vivo -->
+          <div class="status-banner-box" style="margin-top: 0; margin-bottom: 8px; background: var(--bg-surface); border: 1px solid var(--border-card); padding: 12px 14px;">
+            <div class="status-left">
+              <div id="statusPulseDot" class="status-pulse-circle"></div>
               <div>
-                <div id="planNameBig" style="font-family: 'Outfit', sans-serif; font-size: 22px; font-weight: 800; color: var(--text-title); line-height: 1.15;">
-                  Paquete 40 Megas
-                </div>
-                <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px; display: flex; align-items: center; gap: 6px;">
-                  <i class="fa-solid fa-network-wired" style="color: #0284c7;"></i> Fibra Óptica Simétrica
-                </div>
-              </div>
-              <div style="text-align: right; background: rgba(14, 165, 233, 0.1); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 12px; padding: 6px 14px;">
-                <div id="planSpeedBig" style="font-family: 'Outfit', sans-serif; font-size: 28px; font-weight: 800; color: #0284c7; line-height: 1;">
-                  40M
-                </div>
-                <span style="font-size: 10px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Velocidad</span>
-              </div>
-            </div>
-
-            <!-- Estado de Conexión en Vivo -->
-            <div class="status-banner-box" style="margin-top: 0; margin-bottom: 12px; background: var(--bg-surface); border: 1px solid var(--border-card);">
-              <div class="status-left">
-                <div id="statusPulseDot" class="status-pulse-circle"></div>
-                <div>
-                  <div id="statusFriendlyTitle" class="status-text-main" style="font-size: 13.5px;">Tu internet está funcionando al 100%</div>
-                  <div id="statusFriendlySub" class="status-text-sub">Señal excelente y óptima en tu domicilio</div>
-                </div>
-              </div>
-            </div>
-
-            <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text-body); padding: 0 4px;">
-              <span>Titular: <strong id="titularName" style="color: var(--text-title);">-</strong></span>
-              <span>Folio: <strong id="contractFolio" style="color: #0284c7;">#-</strong></span>
-            </div>
-          </div>
-
-          <!-- TARJETA 2: TU RED WI-FI (DOBLE BANDA - UNA SOLA CONTRASEÑA) -->
-          <div class="app-card">
-            <div class="card-head">
-              <div class="card-head-title"><i class="fa-solid fa-wifi"></i> Tu Red Wi-Fi (Doble Banda)</div>
-              <span class="wifi-band-tag tag-5g" style="font-size: 11px;"><i class="fa-solid fa-shield-halved"></i> 2.4G & 5G</span>
-            </div>
-
-            <!-- Nombres de Red (2.4 GHz y 5 GHz) -->
-            <div style="display: flex; flex-direction: column; gap: 8px;">
-              <!-- 2.4 GHz -->
-              <div class="wifi-item">
-                <div class="wifi-item-info">
-                  <div style="display: flex; align-items: center; gap: 6px;">
-                    <span class="wifi-band-tag tag-24g"><i class="fa-solid fa-tower-broadcast"></i> Red 2.4 GHz</span>
-                    <span style="font-size: 11px; color: var(--text-muted);">Mayor cobertura</span>
-                  </div>
-                  <span id="wifiSsid24Label" class="wifi-val" style="margin-top: 3px;">Cargando...</span>
-                </div>
-                <button class="btn-action-icon" onclick="copyWifiSsid24()" title="Copiar nombre de red 2.4G"><i class="fa-solid fa-copy"></i></button>
-              </div>
-
-              <!-- 5 GHz -->
-              <div id="boxWifi5g" class="wifi-item">
-                <div class="wifi-item-info">
-                  <div style="display: flex; align-items: center; gap: 6px;">
-                    <span class="wifi-band-tag tag-5g"><i class="fa-solid fa-bolt"></i> Red 5 GHz</span>
-                    <span style="font-size: 11px; color: var(--text-muted);">Ultra velocidad / Streaming</span>
-                  </div>
-                  <span id="wifiSsid5gLabel" class="wifi-val" style="margin-top: 3px;">Cargando...</span>
-                </div>
-                <button class="btn-action-icon" onclick="copyWifiSsid5g()" title="Copiar nombre de red 5G"><i class="fa-solid fa-copy"></i></button>
-              </div>
-            </div>
-
-            <!-- Contraseña Wi-Fi ÚNICA y Compartida -->
-            <div style="background: var(--bg-surface); border: 1px solid var(--border-highlight); border-radius: var(--radius-md); padding: 14px; margin-top: 12px; display: flex; flex-direction: column; gap: 10px;">
-              <div style="display: flex; justify-content: space-between; align-items: center;">
-                <span class="wifi-label" style="color: #0284c7; font-size: 11px; display: flex; align-items: center; gap: 6px;">
-                  <i class="fa-solid fa-key"></i> Contraseña Wi-Fi (Para ambas redes)
-                </span>
-                <span style="font-size: 10px; color: var(--text-muted);">Misma clave en 2.4G y 5G</span>
-              </div>
-
-              <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--bg-card); padding: 10px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-card);">
-                <span id="wifiPassSharedLabel" class="wifi-val mono" style="font-size: 17px; letter-spacing: 1px;">Cargando...</span>
-                <div class="wifi-actions">
-                  <button class="btn-action-icon" onclick="copyWifiPassShared()" title="Copiar contraseña"><i class="fa-solid fa-copy"></i></button>
-                </div>
-              </div>
-
-              <!-- Acciones Rápidas: QR 5 GHz Directo y Cambiar Clave -->
-              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 2px;">
-                <button class="btn-outline" onclick="openQrModal('5g')" style="padding: 10px 12px; font-size: 12.5px; border-color: rgba(168, 85, 247, 0.4); background: rgba(168, 85, 247, 0.12); color: #a855f7; font-weight: 700;">
-                  <i class="fa-solid fa-qrcode"></i> Conectar QR (5G)
-                </button>
-                <button class="btn-main" onclick="openModalWifi()" style="padding: 10px 12px; font-size: 12.5px;">
-                  <i class="fa-solid fa-pen"></i> Cambiar Clave
-                </button>
+                <div id="statusFriendlyTitle" class="status-text-main" style="font-size: 13px;">Tu internet está funcionando al 100%</div>
+                <div id="statusFriendlySub" class="status-text-sub" style="font-size: 11.5px;">Señal excelente y óptima en tu domicilio</div>
               </div>
             </div>
           </div>
 
+          <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11.5px; color: var(--text-muted); margin-top: auto; padding-top: 10px; border-top: 1px solid var(--border-card);">
+            <span><i class="fa-solid fa-server" style="color: #0284c7;"></i> Fibra FTTH Activa</span>
+            <span>Folio: <strong id="contractFolio" style="color: #38bdf8;">#-</strong></span>
+            <span id="titularName" style="display: none;">-</span>
+          </div>
         </div>
 
-        <!-- COLUMNA 2: SALDO, FACTURAS WISPHUB Y ASISTENCIA -->
-        <div class="portal-col">
+        <!-- TARJETA 2: TU RED WI-FI (DOBLE BANDA - UNA SOLA CONTRASEÑA) -->
+        <div class="app-card card-wifi-box">
+          <div class="card-head" style="margin-bottom: 4px;">
+            <div class="card-head-title" style="color: #0284c7; font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px;">
+              <i class="fa-solid fa-wifi"></i> Tu Red Wi-Fi
+            </div>
+            <span class="wifi-band-tag tag-5g" style="font-size: 11px;"><i class="fa-solid fa-shield-halved"></i> 2.4G & 5G</span>
+          </div>
 
-          <!-- TARJETA 3: TU SALDO Y PAGOS -->
-          <div class="app-card">
-            <div class="card-head">
-              <div class="card-head-title"><i class="fa-solid fa-receipt"></i> Tu Saldo y Recibos</div>
-              <span id="billingBadge" class="badge-status paid">Al Corriente</span>
+          <!-- Nombres de Red (2.4 GHz y 5 GHz) en subgrid compacta -->
+          <div class="wifi-networks-grid">
+            <!-- 2.4 GHz -->
+            <div class="wifi-item" style="padding: 10px 12px;">
+              <div class="wifi-item-info">
+                <div style="display: flex; align-items: center; gap: 5px;">
+                  <span class="wifi-band-tag tag-24g" style="font-size: 10px; padding: 2px 7px;"><i class="fa-solid fa-tower-broadcast"></i> 2.4 GHz</span>
+                </div>
+                <span id="wifiSsid24Label" class="wifi-val" style="margin-top: 3px; font-size: 13.5px;">Cargando...</span>
+              </div>
+              <button class="btn-action-icon" style="width: 32px; height: 32px; font-size: 13px;" onclick="copyWifiSsid24()" title="Copiar nombre de red 2.4G"><i class="fa-solid fa-copy"></i></button>
             </div>
 
-            <div class="billing-hero">
-              <div class="billing-hero-left">
-                <span style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">Saldo a Pagar</span>
-                <div id="billingAmountLabel" class="billing-hero-amount">$0.00</div>
-                <div id="billingDueLabel" class="billing-hero-date">Día 5 de cada mes</div>
+            <!-- 5 GHz -->
+            <div id="boxWifi5g" class="wifi-item" style="padding: 10px 12px;">
+              <div class="wifi-item-info">
+                <div style="display: flex; align-items: center; gap: 5px;">
+                  <span class="wifi-band-tag tag-5g" style="font-size: 10px; padding: 2px 7px;"><i class="fa-solid fa-bolt"></i> 5 GHz</span>
+                </div>
+                <span id="wifiSsid5gLabel" class="wifi-val" style="margin-top: 3px; font-size: 13.5px;">Cargando...</span>
               </div>
-              <button class="btn-outline" style="width: auto; padding: 10px 14px; font-size: 13px;" onclick="openModalBank()">
-                <i class="fa-solid fa-building-columns"></i> Datos de Pago
+              <button class="btn-action-icon" style="width: 32px; height: 32px; font-size: 13px;" onclick="copyWifiSsid5g()" title="Copiar nombre de red 5G"><i class="fa-solid fa-copy"></i></button>
+            </div>
+          </div>
+
+          <!-- Contraseña Wi-Fi ÚNICA y Compartida -->
+          <div style="background: var(--bg-surface); border: 1px solid var(--border-highlight); border-radius: var(--radius-md); padding: 12px 14px; margin-top: auto; display: flex; flex-direction: column; gap: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span class="wifi-label" style="color: #0284c7; font-size: 11px; display: flex; align-items: center; gap: 5px;">
+                <i class="fa-solid fa-key"></i> Contraseña Única Wi-Fi
+              </span>
+              <span style="font-size: 10px; color: var(--text-muted);">Misma clave 2.4G/5G</span>
+            </div>
+
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--bg-card); padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-card);">
+              <span id="wifiPassSharedLabel" class="wifi-val mono" style="font-size: 16px; letter-spacing: 1px;">Cargando...</span>
+              <div class="wifi-actions">
+                <button class="btn-action-icon" style="width: 32px; height: 32px; font-size: 13px;" onclick="copyWifiPassShared()" title="Copiar contraseña"><i class="fa-solid fa-copy"></i></button>
+              </div>
+            </div>
+
+            <!-- Acciones Rápidas: QR 5 GHz Directo y Cambiar Clave -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 2px;">
+              <button class="btn-outline" onclick="openQrModal('5g')" style="padding: 8px 10px; font-size: 12px; border-color: rgba(168, 85, 247, 0.4); background: rgba(168, 85, 247, 0.12); color: #a855f7; font-weight: 700;">
+                <i class="fa-solid fa-qrcode"></i> Conectar QR
+              </button>
+              <button class="btn-main" onclick="openModalWifi()" style="padding: 8px 10px; font-size: 12px;">
+                <i class="fa-solid fa-pen"></i> Cambiar Clave
               </button>
             </div>
+          </div>
+        </div>
 
-            <!-- Lista de recibos detallados de WispHub -->
-            <div style="margin-top: 6px;">
-              <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
-                <span>Historial de Facturas (WispHub)</span>
-                <span style="font-size: 10px; color: #0284c7; cursor: pointer;" onclick="loadInvoicesHistory()"><i class="fa-solid fa-rotate"></i> Actualizar</span>
-              </div>
-              <div id="invoicesList" style="display: flex; flex-direction: column; gap: 8px;">
-                <div style="text-align: center; color: var(--text-muted); font-size: 13px; padding: 10px;">Consultando facturas...</div>
-              </div>
+        <!-- TARJETA 3: TU SALDO Y PAGOS -->
+        <div class="app-card card-billing-box">
+          <div class="card-head" style="margin-bottom: 4px;">
+            <div class="card-head-title" style="color: #0284c7; font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px;">
+              <i class="fa-solid fa-receipt"></i> Tu Saldo y Recibos
+            </div>
+            <span id="billingBadge" class="badge-status paid">Al Corriente</span>
+          </div>
+
+          <div class="billing-hero" style="padding: 10px 14px; margin-bottom: 2px;">
+            <div class="billing-hero-left">
+              <span style="font-size: 10.5px; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">Saldo a Pagar</span>
+              <div id="billingAmountLabel" class="billing-hero-amount" style="font-size: 24px;">$0.00</div>
+              <div id="billingDueLabel" class="billing-hero-date" style="font-size: 11px;">Día 5 de cada mes</div>
+            </div>
+            <button class="btn-outline" style="width: auto; padding: 8px 12px; font-size: 12px;" onclick="openModalBank()">
+              <i class="fa-solid fa-building-columns"></i> Datos de Pago
+            </button>
+          </div>
+
+          <!-- Lista de recibos detallados de WispHub -->
+          <div style="margin-top: 4px; display: flex; flex-direction: column; flex: 1;">
+            <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+              <span>Historial de Facturas</span>
+              <span style="font-size: 10px; color: #0284c7; cursor: pointer;" onclick="loadInvoicesHistory()"><i class="fa-solid fa-rotate"></i> Actualizar</span>
+            </div>
+            <div id="invoicesList">
+              <div style="text-align: center; color: var(--text-muted); font-size: 12.5px; padding: 10px;">Consultando facturas...</div>
             </div>
           </div>
+        </div>
 
-          <!-- TARJETA 4: ASISTENCIA Y SOPORTE DIRECTO -->
-          <div class="app-card" style="text-align: center; align-items: center; gap: 10px;">
-            <i class="fa-brands fa-whatsapp" style="font-size: 36px; color: #10b981;"></i>
-            <div style="font-size: 16px; font-weight: 700; color: var(--text-title);">¿Tienes alguna duda o problema?</div>
-            <p style="font-size: 13px; color: var(--text-body); max-width: 320px;">Estamos listos para atenderte por WhatsApp.</p>
-            <a id="btnSupportWa" href="https://wa.me/${supportPhone}?text=Hola,%20necesito%20apoyo%20con%20mi%20servicio" target="_blank" class="btn-whatsapp">
-              <i class="fa-brands fa-whatsapp"></i> Chatear con Soporte
-            </a>
+        <!-- TARJETA 4: ASISTENCIA Y SOPORTE DIRECTO (BANNER HORIZONTAL VIP) -->
+        <div class="support-banner-card">
+          <div class="support-banner-left">
+            <div class="support-icon-circle">
+              <i class="fa-brands fa-whatsapp"></i>
+            </div>
+            <div>
+              <div class="support-banner-title">¿Tienes alguna duda o reporte con tu servicio?</div>
+              <p class="support-banner-sub">Nuestro equipo técnico y de atención está listo para atenderte por WhatsApp.</p>
+            </div>
           </div>
-
+          <a id="btnSupportWa" href="https://wa.me/${supportPhone}?text=Hola,%20necesito%20apoyo%20con%20mi%20servicio" target="_blank" class="btn-whatsapp" style="width: auto; padding: 11px 22px; font-size: 13.5px; flex-shrink: 0;">
+            <i class="fa-brands fa-whatsapp"></i> Chatear con Soporte
+          </a>
         </div>
 
       </div>
