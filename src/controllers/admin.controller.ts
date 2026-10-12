@@ -953,15 +953,57 @@ export class AdminController {
         dbMap.set(rec.instance_name.toLowerCase(), rec);
       }
 
+      // Sincronizar teléfonos reales de instancias en Base de Datos Local
+      for (const inst of instances) {
+        if (inst.phone) {
+          const rec = dbMap.get(inst.name.toLowerCase());
+          await DbService.upsertWhatsAppInstance({
+            instance_name: inst.name,
+            area_name: rec?.area_name || (inst.name.toLowerCase().includes('soporte') ? 'Soporte Técnico' : (inst.name.toLowerCase().includes('atencion') ? 'Atención al Cliente' : inst.name)),
+            phone_number: inst.phone,
+            description: rec?.description || null,
+          }).catch(() => {});
+        }
+      }
+
+      const configuredOfficeInst = SettingsService.get('PAYMENT_OFFICE_INSTANCE', '').trim().toLowerCase();
+
       const merged = instances.map(inst => {
         const rec = dbMap.get(inst.name.toLowerCase());
         const areaName = rec?.area_name || (inst.name.toLowerCase().includes('soporte') ? 'Soporte Técnico' : (inst.name.toLowerCase().includes('atencion') ? 'Atención al Cliente' : inst.name));
+        
+        const isOfficePayment = 
+          (configuredOfficeInst && configuredOfficeInst === inst.name.toLowerCase()) ||
+          areaName.toLowerCase().includes('pago') || 
+          areaName.toLowerCase().includes('oficina') || 
+          areaName.toLowerCase().includes('atencion') ||
+          inst.name.toLowerCase().includes('oficina') ||
+          inst.name.toLowerCase().includes('pago');
+
         return {
           ...inst,
           area_name: areaName,
           description: rec?.description || null,
+          isOfficePayment: Boolean(isOfficePayment),
         };
       });
+
+      // Si hay una instancia de oficina conectada, sincronizar su teléfono a PAYMENT_OFFICE_PHONE
+      const officeInst = merged.find(i => i.isOfficePayment && i.phone);
+      if (officeInst && officeInst.phone) {
+        const phone10 = officeInst.phone.replace(/\D/g, '').slice(-10);
+        const currentOfficeSetting = SettingsService.get('PAYMENT_OFFICE_PHONE', '');
+        if (!currentOfficeSetting || currentOfficeSetting === '7777777777' || currentOfficeSetting === '7721284398' || configuredOfficeInst === officeInst.name.toLowerCase()) {
+          SettingsService.set('PAYMENT_OFFICE_PHONE', phone10).catch(() => {});
+        }
+      } else if (instances.length === 1 && instances[0].phone) {
+        // Si solo hay una línea conectada (soporte), sincronizarla también si el de oficina sigue en placeholder
+        const singlePhone10 = instances[0].phone.replace(/\D/g, '').slice(-10);
+        const currentOfficeSetting = SettingsService.get('PAYMENT_OFFICE_PHONE', '');
+        if (!currentOfficeSetting || currentOfficeSetting === '7777777777') {
+          SettingsService.set('PAYMENT_OFFICE_PHONE', singlePhone10).catch(() => {});
+        }
+      }
 
       res.json({ success: true, count: merged.length, instances: merged });
     } catch (error: any) {
@@ -1043,7 +1085,7 @@ export class AdminController {
    */
   static async createWhatsAppInstance(req: Request, res: Response): Promise<void> {
     try {
-      const { name, area_name, description } = req.body || {};
+      const { name, area_name, description, role } = req.body || {};
       if (!name) {
         res.status(400).json({ success: false, error: 'El nombre de la instancia es obligatorio' });
         return;
@@ -1057,6 +1099,11 @@ export class AdminController {
           area_name: finalArea,
           description: description ? String(description).trim() : null,
         });
+
+        if (role === 'oficina_pagos' || finalArea.toLowerCase().includes('pago') || finalArea.toLowerCase().includes('oficina') || finalArea.toLowerCase().includes('atencion')) {
+          await SettingsService.set('PAYMENT_OFFICE_INSTANCE', cleanName);
+        }
+
         res.json(result);
       } else {
         res.status(400).json(result);
@@ -1121,6 +1168,74 @@ export class AdminController {
       res.json({ success: true, message: `Instancia "${instance}" seleccionada como activa para el chatbot.` });
     } catch (error: any) {
       logger.error(`Error al seleccionar instancia ${req.params.instance}:`, error?.message || error);
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Asigna el rol operativo a una instancia de WhatsApp: 'oficina_pagos' o 'soporte'
+   */
+  static async assignWhatsAppInstanceRole(req: Request, res: Response): Promise<void> {
+    try {
+      const instance = String(req.params.instance || '').trim();
+      const role = String(req.body?.role || 'oficina_pagos').trim().toLowerCase();
+
+      if (!instance) {
+        res.status(400).json({ success: false, error: 'Nombre de instancia requerido' });
+        return;
+      }
+
+      if (role === 'oficina_pagos' || role === 'oficina' || role === 'pagos') {
+        await SettingsService.set('PAYMENT_OFFICE_INSTANCE', instance);
+        // Sincronizar número real conectado
+        const liveInstances = await EvolutionService.fetchAllInstances().catch(() => []);
+        const found = liveInstances.find(i => i.name.toLowerCase() === instance.toLowerCase());
+        let phone10 = '';
+        if (found?.phone) {
+          phone10 = found.phone.replace(/\D/g, '').slice(-10);
+        } else {
+          const dbRec = await DbService.getWhatsAppInstance(instance);
+          if (dbRec?.phone_number) {
+            phone10 = dbRec.phone_number.replace(/\D/g, '').slice(-10);
+          }
+        }
+
+        if (phone10) {
+          await SettingsService.set('PAYMENT_OFFICE_PHONE', phone10);
+        }
+
+        await DbService.upsertWhatsAppInstance({
+          instance_name: instance,
+          area_name: 'Oficina / Pagos',
+        });
+
+        res.json({
+          success: true,
+          message: `Línea "${instance}" asignada para Oficina de Atención y Pagos.${phone10 ? ` Número oficial configurado: +52 ${phone10}.` : ''}`,
+          phone: phone10 || null,
+        });
+        return;
+      } else if (role === 'soporte') {
+        await SettingsService.set('INSTANCE_NAME', instance);
+        await EvolutionService.verifyAndEnableWebhook(instance);
+        const liveInstances = await EvolutionService.fetchAllInstances().catch(() => []);
+        const found = liveInstances.find(i => i.name.toLowerCase() === instance.toLowerCase());
+        let phone10 = '';
+        if (found?.phone) {
+          phone10 = found.phone.replace(/\D/g, '').slice(-10);
+          await SettingsService.set('SOPORTE_HUMANO_PHONE', phone10);
+        }
+        res.json({
+          success: true,
+          message: `Línea "${instance}" asignada como línea de Soporte Técnico / Chatbot.${phone10 ? ` Número: +52 ${phone10}.` : ''}`,
+          phone: phone10 || null,
+        });
+        return;
+      }
+
+      res.status(400).json({ success: false, error: 'Rol no válido. Usa "oficina_pagos" o "soporte"' });
+    } catch (error: any) {
+      logger.error(`Error al asignar rol a instancia ${req.params.instance}:`, error?.message || error);
       res.status(500).json({ success: false, error: error?.message || error });
     }
   }

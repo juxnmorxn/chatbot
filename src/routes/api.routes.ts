@@ -108,6 +108,7 @@ router.get('/api/whatsapp/areas', AdminController.getWhatsAppAreas);
 router.put('/api/whatsapp/instances/:instance/area', AdminController.updateWhatsAppInstanceArea);
 router.get('/api/whatsapp/instances/:instance/qr', AdminController.getWhatsAppInstanceQr);
 router.post('/api/whatsapp/instances/:instance/select', AdminController.selectWhatsAppInstance);
+router.post('/api/whatsapp/instances/:instance/role', AdminController.assignWhatsAppInstanceRole);
 router.post('/api/whatsapp/instances/:instance/disconnect', AdminController.disconnectWhatsAppInstance);
 router.delete('/api/whatsapp/instances/:instance', AdminController.deleteWhatsAppInstance);
 router.post('/api/whatsapp/instances/:instance/sync-webhook', AdminController.syncInstanceWebhook);

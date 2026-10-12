@@ -3667,6 +3667,49 @@ export class DbService {
     }
   }
 
+  /**
+   * Obtiene el número telefónico de la instancia designada para Oficina / Atención a Clientes / Pagos
+   */
+  static async getOfficeWhatsAppPhone(): Promise<string | null> {
+    try {
+      const instances = await this.getWhatsAppInstancesFromDb();
+      // 1. Instancia cuya área o nombre contenga pago, oficina, atención o cobranza
+      const officeInst = instances.find(i => {
+        const lowerArea = (i.area_name || '').toLowerCase();
+        const lowerName = (i.instance_name || '').toLowerCase();
+        return (lowerArea.includes('pago') || lowerArea.includes('oficina') || lowerArea.includes('atencion') || lowerArea.includes('cobranza') ||
+                lowerName.includes('pago') || lowerName.includes('oficina') || lowerName.includes('atencion') || lowerName.includes('cobranza')) &&
+               Boolean(i.phone_number);
+      });
+      if (officeInst && officeInst.phone_number) {
+        return officeInst.phone_number.replace(/\D/g, '').slice(-10);
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Obtiene el número telefónico de la instancia designada para Soporte Técnico / Bot
+   */
+  static async getSupportWhatsAppPhone(): Promise<string | null> {
+    try {
+      const instances = await this.getWhatsAppInstancesFromDb();
+      const supportInst = instances.find(i => {
+        const lowerArea = (i.area_name || '').toLowerCase();
+        const lowerName = (i.instance_name || '').toLowerCase();
+        return (lowerArea.includes('soporte') || lowerName.includes('soporte') || i.is_active) && Boolean(i.phone_number);
+      });
+      if (supportInst && supportInst.phone_number) {
+        return supportInst.phone_number.replace(/\D/g, '').slice(-10);
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
   static async deleteWhatsAppInstanceRecord(instanceName: string): Promise<boolean> {
     try {
       const client = getDbClient();

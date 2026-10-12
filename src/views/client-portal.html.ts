@@ -6,14 +6,15 @@ import { getCloudWareSphereSvg, getCloudWareFullLogoHtml } from './brand';
  * Genera el HTML completo para el Portal Móvil / PWA de Clientes
  * Diseñado 100% para celulares (Mobile-First), interfaz limpia, cero tecnicismos y muy intuitiva.
  */
-export function getClientPortalHtml(): string {
+export function getClientPortalHtml(customOfficePhone?: string): string {
   const ispName = SettingsService.get('ISP_NAME', 'ISP_NAME', config.isp.name || 'CloudWareMx');
   const supportPhone = SettingsService.get('SUPPORT_PHONE', 'SUPPORT_PHONE', config.isp.soporteHumanoPhone || '7721284398');
   const bankName = SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK_NAME', 'BBVA Bancomer');
   const bankAccount = SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_BANK_ACCOUNT', '012 180 0152433212 90');
   const bankClabe = SettingsService.get('PAYMENT_CLABE', 'PAYMENT_BANK_CLABE', bankAccount || '012 180 0152433212 90');
   const bankBeneficiary = SettingsService.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', ispName || 'CloudWare Telecomunicaciones');
-  const officePhone = SettingsService.get('PAYMENT_OFFICE_PHONE', 'OFFICE_PHONE', SettingsService.get('SOPORTE_HUMANO_PHONE', 'SOPORTE_HUMANO_PHONE', '7721284398'));
+  const rawOffice = customOfficePhone || SettingsService.get('PAYMENT_OFFICE_PHONE', 'OFFICE_PHONE', SettingsService.get('SOPORTE_HUMANO_PHONE', 'SOPORTE_HUMANO_PHONE', '7721284398'));
+  const officePhone = (rawOffice.replace(/\D/g, '').slice(-10)) || '7721284398';
 
   return `<!DOCTYPE html>
 <html lang="es">
@@ -2521,6 +2522,10 @@ export function getClientPortalHtml(): string {
       }
 
       document.getElementById('bankRefText').innerText = 'SRV-' + c.id_servicio;
+      if (data.bankDetails) {
+        cachedBankDetails = data.bankDetails;
+        applyBankDetails(data.bankDetails, c.nombre || data.bankDetails.titular, c.id_servicio);
+      }
 
       loadInvoicesHistory();
     }
@@ -2655,10 +2660,13 @@ export function getClientPortalHtml(): string {
       const btn = document.getElementById('btnOfficePaymentWa');
       if (btn) btn.href = waUrl;
 
+      const formatted = rawPhone.replace(/\\D/g, '').slice(-10);
+      const displayTxt = formatted ? ('+52 ' + formatted) : rawPhone;
+
       const display = document.getElementById('bankOfficePhoneDisplay');
-      if (display) display.innerText = rawPhone;
+      if (display) display.innerText = displayTxt;
       const span = document.getElementById('bankOfficePhoneText');
-      if (span) span.innerText = rawPhone;
+      if (span) span.innerText = displayTxt;
     }
 
     function copyOfficePhone() {

@@ -4545,10 +4545,15 @@ export function getAdminDashboardHtml(): string {
               <input type="text" id="setting-PAYMENT_BENEFICIARY" class="form-control" placeholder="CloudWare Telecomunicaciones" value="CloudWare Telecomunicaciones">
             </div>
             <div class="form-group">
-              <label class="form-label">WhatsApp de Oficina / Cobranza (Recepción de Comprobantes)</label>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; flex-wrap: wrap; gap: 6px;">
+                <label class="form-label" style="margin-bottom: 0;">WhatsApp de Oficina / Cobranza (Recepción de Comprobantes)</label>
+                <button type="button" class="btn btn-secondary btn-xs" onclick="syncOfficePhoneFromWhatsAppInstances()" title="Detectar automáticamente de las líneas de WhatsApp conectadas" style="font-size: 11px; padding: 2px 7px;">
+                  🔄 Autocompletar de WhatsApp
+                </button>
+              </div>
               <input type="text" id="setting-PAYMENT_OFFICE_PHONE" class="form-control" placeholder="7721284398" value="7721284398">
               <span style="font-size: 11px; color: var(--text-muted); display: block; margin-top: 4px;">
-                Número al que los clientes reenviarán su captura de pago y nombre tras transferir.
+                Se toma automáticamente de la línea de WhatsApp agregada como Oficina/Atención o Soporte.
               </span>
             </div>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
@@ -8389,6 +8394,7 @@ export function getAdminDashboardHtml(): string {
                     <strong style="font-size: 13.5px; color: var(--text-main);">\${escapeHtml(inst.name)}</strong>
                     <span class="badge badge-info" style="font-size: 10px;">🏢 \${escapeHtml(areaDisplay)}</span>
                     \${inst.isActive ? '<span class="badge badge-primary" style="font-size: 10px;">BOT ACTIVO</span>' : ''}
+                    \${inst.isOfficePayment ? '<span class="badge" style="background: rgba(16,185,129,0.2); color: #34d399; border: 1px solid rgba(16,185,129,0.4); font-size: 10px;">💳 OFICINA & PAGOS</span>' : ''}
                   </div>
                   <div style="font-size: 12px; color: var(--text-muted); font-family: var(--font-mono); margin-top: 2px;">
                     \${escapeHtml(phoneDisplay)} \${inst.profileName ? \`(\${escapeHtml(inst.profileName)})\` : ''}
@@ -8398,6 +8404,15 @@ export function getAdminDashboardHtml(): string {
 
               <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                 \${statusBadge}
+                \${!inst.isOfficePayment ? \`
+                  <button class="btn btn-secondary btn-sm" style="font-size: 11px; padding: 4px 8px; border-color: rgba(16,185,129,0.4); color: #34d399;" onclick="assignWhatsAppOfficePayment('\${safeName}')" title="Asignar esta línea para Oficina, Atención y Pagos (Portal de Clientes y Recibos)">
+                    💳 Usar en Pagos
+                  </button>
+                \` : \`
+                  <span style="font-size: 11px; color: #34d399; font-weight: 700; padding: 4px 8px; background: rgba(16,185,129,0.12); border-radius: 4px; border: 1px solid rgba(16,185,129,0.25);" title="Línea activa para recepción de comprobantes de pago">
+                    ✓ Línea de Pagos
+                  </span>
+                \`}
                 <button class="btn btn-secondary btn-sm" style="font-size: 11px; padding: 4px 8px;" onclick="openEditWhatsAppInstanceAreaModal('\${safeName}', '\${safeArea}', '\${(inst.description || '').replace(/'/g, "\\'")}')" title="Editar área / oficina asignada">
                   ✏️ Área
                 </button>
@@ -8438,6 +8453,66 @@ export function getAdminDashboardHtml(): string {
       return fetchWhatsAppInstancesList();
     }
 
+    function onWhatsAppRoleSelectChange(role) {
+      const areaInput = document.getElementById('new-instance-area');
+      const nameInput = document.getElementById('new-instance-name');
+      const descInput = document.getElementById('new-instance-desc');
+      if (role === 'oficina_pagos') {
+        if (areaInput) areaInput.value = 'Oficina / Atención & Pagos';
+        if (nameInput) nameInput.value = 'oficina-pagos';
+        if (descInput) descInput.value = 'Línea de atención presencial y recepción de comprobantes de pago';
+      } else if (role === 'soporte') {
+        if (areaInput) areaInput.value = 'Soporte Técnico';
+        if (nameInput) nameInput.value = 'isp-soporte2';
+        if (descInput) descInput.value = 'Línea de diagnóstico de fibra y atención técnica';
+      }
+    }
+
+    async function assignWhatsAppOfficePayment(instanceName) {
+      if (!confirm('¿Deseas asignar la línea "' + instanceName + '" como la oficial de Oficina y Recepción de Pagos?\\n\\nSu número conectado se tomará automáticamente para el Portal de Clientes y datos bancarios.')) {
+        return;
+      }
+      showToast('Configurando Línea', 'Asignando ' + instanceName + ' para Oficina y Pagos...', 'info');
+      try {
+        const res = await apiFetch('/api/whatsapp/instances/' + encodeURIComponent(instanceName) + '/role', {
+          method: 'POST',
+          body: JSON.stringify({ role: 'oficina_pagos' }),
+        });
+        if (res.success) {
+          showToast('Línea Asignada', res.message || 'Línea configurada exitosamente.', 'success');
+          if (res.phone) {
+            const input = document.getElementById('setting-PAYMENT_OFFICE_PHONE');
+            if (input) input.value = res.phone;
+          }
+          fetchWhatsAppInstancesList();
+        } else {
+          showToast('Error', res.error || 'No se pudo asignar la línea', 'error');
+        }
+      } catch (err) {
+        showToast('Error', err.message || 'Error de conexión', 'error');
+      }
+    }
+
+    async function syncOfficePhoneFromWhatsAppInstances() {
+      showToast('Consultando WhatsApp', 'Detectando líneas conectadas en Evolution API...', 'info');
+      try {
+        const res = await apiFetch('/api/whatsapp/instances');
+        const instances = res.instances || [];
+        const officeInst = instances.find(i => i.isOfficePayment && i.phone);
+        const target = officeInst || instances.find(i => i.phone);
+        if (target && target.phone) {
+          const phone10 = target.phone.replace(/\\D/g, '').slice(-10);
+          const officeInput = document.getElementById('setting-PAYMENT_OFFICE_PHONE');
+          if (officeInput) officeInput.value = phone10;
+          showToast('Número Detectado', 'Se cargó el número +52 ' + phone10 + ' (' + target.name + '). Recuerda guardar los cambios.', 'success');
+        } else {
+          showToast('Sin número disponible', 'No hay líneas de WhatsApp conectadas con número en Evolution API.', 'warning');
+        }
+      } catch (err) {
+        showToast('Error', err.message || 'Error al consultar instancias', 'error');
+      }
+    }
+
     function openNewWhatsAppInstanceModal() {
       const content = \`
         <div style="display: flex; flex-direction: column; gap: 14px;">
@@ -8445,17 +8520,25 @@ export function getAdminDashboardHtml(): string {
             Registra una nueva cuenta / línea de WhatsApp e indícale a qué área u oficina pertenece:
           </p>
           <div class="form-group">
+            <label class="form-label">Propósito / Rol de la Línea</label>
+            <select id="new-instance-role" class="form-control" onchange="onWhatsAppRoleSelectChange(this.value)">
+              <option value="oficina_pagos">💳 Oficina / Atención a Clientes & Pagos (Comprobantes en Portal)</option>
+              <option value="soporte">🛠️ Soporte Técnico / Chatbot</option>
+              <option value="general">🏢 Otra Área Personalizada</option>
+            </select>
+          </div>
+          <div class="form-group">
             <label class="form-label">Nombre del Área / Oficina (Visible para traspasos)</label>
-            <input type="text" id="new-instance-area" class="form-control" placeholder="Ej: Oficina Actopan, Cobranza Matriz, Soporte Fibra" required>
+            <input type="text" id="new-instance-area" class="form-control" value="Oficina / Atención & Pagos" placeholder="Ej: Oficina Actopan, Cobranza Matriz, Soporte Fibra" required>
           </div>
           <div class="form-group">
             <label class="form-label">Identificador de Instancia (Slug)</label>
-            <input type="text" id="new-instance-name" class="form-control" placeholder="ej: actopan, cobranza, soporte-linea2" autocomplete="off" spellcheck="false" required oninput="this.value = this.value.toLowerCase().replace(/[^a-z0-9_-]/g, '')">
+            <input type="text" id="new-instance-name" class="form-control" value="oficina-pagos" placeholder="ej: oficina-pagos, cobranza, soporte-linea2" autocomplete="off" spellcheck="false" required oninput="this.value = this.value.toLowerCase().replace(/[^a-z0-9_-]/g, '')">
             <div style="font-size: 11px; color: var(--text-dim); margin-top: 4px;">Usa solo minúsculas sin espacios (ej. oficina-actopan).</div>
           </div>
           <div class="form-group">
             <label class="form-label">Descripción o Notas (Opcional)</label>
-            <input type="text" id="new-instance-desc" class="form-control" placeholder="Ej: Línea de atención presencial y pagos">
+            <input type="text" id="new-instance-desc" class="form-control" value="Línea de atención presencial y recepción de comprobantes de pago" placeholder="Ej: Línea de atención presencial y pagos">
           </div>
         </div>
       \`;
@@ -8464,10 +8547,12 @@ export function getAdminDashboardHtml(): string {
         const nameInput = document.getElementById('new-instance-name');
         const areaInput = document.getElementById('new-instance-area');
         const descInput = document.getElementById('new-instance-desc');
+        const roleInput = document.getElementById('new-instance-role');
 
         const name = (nameInput?.value || '').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
         const area_name = (areaInput?.value || '').trim();
         const description = (descInput?.value || '').trim();
+        const role = (roleInput?.value || 'oficina_pagos').trim();
 
         if (!name || !area_name) {
           showToast('Campos requeridos', 'Debes ingresar el nombre de la instancia y el área u oficina', 'warning');
@@ -8477,7 +8562,7 @@ export function getAdminDashboardHtml(): string {
         showToast('Creando Instancia', \`Registrando "\${name}" para el área "\${area_name}"...\`, 'info');
         const res = await apiFetch('/api/whatsapp/instances', {
           method: 'POST',
-          body: JSON.stringify({ name, area_name, description }),
+          body: JSON.stringify({ name, area_name, description, role }),
         });
 
         if (res.success) {

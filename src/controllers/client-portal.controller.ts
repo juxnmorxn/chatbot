@@ -58,9 +58,10 @@ export class ClientPortalController {
   /**
    * Renderiza la página principal del Portal del Cliente / PWA
    */
-  static renderPortalHtml(_req: Request, res: Response): void {
+  static async renderPortalHtml(_req: Request, res: Response): Promise<void> {
+    const officePhone = await SettingsService.getPaymentOfficePhoneAsync();
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.send(getClientPortalHtml());
+    res.send(getClientPortalHtml(officePhone));
   }
 
   /**
@@ -1085,7 +1086,7 @@ self.addEventListener('fetch', (event) => {
           reference: `SRV-${client.id_servicio}`,
           titular: cleanPersonName(client.nombre || ''),
           concept: cleanPersonName(client.nombre || ''),
-          officePhone: SettingsService.get('PAYMENT_OFFICE_PHONE', 'OFFICE_PHONE', SettingsService.get('SOPORTE_HUMANO_PHONE', 'SOPORTE_HUMANO_PHONE', '7721284398')),
+          officePhone: await SettingsService.getPaymentOfficePhoneAsync(),
         },
       });
     } catch (err: any) {
@@ -1157,7 +1158,7 @@ self.addEventListener('fetch', (event) => {
           reference: `SRV-${client.id_servicio}`,
           titular: cleanPersonName(client.nombre || ''),
           concept: cleanPersonName(client.nombre || ''),
-          officePhone: SettingsService.get('PAYMENT_OFFICE_PHONE', 'OFFICE_PHONE', SettingsService.get('SOPORTE_HUMANO_PHONE', 'SOPORTE_HUMANO_PHONE', '7721284398')),
+          officePhone: await SettingsService.getPaymentOfficePhoneAsync(),
         },
       });
     } catch (err: any) {

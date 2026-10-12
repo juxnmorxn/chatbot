@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { getDbClient } from '../database/db';
 import { Logger } from '../utils/logger';
+import { DbService } from './db.service';
 
 const logger = new Logger('SettingsService');
 
@@ -173,7 +174,7 @@ export class SettingsService {
       paymentAccount: this.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', ''),
       paymentConvenio: this.get('PAYMENT_CONVENIO', 'PAYMENT_CONVENIO', ''),
       paymentBeneficiary: this.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', ''),
-      paymentOfficePhone: this.get('PAYMENT_OFFICE_PHONE', 'PAYMENT_OFFICE_PHONE', this.get('OFFICE_PHONE', 'OFFICE_PHONE', this.get('SOPORTE_HUMANO_PHONE', 'SOPORTE_HUMANO_PHONE', '7721284398'))),
+      paymentOfficePhone: await this.getPaymentOfficePhoneAsync(),
       paymentNotes: this.get('PAYMENT_NOTES', 'PAYMENT_NOTES', ''),
       paymentMercadopagoUrl: this.get('PAYMENT_MERCADOPAGO_URL', 'MERCADOPAGO_URL', ''),
       mercadopagoAccessToken: this.get('MERCADOPAGO_ACCESS_TOKEN', 'MERCADOPAGO_ACCESS_TOKEN', ''),
@@ -195,5 +196,48 @@ export class SettingsService {
   static generateEvolutionMasterKey(): string {
     const randomHex = crypto.randomBytes(24).toString('hex');
     return `EVO_MASTER_${randomHex}`;
+  }
+
+  /**
+   * Obtiene dinámicamente el teléfono de oficina / pagos:
+   * 1. Si hay una instancia de oficina/atención/pagos en Base de Datos Local con teléfono, toma ese.
+   * 2. Si hay un teléfono configurado explícitamente en settings (no placeholder), toma ese.
+   * 3. Si hay una instancia de soporte conectada, toma ese como respaldo.
+   * 4. Si no, usa el fallback por defecto.
+   */
+  static async getPaymentOfficePhoneAsync(): Promise<string> {
+    try {
+      const officeFromDb = await DbService.getOfficeWhatsAppPhone();
+      if (officeFromDb) return officeFromDb;
+    } catch {}
+
+    const configured = this.get('PAYMENT_OFFICE_PHONE').replace(/\D/g, '');
+    if (configured && configured !== '7777777777' && configured !== '7721284398') {
+      return configured.slice(-10);
+    }
+
+    try {
+      const supportFromDb = await DbService.getSupportWhatsAppPhone();
+      if (supportFromDb) return supportFromDb;
+    } catch {}
+
+    return this.get('PAYMENT_OFFICE_PHONE', 'OFFICE_PHONE', this.get('SOPORTE_HUMANO_PHONE', 'SOPORTE_HUMANO_PHONE', '7721284398'));
+  }
+
+  /**
+   * Obtiene dinámicamente el teléfono de soporte humano:
+   * 1. Si hay una instancia de soporte conectada con teléfono, toma ese.
+   * 2. Si no, toma el configurado o el de env.
+   */
+  static async getSupportPhoneAsync(): Promise<string> {
+    try {
+      const supportFromDb = await DbService.getSupportWhatsAppPhone();
+      if (supportFromDb) return supportFromDb;
+    } catch {}
+
+    const configured = this.get('SOPORTE_HUMANO_PHONE').replace(/\D/g, '');
+    if (configured) return configured.slice(-10);
+
+    return this.get('SOPORTE_HUMANO_PHONE', 'SOPORTE_HUMANO_PHONE', '7721284398');
   }
 }
