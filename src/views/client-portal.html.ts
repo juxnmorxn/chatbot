@@ -1776,27 +1776,38 @@ export function getClientPortalHtml(): string {
               <i class="fa-solid fa-copy"></i> Copiar
             </button>
           </div>
-          <div style="font-size: 10.5px; color: var(--text-muted); margin-top: 5px;">
-            Folio de contrato: <strong id="bankRefText" style="color: var(--text-title);">-</strong>
-          </div>
+          <span id="bankRefText" style="display: none;">-</span>
         </div>
 
         <!-- Tarjeta: Instrucción de Reenviar Comprobante / Captura al WhatsApp de Oficina -->
-        <div style="background: rgba(37, 211, 102, 0.08); border: 1.5px solid rgba(37, 211, 102, 0.35); padding: 12px 14px; border-radius: var(--radius-md);">
-          <div style="display: flex; align-items: flex-start; gap: 10px;">
-            <i class="fa-brands fa-whatsapp" style="font-size: 24px; color: #25d366; margin-top: 2px; flex-shrink: 0;"></i>
-            <div style="flex: 1;">
-              <div style="font-weight: 800; font-size: 12.5px; color: #ffffff; margin-bottom: 3px;">
-                📸 Paso obligatorio al terminar tu pago:
-              </div>
-              <div style="font-size: 11.5px; color: var(--text-body); line-height: 1.45; margin-bottom: 8px;">
-                Mandar captura de tu transferencia y escribir tu nombre al número de oficina para confirmar y reactivar tu servicio de inmediato.
-              </div>
-              <a id="btnOfficePaymentWa" href="https://wa.me/52${officePhone}" target="_blank" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; background: #25d366; color: #0b1329; font-weight: 800; font-size: 12.5px; padding: 8px 14px; border-radius: 8px; text-decoration: none; width: 100%; box-sizing: border-box;">
-                <i class="fa-brands fa-whatsapp" style="font-size: 16px;"></i> Mandar Captura y Nombre (<span id="bankOfficePhoneText">${officePhone}</span>)
-              </a>
-            </div>
+        <div style="background: rgba(37, 211, 102, 0.08); border: 1.5px solid rgba(37, 211, 102, 0.35); padding: 13px 14px; border-radius: var(--radius-md);">
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+            <i class="fa-brands fa-whatsapp" style="font-size: 20px; color: #25d366;"></i>
+            <span style="font-weight: 800; font-size: 13px; color: #ffffff;">
+              Confirmar Pago por WhatsApp:
+            </span>
           </div>
+          <div style="font-size: 12px; color: var(--text-body); line-height: 1.45; margin-bottom: 10px;">
+            Manda la <strong>captura de pantalla</strong> de tu transferencia y <strong>escribe tu nombre</strong> a nuestro número de oficina:
+          </div>
+
+          <!-- Caja con el número visible y botón copiar -->
+          <div style="background: rgba(0, 0, 0, 0.25); border: 1px dashed rgba(37, 211, 102, 0.35); padding: 8px 12px; border-radius: 8px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+            <div>
+              <span style="font-size: 10px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; display: block;">WhatsApp Oficina:</span>
+              <span id="bankOfficePhoneDisplay" style="color: #25d366; font-size: 14.5px; font-weight: 800; font-family: monospace; letter-spacing: 0.5px;">${officePhone}</span>
+              <span id="bankOfficePhoneText" style="display: none;">${officePhone}</span>
+            </div>
+            <button type="button" class="btn-outline" onclick="copyOfficePhone()" style="width: auto; padding: 4px 10px; font-size: 11px; height: 28px; color: #25d366; border-color: rgba(37, 211, 102, 0.4);">
+              <i class="fa-solid fa-copy"></i> Copiar
+            </button>
+          </div>
+
+          <!-- Botón de apertura directa hacia WhatsApp -->
+          <a id="btnOfficePaymentWa" href="https://wa.me/52${officePhone}" target="_blank" rel="noopener noreferrer" style="display: flex; align-items: center; justify-content: center; gap: 8px; background: #25d366; color: #042f1a; font-weight: 800; font-size: 13px; padding: 11px 16px; border-radius: 9px; text-decoration: none; width: 100%; box-sizing: border-box; box-shadow: 0 4px 14px rgba(37, 211, 102, 0.25);">
+            <i class="fa-brands fa-whatsapp" style="font-size: 18px;"></i>
+            <span>Mandar Captura y Nombre por WhatsApp</span>
+          </a>
         </div>
 
       </div>
@@ -2359,8 +2370,12 @@ export function getClientPortalHtml(): string {
         bankConceptEl.innerText = cleanTitular;
       }
 
-      const officePhoneVal = (data.bankDetails && data.bankDetails.officePhone) || '${officePhone}';
-      updateOfficePaymentLink(officePhoneVal, cleanTitular, c.id_servicio);
+      if (data.bankDetails) {
+        cachedBankDetails = data.bankDetails;
+        applyBankDetails(data.bankDetails, cleanTitular, c.id_servicio);
+      } else {
+        updateOfficePaymentLink('${officePhone}', cleanTitular, c.id_servicio);
+      }
 
       // Paquete Contratado con Gran Énfasis Visual y Corrección de Discrepancias
       const rawPlan = (c.plan_internet || data.onu?.speed_profile || '').trim();
@@ -2557,25 +2572,8 @@ export function getClientPortalHtml(): string {
 
         if (data.bankDetails) {
           cachedBankDetails = data.bankDetails;
-          if (data.bankDetails.bank) {
-            const el = document.getElementById('bankNameDisplay');
-            if (el) el.innerText = data.bankDetails.bank;
-          }
-          if (data.bankDetails.clabe) {
-            const el = document.getElementById('bankClabeText');
-            if (el) el.innerText = data.bankDetails.clabe;
-          }
-          if (data.bankDetails.account) {
-            const el = document.getElementById('bankAccountText');
-            if (el) el.innerText = data.bankDetails.account;
-          }
-          if (data.bankDetails.beneficiary) {
-            const el = document.getElementById('bankBeneficiaryText');
-            if (el) el.innerText = data.bankDetails.beneficiary;
-          }
-          if (data.bankDetails.officePhone) {
-            updateOfficePaymentLink(data.bankDetails.officePhone);
-          }
+          const titular = document.getElementById('bankConceptText')?.innerText || document.getElementById('titularHeroName')?.innerText || data.bankDetails.titular || 'Cliente';
+          applyBankDetails(data.bankDetails, titular, currentContractId);
         }
 
         if (data.success && data.invoices && data.invoices.length > 0) {
@@ -2612,18 +2610,61 @@ export function getClientPortalHtml(): string {
       }
     }
 
+    function applyBankDetails(b, titularName, contractId) {
+      if (!b) return;
+      if (b.bank) {
+        const el = document.getElementById('bankNameDisplay');
+        if (el) el.innerText = b.bank;
+      }
+      if (b.clabe) {
+        const el = document.getElementById('bankClabeText');
+        if (el) el.innerText = b.clabe;
+      }
+      if (b.account) {
+        const el = document.getElementById('bankAccountText');
+        if (el) el.innerText = b.account;
+      }
+      if (b.beneficiary) {
+        const el = document.getElementById('bankBeneficiaryText');
+        if (el) el.innerText = b.beneficiary;
+      }
+      if (b.concept) {
+        const el = document.getElementById('bankConceptText');
+        if (el) el.innerText = b.concept;
+      } else if (titularName) {
+        const el = document.getElementById('bankConceptText');
+        if (el) el.innerText = titularName;
+      }
+      const rawPhone = b.officePhone || '${officePhone}';
+      updateOfficePaymentLink(rawPhone, titularName || b.titular, contractId);
+    }
+
     function updateOfficePaymentLink(rawPhone, titularName, contractId) {
       if (!rawPhone) return;
-      const cleanDigits = String(rawPhone).replace(/\\D/g, '');
-      const phoneDigits = cleanDigits.length === 10 ? ('52' + cleanDigits) : cleanDigits;
+      let digits = String(rawPhone).replace(/\\D/g, '');
+      if (digits.startsWith('521') && digits.length === 13) {
+        digits = '52' + digits.slice(3);
+      } else if (digits.length === 10) {
+        digits = '52' + digits;
+      }
       const titular = titularName || document.getElementById('bankConceptText')?.innerText || document.getElementById('titularHeroName')?.innerText || 'Cliente';
       const folio = contractId || currentContractId || '';
       const textMsg = 'Hola, envío comprobante de pago de mi servicio.\\nTitular: ' + titular + (folio ? ('\\nContrato: #' + folio) : '');
-      const waUrl = 'https://wa.me/' + phoneDigits + '?text=' + encodeURIComponent(textMsg);
+      const waUrl = 'https://wa.me/' + digits + '?text=' + encodeURIComponent(textMsg);
+      
       const btn = document.getElementById('btnOfficePaymentWa');
       if (btn) btn.href = waUrl;
+
+      const display = document.getElementById('bankOfficePhoneDisplay');
+      if (display) display.innerText = rawPhone;
       const span = document.getElementById('bankOfficePhoneText');
       if (span) span.innerText = rawPhone;
+    }
+
+    function copyOfficePhone() {
+      const val = (document.getElementById('bankOfficePhoneDisplay')?.innerText || document.getElementById('bankOfficePhoneText')?.innerText || '').trim();
+      navigator.clipboard.writeText(val);
+      showToast('Número de oficina copiado: ' + val);
     }
 
     // Copiado de Contraseña Única
@@ -2834,25 +2875,28 @@ export function getClientPortalHtml(): string {
     }
 
     function openModalBank() {
+      const titular = document.getElementById('bankConceptText')?.innerText || document.getElementById('titularHeroName')?.innerText || 'Cliente';
       if (cachedBankDetails) {
-        if (cachedBankDetails.bank) {
-          const el = document.getElementById('bankNameDisplay');
-          if (el) el.innerText = cachedBankDetails.bank;
-        }
-        if (cachedBankDetails.clabe) {
-          const el = document.getElementById('bankClabeText');
-          if (el) el.innerText = cachedBankDetails.clabe;
-        }
-        if (cachedBankDetails.account) {
-          const el = document.getElementById('bankAccountText');
-          if (el) el.innerText = cachedBankDetails.account;
-        }
-        if (cachedBankDetails.beneficiary) {
-          const el = document.getElementById('bankBeneficiaryText');
-          if (el) el.innerText = cachedBankDetails.beneficiary;
-        }
+        applyBankDetails(cachedBankDetails, titular, currentContractId);
       }
+      fetchFreshBankDetails();
       document.getElementById('modalBank').style.display = 'flex';
+    }
+
+    async function fetchFreshBankDetails() {
+      try {
+        const cId = currentContractId || localStorage.getItem('cp_selected_service') || '';
+        if (!cId) return;
+        const res = await fetch('/api/portal/billing-history?serviceId=' + encodeURIComponent(cId) + (currentToken ? ('&token=' + encodeURIComponent(currentToken)) : ''));
+        const data = await res.json();
+        if (data && data.success && data.bankDetails) {
+          cachedBankDetails = data.bankDetails;
+          const titular = document.getElementById('bankConceptText')?.innerText || document.getElementById('titularHeroName')?.innerText || data.bankDetails.titular || 'Cliente';
+          applyBankDetails(data.bankDetails, titular, cId);
+        }
+      } catch (err) {
+        console.warn('Error al actualizar datos bancarios en vivo:', err);
+      }
     }
 
     function closeModal(id) {
