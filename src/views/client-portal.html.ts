@@ -1530,10 +1530,11 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
 
           <!-- Lista de recibos detallados de WispHub -->
           <div style="margin-top: 4px; display: flex; flex-direction: column; flex: 1;">
-            <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px;">
-              <span>Historial de Facturas</span>
+            <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+              <span><i class="fa-solid fa-clock-rotate-left" style="color: #0284c7; margin-right: 4px;"></i> Historial de Pagos</span>
+              <span id="invoicesTotalCountBadge" style="font-size: 10px; background: rgba(56, 189, 248, 0.12); color: #38bdf8; padding: 2px 8px; border-radius: 999px; font-weight: 700; border: 1px solid rgba(56, 189, 248, 0.25);"></span>
             </div>
-            <div id="invoicesList">
+            <div id="invoicesList" style="max-height: 460px; overflow-y: auto; padding-right: 4px; display: flex; flex-direction: column; gap: 8px;">
               <div style="text-align: center; color: var(--text-muted); font-size: 12.5px; padding: 10px;">Consultando facturas...</div>
             </div>
           </div>
@@ -2714,37 +2715,63 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
         }
 
         if (data.success && data.invoices && data.invoices.length > 0) {
+          const countBadge = document.getElementById('invoicesTotalCountBadge');
+          if (countBadge) {
+            countBadge.innerText = data.invoices.length + ' Pagos';
+          }
           container.innerHTML = data.invoices.map(inv => {
             const isPaid = String(inv.estado || '').toLowerCase().includes('pagad');
             const statusClass = isPaid ? 'paid' : 'pending';
             const statusText = isPaid ? 'Pagada' : (inv.estado || 'Pendiente de Pago');
             const payBtn = (!isPaid && inv.link_pago) ? '<a href="' + inv.link_pago + '" target="_blank" class="btn-main" style="width:auto; padding:5px 12px; font-size:12px; height:30px; border-radius:7px; display:inline-flex; align-items:center; gap:5px;" title="Pagar Factura"><i class="fa-solid fa-credit-card"></i> Pagar</a>' : '';
             
-            const emision = inv.fecha_emision ? inv.fecha_emision.slice(0, 10) : '';
+            let fechaPagoStr = '';
+            if (inv.fecha_pago) {
+              const dt = new Date(inv.fecha_pago);
+              if (!isNaN(dt.getTime())) {
+                const day = String(dt.getDate()).padStart(2, '0');
+                const mon = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'][dt.getMonth()];
+                const yr = dt.getFullYear();
+                const hrs = String(dt.getHours()).padStart(2, '0');
+                const min = String(dt.getMinutes()).padStart(2, '0');
+                fechaPagoStr = day + '/' + mon + '/' + yr + ' ' + hrs + ':' + min;
+              } else {
+                fechaPagoStr = String(inv.fecha_pago).slice(0, 16).replace('T', ' ');
+              }
+            }
             const vence = inv.fecha_vencimiento ? inv.fecha_vencimiento.slice(0, 10) : '';
             const fechaLabel = isPaid 
-              ? ('Pagada el ' + (inv.fecha_pago ? inv.fecha_pago.slice(0, 10) : (emision || 'Reciente')))
+              ? ('Pagada el ' + (fechaPagoStr || inv.fecha_emision || 'Reciente'))
               : ('Vence el ' + (vence || 'Próximo corte'));
 
-            return '<div style="background:var(--bg-surface); border:1px solid var(--border-card); border-radius:var(--radius-md); padding:12px 14px; margin-bottom:8px; display:flex; flex-direction:column; gap:8px;">' +
+            const cajeroPart = inv.cajero ? ('<span style="display:inline-flex; align-items:center; gap:4px;"><i class="fa-solid fa-user-tie" style="font-size:10px; color:#38bdf8;"></i> Cajero: ' + inv.cajero + '</span>') : '';
+            const formaPart = inv.forma_pago ? ('<span style="display:inline-flex; align-items:center; gap:4px;"><i class="fa-solid fa-money-bill-wave" style="font-size:10px; color:#10b981;"></i> ' + inv.forma_pago + '</span>') : '';
+            const metaParts = [cajeroPart, formaPart].filter(Boolean).join('<span style="opacity:0.4;"> · </span>');
+
+            const receiptBtn = inv.pdf_url ? '<a href="' + inv.pdf_url + '" target="_blank" style="font-size:11px; color:#38bdf8; text-decoration:none; display:inline-flex; align-items:center; gap:4px; font-weight:600; padding:3px 8px; border-radius:6px; background:rgba(56,189,248,0.08); border:1px solid rgba(56,189,248,0.2);"><i class="fa-solid fa-file-arrow-down"></i> Recibo</a>' : '';
+
+            return '<div style="background:var(--bg-surface); border:1px solid var(--border-card); border-radius:var(--radius-md); padding:11px 13px; display:flex; flex-direction:column; gap:7px;">' +
               '<div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">' +
                 '<div style="min-width:0; flex:1;">' +
-                  '<div style="font-weight:700; font-size:13.5px; color:var(--text-title); display:flex; align-items:center; gap:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' +
-                    '<i class="fa-solid fa-file-invoice" style="color:#0284c7;"></i> Recibo #' + (inv.folio || inv.id) +
+                  '<div style="font-weight:700; font-size:13px; color:var(--text-title); display:flex; align-items:center; gap:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' +
+                    '<i class="fa-solid fa-receipt" style="color:#0284c7;"></i> Factura #' + (inv.folio || inv.id) +
                   '</div>' +
-                  '<div style="font-size:11.5px; color:var(--text-muted); margin-top:2px;">' + fechaLabel + '</div>' +
+                  '<div style="font-size:11px; color:var(--text-muted); margin-top:2px;">' + fechaLabel + '</div>' +
                 '</div>' +
                 '<div style="text-align:right; flex-shrink:0;">' +
-                  '<span style="font-weight:800; font-size:16px; color:var(--text-title); display:block;">$' + Number(inv.monto || 0).toFixed(2) + '</span>' +
+                  '<span style="font-weight:800; font-size:15.5px; color:var(--text-title); display:block;">$' + Number(inv.monto || 0).toFixed(2) + '</span>' +
                 '</div>' +
               '</div>' +
+              (metaParts ? ('<div style="font-size:11px; color:var(--text-muted); display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:3px 0 1px;">' + metaParts + '</div>') : '') +
               '<div style="display:flex; align-items:center; justify-content:space-between; gap:8px; padding-top:6px; border-top:1px solid rgba(255,255,255,0.06);">' +
-                '<span class="badge-status ' + statusClass + '" style="font-size:11px; padding:3px 8px;">' + statusText + '</span>' +
-                (payBtn || '<span style="font-size:11px; color:var(--text-muted);"><i class="fa-solid fa-circle-check" style="color:#10b981;"></i> Liquidado</span>') +
+                '<span class="badge-status ' + statusClass + '" style="font-size:10.5px; padding:2px 7px;"><i class="fa-solid ' + (isPaid ? 'fa-circle-check' : 'fa-clock') + '"></i> ' + statusText + '</span>' +
+                (payBtn || receiptBtn || '<span style="font-size:11px; color:var(--text-muted);"><i class="fa-solid fa-circle-check" style="color:#10b981;"></i> Liquidado</span>') +
               '</div>' +
             '</div>';
           }).join('');
         } else {
+          const countBadge = document.getElementById('invoicesTotalCountBadge');
+          if (countBadge) countBadge.innerText = '0 Pagos';
           container.innerHTML = '<div style="text-align:center; color:var(--text-muted); font-size:13px; padding:12px; background:rgba(255,255,255,0.02); border-radius:12px;">Estás al corriente con tus pagos 👍 No hay facturas pendientes.</div>';
         }
       } catch (err) {

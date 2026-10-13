@@ -1195,13 +1195,20 @@ export class WispHubService {
         const linkPago = f.url_pasarela || f.url_payu || (idFactura ? `https://wisphub.net/factura/${idFactura}/` : null);
         const pdfUrl = f.url_pdf || (idFactura ? `https://wisphub.net/factura/pdf/${idFactura}/` : null);
 
+        const rawData = JSON.stringify({
+          forma_pago: f.forma_pago?.nombre || f.forma_pago || 'Efectivo',
+          cajero: f.cajero?.nombre || f.cajero || '',
+          zona: f.zona?.nombre || '',
+          total_cobrado: f.total_cobrado || total,
+        });
+
         await db.execute({
           sql: `
             INSERT INTO wisphub_invoices (
               id_factura, id_servicio, folio, cliente_nombre, cliente_usuario, cliente_telefono,
               total, sub_total, descuento, estado, fecha_emision, fecha_vencimiento, fecha_pago,
-              descripcion, link_pago, pdf_url, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              descripcion, link_pago, pdf_url, raw_data, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id_factura) DO UPDATE SET
               id_servicio = excluded.id_servicio,
               folio = excluded.folio,
@@ -1218,12 +1225,13 @@ export class WispHubService {
               descripcion = excluded.descripcion,
               link_pago = excluded.link_pago,
               pdf_url = excluded.pdf_url,
+              raw_data = excluded.raw_data,
               updated_at = excluded.updated_at
           `,
           args: [
             idFactura, idServicio, folio, clienteNombre, clienteUsuario, clienteTel,
             total, subTotal, descuento, estado, fechaEmision, fechaVencimiento, fechaPago,
-            descripcion, linkPago, pdfUrl, now
+            descripcion, linkPago, pdfUrl, rawData, now
           ],
         });
         saved++;
@@ -1288,11 +1296,11 @@ export class WispHubService {
     const db = getDbClient();
     const cleanId = Number(idServicio);
 
-    // 1. Buscar en tabla local por id_servicio
+    // 1. Buscar en tabla local por id_servicio (sin limitar para entregar el historial completo de pagos)
     let rows: any[] = [];
     if (!isNaN(cleanId) && cleanId > 0) {
       const res = await db.execute({
-        sql: `SELECT * FROM wisphub_invoices WHERE id_servicio = ? ORDER BY fecha_emision DESC, id_factura DESC LIMIT 20`,
+        sql: `SELECT * FROM wisphub_invoices WHERE id_servicio = ? ORDER BY fecha_emision DESC, id_factura DESC`,
         args: [cleanId],
       });
       rows = res.rows as any[];
@@ -1304,7 +1312,7 @@ export class WispHubService {
       const rawUser = options.usuario.toLowerCase().trim();
       if (uPrefix) {
         const res = await db.execute({
-          sql: `SELECT * FROM wisphub_invoices WHERE LOWER(cliente_usuario) = ? OR LOWER(cliente_usuario) LIKE ? OR cliente_usuario LIKE ? ORDER BY fecha_emision DESC, id_factura DESC LIMIT 20`,
+          sql: `SELECT * FROM wisphub_invoices WHERE LOWER(cliente_usuario) = ? OR LOWER(cliente_usuario) LIKE ? OR cliente_usuario LIKE ? ORDER BY fecha_emision DESC, id_factura DESC`,
           args: [rawUser, `${rawUser}%`, `${uPrefix}-%`],
         });
         rows = res.rows as any[];
@@ -1318,7 +1326,7 @@ export class WispHubService {
 
       if (!isNaN(cleanId) && cleanId > 0) {
         const res2 = await db.execute({
-          sql: `SELECT * FROM wisphub_invoices WHERE id_servicio = ? ORDER BY fecha_emision DESC, id_factura DESC LIMIT 20`,
+          sql: `SELECT * FROM wisphub_invoices WHERE id_servicio = ? ORDER BY fecha_emision DESC, id_factura DESC`,
           args: [cleanId],
         });
         rows = res2.rows as any[];
@@ -1328,7 +1336,7 @@ export class WispHubService {
         const rawUser = options.usuario.toLowerCase().trim();
         if (uPrefix) {
           const res2 = await db.execute({
-            sql: `SELECT * FROM wisphub_invoices WHERE LOWER(cliente_usuario) = ? OR LOWER(cliente_usuario) LIKE ? OR cliente_usuario LIKE ? ORDER BY fecha_emision DESC, id_factura DESC LIMIT 20`,
+            sql: `SELECT * FROM wisphub_invoices WHERE LOWER(cliente_usuario) = ? OR LOWER(cliente_usuario) LIKE ? OR cliente_usuario LIKE ? ORDER BY fecha_emision DESC, id_factura DESC`,
             args: [rawUser, `${rawUser}%`, `${uPrefix}-%`],
           });
           rows = res2.rows as any[];

@@ -1173,6 +1173,8 @@ self.addEventListener('fetch', (event) => {
             estado = 'Pagada';
           }
           const isPaid = String(estado || '').toLowerCase().includes('pagad');
+          let extra: any = {};
+          try { extra = JSON.parse(f.raw_data || '{}'); } catch (_) {}
           return {
             id: f.id_factura || f.id || client.id_servicio,
             folio: f.folio || `FAC-${f.id_factura || client.id_servicio}`,
@@ -1181,6 +1183,8 @@ self.addEventListener('fetch', (event) => {
             fecha_emision: f.fecha_emision || new Date().toISOString().slice(0, 10),
             fecha_vencimiento: f.fecha_vencimiento || client.fecha_corte || 'Próximo corte',
             fecha_pago: f.fecha_pago || (isPaid ? (f.fecha_emision || new Date().toISOString().slice(0, 10)) : null),
+            forma_pago: extra.forma_pago || f.forma_pago || 'Efectivo',
+            cajero: extra.cajero || f.cajero || '',
             descripcion: f.descripcion || '',
             link_pago: f.link_pago || (f.id_factura ? `https://wisphub.net/factura/${f.id_factura}/` : null),
             pdf_url: `/api/portal/invoice/${f.id_factura || f.id || client.id_servicio}/receipt`,
