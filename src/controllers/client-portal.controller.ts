@@ -1053,8 +1053,9 @@ self.addEventListener('fetch', (event) => {
 
       const wifi = wifiInfo;
 
-      // 5. Verificar si el cliente ya tiene contraseña registrada para su número de acceso
-      const targetPhone10 = (verifiedPhone || client.telefono || '').replace(/\D/g, '').slice(-10);
+      // 5. Verificar si el cliente ya tiene contraseña registrada para su número de acceso (priorizando nuestra BD / enlace)
+      const queryPhone = ((req.query.p as string) || (req.query.phone as string) || (req.query.id as string) || '').replace(/\D/g, '').slice(-10);
+      const targetPhone10 = (verifiedPhone || queryPhone || client.telefono || '').replace(/\D/g, '').slice(-10);
       let hasPassword = false;
       let tokenVer = 1;
 
@@ -1069,9 +1070,9 @@ self.addEventListener('fetch', (event) => {
         }
       }
 
-      // Generar token permanente e indestructible para auto-autenticación
+      // Generar token permanente e indestructible para auto-autenticación usando el número de acceso del cliente
       const serviceIds = services.map((s: any) => s.id_servicio);
-      const sessionToken = generateClientPortalToken(verifiedPhone || client.telefono || '', client.nombre, serviceIds, tokenVer);
+      const sessionToken = generateClientPortalToken(targetPhone10, client.nombre, serviceIds, tokenVer);
 
       res.json({
         success: true,
@@ -1081,7 +1082,8 @@ self.addEventListener('fetch', (event) => {
           id_servicio: client.id_servicio,
           nombre: client.nombre,
           smartolt_name: onuRecord?.name || client.nombre,
-          telefono: client.telefono,
+          telefono: targetPhone10,
+          telefono_wisphub: client.telefono,
           direccion: client.direccion || onuRecord?.zone_name,
           ip: client.ip || onuRecord?.ip_address,
           router: client.router,

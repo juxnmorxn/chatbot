@@ -2313,10 +2313,13 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
       }
 
       try {
+        const urlP = new URLSearchParams(window.location.search).get('p') || new URLSearchParams(window.location.search).get('phone') || '';
+        const cleanUrlP = urlP.replace(/\D/g, '').slice(-10);
+        const savePhone = (cleanUrlP || currentPhone || localStorage.getItem('cp_phone') || '').replace(/\D/g, '').slice(-10);
         const res = await fetch('/api/portal/auth/register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phone: currentPhone, password: pass })
+          body: JSON.stringify({ phone: savePhone, password: pass })
         });
         const d = await res.json();
         if (d.success) {
@@ -2391,9 +2394,12 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
           localStorage.setItem('cp_token', data.token);
           currentToken = data.token;
         }
-        if (data.client && data.client.telefono) {
-          localStorage.setItem('cp_phone', data.client.telefono);
-          currentPhone = data.client.telefono;
+        const urlParamsNow = new URLSearchParams(window.location.search);
+        const cleanPNow = (urlParamsNow.get('p') || urlParamsNow.get('phone') || '').replace(/\D/g, '').slice(-10);
+        const activeClientPhone = cleanPNow || targetPhone || (data.client && data.client.telefono) || '';
+        if (activeClientPhone) {
+          currentPhone = activeClientPhone.replace(/\D/g, '').slice(-10);
+          localStorage.setItem('cp_phone', currentPhone);
         }
 
         // Guardar en caché local para persistencia 100% offline
@@ -2460,7 +2466,13 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
       const c = data.client;
       currentContractId = String(c.id_servicio);
       currentServices = data.relatedServices || [];
-      currentPhone = c.telefono || currentPhone;
+      const urlPNow = new URLSearchParams(window.location.search).get('p') || new URLSearchParams(window.location.search).get('phone') || '';
+      const cleanUrlPNow = urlPNow.replace(/\D/g, '').slice(-10);
+      const activeDisplayPhone = cleanUrlPNow || currentPhone || (c.telefono || '').replace(/\D/g, '').slice(-10);
+      if (activeDisplayPhone) {
+        currentPhone = activeDisplayPhone.replace(/\D/g, '').slice(-10);
+        localStorage.setItem('cp_phone', currentPhone);
+      }
 
       // Header Saludo y Perfil Ejecutivo del Titular
       const rawTitular = data.onu?.name || c.smartolt_name || c.nombre || 'Cliente';
@@ -2477,7 +2489,7 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
       if (heroFolioEl) heroFolioEl.innerText = '#' + c.id_servicio;
 
       const heroPhoneEl = document.getElementById('titularHeroPhone');
-      if (heroPhoneEl) heroPhoneEl.innerText = c.telefono || currentPhone || 'Registrado';
+      if (heroPhoneEl) heroPhoneEl.innerText = currentPhone || 'Registrado';
 
       // 2. Tarjeta de Paquete
       document.getElementById('titularName').innerText = cleanTitular;
@@ -3041,7 +3053,13 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
 
     function openCreatePasswordModal(phone, isManual = false) {
       isCreatePassMandatory = !isManual;
-      const targetP = (phone || currentPhone || localStorage.getItem('cp_phone') || '').replace(/\D/g, '').slice(-10);
+      const urlP = new URLSearchParams(window.location.search).get('p') || new URLSearchParams(window.location.search).get('phone') || '';
+      const cleanUrlP = urlP.replace(/\D/g, '').slice(-10);
+      const targetP = (cleanUrlP || phone || currentPhone || localStorage.getItem('cp_phone') || '').replace(/\D/g, '').slice(-10);
+      if (targetP) {
+        currentPhone = targetP;
+        localStorage.setItem('cp_phone', targetP);
+      }
       const displayEl = document.getElementById('modalCreatePassPhoneDisplay');
       if (displayEl) displayEl.innerText = targetP || 'Tu celular';
       const inputPass = document.getElementById('modalCreatePassInput');
@@ -3095,7 +3113,9 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
         submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando...';
       }
 
-      const phone = (currentPhone || localStorage.getItem('cp_phone') || '').replace(/\D/g, '').slice(-10);
+      const urlP = new URLSearchParams(window.location.search).get('p') || new URLSearchParams(window.location.search).get('phone') || '';
+      const cleanUrlP = urlP.replace(/\D/g, '').slice(-10);
+      const phone = (cleanUrlP || currentPhone || localStorage.getItem('cp_phone') || '').replace(/\D/g, '').slice(-10);
 
       try {
         const res = await fetch('/api/portal/auth/register', {
