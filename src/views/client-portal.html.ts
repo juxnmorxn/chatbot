@@ -189,7 +189,7 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
         display: grid !important;
         grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
         gap: 18px;
-        align-items: stretch;
+        align-items: start;
       }
 
       .card-billing-box {
@@ -217,11 +217,10 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
         display: grid !important;
         grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
         gap: 22px;
-        align-items: stretch;
+        align-items: start;
       }
 
       .card-plan-box, .card-wifi-box, .card-billing-box {
-        height: 100%;
         display: flex;
         flex-direction: column;
       }
@@ -312,9 +311,9 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
       gap: 5px;
       font-size: 11px;
       font-weight: 700;
-      color: #38bdf8;
-      background: rgba(14, 165, 233, 0.15);
-      border: 1px solid rgba(56, 189, 248, 0.3);
+      color: var(--primary);
+      background: rgba(2, 132, 199, 0.12);
+      border: 1px solid rgba(2, 132, 199, 0.25);
       padding: 2px 8px;
       border-radius: 999px;
       text-transform: uppercase;
@@ -326,9 +325,9 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
       align-items: center;
       font-size: 11px;
       font-weight: 700;
-      color: #10b981;
-      background: rgba(16, 185, 129, 0.12);
-      border: 1px solid rgba(16, 185, 129, 0.3);
+      color: var(--success);
+      background: var(--success-bg);
+      border: 1px solid rgba(16, 185, 129, 0.25);
       padding: 2px 8px;
       border-radius: 999px;
     }
@@ -1103,10 +1102,12 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
       inset: 0;
       background: rgba(0, 0, 0, 0.75);
       backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
       z-index: 100;
       align-items: center;
       justify-content: center;
       padding: 16px;
+      transition: opacity 0.2s ease;
     }
 
     .modal-sheet {
@@ -1114,13 +1115,27 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
       color: var(--modal-text);
       border: 1px solid var(--border-highlight);
       border-radius: var(--radius-lg);
-      padding: 22px 18px;
+      padding: 18px 18px 22px 18px;
       max-width: 420px;
       width: 100%;
+      max-height: 90vh;
+      overflow-y: auto;
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      gap: 14px;
       box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+      touch-action: pan-y;
+      transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease;
+      position: relative;
+    }
+
+    .modal-drag-bar {
+      width: 36px;
+      height: 4px;
+      border-radius: 999px;
+      background: rgba(148, 163, 184, 0.4);
+      margin: 0 auto 2px auto;
+      display: block;
     }
 
     .modal-sheet-header {
@@ -1383,12 +1398,12 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
             <div class="titular-sub-meta">
               <span><i class="fa-solid fa-phone"></i> <span id="titularHeroPhone">Teléfono registrado</span></span>
               <span>•</span>
-              <span style="color: #10b981; font-weight: 600;"><i class="fa-solid fa-circle" style="font-size: 8px;"></i> Servicio Activo</span>
+              <span style="color: var(--success); font-weight: 600;"><i class="fa-solid fa-circle" style="font-size: 8px;"></i> Servicio Activo</span>
             </div>
           </div>
         </div>
         <div class="titular-profile-right">
-          <button class="btn-outline" onclick="openModalBank()" style="padding: 10px 16px; font-size: 13px; border-color: rgba(14, 165, 233, 0.45); background: rgba(14, 165, 233, 0.12); color: #38bdf8; font-weight: 700;">
+          <button class="btn-outline" onclick="openModalBank()" style="padding: 10px 16px; font-size: 13px; border-color: rgba(2, 132, 199, 0.35); background: rgba(2, 132, 199, 0.1); color: var(--primary); font-weight: 700;">
             <i class="fa-solid fa-building-columns"></i> Datos de Pago SPEI
           </button>
         </div>
@@ -1408,17 +1423,15 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
             </span>
           </div>
 
-          <!-- Énfasis en Nombre de Paquete y Velocidad Simétrica -->
-          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 4px 0 10px 0; padding-bottom: 12px; border-bottom: 1px solid var(--border-card);">
-            <div>
-              <div id="planNameBig" style="font-family: 'Outfit', sans-serif; font-size: 21px; font-weight: 800; color: var(--text-title); line-height: 1.15;">
+          <!-- Nombre de Paquete y Velocidad -->
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 6px 0 14px 0; padding-bottom: 14px; border-bottom: 1px solid var(--border-card);">
+            <div style="min-width: 0; flex: 1;">
+              <span style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 3px;">Plan Activo</span>
+              <div id="planNameBig" style="font-family: 'Outfit', sans-serif; font-size: 22px; font-weight: 800; color: var(--text-title); line-height: 1.2; word-break: break-word;">
                 Paquete 40 Megas
               </div>
-              <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px; display: flex; align-items: center; gap: 6px;">
-                <i class="fa-solid fa-network-wired" style="color: #0284c7;"></i> Fibra Óptica Simétrica
-              </div>
             </div>
-            <div style="text-align: right; background: rgba(14, 165, 233, 0.1); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 12px; padding: 6px 12px; flex-shrink: 0;">
+            <div style="text-align: right; background: rgba(14, 165, 233, 0.1); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 12px; padding: 6px 14px; flex-shrink: 0;">
               <div id="planSpeedBig" style="font-family: 'Outfit', sans-serif; font-size: 26px; font-weight: 800; color: #0284c7; line-height: 1;">
                 40M
               </div>
@@ -1426,20 +1439,8 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
             </div>
           </div>
 
-          <!-- Estado de Conexión en Vivo -->
-          <div class="status-banner-box" style="margin-top: 0; margin-bottom: 8px; background: var(--bg-surface); border: 1px solid var(--border-card); padding: 12px 14px;">
-            <div class="status-left">
-              <div id="statusPulseDot" class="status-pulse-circle"></div>
-              <div>
-                <div id="statusFriendlyTitle" class="status-text-main" style="font-size: 13px;">Tu internet está funcionando al 100%</div>
-                <div id="statusFriendlySub" class="status-text-sub" style="font-size: 11.5px;">Señal excelente y óptima en tu domicilio</div>
-              </div>
-            </div>
-          </div>
-
           <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11.5px; color: var(--text-muted); margin-top: auto; padding-top: 10px; border-top: 1px solid var(--border-card);">
-            <span><i class="fa-solid fa-server" style="color: #0284c7;"></i> Fibra FTTH Activa</span>
-            <span>Folio: <strong id="contractFolio" style="color: #38bdf8;">#-</strong></span>
+            <span>Folio Contrato: <strong id="contractFolio" style="color: #0284c7;">#-</strong></span>
             <span id="titularName" style="display: none;">-</span>
           </div>
         </div>
@@ -1534,7 +1535,7 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
               <span><i class="fa-solid fa-clock-rotate-left" style="color: #0284c7; margin-right: 4px;"></i> Historial de Pagos</span>
               <span id="invoicesTotalCountBadge" style="font-size: 10px; background: rgba(56, 189, 248, 0.12); color: #38bdf8; padding: 2px 8px; border-radius: 999px; font-weight: 700; border: 1px solid rgba(56, 189, 248, 0.25);"></span>
             </div>
-            <div id="invoicesList" style="max-height: 460px; overflow-y: auto; padding-right: 4px; display: flex; flex-direction: column; gap: 8px;">
+            <div id="invoicesList" style="max-height: 320px; overflow-y: auto; padding-right: 4px; display: flex; flex-direction: column; gap: 8px;">
               <div style="text-align: center; color: var(--text-muted); font-size: 12.5px; padding: 10px;">Consultando facturas...</div>
             </div>
           </div>
@@ -1772,17 +1773,17 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
         </div>
 
         <!-- Tarjeta: Concepto (Nombre del Titular de la Cuenta) -->
-        <div style="background: rgba(16, 185, 129, 0.08); border: 1.5px solid rgba(16, 185, 129, 0.4); padding: 12px 14px; border-radius: var(--radius-md);">
+        <div style="background: rgba(14, 165, 233, 0.08); border: 1.5px solid rgba(14, 165, 233, 0.35); padding: 12px 14px; border-radius: var(--radius-md);">
           <div style="margin-bottom: 6px;">
-            <span style="font-size: 11px; color: #10b981; font-weight: 800; text-transform: uppercase; letter-spacing: 0.3px;">
+            <span style="font-size: 11px; color: #0284c7; font-weight: 800; text-transform: uppercase; letter-spacing: 0.3px;">
               <i class="fa-solid fa-pen-to-square"></i> En concepto escribe el nombre del titular de la cuenta:
             </span>
           </div>
           <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
-            <div id="bankConceptText" style="font-family: 'Outfit', sans-serif; font-size: 15px; font-weight: 800; color: #10b981; line-height: 1.3;">
+            <div id="bankConceptText" style="font-family: 'Outfit', sans-serif; font-size: 15px; font-weight: 800; color: var(--text-title); line-height: 1.3;">
               Cargando...
             </div>
-            <button class="btn-outline" onclick="copyBankConcept()" style="width: auto; padding: 4px 10px; font-size: 11px; height: 28px; flex-shrink: 0; color: #10b981; border-color: rgba(16, 185, 129, 0.4);">
+            <button class="btn-outline" onclick="copyBankConcept()" style="width: auto; padding: 4px 10px; font-size: 11px; height: 28px; flex-shrink: 0; color: #0284c7; border-color: rgba(14, 165, 233, 0.4);">
               <i class="fa-solid fa-copy"></i> Copiar
             </button>
           </div>
@@ -1790,10 +1791,10 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
         </div>
 
         <!-- Tarjeta: Instrucción de Reenviar Comprobante / Captura al WhatsApp de Oficina -->
-        <div style="background: rgba(37, 211, 102, 0.08); border: 1.5px solid rgba(37, 211, 102, 0.35); padding: 13px 14px; border-radius: var(--radius-md);">
+        <div style="background: var(--bg-surface); border: 1.5px solid rgba(16, 185, 129, 0.35); padding: 13px 14px; border-radius: var(--radius-md);">
           <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
-            <i class="fa-brands fa-whatsapp" style="font-size: 20px; color: #25d366;"></i>
-            <span style="font-weight: 800; font-size: 13px; color: #ffffff;">
+            <i class="fa-brands fa-whatsapp" style="font-size: 20px; color: var(--success);"></i>
+            <span style="font-weight: 800; font-size: 13px; color: var(--text-title);">
               Confirmar Pago por WhatsApp:
             </span>
           </div>
@@ -1802,33 +1803,24 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
           </div>
 
           <!-- Caja con el número visible y botón copiar -->
-          <div style="background: rgba(0, 0, 0, 0.25); border: 1px dashed rgba(37, 211, 102, 0.35); padding: 8px 12px; border-radius: 8px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
+          <div style="background: var(--bg-card); border: 1px dashed rgba(16, 185, 129, 0.4); padding: 8px 12px; border-radius: 8px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
             <div>
               <span style="font-size: 10px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; display: block;">WhatsApp Oficina:</span>
-              <span id="bankOfficePhoneDisplay" style="color: #25d366; font-size: 14.5px; font-weight: 800; font-family: monospace; letter-spacing: 0.5px;">${officePhone}</span>
+              <span id="bankOfficePhoneDisplay" style="color: var(--success); font-size: 14.5px; font-weight: 800; font-family: monospace; letter-spacing: 0.5px;">${officePhone}</span>
               <span id="bankOfficePhoneText" style="display: none;">${officePhone}</span>
             </div>
-            <button type="button" class="btn-outline" onclick="copyOfficePhone()" style="width: auto; padding: 4px 10px; font-size: 11px; height: 28px; color: #25d366; border-color: rgba(37, 211, 102, 0.4);">
+            <button type="button" class="btn-outline" onclick="copyOfficePhone()" style="width: auto; padding: 4px 10px; font-size: 11px; height: 28px; color: var(--success); border-color: rgba(16, 185, 129, 0.4);">
               <i class="fa-solid fa-copy"></i> Copiar
             </button>
           </div>
 
           <!-- Botón de apertura directa hacia WhatsApp -->
-          <a id="btnOfficePaymentWa" href="https://wa.me/52${officePhone}" target="_blank" rel="noopener noreferrer" style="display: flex; align-items: center; justify-content: center; gap: 8px; background: #25d366; color: #042f1a; font-weight: 800; font-size: 13px; padding: 11px 16px; border-radius: 9px; text-decoration: none; width: 100%; box-sizing: border-box; box-shadow: 0 4px 14px rgba(37, 211, 102, 0.25);">
+          <a id="btnOfficePaymentWa" href="https://wa.me/52${officePhone}" target="_blank" rel="noopener noreferrer" style="display: flex; align-items: center; justify-content: center; gap: 8px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: #ffffff; font-weight: 800; font-size: 13px; padding: 11px 16px; border-radius: 9px; text-decoration: none; width: 100%; box-sizing: border-box; box-shadow: 0 4px 14px rgba(16, 185, 129, 0.25);">
             <i class="fa-brands fa-whatsapp" style="font-size: 18px;"></i>
             <span>Mandar Captura y Nombre por WhatsApp</span>
           </a>
         </div>
 
-      </div>
-
-      <div style="display: flex; gap: 8px; margin-top: 12px;">
-        <button class="btn-main" onclick="copyClabe()" style="flex: 1;">
-          <i class="fa-solid fa-copy"></i> Copiar CLABE Interbancaria
-        </button>
-        <button class="btn-outline" onclick="closeModal('modalBank')" style="width: auto; padding: 10px 18px;">
-          Cerrar
-        </button>
       </div>
     </div>
   </div>
@@ -2600,24 +2592,26 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
         multiBox.classList.add('hidden');
       }
 
-      // Estado Amigable (Cero dBm o tecnicismos)
+      // Estado de Conexión (si existe el contenedor)
       const dot = document.getElementById('statusPulseDot');
       const title = document.getElementById('statusFriendlyTitle');
       const sub = document.getElementById('statusFriendlySub');
       const sig = data.signal || {};
 
-      if (sig.status === 'ONLINE' || c.estado === 'activo') {
-        dot.className = 'status-pulse-circle';
-        title.innerText = 'Tu internet está funcionando al 100%';
-        sub.innerText = 'Señal excelente y estable';
-      } else if (sig.status === 'LOS' || sig.status === 'OFFLINE') {
-        dot.className = 'status-pulse-circle red';
-        title.innerText = 'Módem sin señal de fibra';
-        sub.innerText = 'Verifica que el cable amarillo esté bien conectado';
-      } else {
-        dot.className = 'status-pulse-circle yellow';
-        title.innerText = 'Módem sincronizando conexión';
-        sub.innerText = 'Revisa tu equipo';
+      if (dot && title && sub) {
+        if (sig.status === 'ONLINE' || c.estado === 'activo') {
+          dot.className = 'status-pulse-circle';
+          title.innerText = 'Tu internet está funcionando al 100%';
+          sub.innerText = 'Señal excelente y estable';
+        } else if (sig.status === 'LOS' || sig.status === 'OFFLINE') {
+          dot.className = 'status-pulse-circle red';
+          title.innerText = 'Módem sin señal de fibra';
+          sub.innerText = 'Verifica que el cable amarillo esté bien conectado';
+        } else {
+          dot.className = 'status-pulse-circle yellow';
+          title.innerText = 'Módem sincronizando conexión';
+          sub.innerText = 'Revisa tu equipo';
+        }
       }
 
       // Wi-Fi Real Dual Band Simplificado (Una Sola Contraseña Compartida)
@@ -2744,11 +2738,7 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
               ? ('Pagada el ' + (fechaPagoStr || inv.fecha_emision || 'Reciente'))
               : ('Vence el ' + (vence || 'Próximo corte'));
 
-            const cajeroPart = inv.cajero ? ('<span style="display:inline-flex; align-items:center; gap:4px;"><i class="fa-solid fa-user-tie" style="font-size:10px; color:#38bdf8;"></i> Cajero: ' + inv.cajero + '</span>') : '';
-            const formaPart = inv.forma_pago ? ('<span style="display:inline-flex; align-items:center; gap:4px;"><i class="fa-solid fa-money-bill-wave" style="font-size:10px; color:#10b981;"></i> ' + inv.forma_pago + '</span>') : '';
-            const metaParts = [cajeroPart, formaPart].filter(Boolean).join('<span style="opacity:0.4;"> · </span>');
-
-            const receiptBtn = inv.pdf_url ? '<a href="' + inv.pdf_url + '" target="_blank" style="font-size:11px; color:#38bdf8; text-decoration:none; display:inline-flex; align-items:center; gap:4px; font-weight:600; padding:3px 8px; border-radius:6px; background:rgba(56,189,248,0.08); border:1px solid rgba(56,189,248,0.2);"><i class="fa-solid fa-file-arrow-down"></i> Recibo</a>' : '';
+            const receiptBtn = inv.pdf_url ? '<a href="' + inv.pdf_url + '" target="_blank" style="font-size:11px; color:#0284c7; text-decoration:none; display:inline-flex; align-items:center; gap:4px; font-weight:600; padding:3px 8px; border-radius:6px; background:rgba(2,132,199,0.08); border:1px solid rgba(2,132,199,0.25);"><i class="fa-solid fa-file-arrow-down"></i> Recibo</a>' : '';
 
             return '<div style="background:var(--bg-surface); border:1px solid var(--border-card); border-radius:var(--radius-md); padding:11px 13px; display:flex; flex-direction:column; gap:7px;">' +
               '<div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">' +
@@ -2762,10 +2752,9 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
                   '<span style="font-weight:800; font-size:15.5px; color:var(--text-title); display:block;">$' + Number(inv.monto || 0).toFixed(2) + '</span>' +
                 '</div>' +
               '</div>' +
-              (metaParts ? ('<div style="font-size:11px; color:var(--text-muted); display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:3px 0 1px;">' + metaParts + '</div>') : '') +
-              '<div style="display:flex; align-items:center; justify-content:space-between; gap:8px; padding-top:6px; border-top:1px solid rgba(255,255,255,0.06);">' +
+              '<div style="display:flex; align-items:center; justify-content:space-between; gap:8px; padding-top:6px; border-top:1px solid var(--border-card);">' +
                 '<span class="badge-status ' + statusClass + '" style="font-size:10.5px; padding:2px 7px;"><i class="fa-solid ' + (isPaid ? 'fa-circle-check' : 'fa-clock') + '"></i> ' + statusText + '</span>' +
-                (payBtn || receiptBtn || '<span style="font-size:11px; color:var(--text-muted);"><i class="fa-solid fa-circle-check" style="color:#10b981;"></i> Liquidado</span>') +
+                (payBtn || receiptBtn || '<span style="font-size:11px; color:var(--text-muted);"><i class="fa-solid fa-circle-check" style="color:var(--success);"></i> Liquidado</span>') +
               '</div>' +
             '</div>';
           }).join('');
@@ -2904,7 +2893,7 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
       const sBox = document.getElementById('passStrengthBox');
       if (sBox) sBox.style.display = 'none';
 
-      document.getElementById('modalWifi').style.display = 'flex';
+      openModalWithState('modalWifi');
     }
 
     function generateSecureRandomWifiPass() {
@@ -3039,7 +3028,7 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
         colorLight: "#ffffff",
         correctLevel: QRCode.CorrectLevel.H
       });
-      document.getElementById('modalQr').style.display = 'flex';
+      openModalWithState('modalQr');
     }
 
     function toggleQrBand() {
@@ -3052,7 +3041,7 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
         applyBankDetails(cachedBankDetails, titular, currentContractId);
       }
       fetchFreshBankDetails();
-      document.getElementById('modalBank').style.display = 'flex';
+      openModalWithState('modalBank');
     }
 
     async function fetchFreshBankDetails() {
@@ -3105,8 +3094,7 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
         if (subEl) subEl.innerText = 'Configura tu contraseña para entrar a tu portal desde cualquier celular, computadora o tablet sin depender de WhatsApp.';
       }
 
-      const modalEl = document.getElementById('modalCreatePassword');
-      if (modalEl) modalEl.style.display = 'flex';
+      openModalWithState('modalCreatePassword');
     }
 
     async function handleSaveCreatePassword(e) {
@@ -3159,8 +3147,7 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
           // Desplegar modal de confirmación con datos de acceso
           const succPhone = document.getElementById('successModalPhoneDisplay');
           if (succPhone) succPhone.innerText = phone;
-          const succModal = document.getElementById('modalPasswordSuccess');
-          if (succModal) succModal.style.display = 'flex';
+          openModalWithState('modalPasswordSuccess');
         } else {
           errBox.innerText = d.message || 'Error al guardar la contraseña.';
           errBox.style.display = 'block';
@@ -3176,14 +3163,100 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
       }
     }
 
-    function closeModal(id) {
+    let activeModalId = null;
+
+    function openModalWithState(id) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.style.display = 'flex';
+      activeModalId = id;
+      try {
+        window.history.pushState({ modalOpen: id }, '');
+      } catch {}
+    }
+
+    function closeModal(id, fromPopState = false) {
       if (id === 'modalCreatePassword' && isCreatePassMandatory) {
         showToast('Debes crear tu contraseña para continuar');
         return;
       }
       const el = document.getElementById(id);
       if (el) el.style.display = 'none';
+      if (activeModalId === id) {
+        activeModalId = null;
+      }
+      if (!fromPopState) {
+        try {
+          if (window.history.state && window.history.state.modalOpen === id) {
+            window.history.back();
+          }
+        } catch {}
+      }
     }
+
+    // Navegación táctil hacia atrás (gesto de retroceso de Android / iOS / botón Volver)
+    window.addEventListener('popstate', (e) => {
+      const modals = document.querySelectorAll('.modal-overlay');
+      modals.forEach(m => {
+        if (m.style.display === 'flex') {
+          closeModal(m.id, true);
+        }
+      });
+    });
+
+    // Cerrar al pulsar el fondo oscuro del modal
+    document.querySelectorAll('.modal-overlay').forEach(overlay => {
+      overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) {
+          closeModal(overlay.id);
+        }
+      });
+    });
+
+    // Gestos táctiles de deslizamiento hacia abajo para cerrar modal en móvil
+    document.querySelectorAll('.modal-sheet').forEach(sheet => {
+      let touchStartY = 0;
+      let touchCurrentY = 0;
+      let isDragging = false;
+
+      sheet.addEventListener('touchstart', (e) => {
+        if (sheet.scrollTop <= 0) {
+          touchStartY = e.touches[0].clientY;
+          isDragging = true;
+        }
+      }, { passive: true });
+
+      sheet.addEventListener('touchmove', (e) => {
+        if (!isDragging) return;
+        touchCurrentY = e.touches[0].clientY;
+        const diff = touchCurrentY - touchStartY;
+        if (diff > 0 && sheet.scrollTop <= 0) {
+          sheet.style.transform = 'translateY(' + Math.min(diff * 0.7, 180) + 'px)';
+          sheet.style.opacity = String(Math.max(1 - (diff / 280), 0.5));
+        }
+      }, { passive: true });
+
+      sheet.addEventListener('touchend', () => {
+        if (!isDragging) return;
+        isDragging = false;
+        const diff = touchCurrentY - touchStartY;
+        const parentModal = sheet.closest('.modal-overlay');
+        if (diff > 90 && sheet.scrollTop <= 0 && parentModal) {
+          sheet.style.transform = 'translateY(100%)';
+          sheet.style.opacity = '0';
+          setTimeout(() => {
+            sheet.style.transform = '';
+            sheet.style.opacity = '';
+            closeModal(parentModal.id);
+          }, 180);
+        } else {
+          sheet.style.transform = '';
+          sheet.style.opacity = '';
+        }
+        touchStartY = 0;
+        touchCurrentY = 0;
+      }, { passive: true });
+    });
 
     async function handleSaveWifi(e) {
       e.preventDefault();
@@ -3229,7 +3302,7 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
 
           // Mostrar modal con la nueva contraseña y el QR 5G
           document.getElementById('postWifiNewPassLabel').innerText = password;
-          document.getElementById('modalPostWifiSuccess').style.display = 'flex';
+          openModalWithState('modalPostWifiSuccess');
 
           showToast('✅ ¡Contraseña guardada en tu módem!');
         } else {
