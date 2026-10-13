@@ -649,33 +649,6 @@ export class BotOrchestrator {
       session = await DbService.getSession(phone);
     }
 
-    // Comandos directos de WhatsApp para alternar modo staff / modo cliente (pruebas)
-    if (isConfiguredStaffPhone && (lowerMsg === 'modo cliente' || lowerMsg === 'modo pruebas' || lowerMsg === 'modo cliente pruebas')) {
-      metaObjStaff.staff_mode = false;
-      await DbService.upsertSession({ phone, metadata: JSON.stringify(metaObjStaff) });
-      await this.enviarYLoguear(
-        phone,
-        `🧪 *Modo Cliente (Pruebas) Activado*\n\nTu número ahora se comporta exactamente como el de un cliente común.\n\nPuedes saludar ("Hola") o dar tu nombre/contrato para probar el flujo de atención y recibir tu acceso al Portal Web.\n\n_Para volver a modo administración, escribe: *modo staff*._`,
-        'STAFF',
-        'MODO_CLIENTE_ACTIVADO',
-        targetJid
-      );
-      return;
-    }
-
-    if (isConfiguredStaffPhone && (lowerMsg === 'modo staff' || lowerMsg === 'modo admin')) {
-      metaObjStaff.staff_mode = true;
-      await DbService.upsertSession({ phone, metadata: JSON.stringify(metaObjStaff) });
-      await this.enviarYLoguear(
-        phone,
-        `🛡️ *Modo Staff Activado (Full Staff)*\n\nTu número ahora tiene permisos completos de administración y soporte técnico. La protección anti-secuestro de cliente está activa.`,
-        'STAFF',
-        'MODO_STAFF_ACTIVADO',
-        targetJid
-      );
-      return;
-    }
-
     if (esStaffAdmin && (lowerMsg === 'reiniciar' || lowerMsg === 'reset' || lowerMsg === 'desvincular')) {
       await DbService.unlinkClientFromSession(phone);
       await this.enviarYLoguear(
@@ -5520,6 +5493,13 @@ export class BotOrchestrator {
     if (sessionAnteriorMeta && typeof sessionAnteriorMeta === 'object') {
       meta = { ...sessionAnteriorMeta, ...meta };
     }
+
+    // Vincular este teléfono al cliente en NUESTRA Base de Datos Local (soporte multi-teléfono y cambio de número sin alterar WispHub remoto)
+    await DbService.linkClientPhoneInLocalDb(
+      phone,
+      session.client_name || undefined,
+      session.service_id || meta.wisphub_id
+    );
 
     const nombreLimpio = formatDisplayName(session.client_name, true) || 'Cliente';
     const planTexto = meta.speed_profile ? `\n📦 *Plan:* ${meta.speed_profile}` : '';

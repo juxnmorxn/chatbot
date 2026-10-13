@@ -254,12 +254,13 @@ export class AdminController {
       const phone10 = cleanPhoneDigits.slice(-10);
       const soportePhone10 = SettingsService.get('SOPORTE_HUMANO_PHONE', '').replace(/\D/g, '').slice(-10);
       const officePhone10 = SettingsService.get('PAYMENT_OFFICE_PHONE', '').replace(/\D/g, '').slice(-10);
-      const isStaffConfigured = Boolean((soportePhone10 && phone10 === soportePhone10) || (officePhone10 && phone10 === officePhone10));
+      const isTech = phone10 ? Boolean(await DbService.isAuthorizedTechnician(phone10).catch(() => null)) : false;
+      const isStaffOrTech = isStaffConfigured || isTech;
 
       let metaObj: any = {};
       try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
       const staffProtectionGlobal = SettingsService.get('STAFF_PROTECTION_ENABLED', 'true') !== 'false';
-      const isStaffActive = metaObj.staff_mode !== undefined ? Boolean(metaObj.staff_mode) : (isStaffConfigured && staffProtectionGlobal);
+      const isStaffActive = metaObj.staff_mode !== undefined ? Boolean(metaObj.staff_mode) : (isStaffOrTech && staffProtectionGlobal);
 
       res.json({
         success: true,
@@ -267,7 +268,7 @@ export class AdminController {
         session,
         is_paused: isPaused.pausado,
         takeover: isPaused,
-        is_staff_phone: isStaffConfigured,
+        is_staff_phone: isStaffOrTech,
         is_staff_active: isStaffActive,
       });
     } catch (error: any) {
@@ -676,27 +677,48 @@ export class AdminController {
    */
   static async toggleStaffMode(req: Request, res: Response): Promise<void> {
     try {
-      const phone = String(req.params.phone || req.body?.phone || req.query?.phone || '');
+      const rawPhone = String(req.params.phone || req.body?.phone || req.query?.phone || '');
+      const cleanDigits = rawPhone.replace(/\D/g, '');
+      const last10 = cleanDigits.length >= 10 ? cleanDigits.slice(-10) : cleanDigits;
       const enabled = req.body?.enabled !== undefined ? Boolean(req.body.enabled) : undefined;
-      const session = await DbService.getSession(phone);
+
+      const db = getDbClient();
+      const sessRes = await db.execute({
+        sql: `SELECT phone, metadata FROM sessions WHERE phone = ? OR phone LIKE ? ORDER BY last_interaction DESC LIMIT 1`,
+        args: [rawPhone, `%${last10}%`],
+      });
+
+      const targetPhone = sessRes.rows.length > 0 ? String(sessRes.rows[0].phone) : (rawPhone || last10);
+      const existingMetaStr = sessRes.rows.length > 0 ? String(sessRes.rows[0].metadata || '{}') : '{}';
+
       let meta: any = {};
-      try { meta = JSON.parse(session?.metadata || '{}'); } catch {}
+      try { meta = JSON.parse(existingMetaStr); } catch {}
 
       const newStaffMode = enabled !== undefined ? enabled : !(meta.staff_mode !== false);
       meta.staff_mode = newStaffMode;
 
       await DbService.upsertSession({
-        phone,
+        phone: targetPhone,
         metadata: JSON.stringify(meta),
       });
 
-      AdminController.broadcastSSE('chat:status', { phone, staff_mode: newStaffMode });
+      // Si también está registrado en la tabla de technicians, sincronizar su is_active
+      if (last10) {
+        try {
+          await db.execute({
+            sql: `UPDATE technicians SET is_active = ?, updated_at = datetime('now') WHERE phone LIKE ?`,
+            args: [newStaffMode ? 1 : 0, `%${last10}%`],
+          });
+        } catch (_) {}
+      }
+
+      AdminController.broadcastSSE('chat:status', { phone: targetPhone, staff_mode: newStaffMode });
       res.json({
         success: true,
         staff_mode: newStaffMode,
         message: newStaffMode
-          ? `Modo Staff activado (Full Staff) para ${phone}.`
-          : `Modo Cliente (Pruebas) activado para ${phone}. Ahora opera 100% como cliente de pruebas.`,
+          ? `Modo Staff activado (Full Staff) para ${targetPhone}.`
+          : `Modo Cliente (Pruebas) activado para ${targetPhone}. Ahora opera como cliente de pruebas.`,
       });
     } catch (error: any) {
       res.status(500).json({ success: false, error: error?.message || error });

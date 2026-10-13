@@ -1010,6 +1010,96 @@ export class DbService {
   }
 
   /**
+   * Vincula un número telefónico (nuevo, cambiado o secundario) a un cliente en NUESTRA Base de Datos Local (SQLite).
+   * NO actualiza ni modifica WispHub remoto, preservando la información original en el CRM externo.
+   * Si el cliente ya tiene un teléfono principal, este nuevo número se agrega a 'telefonos_adicionales' en wisphub_clients.
+   * También asegura la cuenta en client_portal_accounts para acceso inmediato al Portal Web.
+   */
+  static async linkClientPhoneInLocalDb(
+    phone: string,
+    clientName?: string | null,
+    serviceId?: string | number | null
+  ): Promise<boolean> {
+    try {
+      const client = getDbClient();
+      const cleanPhone = (phone || '').replace(/\D/g, '');
+      const last10 = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
+      if (!last10 || last10.length < 10) return false;
+
+      const now = new Date().toISOString();
+
+      // 1. Asegurar en client_portal_accounts para el Portal Web
+      await this.ensurePortalAccount(last10, clientName || undefined);
+
+      // 2. Localizar el registro del cliente en wisphub_clients (Base de Datos Local)
+      let targetServiceId: number | null = null;
+      let targetRow: any = null;
+
+      if (serviceId) {
+        const rawId = String(serviceId).replace(/\D/g, '');
+        const numericId = rawId ? Number(rawId) : NaN;
+        if (!isNaN(numericId) && numericId > 0) {
+          const res = await client.execute({
+            sql: `SELECT id_servicio, telefono, telefonos_adicionales FROM wisphub_clients WHERE id_servicio = ? LIMIT 1`,
+            args: [numericId],
+          });
+          if (res.rows.length > 0) {
+            targetRow = res.rows[0];
+            targetServiceId = numericId;
+          }
+        }
+      }
+
+      if (!targetRow && clientName && clientName.trim().length >= 3) {
+        const cleanName = cleanPersonName(clientName);
+        const res = await client.execute({
+          sql: `SELECT id_servicio, telefono, telefonos_adicionales FROM wisphub_clients WHERE nombre LIKE ? OR nombre_normalized LIKE ? LIMIT 1`,
+          args: [`%${cleanName}%`, `%${normalizeText(cleanName)}%`],
+        });
+        if (res.rows.length > 0) {
+          targetRow = res.rows[0];
+          targetServiceId = Number(res.rows[0].id_servicio);
+        }
+      }
+
+      // 3. Vincular el número en wisphub_clients (localmente)
+      if (targetRow && targetServiceId) {
+        const mainPhone = String(targetRow.telefono || '').replace(/\D/g, '');
+        let extraPhones: string[] = [];
+        try {
+          if (targetRow.telefonos_adicionales) {
+            extraPhones = JSON.parse(String(targetRow.telefonos_adicionales));
+          }
+        } catch {
+          extraPhones = String(targetRow.telefonos_adicionales || '').split(',').map(s => s.trim().replace(/\D/g, '')).filter(Boolean);
+        }
+
+        if (!mainPhone || mainPhone.length < 10) {
+          // Si no tenía teléfono registrado en la BD local, asignarlo como principal
+          await client.execute({
+            sql: `UPDATE wisphub_clients SET telefono = ?, updated_at = ? WHERE id_servicio = ?`,
+            args: [last10, now, targetServiceId],
+          });
+          logger.info(`[Vínculo Local] Teléfono principal ${last10} asignado a cliente #${targetServiceId} (${clientName || 'Sin nombre'}) en Base de Datos Local.`);
+        } else if (mainPhone !== last10 && !extraPhones.includes(last10)) {
+          // Si ya tiene un teléfono principal, guardarlo en telefonos_adicionales (soporte multi-teléfono)
+          extraPhones.push(last10);
+          await client.execute({
+            sql: `UPDATE wisphub_clients SET telefonos_adicionales = ?, updated_at = ? WHERE id_servicio = ?`,
+            args: [JSON.stringify(extraPhones), now, targetServiceId],
+          });
+          logger.info(`[Vínculo Local] Teléfono adicional/nuevo ${last10} vinculado a cliente #${targetServiceId} (${clientName || 'Sin nombre'}) en Base de Datos Local (Total asociados: ${extraPhones.length + 1}).`);
+        }
+      }
+
+      return true;
+    } catch (err: any) {
+      logger.warn(`Error al vincular teléfono en Base de Datos Local para ${phone}:`, err?.message || err);
+      return false;
+    }
+  }
+
+  /**
    * Actualiza o registra las coordenadas GPS, enlace de Google Maps y dirección de un cliente
    * Funciona buscando por id_servicio, teléfono (principal o adicional), SN de ONU (ASCII o Hex) o nombre.
    */
@@ -2243,13 +2333,13 @@ export class DbService {
         }
       }
 
-      // 4. Búsqueda por Teléfono
+      // 4. Búsqueda por Teléfono (Principal o Adicionales / Líneas Secundarias)
       if (phone) {
         const phoneClean = phone.replace(/\D/g, '').slice(-10);
         if (phoneClean.length >= 7) {
           const res = await client.execute({
-            sql: `SELECT * FROM wisphub_clients WHERE telefono LIKE ? LIMIT 1`,
-            args: [`%${phoneClean}%`],
+            sql: `SELECT * FROM wisphub_clients WHERE telefono LIKE ? OR telefonos_adicionales LIKE ? LIMIT 1`,
+            args: [`%${phoneClean}%`, `%${phoneClean}%`],
           });
           if (res.rows.length > 0) return res.rows[0] as any;
         }

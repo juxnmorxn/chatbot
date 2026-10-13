@@ -769,11 +769,7 @@ self.addEventListener('fetch', (event) => {
         services = await ClientPortalController.findClientsByIdentifier(tokenName);
         if (services && services.length > 0 && verifiedPhone) {
           try {
-            const db = getDbClient();
-            await db.execute({
-              sql: `UPDATE client_portal_accounts SET nombre = ?, updated_at = datetime('now') WHERE telefono = ?`,
-              args: [services[0].nombre || tokenName, verifiedPhone],
-            });
+            await DbService.linkClientPhoneInLocalDb(verifiedPhone, services[0].nombre || tokenName, services[0].id_servicio);
           } catch (_) {}
         }
       }
@@ -1588,18 +1584,11 @@ self.addEventListener('fetch', (event) => {
               });
               if (byName.rows.length > 0) initialMatches.push(...(byName.rows as any[]));
             }
-            // Auto-vincular en client_portal_accounts y wisphub_clients para persistencia permanente
+            // Auto-vincular en Base de Datos Local para persistencia permanente (soporte multi-teléfono sin alterar WispHub)
             if (initialMatches.length > 0) {
               const foundClient = initialMatches[0];
               try {
-                await db.execute({
-                  sql: `UPDATE client_portal_accounts SET nombre = ? WHERE telefono = ?`,
-                  args: [foundClient.nombre, last10],
-                });
-                await db.execute({
-                  sql: `UPDATE wisphub_clients SET telefono = ? WHERE id_servicio = ? AND (telefono IS NULL OR telefono = '' OR telefono LIKE '777%')`,
-                  args: [last10, foundClient.id_servicio],
-                });
+                await DbService.linkClientPhoneInLocalDb(last10, foundClient.nombre, foundClient.id_servicio);
               } catch (_) {}
             }
           }
