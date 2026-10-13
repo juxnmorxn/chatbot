@@ -1087,7 +1087,7 @@ self.addEventListener('fetch', (event) => {
           direccion: client.direccion || onuRecord?.zone_name,
           ip: client.ip || onuRecord?.ip_address,
           router: client.router,
-          estado: client.estado,
+          estado: (Number(client.saldo || 0) <= 0 && String(client.estado || '').toLowerCase().includes('suspend')) ? 'Activo' : client.estado,
           saldo: client.saldo || 0,
           precio_plan: client.precio_plan,
           plan_internet: client.plan_internet || onuRecord?.speed_profile || '40 Megas',
@@ -1148,11 +1148,13 @@ self.addEventListener('fetch', (event) => {
       let facturas: any[] = [];
       let rawUserData: any = {};
       try { rawUserData = JSON.parse(client.raw_data || '{}'); } catch (_) {}
+      const clientBalance = Number(client.saldo || 0);
 
       try {
         facturas = await WispHubService.getInvoicesForClient(client.id_servicio, {
           usuario: rawUserData.usuario || client.usuario_rb,
           nombre: client.nombre,
+          saldo: clientBalance,
         });
       } catch (fErr: any) {
         logger.warn(`Error al consultar facturas para ${client.id_servicio}:`, fErr?.message || fErr);
@@ -1161,22 +1163,29 @@ self.addEventListener('fetch', (event) => {
       // Estructurar respuesta con facturas e información de pago bancario
       res.json({
         success: true,
-        balance: Number(client.saldo || 0),
+        balance: clientBalance,
         planPrice: Number(client.precio_plan || 0),
         dueDate: client.fecha_corte || `Día ${client.dia_corte || 5} de cada mes`,
         status: client.estado,
-        invoices: facturas.map((f: any) => ({
-          id: f.id_factura || f.id || client.id_servicio,
-          folio: f.folio || `FAC-${f.id_factura || client.id_servicio}`,
-          monto: Number(f.total || f.monto || client.saldo || client.precio_plan || 0),
-          estado: f.estado || (Number(client.saldo || 0) > 0 ? 'Pendiente' : 'Pagada'),
-          fecha_emision: f.fecha_emision || new Date().toISOString().slice(0, 10),
-          fecha_vencimiento: f.fecha_vencimiento || client.fecha_corte || 'Próximo corte',
-          fecha_pago: f.fecha_pago || null,
-          descripcion: f.descripcion || '',
-          link_pago: f.link_pago || (f.id_factura ? `https://wisphub.net/factura/${f.id_factura}/` : null),
-          pdf_url: `/api/portal/invoice/${f.id_factura || f.id || client.id_servicio}/receipt`,
-        })),
+        invoices: facturas.map((f: any) => {
+          let estado = f.estado;
+          if (clientBalance <= 0) {
+            estado = 'Pagada';
+          }
+          const isPaid = String(estado || '').toLowerCase().includes('pagad');
+          return {
+            id: f.id_factura || f.id || client.id_servicio,
+            folio: f.folio || `FAC-${f.id_factura || client.id_servicio}`,
+            monto: Number(f.total || f.monto || client.saldo || client.precio_plan || 0),
+            estado: estado || (clientBalance > 0 ? 'Pendiente de Pago' : 'Pagada'),
+            fecha_emision: f.fecha_emision || new Date().toISOString().slice(0, 10),
+            fecha_vencimiento: f.fecha_vencimiento || client.fecha_corte || 'Próximo corte',
+            fecha_pago: f.fecha_pago || (isPaid ? (f.fecha_emision || new Date().toISOString().slice(0, 10)) : null),
+            descripcion: f.descripcion || '',
+            link_pago: f.link_pago || (f.id_factura ? `https://wisphub.net/factura/${f.id_factura}/` : null),
+            pdf_url: `/api/portal/invoice/${f.id_factura || f.id || client.id_servicio}/receipt`,
+          };
+        }),
         bankDetails: {
           bank: SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK_NAME', 'BBVA Bancomer'),
           clabe: SettingsService.get('PAYMENT_CLABE', 'PAYMENT_BANK_CLABE', '012 180 0152433212 90'),

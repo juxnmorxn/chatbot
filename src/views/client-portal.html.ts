@@ -1530,9 +1530,8 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
 
           <!-- Lista de recibos detallados de WispHub -->
           <div style="margin-top: 4px; display: flex; flex-direction: column; flex: 1;">
-            <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+            <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px;">
               <span>Historial de Facturas</span>
-              <span style="font-size: 10px; color: #0284c7; cursor: pointer;" onclick="loadInvoicesHistory()"><i class="fa-solid fa-rotate"></i> Actualizar</span>
             </div>
             <div id="invoicesList">
               <div style="text-align: center; color: var(--text-muted); font-size: 12.5px; padding: 10px;">Consultando facturas...</div>
@@ -1739,13 +1738,10 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
 
         <!-- Tarjeta: CLABE Interbancaria (SPEI) -->
         <div style="background: var(--bg-surface); border: 1.5px solid rgba(56, 189, 248, 0.35); padding: 12px 14px; border-radius: var(--radius-md);">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <div style="margin-bottom: 6px;">
             <span style="font-size: 11px; color: #38bdf8; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">
               <i class="fa-solid fa-shield-halved"></i> CLABE Interbancaria (SPEI)
             </span>
-            <button class="btn-action-icon" onclick="copyClabe()" title="Copiar CLABE" style="width: 28px; height: 28px; font-size: 12px; color: #38bdf8;">
-              <i class="fa-solid fa-copy"></i>
-            </button>
           </div>
           <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
             <div id="bankClabeText" style="color: var(--text-title); font-family: monospace; font-size: 15.5px; font-weight: 800; letter-spacing: 0.8px; word-break: break-all;">
@@ -1759,13 +1755,10 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
 
         <!-- Tarjeta: Número de Cuenta -->
         <div style="background: var(--bg-surface); border: 1px solid var(--border-card); padding: 12px 14px; border-radius: var(--radius-md);">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <div style="margin-bottom: 6px;">
             <span style="font-size: 11px; color: var(--text-muted); font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">
               <i class="fa-solid fa-credit-card"></i> Número de Cuenta
             </span>
-            <button class="btn-action-icon" onclick="copyBankAccount()" title="Copiar Cuenta" style="width: 28px; height: 28px; font-size: 12px;">
-              <i class="fa-solid fa-copy"></i>
-            </button>
           </div>
           <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
             <div id="bankAccountText" style="color: var(--text-title); font-family: monospace; font-size: 14.5px; font-weight: 700;">
@@ -1779,13 +1772,10 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
 
         <!-- Tarjeta: Concepto (Nombre del Titular de la Cuenta) -->
         <div style="background: rgba(16, 185, 129, 0.08); border: 1.5px solid rgba(16, 185, 129, 0.4); padding: 12px 14px; border-radius: var(--radius-md);">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <div style="margin-bottom: 6px;">
             <span style="font-size: 11px; color: #10b981; font-weight: 800; text-transform: uppercase; letter-spacing: 0.3px;">
               <i class="fa-solid fa-pen-to-square"></i> En concepto escribe el nombre del titular de la cuenta:
             </span>
-            <button class="btn-action-icon" onclick="copyBankConcept()" title="Copiar Nombre" style="width: 28px; height: 28px; font-size: 12px; color: #10b981;">
-              <i class="fa-solid fa-copy"></i>
-            </button>
           </div>
           <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
             <div id="bankConceptText" style="font-family: 'Outfit', sans-serif; font-size: 15px; font-weight: 800; color: #10b981; line-height: 1.3;">
@@ -2727,7 +2717,8 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
           container.innerHTML = data.invoices.map(inv => {
             const isPaid = String(inv.estado || '').toLowerCase().includes('pagad');
             const statusClass = isPaid ? 'paid' : 'pending';
-            const payBtn = (!isPaid && inv.link_pago) ? '<a href="' + inv.link_pago + '" target="_blank" class="btn-main" style="width:auto; padding:6px 12px; font-size:12px; height:34px;" title="Pagar Factura"><i class="fa-solid fa-credit-card"></i> Pagar</a>' : '';
+            const statusText = isPaid ? 'Pagada' : (inv.estado || 'Pendiente de Pago');
+            const payBtn = (!isPaid && inv.link_pago) ? '<a href="' + inv.link_pago + '" target="_blank" class="btn-main" style="width:auto; padding:5px 12px; font-size:12px; height:30px; border-radius:7px; display:inline-flex; align-items:center; gap:5px;" title="Pagar Factura"><i class="fa-solid fa-credit-card"></i> Pagar</a>' : '';
             
             const emision = inv.fecha_emision ? inv.fecha_emision.slice(0, 10) : '';
             const vence = inv.fecha_vencimiento ? inv.fecha_vencimiento.slice(0, 10) : '';
@@ -2735,17 +2726,21 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
               ? ('Pagada el ' + (inv.fecha_pago ? inv.fecha_pago.slice(0, 10) : (emision || 'Reciente')))
               : ('Vence el ' + (vence || 'Próximo corte'));
 
-            return '<div style="display:flex; align-items:center; justify-content:space-between; background:var(--bg-surface); border:1px solid var(--border-card); border-radius:var(--radius-sm); padding:12px 14px; gap:8px;">' +
-              '<div style="overflow:hidden;">' +
-                '<div style="font-weight:700; font-size:13px; color:var(--text-title); display:flex; align-items:center; gap:6px;">' +
-                  '<i class="fa-solid fa-file-invoice" style="color:#0284c7;"></i> Recibo #' + (inv.folio || inv.id) +
+            return '<div style="background:var(--bg-surface); border:1px solid var(--border-card); border-radius:var(--radius-md); padding:12px 14px; margin-bottom:8px; display:flex; flex-direction:column; gap:8px;">' +
+              '<div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">' +
+                '<div style="min-width:0; flex:1;">' +
+                  '<div style="font-weight:700; font-size:13.5px; color:var(--text-title); display:flex; align-items:center; gap:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' +
+                    '<i class="fa-solid fa-file-invoice" style="color:#0284c7;"></i> Recibo #' + (inv.folio || inv.id) +
+                  '</div>' +
+                  '<div style="font-size:11.5px; color:var(--text-muted); margin-top:2px;">' + fechaLabel + '</div>' +
                 '</div>' +
-                '<div style="font-size:11px; color:var(--text-muted); margin-top:2px;">' + fechaLabel + '</div>' +
+                '<div style="text-align:right; flex-shrink:0;">' +
+                  '<span style="font-weight:800; font-size:16px; color:var(--text-title); display:block;">$' + Number(inv.monto || 0).toFixed(2) + '</span>' +
+                '</div>' +
               '</div>' +
-              '<div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">' +
-                '<span style="font-weight:800; font-size:15px; color:var(--text-title);">$' + Number(inv.monto || 0).toFixed(2) + '</span>' +
-                '<span class="badge-status ' + statusClass + '" style="font-size:11px; padding:3px 8px;">' + inv.estado + '</span>' +
-                payBtn +
+              '<div style="display:flex; align-items:center; justify-content:space-between; gap:8px; padding-top:6px; border-top:1px solid rgba(255,255,255,0.06);">' +
+                '<span class="badge-status ' + statusClass + '" style="font-size:11px; padding:3px 8px;">' + statusText + '</span>' +
+                (payBtn || '<span style="font-size:11px; color:var(--text-muted);"><i class="fa-solid fa-circle-check" style="color:#10b981;"></i> Liquidado</span>') +
               '</div>' +
             '</div>';
           }).join('');

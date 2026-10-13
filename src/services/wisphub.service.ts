@@ -1283,7 +1283,7 @@ export class WispHubService {
    */
   static async getInvoicesForClient(
     idServicio: number | string,
-    options?: { usuario?: string; nombre?: string }
+    options?: { usuario?: string; nombre?: string; saldo?: number }
   ): Promise<any[]> {
     const db = getDbClient();
     const cleanId = Number(idServicio);
@@ -1333,6 +1333,50 @@ export class WispHubService {
           });
           rows = res2.rows as any[];
         }
+      }
+    }
+
+    // 4. Conciliación y verificación en vivo de facturas:
+    // A) Si el cliente está al corriente (saldo <= 0), todas sus facturas anteriores deben quedar 'Pagada'
+    const isZeroBalance = options?.saldo !== undefined && Number(options.saldo) <= 0;
+    if (isZeroBalance && rows.length > 0) {
+      const hadPending = rows.some((r: any) => !String(r.estado || '').toLowerCase().includes('pagad'));
+      if (hadPending) {
+        rows = rows.map((r: any) => ({
+          ...r,
+          estado: 'Pagada',
+          fecha_pago: r.fecha_pago || r.fecha_emision || new Date().toISOString(),
+        }));
+        if (!isNaN(cleanId) && cleanId > 0) {
+          db.execute({
+            sql: `UPDATE wisphub_invoices SET estado = 'Pagada', updated_at = CURRENT_TIMESTAMP WHERE id_servicio = ? AND LOWER(estado) NOT LIKE '%pagad%'`,
+            args: [cleanId],
+          }).catch(() => {});
+        }
+      }
+    }
+
+    // B) Si la factura más reciente sigue marcada como pendiente, verificar WispHub en vivo (/facturas/{id}/)
+    // para capturar pagos recién realizados en caja/oficina sin demoras
+    if (rows.length > 0 && !String(rows[0].estado || '').toLowerCase().includes('pagad') && rows[0].id_factura) {
+      try {
+        const api = this.getApi();
+        const topFacturaId = rows[0].id_factura;
+        const liveFactRes = await api.get(`/facturas/${topFacturaId}/`);
+        if (liveFactRes.data && liveFactRes.data.estado) {
+          const liveState = String(liveFactRes.data.estado);
+          if (liveState.toLowerCase().includes('pagad')) {
+            rows[0].estado = 'Pagada';
+            rows[0].fecha_pago = liveFactRes.data.fecha_pago || rows[0].fecha_pago || new Date().toISOString();
+            rows[0].total = Number(liveFactRes.data.total || rows[0].total);
+            db.execute({
+              sql: `UPDATE wisphub_invoices SET estado = 'Pagada', fecha_pago = ?, total = ?, updated_at = CURRENT_TIMESTAMP WHERE id_factura = ?`,
+              args: [rows[0].fecha_pago, rows[0].total, topFacturaId],
+            }).catch(() => {});
+          }
+        }
+      } catch (checkErr: any) {
+        logger.warn(`No se pudo verificar factura ${rows[0]?.id_factura} en vivo:`, checkErr?.message);
       }
     }
 
