@@ -1202,6 +1202,9 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
         <button id="btnThemeToggle" class="btn-header-action" onclick="togglePortalTheme()" title="Cambiar tema claro / oscuro">
           <i class="fa-solid fa-sun" id="themeIcon"></i>
         </button>
+        <button id="btnChangePassword" class="btn-header-action hidden" onclick="openCreatePasswordModal(currentPhone, true)" title="Cambiar mi contraseña de acceso">
+          <i class="fa-solid fa-key"></i>
+        </button>
         <button id="btnPwa" class="btn-header-action hidden"><i class="fa-solid fa-download"></i> App</button>
         <button id="btnLogout" class="btn-header-action hidden" onclick="logoutClient()" title="Cerrar sesión"><i class="fa-solid fa-right-from-bracket"></i></button>
       </div>
@@ -1225,11 +1228,26 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
         ${getCloudWareFullLogoHtml(true)}
       </div>
       <div class="auth-title" style="font-size: 18px;">Iniciar Sesión</div>
-      <p class="auth-sub">Ingresa tu número celular y tu contraseña para ver tu red, facturas y saldo.</p>
+      <p class="auth-sub">Accede desde cualquier dispositivo con tu número celular (usuario) y tu contraseña.</p>
 
       <form onsubmit="handleLogin(event)" style="display: flex; flex-direction: column; gap: 12px;">
-        <input type="tel" id="loginPhone" class="form-input" placeholder="Número de celular (10 dígitos)" maxlength="10" required>
-        <input type="password" id="loginPass" class="form-input" placeholder="Tu contraseña" required>
+        <div>
+          <label style="font-size: 11.5px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; margin-bottom: 4px; display: block;">
+            <i class="fa-solid fa-user" style="color: #0284c7;"></i> Usuario (Tu Celular - 10 dígitos)
+          </label>
+          <input type="tel" id="loginPhone" class="form-input" placeholder="Ej. 7721284398" maxlength="10" required>
+        </div>
+        <div>
+          <label style="font-size: 11.5px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; margin-bottom: 4px; display: block;">
+            <i class="fa-solid fa-lock" style="color: #0284c7;"></i> Contraseña
+          </label>
+          <div style="position: relative;">
+            <input type="password" id="loginPass" class="form-input" placeholder="Tu contraseña de acceso" required style="padding-right: 42px;">
+            <button type="button" onclick="toggleModalPassVisibility('loginPass', 'eyeLoginPass')" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 15px;">
+              <i id="eyeLoginPass" class="fa-solid fa-eye"></i>
+            </button>
+          </div>
+        </div>
         <button type="submit" class="btn-main"><i class="fa-solid fa-arrow-right-to-bracket"></i> Entrar a mi Cuenta</button>
       </form>
 
@@ -1824,6 +1842,104 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
     </div>
   </div>
 
+  <!-- MODAL: CREACIÓN OBLIGATORIA / CAMBIO DE CONTRASEÑA -->
+  <div id="modalCreatePassword" class="modal-overlay" style="z-index: 250;">
+    <div class="modal-sheet" style="border-color: rgba(56, 189, 248, 0.45); max-width: 440px; box-shadow: 0 25px 60px rgba(0, 0, 0, 0.7);">
+      <div class="modal-sheet-header">
+        <div class="modal-sheet-title" id="createPassModalTitle" style="display: flex; align-items: center; gap: 8px;">
+          <i class="fa-solid fa-shield-halved" style="color: #38bdf8;"></i> Crea tu Contraseña de Acceso
+        </div>
+        <button id="btnCloseCreatePassModal" class="btn-close-modal" onclick="closeModal('modalCreatePassword')" style="display: none;">&times;</button>
+      </div>
+
+      <p id="createPassModalSubtitle" style="font-size: 13px; color: var(--text-body); line-height: 1.45; margin: -4px 0 0;">
+        Configura tu contraseña para entrar a tu portal desde cualquier celular, computadora o tablet cuando quieras.
+      </p>
+
+      <!-- Ficha destacada: Tu Usuario es tu Celular -->
+      <div style="background: linear-gradient(135deg, rgba(14, 165, 233, 0.15) 0%, rgba(37, 99, 235, 0.12) 100%); border: 1px solid rgba(56, 189, 248, 0.4); border-radius: var(--radius-md); padding: 14px 16px;">
+        <div style="font-size: 11px; text-transform: uppercase; font-weight: 800; letter-spacing: 0.5px; color: #38bdf8; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+          <i class="fa-solid fa-id-badge"></i> Tus Datos de Acceso para Cualquier Dispositivo
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13.5px; margin-bottom: 4px;">
+          <span style="color: var(--text-body); font-weight: 600;"><i class="fa-solid fa-user" style="color: #38bdf8;"></i> Tu Usuario:</span>
+          <strong id="modalCreatePassPhoneDisplay" style="color: #ffffff; font-family: monospace; font-size: 15px; letter-spacing: 0.5px; background: rgba(0, 0, 0, 0.4); padding: 3px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.12);">-</strong>
+        </div>
+        <div style="font-size: 12px; color: var(--text-body); line-height: 1.4; margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.08);">
+          💡 <strong>¡Importante!</strong> Tu número celular registrado es tu <strong>nombre de usuario</strong>. Con él y la contraseña que crees aquí podrás iniciar sesión en <strong style="color: #38bdf8;">portal.cloudwaremx.com</strong> desde cualquier equipo o navegador.
+        </div>
+      </div>
+
+      <form onsubmit="handleSaveCreatePassword(event)" style="display: flex; flex-direction: column; gap: 12px;">
+        <div>
+          <label style="font-size: 12px; color: var(--text-body); margin-bottom: 5px; display: block; font-weight: 600;">
+            Nueva Contraseña (mínimo 6 caracteres)
+          </label>
+          <div style="position: relative;">
+            <input type="password" id="modalCreatePassInput" class="form-input" minlength="6" placeholder="Escribe tu nueva contraseña" required style="padding-right: 42px;">
+            <button type="button" onclick="toggleModalPassVisibility('modalCreatePassInput', 'eyeModalCreatePass1')" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 15px;">
+              <i id="eyeModalCreatePass1" class="fa-solid fa-eye"></i>
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <label style="font-size: 12px; color: var(--text-body); margin-bottom: 5px; display: block; font-weight: 600;">
+            Confirmar Nueva Contraseña
+          </label>
+          <div style="position: relative;">
+            <input type="password" id="modalCreatePassConfirmInput" class="form-input" minlength="6" placeholder="Vuelve a escribir la contraseña" required style="padding-right: 42px;">
+            <button type="button" onclick="toggleModalPassVisibility('modalCreatePassConfirmInput', 'eyeModalCreatePass2')" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 15px;">
+              <i id="eyeModalCreatePass2" class="fa-solid fa-eye"></i>
+            </button>
+          </div>
+        </div>
+
+        <div id="createPassErrorAlert" style="display: none; font-size: 12px; color: #ef4444; background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.3); padding: 8px 12px; border-radius: var(--radius-sm);"></div>
+
+        <button type="submit" id="btnSubmitCreatePass" class="btn-main" style="padding: 13px 16px; font-size: 14.5px; font-weight: 700; margin-top: 4px;">
+          <i class="fa-solid fa-floppy-disk"></i> Guardar mi Contraseña y Continuar
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: CONTRASEÑA GUARDADA CON ÉXITO -->
+  <div id="modalPasswordSuccess" class="modal-overlay" style="z-index: 260;">
+    <div class="modal-sheet" style="text-align: center; max-width: 420px; border-color: rgba(16, 185, 129, 0.4); box-shadow: 0 25px 60px rgba(0, 0, 0, 0.7);">
+      <div style="width: 56px; height: 56px; border-radius: 50%; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.35); display: flex; align-items: center; justify-content: center; margin: 4px auto 8px; font-size: 26px; color: #10b981;">
+        <i class="fa-solid fa-circle-check"></i>
+      </div>
+
+      <div class="modal-sheet-title" style="font-size: 19px; color: var(--text-title); justify-content: center;">
+        ¡Contraseña Guardada con Éxito!
+      </div>
+
+      <p style="font-size: 13px; color: var(--text-body); line-height: 1.45; margin: 0;">
+        Tu cuenta está protegida. Ahora puedes entrar a tu portal cuando quieras desde cualquier dispositivo:
+      </p>
+
+      <div style="background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border-card); border-radius: var(--radius-md); padding: 14px 16px; text-align: left; display: flex; flex-direction: column; gap: 8px; font-size: 13.5px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span style="color: var(--text-muted);"><i class="fa-solid fa-globe" style="color: #38bdf8;"></i> Portal Web:</span>
+          <strong style="color: #38bdf8; font-size: 13px;">portal.cloudwaremx.com</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span style="color: var(--text-muted);"><i class="fa-solid fa-user" style="color: #38bdf8;"></i> Tu Usuario:</span>
+          <strong id="successModalPhoneDisplay" style="color: var(--text-title); font-family: monospace; font-size: 14px;">-</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span style="color: var(--text-muted);"><i class="fa-solid fa-key" style="color: #38bdf8;"></i> Contraseña:</span>
+          <span style="color: #10b981; font-weight: 700;">(La que acabas de guardar)</span>
+        </div>
+      </div>
+
+      <button type="button" class="btn-main" onclick="closeModal('modalPasswordSuccess')" style="padding: 12px 18px; font-size: 14.5px; font-weight: 700; margin-top: 4px;">
+        <i class="fa-solid fa-arrow-right"></i> Entendido, ir a Mi Portal
+      </button>
+    </div>
+  </div>
+
   <!-- TOAST NOTIFICACIÓN -->
   <div id="toast"><i class="fa-solid fa-circle-check"></i> <span id="toastMessage">Listo</span></div>
 
@@ -2013,8 +2129,13 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
     function logoutClient() {
       localStorage.removeItem('cp_token');
       localStorage.removeItem('cp_phone');
+      localStorage.removeItem('cp_selected_service');
       currentToken = '';
       currentPhone = '';
+      const btnPass = document.getElementById('btnChangePassword');
+      if (btnPass) btnPass.classList.add('hidden');
+      const btnLogout = document.getElementById('btnLogout');
+      if (btnLogout) btnLogout.classList.add('hidden');
       showLogin();
       showToast('Sesión cerrada');
     }
@@ -2283,6 +2404,8 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
         hideAllViews();
         document.getElementById('viewDashboard').classList.remove('hidden');
         document.getElementById('btnLogout').classList.remove('hidden');
+        const btnChangePass1 = document.getElementById('btnChangePassword');
+        if (btnChangePass1) btnChangePass1.classList.remove('hidden');
 
         renderDashboard(data);
       } catch (err) {
@@ -2302,6 +2425,8 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
             hideAllViews();
             document.getElementById('viewDashboard').classList.remove('hidden');
             document.getElementById('btnLogout').classList.remove('hidden');
+            const btnChangePass2 = document.getElementById('btnChangePassword');
+            if (btnChangePass2) btnChangePass2.classList.remove('hidden');
             renderDashboard(cachedData);
             showToast('Mostrando datos guardados en tu dispositivo');
             return;
@@ -2416,13 +2541,18 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
         planSpeedEl.innerText = speedBig;
       }
 
-      // Onboarding Password Banner
+      // Onboarding Password Banner & Modal Obligatorio de Creación
       const onb = document.getElementById('onboardingBanner');
       if (data.hasPassword === false) {
-        onb.classList.remove('hidden');
-        document.getElementById('onboardingPhoneLabel').innerText = currentPhone;
+        if (onb) {
+          onb.classList.remove('hidden');
+          const phoneLbl = document.getElementById('onboardingPhoneLabel');
+          if (phoneLbl) phoneLbl.innerText = currentPhone;
+        }
+        // Desplegar modal obligatorio para crear contraseña
+        openCreatePasswordModal(currentPhone, false);
       } else {
-        onb.classList.add('hidden');
+        if (onb) onb.classList.add('hidden');
       }
 
       // Multi-Servicio: Tarjetas interactivas para titulares con múltiples contratos
@@ -2907,8 +3037,110 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
       }
     }
 
+    let isCreatePassMandatory = false;
+
+    function openCreatePasswordModal(phone, isManual = false) {
+      isCreatePassMandatory = !isManual;
+      const targetP = (phone || currentPhone || localStorage.getItem('cp_phone') || '').replace(/\D/g, '').slice(-10);
+      const displayEl = document.getElementById('modalCreatePassPhoneDisplay');
+      if (displayEl) displayEl.innerText = targetP || 'Tu celular';
+      const inputPass = document.getElementById('modalCreatePassInput');
+      if (inputPass) inputPass.value = '';
+      const inputConf = document.getElementById('modalCreatePassConfirmInput');
+      if (inputConf) inputConf.value = '';
+      const errBox = document.getElementById('createPassErrorAlert');
+      if (errBox) errBox.style.display = 'none';
+
+      const closeBtn = document.getElementById('btnCloseCreatePassModal');
+      const titleEl = document.getElementById('createPassModalTitle');
+      const subEl = document.getElementById('createPassModalSubtitle');
+
+      if (isManual) {
+        if (closeBtn) closeBtn.style.display = 'flex';
+        if (titleEl) titleEl.innerHTML = '<i class="fa-solid fa-key" style="color: #38bdf8;"></i> Cambiar Contraseña de Acceso';
+        if (subEl) subEl.innerText = 'Actualiza tu clave para iniciar sesión en tu portal desde cualquier celular, computadora o tablet.';
+      } else {
+        if (closeBtn) closeBtn.style.display = 'none';
+        if (titleEl) titleEl.innerHTML = '<i class="fa-solid fa-shield-halved" style="color: #38bdf8;"></i> Crea tu Contraseña de Acceso';
+        if (subEl) subEl.innerText = 'Configura tu contraseña para entrar a tu portal desde cualquier celular, computadora o tablet sin depender de WhatsApp.';
+      }
+
+      const modalEl = document.getElementById('modalCreatePassword');
+      if (modalEl) modalEl.style.display = 'flex';
+    }
+
+    async function handleSaveCreatePassword(e) {
+      e.preventDefault();
+      const pass = document.getElementById('modalCreatePassInput').value;
+      const confirmPass = document.getElementById('modalCreatePassConfirmInput').value;
+      const errBox = document.getElementById('createPassErrorAlert');
+
+      if (!pass || pass.length < 6) {
+        errBox.innerText = 'La contraseña debe tener al menos 6 caracteres.';
+        errBox.style.display = 'block';
+        return;
+      }
+
+      if (pass !== confirmPass) {
+        errBox.innerText = 'Las contraseñas no coinciden. Por favor verifícalas.';
+        errBox.style.display = 'block';
+        return;
+      }
+
+      errBox.style.display = 'none';
+      const submitBtn = document.getElementById('btnSubmitCreatePass');
+      const origText = submitBtn ? submitBtn.innerHTML : '';
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando...';
+      }
+
+      const phone = (currentPhone || localStorage.getItem('cp_phone') || '').replace(/\D/g, '').slice(-10);
+
+      try {
+        const res = await fetch('/api/portal/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone, password: pass })
+        });
+        const d = await res.json();
+        if (d.success) {
+          isCreatePassMandatory = false;
+          closeModal('modalCreatePassword');
+          if (d.token) {
+            localStorage.setItem('cp_token', d.token);
+            currentToken = d.token;
+          }
+          const onb = document.getElementById('onboardingBanner');
+          if (onb) onb.classList.add('hidden');
+
+          // Desplegar modal de confirmación con datos de acceso
+          const succPhone = document.getElementById('successModalPhoneDisplay');
+          if (succPhone) succPhone.innerText = phone;
+          const succModal = document.getElementById('modalPasswordSuccess');
+          if (succModal) succModal.style.display = 'flex';
+        } else {
+          errBox.innerText = d.message || 'Error al guardar la contraseña.';
+          errBox.style.display = 'block';
+        }
+      } catch (err) {
+        errBox.innerText = 'Error de conexión. Intenta nuevamente.';
+        errBox.style.display = 'block';
+      } finally {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = origText;
+        }
+      }
+    }
+
     function closeModal(id) {
-      document.getElementById(id).style.display = 'none';
+      if (id === 'modalCreatePassword' && isCreatePassMandatory) {
+        showToast('Debes crear tu contraseña para continuar');
+        return;
+      }
+      const el = document.getElementById(id);
+      if (el) el.style.display = 'none';
     }
 
     async function handleSaveWifi(e) {

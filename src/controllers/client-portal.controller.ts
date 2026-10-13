@@ -184,7 +184,7 @@ self.addEventListener('fetch', (event) => {
         args: [last10],
       });
 
-      const hasAccount = accRes.rows.length > 0;
+      const hasAccount = accRes.rows.length > 0 && !!accRes.rows[0].password_hash;
 
       // 2. Verificar servicios en wisphub_clients
       const services = await ClientPortalController.findClientsByIdentifier(last10);
@@ -229,15 +229,26 @@ self.addEventListener('fetch', (event) => {
       }
 
       const services = await ClientPortalController.findClientsByIdentifier(last10);
-      if (!services || services.length === 0) {
+      let clientName = services && services.length > 0 ? services[0].nombre : '';
+      const serviceIds = services && services.length > 0 ? services.map(s => s.id_servicio) : [];
+
+      const db = getDbClient();
+      if (!clientName) {
+        const accRow = await db.execute({
+          sql: `SELECT nombre FROM client_portal_accounts WHERE telefono = ? LIMIT 1`,
+          args: [last10],
+        });
+        if (accRow.rows.length > 0 && accRow.rows[0].nombre) {
+          clientName = String(accRow.rows[0].nombre);
+        }
+      }
+
+      if (!clientName) {
         res.status(404).json({ success: false, message: 'No encontramos ningún contrato con ese número de teléfono.' });
         return;
       }
 
-      const clientName = services[0].nombre;
-      const serviceIds = services.map(s => s.id_servicio);
       const passHash = hashPassword(password);
-      const db = getDbClient();
       const now = new Date().toISOString();
 
       await db.execute({
@@ -246,12 +257,14 @@ self.addEventListener('fetch', (event) => {
           VALUES (?, ?, ?, ?, ?, ?)
           ON CONFLICT(telefono) DO UPDATE SET
             password_hash = excluded.password_hash,
-            nombre = excluded.nombre,
+            nombre = COALESCE(NULLIF(excluded.nombre, ''), client_portal_accounts.nombre),
             updated_at = excluded.updated_at,
             last_login = excluded.last_login
         `,
         args: [last10, passHash, clientName, now, now, now],
       });
+
+      await DbService.linkClientPhoneInLocalDb(last10, clientName, serviceIds[0] || null);
 
       const token = generateClientPortalToken(last10, clientName, serviceIds);
 
@@ -469,7 +482,7 @@ self.addEventListener('fetch', (event) => {
         args: [last10],
       });
 
-      if (accRes.rows.length === 0) {
+      if (accRes.rows.length === 0 || !accRes.rows[0].password_hash) {
         // No tiene contraseña creada todavía
         res.status(404).json({
           success: false,
@@ -1040,19 +1053,20 @@ self.addEventListener('fetch', (event) => {
 
       const wifi = wifiInfo;
 
-      // 5. Verificar si el cliente ya tiene contraseña registrada
+      // 5. Verificar si el cliente ya tiene contraseña registrada para su número de acceso
       const targetPhone10 = (verifiedPhone || client.telefono || '').replace(/\D/g, '').slice(-10);
-      const clientPhone10 = (client.telefono || '').replace(/\D/g, '').slice(-10);
       let hasPassword = false;
       let tokenVer = 1;
 
-      const accRes = await db.execute({
-        sql: `SELECT id, password_hash, token_version FROM client_portal_accounts WHERE (telefono = ? OR telefono = ? OR nombre = ?) AND password_hash IS NOT NULL AND password_hash != '' LIMIT 1`,
-        args: [targetPhone10, clientPhone10, client.nombre],
-      });
-      if (accRes.rows.length > 0) {
-        hasPassword = true;
-        tokenVer = Number(accRes.rows[0].token_version || 1);
+      if (targetPhone10) {
+        const accRes = await db.execute({
+          sql: `SELECT id, password_hash, token_version FROM client_portal_accounts WHERE telefono = ? AND password_hash IS NOT NULL AND password_hash != '' LIMIT 1`,
+          args: [targetPhone10],
+        });
+        if (accRes.rows.length > 0) {
+          hasPassword = true;
+          tokenVer = Number(accRes.rows[0].token_version || 1);
+        }
       }
 
       // Generar token permanente e indestructible para auto-autenticación
