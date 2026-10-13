@@ -634,12 +634,46 @@ export class BotOrchestrator {
     const phone10 = cleanPhoneDigits.slice(-10);
     const soportePhone10 = SettingsService.get('SOPORTE_HUMANO_PHONE', '').replace(/\D/g, '').slice(-10);
     const officePhone10 = SettingsService.get('PAYMENT_OFFICE_PHONE', '').replace(/\D/g, '').slice(-10);
-    const esStaffAdmin = (soportePhone10 && phone10 === soportePhone10) || (officePhone10 && phone10 === officePhone10);
+    const isConfiguredStaffPhone = Boolean((soportePhone10 && phone10 === soportePhone10) || (officePhone10 && phone10 === officePhone10));
+
+    let metaObjStaff: any = {};
+    try { metaObjStaff = JSON.parse(session?.metadata || '{}'); } catch {}
+    const staffProtectionGlobal = SettingsService.get('STAFF_PROTECTION_ENABLED', 'true') !== 'false';
+    const isStaffMode = metaObjStaff.staff_mode !== undefined ? Boolean(metaObjStaff.staff_mode) : staffProtectionGlobal;
+
+    const esStaffAdmin = isConfiguredStaffPhone && isStaffMode;
 
     if (esStaffAdmin && session?.client_name && !session.step?.startsWith('TECNICO_')) {
       logger.info(`[Staff Protection] Limpiando cliente asignado erróneamente a número de staff/admin: ${phone}`);
       await DbService.unlinkClientFromSession(phone);
       session = await DbService.getSession(phone);
+    }
+
+    // Comandos directos de WhatsApp para alternar modo staff / modo cliente (pruebas)
+    if (isConfiguredStaffPhone && (lowerMsg === 'modo cliente' || lowerMsg === 'modo pruebas' || lowerMsg === 'modo cliente pruebas')) {
+      metaObjStaff.staff_mode = false;
+      await DbService.upsertSession({ phone, metadata: JSON.stringify(metaObjStaff) });
+      await this.enviarYLoguear(
+        phone,
+        `🧪 *Modo Cliente (Pruebas) Activado*\n\nTu número ahora se comporta exactamente como el de un cliente común.\n\nPuedes saludar ("Hola") o dar tu nombre/contrato para probar el flujo de atención y recibir tu acceso al Portal Web.\n\n_Para volver a modo administración, escribe: *modo staff*._`,
+        'STAFF',
+        'MODO_CLIENTE_ACTIVADO',
+        targetJid
+      );
+      return;
+    }
+
+    if (isConfiguredStaffPhone && (lowerMsg === 'modo staff' || lowerMsg === 'modo admin')) {
+      metaObjStaff.staff_mode = true;
+      await DbService.upsertSession({ phone, metadata: JSON.stringify(metaObjStaff) });
+      await this.enviarYLoguear(
+        phone,
+        `🛡️ *Modo Staff Activado (Full Staff)*\n\nTu número ahora tiene permisos completos de administración y soporte técnico. La protección anti-secuestro de cliente está activa.`,
+        'STAFF',
+        'MODO_STAFF_ACTIVADO',
+        targetJid
+      );
+      return;
     }
 
     if (esStaffAdmin && (lowerMsg === 'reiniciar' || lowerMsg === 'reset' || lowerMsg === 'desvincular')) {
@@ -5589,9 +5623,15 @@ export class BotOrchestrator {
     }
 
     // Si el usuario no tenía reporte previo (solo saludó o se identificó)
+    await DbService.ensurePortalAccount(phone, session.client_name || undefined);
+    const portalUrl = await this.getClientPortalLinkAsync(phone, session.client_name || undefined);
+
     await this.enviarYLoguear(
       phone,
-      `¡Hola, *${nombreLimpio}*! 👋 Bienvenido al centro de atención y soporte de *${this.getIspName()}*.\n\n¿En qué podemos apoyarte el día de hoy con tu servicio?`,
+      `¡Hola, *${nombreLimpio}*! 👋 Bienvenido al centro de atención y soporte de *${this.getIspName()}*.\n\n` +
+      `¿En qué podemos apoyarte el día de hoy con tu servicio?\n\n` +
+      `💡 _*Tip:* También puedes consultar tu conexión, potencia y facturas en tu Portal Web:_\n` +
+      `👉 ${portalUrl}`,
       'IDENTIFICAR_CLIENTE',
       'VINCULADO_ESPERANDO_PROBLEMA',
       targetJid
@@ -8625,8 +8665,16 @@ Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *
     const last10 = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
     if (!last10) return `${this.getClientPortalBaseUrl()}/portal`;
 
-    const tokenVer = await DbService.ensurePortalAccount(last10, clientName || undefined);
-    return this.getClientPortalLink(phone, clientName, tokenVer);
+    let resolvedName = clientName;
+    if (!resolvedName && phone) {
+      try {
+        const sess = await DbService.getSession(phone);
+        resolvedName = sess?.client_name || undefined;
+      } catch (_) {}
+    }
+
+    const tokenVer = await DbService.ensurePortalAccount(last10, resolvedName || undefined);
+    return this.getClientPortalLink(phone, resolvedName, tokenVer);
   }
 
   /**

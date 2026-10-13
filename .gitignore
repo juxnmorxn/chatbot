@@ -15,3 +15,9 @@ data/*.db-shm
 data/*.sqlite*
 !data/.gitkeep
 
+# Sensitive deployment configuration and scratch scripts
+deploy.config.json
+scripts/query-*.mjs
+scripts/unlink-*.mjs
+
+

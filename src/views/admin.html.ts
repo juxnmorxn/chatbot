@@ -3208,6 +3208,13 @@ export function getAdminDashboardHtml(): string {
                 </div>
               </div>
               <div class="chat-header-actions">
+                <div id="wrap-staff-switch" style="display: none; align-items: center; gap: 6px; padding: 2px 7px; background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(168, 85, 247, 0.25); border-radius: var(--radius-sm);" title="Alternar Modo Staff: Activado es Full Staff, Desactivado es Modo Cliente de pruebas">
+                  <label class="switch" style="margin: 0; width: 32px; height: 18px;">
+                    <input type="checkbox" id="switch-staff-mode" onchange="toggleActiveChatStaffMode(this.checked)">
+                    <span class="slider" style="border-radius: 18px;"></span>
+                  </label>
+                  <span id="label-staff-mode" style="font-size: 10.5px; font-weight: 700; color: #c084fc;">Staff</span>
+                </div>
                 <button id="btn-transfer-dept" class="btn btn-secondary btn-xs" onclick="openTransferChatModal()" title="Traspasar conversación a otra línea / área de WhatsApp">
                   🔄 <span>Traspasar</span>
                 </button>
@@ -6140,6 +6147,9 @@ export function getAdminDashboardHtml(): string {
         if (res.is_paused !== undefined) {
           updateTakeoverButton(res.is_paused, res.takeover);
         }
+        if (typeof updateStaffModeUI === 'function') {
+          updateStaffModeUI(res.is_staff_phone, res.is_staff_active);
+        }
       } catch (err) {
         showToast('Error', 'No se pudieron cargar los mensajes', 'error');
       }
@@ -8922,6 +8932,44 @@ export function getAdminDashboardHtml(): string {
 
     async function resetActiveChatPortalAndBot() {
       return unlinkActiveChatClientAndReset();
+    }
+
+    function updateStaffModeUI(isStaffPhone, isStaffActive) {
+      const wrap = document.getElementById('wrap-staff-switch');
+      const sw = document.getElementById('switch-staff-mode');
+      const label = document.getElementById('label-staff-mode');
+      if (!wrap || !sw || !label) return;
+      if (isStaffPhone) {
+        wrap.style.display = 'inline-flex';
+        sw.checked = Boolean(isStaffActive);
+        label.innerText = isStaffActive ? 'Full Staff' : 'Modo Cliente';
+        label.style.color = isStaffActive ? '#c084fc' : '#38bdf8';
+        wrap.title = isStaffActive
+          ? 'Modo Staff ACTIVO: permisos de administración y protección anti-secuestro habilitados.'
+          : 'Modo Cliente (Pruebas) ACTIVO: este número actúa como cliente normal para pruebas.';
+      } else {
+        wrap.style.display = 'none';
+      }
+    }
+
+    async function toggleActiveChatStaffMode(checked) {
+      if (!state.activeChatPhone) return;
+      const cleanDigits = String(state.activeChatPhone || '').replace(/\D/g, '');
+      const cleanPhone = cleanDigits.length >= 10 ? cleanDigits.slice(-10) : cleanDigits;
+      try {
+        const res = await apiFetch('/api/sessions/' + encodeURIComponent(cleanPhone) + '/toggle-staff', {
+          method: 'POST',
+          body: JSON.stringify({ enabled: checked }),
+        });
+        if (res.success) {
+          showToast(checked ? '🛡️ Modo Staff Activado' : '🧪 Modo Cliente Activado', res.message, 'info');
+          updateStaffModeUI(true, res.staff_mode);
+        } else {
+          showToast('Error', res.error || 'No se pudo cambiar el modo staff.', 'error');
+        }
+      } catch (err) {
+        showToast('Error', err.message || 'Error de conexión', 'error');
+      }
     }
 
     async function handleRevokeAllPortalLinks() {

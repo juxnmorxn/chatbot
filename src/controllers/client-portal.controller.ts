@@ -763,6 +763,21 @@ self.addEventListener('fetch', (event) => {
         services = await ClientPortalController.findClientsByIdentifier(requestedServiceId);
       }
 
+      // Si no se encontraron contratos directamente por teléfono, buscar por nombre del token/cuenta
+      if ((!services || services.length === 0) && tokenName && tokenName.trim().length >= 3) {
+        logger.info(`[Portal Auth] Resolviendo servicios por tokenName "${tokenName}" para teléfono ${verifiedPhone}`);
+        services = await ClientPortalController.findClientsByIdentifier(tokenName);
+        if (services && services.length > 0 && verifiedPhone) {
+          try {
+            const db = getDbClient();
+            await db.execute({
+              sql: `UPDATE client_portal_accounts SET nombre = ?, updated_at = datetime('now') WHERE telefono = ?`,
+              args: [services[0].nombre || tokenName, verifiedPhone],
+            });
+          } catch (_) {}
+        }
+      }
+
       if (!services || services.length === 0) {
         res.status(404).json({ success: false, message: 'Cliente no localizado en el sistema.' });
         return;

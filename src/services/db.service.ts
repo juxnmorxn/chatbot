@@ -4320,10 +4320,16 @@ export class DbService {
     try {
       const client = getDbClient();
       const res = await client.execute({
-        sql: `SELECT token_version, is_active FROM client_portal_accounts WHERE telefono = ? LIMIT 1`,
+        sql: `SELECT token_version, is_active, nombre FROM client_portal_accounts WHERE telefono = ? LIMIT 1`,
         args: [cleanPhone],
       });
       if (res.rows.length > 0) {
+        if (name && (!res.rows[0].nombre || res.rows[0].nombre !== name)) {
+          await client.execute({
+            sql: `UPDATE client_portal_accounts SET nombre = ?, updated_at = datetime('now') WHERE telefono = ?`,
+            args: [name, cleanPhone],
+          });
+        }
         return Number(res.rows[0].token_version || 1);
       }
       await client.execute({

@@ -249,12 +249,26 @@ export class AdminController {
       const messages = await DbService.getChatMessagesByPhone(phone, limit);
       const session = await DbService.getSession(phone);
       const isPaused = BotOrchestrator.estaBotPausado(phone, session);
+
+      const cleanPhoneDigits = phone.replace(/\D/g, '');
+      const phone10 = cleanPhoneDigits.slice(-10);
+      const soportePhone10 = SettingsService.get('SOPORTE_HUMANO_PHONE', '').replace(/\D/g, '').slice(-10);
+      const officePhone10 = SettingsService.get('PAYMENT_OFFICE_PHONE', '').replace(/\D/g, '').slice(-10);
+      const isStaffConfigured = Boolean((soportePhone10 && phone10 === soportePhone10) || (officePhone10 && phone10 === officePhone10));
+
+      let metaObj: any = {};
+      try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
+      const staffProtectionGlobal = SettingsService.get('STAFF_PROTECTION_ENABLED', 'true') !== 'false';
+      const isStaffActive = metaObj.staff_mode !== undefined ? Boolean(metaObj.staff_mode) : (isStaffConfigured && staffProtectionGlobal);
+
       res.json({
         success: true,
         messages,
         session,
         is_paused: isPaused.pausado,
         takeover: isPaused,
+        is_staff_phone: isStaffConfigured,
+        is_staff_active: isStaffActive,
       });
     } catch (error: any) {
       logger.error(`Error al obtener mensajes de ${req.params.phone}:`, error?.message || error);
@@ -652,6 +666,38 @@ export class AdminController {
       const count = await DbService.unlinkAllClientsFromSessions();
       AdminController.broadcastSSE('chat:status', { client_name: null, client_id: null, step: 'INICIO' });
       res.json({ success: true, message: `Se desvincularon los clientes de ${count} sesiones correctamente.` });
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error?.message || error });
+    }
+  }
+
+  /**
+   * Alterna el modo staff / pruebas para un teléfono específico
+   */
+  static async toggleStaffMode(req: Request, res: Response): Promise<void> {
+    try {
+      const phone = String(req.params.phone || req.body?.phone || req.query?.phone || '');
+      const enabled = req.body?.enabled !== undefined ? Boolean(req.body.enabled) : undefined;
+      const session = await DbService.getSession(phone);
+      let meta: any = {};
+      try { meta = JSON.parse(session?.metadata || '{}'); } catch {}
+
+      const newStaffMode = enabled !== undefined ? enabled : !(meta.staff_mode !== false);
+      meta.staff_mode = newStaffMode;
+
+      await DbService.upsertSession({
+        phone,
+        metadata: JSON.stringify(meta),
+      });
+
+      AdminController.broadcastSSE('chat:status', { phone, staff_mode: newStaffMode });
+      res.json({
+        success: true,
+        staff_mode: newStaffMode,
+        message: newStaffMode
+          ? `Modo Staff activado (Full Staff) para ${phone}.`
+          : `Modo Cliente (Pruebas) activado para ${phone}. Ahora opera 100% como cliente de pruebas.`,
+      });
     } catch (error: any) {
       res.status(500).json({ success: false, error: error?.message || error });
     }

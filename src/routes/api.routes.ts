@@ -214,6 +214,7 @@ router.post('/api/sessions/clear-all', requireAdminAuth(['superadmin', 'soporte'
 router.delete('/api/logs/clear-all', requireAdminAuth(['superadmin', 'soporte']), AdminController.clearAllLogs);
 router.post('/api/logs/clear-all', requireAdminAuth(['superadmin', 'soporte']), AdminController.clearAllLogs);
 router.post('/api/sessions/:phone/toggle-pause', AdminController.toggleBotPause);
+router.post('/api/sessions/:phone/toggle-staff', AdminController.toggleStaffMode);
 router.delete('/api/sessions/:phone', requireAdminAuth(['superadmin', 'soporte']), AdminController.deleteSession);
 router.post('/api/sessions/:phone/delete', requireAdminAuth(['superadmin', 'soporte']), AdminController.deleteSession);
 router.post('/api/sessions/:phone/unlink', requireAdminAuth(['superadmin', 'soporte']), AdminController.unlinkSession);
