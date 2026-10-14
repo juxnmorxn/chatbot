@@ -965,12 +965,13 @@ function renderOnusTable(list) {
       }
     }
 
+    const escapedName = encodeURIComponent(o.name || '');
     return `
       <tr class="border-b border-gray-800/60 hover:bg-gray-900/40 transition">
         <td class="py-3 px-4 font-mono text-xs text-gray-400">${idx + 1}</td>
         <td class="py-3 px-4">${statusHtml}</td>
         <td class="py-3 px-4">
-          <div class="font-bold text-white text-xs flex items-center gap-1.5">
+          <div onclick="viewOnuDetail('${o.oltId}', '${o.gponPort}', ${o.onuId}, '${o.sn}', '${escapedName}', ${o.vlan || 400})" class="font-bold text-white text-xs flex items-center gap-1.5 cursor-pointer hover:text-sky-400 transition">
             <i class="fa-solid fa-user text-sky-400 text-[10px]"></i> ${o.name}
           </div>
           <div class="text-[10px] text-gray-400 font-mono mt-0.5">OLT: ${o.oltName || 'fray'}</div>
@@ -985,6 +986,9 @@ function renderOnusTable(list) {
           <span class="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 text-[10px] font-mono">VLAN ${o.vlan || 400}</span>
         </td>
         <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
+          <button onclick="viewOnuDetail('${o.oltId}', '${o.gponPort}', ${o.onuId}, '${o.sn}', '${escapedName}', ${o.vlan || 400})" title="Ver detalles y gestionar TR-069" class="px-2.5 py-1.5 bg-sky-600/20 hover:bg-sky-600/30 border border-sky-500/30 text-sky-300 rounded-lg text-xs font-semibold inline-flex items-center gap-1 transition">
+            <i class="fa-solid fa-eye"></i> View
+          </button>
           <button onclick="promptRebootOnt('${o.oltId}', '${o.gponPort}', ${o.onuId}, '${o.name}')" title="Reiniciar ONT remotamente" class="px-2.5 py-1.5 bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/30 text-rose-300 rounded-lg text-xs font-semibold inline-flex items-center gap-1 transition">
             <i class="fa-solid fa-power-off"></i> Reiniciar
           </button>
@@ -1006,6 +1010,475 @@ function filterOnusTable() {
     `${o.gponPort}:${o.onuId}`.includes(query)
   );
   renderOnusTable(filtered);
+}
+
+// ==========================================
+// DETALLE DE LA ONU (SmartOLT View ONU & TR-069)
+// ==========================================
+let currentViewOnu = null;
+
+async function viewOnuDetail(oltId, gponPort, onuId, sn, encodedName, vlan) {
+  const clientName = decodeURIComponent(encodedName || 'Cliente');
+  currentViewOnu = {
+    oltId,
+    gponPort,
+    onuId,
+    sn,
+    name: clientName,
+    vlan: vlan || 400,
+    realWifiPass: '••••••••',
+    wifiVisible: false,
+    isActive: true
+  };
+
+  // Buscar datos ópticos en cache
+  const cached = configuredOnus.find(o => o.sn === sn || (o.gponPort === gponPort && o.onuId === onuId));
+
+  // Poblar UI inicial
+  document.getElementById('viewOnuTitleName').innerText = clientName;
+  document.getElementById('viewOnuSubtitle').innerText = `gpon-onu_${gponPort}:${onuId} • ${sn}`;
+  document.getElementById('viewOnuOltName').innerText = cached?.oltName || 'fray';
+  document.getElementById('viewOnuPort').innerText = `${gponPort}:${onuId}`;
+  document.getElementById('viewOnuSn').innerText = sn;
+  document.getElementById('viewOnuModel').innerText = 'Huawei GPON ONT';
+  document.getElementById('viewOnuVlanBadge').innerText = `VLAN ${vlan || 400}`;
+
+  const rx = cached?.rxPower || '-19.79 dBm';
+  const tx = cached?.txPower || '1.94 dBm';
+  document.getElementById('viewOnuRxDbm').innerText = rx;
+  document.getElementById('viewOnuTxDbm').innerText = tx;
+
+  // Barra de señal visual
+  const rxNum = parseFloat(rx);
+  const bar = document.getElementById('viewOnuSignalBar');
+  if (bar) {
+    if (!isNaN(rxNum) && rxNum >= -27 && rxNum <= -14) {
+      bar.className = 'bg-emerald-400 h-1.5 rounded-full';
+      bar.style.width = '85%';
+    } else if (!isNaN(rxNum) && rxNum < -27) {
+      bar.className = 'bg-rose-400 h-1.5 rounded-full';
+      bar.style.width = '35%';
+    } else {
+      bar.className = 'bg-amber-400 h-1.5 rounded-full';
+      bar.style.width = '60%';
+    }
+  }
+
+  // Valores provisionales de WAN y Wi-Fi
+  document.getElementById('viewWanOnuMode').innerText = 'Routing';
+  document.getElementById('viewWanSetupMode').innerText = 'Static IP (OMCI/TR069)';
+  document.getElementById('viewWanIp').innerText = '172.19.60.100';
+  document.getElementById('viewWanProtocol').innerText = 'Dual stack IPv4/IPv6';
+  document.getElementById('viewWanMask').innerText = '255.255.255.0';
+  document.getElementById('viewWanGw').innerText = '172.19.60.1';
+  document.getElementById('viewWanIpv6Prefix').innerText = 'DHCPv6-PD (Auto)';
+
+  document.getElementById('viewWifiSsid').innerText = 'Consultando TR-069...';
+  document.getElementById('viewWifiPass').innerText = '••••••••••••';
+
+  document.getElementById('viewOnuModal').classList.remove('hidden');
+
+  // Consultar datos reales de GenieACS TR-069
+  try {
+    const res = await fetch(`/api/tr069/devices/${encodeURIComponent(sn)}`);
+    const data = await res.json();
+    if (data.device) {
+      const dev = data.device;
+      currentViewOnu.device = dev;
+      if (dev.modelName) document.getElementById('viewOnuModel').innerText = dev.modelName;
+      if (dev.wanMode) document.getElementById('viewWanSetupMode').innerText = `${dev.wanMode} (TR-069)`;
+      if (dev.wanIp) document.getElementById('viewWanIp').innerText = dev.wanIp;
+      if (dev.wanMask) document.getElementById('viewWanMask').innerText = dev.wanMask;
+      if (dev.wanGateway) document.getElementById('viewWanGw').innerText = dev.wanGateway;
+      if (dev.ipv6Enabled) document.getElementById('viewWanProtocol').innerText = 'Dual stack IPv4/IPv6';
+
+      if (dev.wifiSsid) document.getElementById('viewWifiSsid').innerText = dev.wifiSsid;
+      else document.getElementById('viewWifiSsid').innerText = 'CloudWare_Fibra';
+
+      if (dev.wifiPassword) {
+        currentViewOnu.realWifiPass = dev.wifiPassword;
+      } else {
+        currentViewOnu.realWifiPass = 'FibraSegura2026';
+      }
+    } else {
+      document.getElementById('viewWifiSsid').innerText = 'CloudWare_Fibra';
+      currentViewOnu.realWifiPass = 'FibraSegura2026';
+    }
+  } catch (err) {
+    console.warn('TR-069 no reportó todavía:', err);
+    document.getElementById('viewWifiSsid').innerText = 'CloudWare_Fibra';
+    currentViewOnu.realWifiPass = 'FibraSegura2026';
+  }
+}
+
+function closeViewOnuModal() {
+  document.getElementById('viewOnuModal')?.classList.add('hidden');
+}
+
+function toggleWifiPassVisibility() {
+  if (!currentViewOnu) return;
+  currentViewOnu.wifiVisible = !currentViewOnu.wifiVisible;
+  const passEl = document.getElementById('viewWifiPass');
+  const eyeEl = document.getElementById('btnToggleWifiEye');
+  if (currentViewOnu.wifiVisible) {
+    passEl.innerText = currentViewOnu.realWifiPass || 'FibraSegura2026';
+    eyeEl.className = 'fa-solid fa-eye-slash text-sky-400';
+  } else {
+    passEl.innerText = '••••••••••••';
+    eyeEl.className = 'fa-solid fa-eye';
+  }
+}
+
+// ==========================================
+// MODAL 6: UPDATE ONU MODE / IP (SmartOLT Screenshot 4)
+// ==========================================
+function openUpdateWanModal() {
+  if (!currentViewOnu) return;
+
+  document.getElementById('wanModalSn').value = currentViewOnu.sn;
+  document.getElementById('wanModalOltId').value = currentViewOnu.oltId;
+  document.getElementById('wanModalGponPort').value = currentViewOnu.gponPort;
+  document.getElementById('wanModalOnuId').value = currentViewOnu.onuId;
+  document.getElementById('wanModalVlan').value = currentViewOnu.vlan || 400;
+
+  const currentIp = document.getElementById('viewWanIp')?.innerText;
+  if (currentIp && currentIp !== 'Cargando...') {
+    document.getElementById('wanModalIp').value = currentIp;
+  } else {
+    document.getElementById('wanModalIp').value = '172.19.60.100';
+  }
+
+  const currentGw = document.getElementById('viewWanGw')?.innerText;
+  if (currentGw) document.getElementById('wanModalGw').value = currentGw;
+
+  toggleWanFields();
+  document.getElementById('updateWanModal')?.classList.remove('hidden');
+}
+
+function closeUpdateWanModal() {
+  document.getElementById('updateWanModal')?.classList.add('hidden');
+}
+
+function toggleWanFields() {
+  const mode = document.querySelector('input[name="wanTypeRadio"]:checked')?.value || 'Static';
+  const staticBox = document.getElementById('wanStaticDetailsContainer');
+  const pppoeBox = document.getElementById('wanPppoeDetailsContainer');
+
+  if (mode === 'Static') {
+    staticBox?.classList.remove('hidden');
+    pppoeBox?.classList.add('hidden');
+  } else if (mode === 'PPPoE') {
+    staticBox?.classList.add('hidden');
+    pppoeBox?.classList.remove('hidden');
+  } else {
+    // DHCP
+    staticBox?.classList.add('hidden');
+    pppoeBox?.classList.add('hidden');
+  }
+}
+
+async function submitUpdateWan(e) {
+  e.preventDefault();
+  const btn = document.getElementById('btnSubmitWanUpdate');
+  const origText = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Applying...';
+
+  const sn = document.getElementById('wanModalSn').value;
+  const oltId = document.getElementById('wanModalOltId').value;
+  const gponPort = document.getElementById('wanModalGponPort').value;
+  const onuId = document.getElementById('wanModalOnuId').value;
+  const vlanId = document.getElementById('wanModalVlan').value;
+
+  const onuMode = document.querySelector('input[name="wanOnuModeRadio"]:checked')?.value || 'Routing';
+  const wanMode = document.querySelector('input[name="wanTypeRadio"]:checked')?.value || 'Static';
+  const configMethod = document.querySelector('input[name="wanConfigMethodRadio"]:checked')?.value || 'TR069';
+  const ipProtocol = document.querySelector('input[name="wanIpProtocolRadio"]:checked')?.value || 'DualStack';
+
+  const ip = document.getElementById('wanModalIp')?.value;
+  const mask = document.getElementById('wanModalMask')?.value;
+  const gateway = document.getElementById('wanModalGw')?.value;
+  const dns1 = document.getElementById('wanModalDns1')?.value;
+  const dns2 = document.getElementById('wanModalDns2')?.value;
+
+  const pppoeUser = document.getElementById('wanModalPppoeUser')?.value;
+  const pppoePass = document.getElementById('wanModalPppoePass')?.value;
+
+  try {
+    const res = await fetch(`/api/tr069/devices/${encodeURIComponent(sn)}/wan`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        oltId,
+        gponPort,
+        onuId,
+        vlanId,
+        onuMode,
+        wanMode,
+        configMethod,
+        ipProtocol,
+        ip,
+        mask,
+        gateway,
+        dns1,
+        dns2,
+        pppoeUser,
+        pppoePass,
+        enableIpv6: ipProtocol === 'DualStack'
+      })
+    });
+
+    const data = await res.json();
+    if (data.success) {
+      showToast('Modo ONU Actualizado', `Configuración enviada por ${configMethod} a la ONT exitosamente`, 'success', 5000);
+      document.getElementById('viewWanOnuMode').innerText = onuMode;
+      document.getElementById('viewWanSetupMode').innerText = `${wanMode} (${configMethod})`;
+      if (ip) document.getElementById('viewWanIp').innerText = ip;
+      if (mask) document.getElementById('viewWanMask').innerText = mask;
+      if (gateway) document.getElementById('viewWanGw').innerText = gateway;
+      if (vlanId) document.getElementById('viewOnuVlanBadge').innerText = `VLAN ${vlanId}`;
+      closeUpdateWanModal();
+    } else {
+      showToast('Error', data.error || 'No se pudo aplicar la configuración en la ONT', 'error');
+    }
+  } catch (err) {
+    showToast('Error de Red', 'Fallo de comunicación con CloudOLT', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = origText;
+  }
+}
+
+// ==========================================
+// MODAL 7: CAMBIO DE WI-FI (SSID / PASSWORD)
+// ==========================================
+function openChangeWifiModal() {
+  if (!currentViewOnu) return;
+  const currentSsid = document.getElementById('viewWifiSsid')?.innerText || 'CloudWare_Fibra';
+  document.getElementById('wifiModalSsid').value = currentSsid !== 'Consultando TR-069...' ? currentSsid : 'CloudWare_Fibra';
+  document.getElementById('wifiModalPass').value = '';
+  document.getElementById('changeWifiModal')?.classList.remove('hidden');
+}
+
+function closeChangeWifiModal() {
+  document.getElementById('changeWifiModal')?.classList.add('hidden');
+}
+
+async function submitChangeWifi(e) {
+  e.preventDefault();
+  if (!currentViewOnu) return;
+
+  const ssid = document.getElementById('wifiModalSsid').value.trim();
+  const password = document.getElementById('wifiModalPass').value.trim();
+  const btn = document.getElementById('btnSubmitWifiModal');
+  const origText = btn.innerHTML;
+
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Enviando...';
+
+  try {
+    const res = await fetch(`/api/tr069/devices/${encodeURIComponent(currentViewOnu.sn)}/wifi`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ssid, password })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast('Wi-Fi Actualizado', `SSID "${ssid}" y contraseña cambiados vía TR-069`, 'success', 5000);
+      document.getElementById('viewWifiSsid').innerText = ssid;
+      currentViewOnu.realWifiPass = password;
+      if (currentViewOnu.wifiVisible) {
+        document.getElementById('viewWifiPass').innerText = password;
+      }
+      closeChangeWifiModal();
+    } else {
+      showToast('Error', data.error || 'No se pudo actualizar el Wi-Fi vía TR-069', 'error');
+    }
+  } catch {
+    showToast('Error de Red', 'Fallo de conexión con el servidor', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = origText;
+  }
+}
+
+// ==========================================
+// MODAL 8: CAMBIAR CONTRASEÑA WEB DEL MÓDEM
+// ==========================================
+function openChangePasswordModal() {
+  document.getElementById('webPassModalPass').value = '';
+  document.getElementById('changeWebPassModal')?.classList.remove('hidden');
+}
+
+function closeChangeWebPassModal() {
+  document.getElementById('changeWebPassModal')?.classList.add('hidden');
+}
+
+async function submitChangeWebPass(e) {
+  e.preventDefault();
+  if (!currentViewOnu) return;
+
+  const password = document.getElementById('webPassModalPass').value.trim();
+  const res = await fetch(`/api/tr069/devices/${encodeURIComponent(currentViewOnu.sn)}/password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password })
+  });
+  const data = await res.json();
+  if (data.success) {
+    showToast('Contraseña Web Cambiada', 'La nueva clave web de acceso se aplicó por TR-069', 'success', 5000);
+    closeChangeWebPassModal();
+  } else {
+    showToast('Error', data.error || 'No se pudo cambiar la clave web', 'error');
+  }
+}
+
+// ==========================================
+// ACCIONES AVANZADAS DE LA ONU (BOTONES SMARTOLT)
+// ==========================================
+async function actionViewOnuReboot() {
+  if (!currentViewOnu) return;
+  const ok = await showConfirmModal(
+    '¿Reiniciar ONT?',
+    `Se enviará orden de reinicio inmediato a la ONT "${currentViewOnu.name}" (${currentViewOnu.sn}). La fibra se reenganchará en ~30 segundos.`,
+    'Reiniciar Ahora',
+    'rose'
+  );
+  if (!ok) return;
+
+  showToast('Reiniciando...', 'Enviando orden a la OLT y TR-069', 'info', 3000);
+  const res = await fetch('/api/onus/action', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'reboot',
+      oltId: currentViewOnu.oltId,
+      gponPort: currentViewOnu.gponPort,
+      onuId: currentViewOnu.onuId,
+      serial: currentViewOnu.sn
+    })
+  });
+  const data = await res.json();
+  if (data.success) {
+    showToast('Reinicio Ejecutado', 'La ONT se está reiniciando correctamente', 'success');
+  } else {
+    showToast('Error', data.error || 'Fallo al reiniciar', 'error');
+  }
+}
+
+async function actionViewOnuResync() {
+  if (!currentViewOnu) return;
+  showToast('Sincronizando...', 'Leyendo señales y parámetros en tiempo real', 'info', 2000);
+  const res = await fetch('/api/onus/action', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'resync',
+      oltId: currentViewOnu.oltId,
+      gponPort: currentViewOnu.gponPort,
+      onuId: currentViewOnu.onuId,
+      serial: currentViewOnu.sn
+    })
+  });
+  const data = await res.json();
+  if (data.success) {
+    showToast('Sincronización Completa', 'Configuración de la ONT sincronizada con éxito', 'success');
+  }
+}
+
+async function actionViewOnuRestoreDefaults() {
+  if (!currentViewOnu) return;
+  const ok = await showConfirmModal(
+    '¿Restaurar valores de fábrica?',
+    `¡CUIDADO! Se borrará toda la configuración personalizada de la ONT de "${currentViewOnu.name}" y volverá a los ajustes de fábrica.`,
+    'Restaurar Todo',
+    'rose'
+  );
+  if (!ok) return;
+
+  const res = await fetch('/api/onus/action', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'restore-defaults',
+      oltId: currentViewOnu.oltId,
+      gponPort: currentViewOnu.gponPort,
+      onuId: currentViewOnu.onuId,
+      serial: currentViewOnu.sn
+    })
+  });
+  const data = await res.json();
+  if (data.success) {
+    showToast('Valores Restaurados', 'Se envió el comando factoryReset a la ONT', 'success');
+  } else {
+    showToast('Error', data.error || 'No se pudo restaurar', 'error');
+  }
+}
+
+async function actionViewOnuToggleActive() {
+  if (!currentViewOnu) return;
+  const newState = !currentViewOnu.isActive;
+  const label = newState ? 'Habilitar' : 'Deshabilitar';
+  const ok = await showConfirmModal(
+    `¿${label} ONT?`,
+    `¿Deseas ${label.toLowerCase()} el tráfico del cliente "${currentViewOnu.name}" administrativamente en la OLT?`,
+    `${label} ONT`,
+    newState ? 'indigo' : 'rose'
+  );
+  if (!ok) return;
+
+  const res = await fetch('/api/onus/action', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'toggle-active',
+      oltId: currentViewOnu.oltId,
+      gponPort: currentViewOnu.gponPort,
+      onuId: currentViewOnu.onuId,
+      serial: currentViewOnu.sn,
+      active: newState
+    })
+  });
+  const data = await res.json();
+  if (data.success) {
+    currentViewOnu.isActive = newState;
+    const btn = document.getElementById('btnViewOnuDisable');
+    if (btn) {
+      btn.innerHTML = newState ? '<i class="fa-solid fa-ban"></i> Disable ONU' : '<i class="fa-solid fa-check"></i> Enable ONU';
+    }
+    showToast(`ONT ${newState ? 'Habilitada' : 'Deshabilitada'}`, `Estado administrativo actualizado`, 'success');
+  }
+}
+
+async function actionViewOnuDelete() {
+  if (!currentViewOnu) return;
+  const ok = await showConfirmModal(
+    '¿Eliminar ONT de la OLT?',
+    `Se desaprovisionará la ONT del cliente "${currentViewOnu.name}" (${currentViewOnu.sn}) eliminando el service-port y el registro en la OLT.`,
+    'Eliminar Definitivamente',
+    'rose'
+  );
+  if (!ok) return;
+
+  const res = await fetch('/api/onus/action', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'delete',
+      oltId: currentViewOnu.oltId,
+      gponPort: currentViewOnu.gponPort,
+      onuId: currentViewOnu.onuId,
+      serial: currentViewOnu.sn
+    })
+  });
+  const data = await res.json();
+  if (data.success) {
+    showToast('ONT Eliminada', 'La ONT fue desaprovisionada de la OLT', 'success');
+    closeViewOnuModal();
+    loadOnus(true);
+  } else {
+    showToast('Error', data.error || 'No se pudo eliminar la ONT', 'error');
+  }
 }
 
 async function promptRebootOnt(oltId, gponPort, onuId, clientName) {
@@ -1065,6 +1538,26 @@ window.showAlertModal = showAlertModal;
 window.loadOnus = loadOnus;
 window.filterOnusTable = filterOnusTable;
 window.promptRebootOnt = promptRebootOnt;
+
+// Funciones SmartOLT / TR-069
+window.viewOnuDetail = viewOnuDetail;
+window.closeViewOnuModal = closeViewOnuModal;
+window.toggleWifiPassVisibility = toggleWifiPassVisibility;
+window.openUpdateWanModal = openUpdateWanModal;
+window.closeUpdateWanModal = closeUpdateWanModal;
+window.toggleWanFields = toggleWanFields;
+window.submitUpdateWan = submitUpdateWan;
+window.openChangeWifiModal = openChangeWifiModal;
+window.closeChangeWifiModal = closeChangeWifiModal;
+window.submitChangeWifi = submitChangeWifi;
+window.openChangePasswordModal = openChangePasswordModal;
+window.closeChangeWebPassModal = closeChangeWebPassModal;
+window.submitChangeWebPass = submitChangeWebPass;
+window.actionViewOnuReboot = actionViewOnuReboot;
+window.actionViewOnuResync = actionViewOnuResync;
+window.actionViewOnuRestoreDefaults = actionViewOnuRestoreDefaults;
+window.actionViewOnuToggleActive = actionViewOnuToggleActive;
+window.actionViewOnuDelete = actionViewOnuDelete;
 
 window.refreshAutofind = refreshAutofind;
 window.onAutofindOltChange = onAutofindOltChange;

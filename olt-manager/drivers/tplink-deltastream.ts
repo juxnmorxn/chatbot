@@ -527,4 +527,50 @@ copy running-config startup-config
     }
     return list;
   }
+
+  /**
+   * Configurar modo IP / WAN via OMCI (para OLTs que soportan ont ipconfig)
+   */
+  public async configureOntWanOmci(gponPort: string, onuId: number, params: { mode: string; ip?: string; mask?: string; gateway?: string; vlanId?: number }): Promise<{ success: boolean; log: string }> {
+    let cmd = `configure\ninterface gpon ${gponPort}\n`;
+    if (params.mode === 'Static' && params.ip && params.mask) {
+      cmd += ` ont ipconfig ${onuId} static ip-address ${params.ip} mask ${params.mask} ${params.gateway ? `gateway ${params.gateway}` : ''}\n`;
+    } else if (params.mode === 'DHCP') {
+      cmd += ` ont ipconfig ${onuId} dhcp\n`;
+    }
+    cmd += `exit\nend\ncopy running-config startup-config\n`;
+    try {
+      const log = await this.executeCommand(cmd, 12000);
+      return { success: true, log };
+    } catch (err: any) {
+      return { success: false, log: err.message || String(err) };
+    }
+  }
+
+  /**
+   * Habilitar o Deshabilitar ONT administrativamente en la OLT
+   */
+  public async setOntAdminState(gponPort: string, onuId: number, active: boolean): Promise<{ success: boolean; log: string }> {
+    const action = active ? 'activate' : 'deactivate';
+    const cmd = `configure\ninterface gpon ${gponPort}\n ont ${action} ${onuId}\nexit\nend\n`;
+    try {
+      const log = await this.executeCommand(cmd, 10000);
+      return { success: true, log };
+    } catch (err: any) {
+      return { success: false, log: err.message || String(err) };
+    }
+  }
+
+  /**
+   * Restaurar ONT a valores de fábrica desde OLT
+   */
+  public async restoreOntFactory(gponPort: string, onuId: number): Promise<{ success: boolean; log: string }> {
+    const cmd = `configure\ninterface gpon ${gponPort}\n ont reset ${onuId}\nexit\nend\n`;
+    try {
+      const log = await this.executeCommand(cmd, 10000);
+      return { success: true, log };
+    } catch (err: any) {
+      return { success: false, log: err.message || String(err) };
+    }
+  }
 }

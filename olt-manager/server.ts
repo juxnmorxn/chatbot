@@ -12,12 +12,14 @@ import {
   getWireguardStats,
   buildMikrotikScript
 } from './wireguard.js';
+import { GenieAcsClient } from './services/genieacs-client.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.OLT_PORT || 3001;
+const acsClient = new GenieAcsClient();
 
 app.use(cors());
 app.use(express.json());
@@ -575,6 +577,367 @@ app.get('/', async (req: Request, res: Response) => {
   </div>
 
   <!-- ========================================== -->
+  <!-- MODAL 5: DETALLE DE LA ONU (SmartOLT Screenshot 3) -->
+  <!-- ========================================== -->
+  <div id="viewOnuModal" class="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 hidden flex items-center justify-center p-3 sm:p-5">
+    <div class="glass-card w-full max-w-4xl rounded-2xl p-6 border border-gray-700/60 space-y-4 max-h-[92vh] overflow-y-auto">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-gray-800 gap-2">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-sky-500/10 text-sky-400 flex items-center justify-center text-lg shrink-0">
+            <i class="fa-solid fa-network-wired"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-extrabold text-white flex items-center gap-2">
+              <span id="viewOnuTitleName">Cliente</span>
+              <span id="viewOnuStatusPill" class="text-[10px] px-2 py-0.5 rounded-full font-bold">ONLINE</span>
+            </h3>
+            <p class="text-xs text-gray-400 font-mono" id="viewOnuSubtitle">gpon-onu_1/0/1:1 &bull; HWTC-685E10B6</p>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-[11px] px-2.5 py-1 rounded-lg bg-emerald-950/60 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5 font-mono">
+            <i class="fa-solid fa-server text-[10px]"></i> TR-069 ACS: 10.200.0.1:7547
+          </span>
+          <button onclick="closeViewOnuModal()" class="text-gray-400 hover:text-white p-1 text-lg">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div class="p-3.5 rounded-xl bg-gray-950/80 border border-gray-800/80 space-y-1.5 text-xs">
+          <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Dispositivo & OLT</div>
+          <div class="flex justify-between"><span class="text-gray-400">OLT:</span> <span id="viewOnuOltName" class="font-bold text-white">fray</span></div>
+          <div class="flex justify-between"><span class="text-gray-400">Puerto GPON:</span> <span id="viewOnuPort" class="font-mono text-gray-200">1/0/1:1</span></div>
+          <div class="flex justify-between"><span class="text-gray-400">Número de Serie:</span> <span id="viewOnuSn" class="font-mono text-sky-400 font-bold">HWTC-685E10B6</span></div>
+          <div class="flex justify-between"><span class="text-gray-400">Modelo:</span> <span id="viewOnuModel" class="text-gray-200">Huawei GPON ONT</span></div>
+        </div>
+
+        <div class="p-3.5 rounded-xl bg-gray-950/80 border border-gray-800/80 space-y-2 text-xs">
+          <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Potencia Óptica (dBm)</div>
+          <div class="flex items-center justify-between">
+            <span class="text-gray-400">Rx Power (ONU):</span>
+            <span id="viewOnuRxDbm" class="font-mono font-bold text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-500/30 text-xs">-19.79 dBm</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-gray-400">Tx Power (Láser):</span>
+            <span id="viewOnuTxDbm" class="font-mono text-gray-300 text-xs">1.94 dBm</span>
+          </div>
+          <div class="w-full bg-gray-900 rounded-full h-1.5 mt-1 overflow-hidden">
+            <div id="viewOnuSignalBar" class="bg-emerald-400 h-1.5 rounded-full" style="width: 85%;"></div>
+          </div>
+        </div>
+
+        <div class="p-3.5 rounded-xl bg-gray-950/80 border border-gray-800/80 space-y-2 text-xs">
+          <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Estado TR-069 CWMP</div>
+          <div class="flex items-center justify-between">
+            <span class="text-gray-400">Servidor CWMP:</span>
+            <span class="text-emerald-400 font-bold flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> GenieACS Online</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-gray-400">VLAN de Servicio:</span>
+            <span id="viewOnuVlanBadge" class="font-mono text-indigo-300 px-2 py-0.5 rounded bg-indigo-950/40 border border-indigo-500/30">VLAN 400</span>
+          </div>
+          <div class="text-[11px] text-gray-400 flex items-center gap-1">
+            <i class="fa-solid fa-circle-check text-emerald-400 text-[10px]"></i> TR-069 / OMCI Habilitado
+          </div>
+        </div>
+      </div>
+
+      <div class="p-4 rounded-xl bg-gray-900/50 border border-gray-800 space-y-3">
+        <div class="flex items-center justify-between">
+          <h4 class="text-xs font-bold text-white flex items-center gap-2">
+            <i class="fa-solid fa-sliders text-indigo-400"></i> Modo de Operación & Enrutamiento WAN (IPv4 / IPv6)
+          </h4>
+          <button onclick="openUpdateWanModal()" class="px-3 py-1.5 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow-md shadow-indigo-500/20">
+            <i class="fa-solid fa-pen-to-square"></i> Update ONU mode / IP
+          </button>
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+          <div class="p-2.5 rounded-lg bg-gray-950 border border-gray-800/80">
+            <span class="text-[10px] text-gray-400 uppercase block font-semibold">Modo ONU</span>
+            <span id="viewWanOnuMode" class="font-bold text-white">Routing</span>
+          </div>
+          <div class="p-2.5 rounded-lg bg-gray-950 border border-gray-800/80">
+            <span class="text-[10px] text-gray-400 uppercase block font-semibold">Tipo Conexión WAN</span>
+            <span id="viewWanSetupMode" class="font-bold text-sky-400">Static IP (TR-069)</span>
+          </div>
+          <div class="p-2.5 rounded-lg bg-gray-950 border border-gray-800/80">
+            <span class="text-[10px] text-gray-400 uppercase block font-semibold">Dirección IPv4 WAN</span>
+            <span id="viewWanIp" class="font-mono font-bold text-indigo-300">172.19.60.100</span>
+          </div>
+          <div class="p-2.5 rounded-lg bg-gray-950 border border-gray-800/80">
+            <span class="text-[10px] text-gray-400 uppercase block font-semibold">Protocolo IP</span>
+            <span id="viewWanProtocol" class="font-bold text-emerald-400">Dual stack IPv4/IPv6</span>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs pt-1">
+          <div class="text-gray-400 flex justify-between px-2"><span>Máscara de Red:</span> <span id="viewWanMask" class="font-mono text-gray-200">255.255.255.0</span></div>
+          <div class="text-gray-400 flex justify-between px-2"><span>Gateway:</span> <span id="viewWanGw" class="font-mono text-gray-200">172.19.60.1</span></div>
+          <div class="text-gray-400 flex justify-between px-2"><span>Prefijo IPv6:</span> <span id="viewWanIpv6Prefix" class="font-mono text-emerald-300">DHCPv6-PD (Auto)</span></div>
+        </div>
+      </div>
+
+      <div class="p-4 rounded-xl bg-gray-900/50 border border-gray-800 space-y-3">
+        <div class="flex items-center justify-between">
+          <h4 class="text-xs font-bold text-white flex items-center gap-2">
+            <i class="fa-solid fa-wifi text-emerald-400"></i> Red Inalámbrica Wi-Fi & Seguridad
+          </h4>
+          <div class="flex items-center gap-2">
+            <button onclick="openChangePasswordModal()" class="px-2.5 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-xs font-semibold transition flex items-center gap-1">
+              <i class="fa-solid fa-key"></i> Clave Web
+            </button>
+            <button onclick="openChangeWifiModal()" class="px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow-md shadow-emerald-500/20">
+              <i class="fa-solid fa-wifi"></i> Cambiar Wi-Fi
+            </button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+          <div class="p-3 rounded-lg bg-gray-950 border border-gray-800/80 flex items-center justify-between">
+            <div>
+              <span class="text-[10px] text-gray-400 uppercase block font-semibold">Nombre de Red (SSID)</span>
+              <span id="viewWifiSsid" class="font-bold text-white text-sm">CloudWare_Fibra</span>
+            </div>
+            <i class="fa-solid fa-signal text-emerald-400/60 text-lg"></i>
+          </div>
+          <div class="p-3 rounded-lg bg-gray-950 border border-gray-800/80 flex items-center justify-between">
+            <div>
+              <span class="text-[10px] text-gray-400 uppercase block font-semibold">Contraseña Wi-Fi (WPA2)</span>
+              <span id="viewWifiPass" class="font-mono text-gray-200 text-sm">••••••••••••</span>
+            </div>
+            <button onclick="toggleWifiPassVisibility()" class="text-gray-400 hover:text-white p-1 text-xs">
+              <i class="fa-solid fa-eye" id="btnToggleWifiEye"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap items-center justify-between pt-3 border-t border-gray-800 gap-2">
+        <div class="flex flex-wrap items-center gap-2">
+          <button onclick="actionViewOnuReboot()" class="px-3 py-2 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5">
+            <i class="fa-solid fa-power-off"></i> Reboot
+          </button>
+          <button onclick="actionViewOnuResync()" class="px-3 py-2 bg-sky-600/20 hover:bg-sky-600/30 border border-sky-500/40 text-sky-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5">
+            <i class="fa-solid fa-rotate"></i> Resync config
+          </button>
+          <button onclick="actionViewOnuRestoreDefaults()" class="px-3 py-2 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/40 text-purple-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5">
+            <i class="fa-solid fa-clock-rotate-left"></i> Restore defaults
+          </button>
+          <button onclick="actionViewOnuToggleActive()" id="btnViewOnuDisable" class="px-3 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5">
+            <i class="fa-solid fa-ban"></i> Disable ONU
+          </button>
+        </div>
+
+        <button onclick="actionViewOnuDelete()" class="px-3.5 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-lg shadow-rose-600/25">
+          <i class="fa-solid fa-trash"></i> Delete
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL 6: UPDATE ONU MODE / IP (SmartOLT Screenshot 4 - EXACT MATCH) -->
+  <!-- ========================================== -->
+  <div id="updateWanModal" class="fixed inset-0 bg-black/85 backdrop-blur-md z-[60] hidden flex items-center justify-center p-3 sm:p-5">
+    <div class="glass-card w-full max-w-lg rounded-2xl p-6 border border-gray-700/80 space-y-4 max-h-[92vh] overflow-y-auto shadow-2xl">
+      <div class="flex justify-between items-center pb-2.5 border-b border-gray-800">
+        <h3 class="text-base font-bold text-white flex items-center gap-2">
+          Update ONU mode
+        </h3>
+        <button onclick="closeUpdateWanModal()" class="text-gray-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+
+      <form onsubmit="submitUpdateWan(event)" class="space-y-4 text-xs">
+        <input type="hidden" id="wanModalSn">
+        <input type="hidden" id="wanModalOltId">
+        <input type="hidden" id="wanModalGponPort">
+        <input type="hidden" id="wanModalOnuId">
+
+        <div>
+          <label class="text-gray-300 font-semibold block mb-1">WAN VLAN-ID</label>
+          <input type="number" id="wanModalVlan" value="400" required class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white font-mono focus:outline-none focus:border-indigo-500">
+          <span class="text-[10px] text-gray-500 mt-0.5 block">After changing the WAN VLAN-ID, please check the Ethernet ports settings and update VLANs as desired.</span>
+        </div>
+
+        <div class="flex items-center justify-between py-1">
+          <span class="text-gray-300 font-semibold">ONU mode</span>
+          <div class="flex items-center gap-4">
+            <label class="flex items-center gap-1.5 cursor-pointer text-gray-200">
+              <input type="radio" name="wanOnuModeRadio" value="Routing" checked class="text-indigo-600 focus:ring-0"> Routing
+            </label>
+            <label class="flex items-center gap-1.5 cursor-pointer text-gray-200">
+              <input type="radio" name="wanOnuModeRadio" value="Bridging" class="text-indigo-600 focus:ring-0"> Bridging
+            </label>
+          </div>
+        </div>
+
+        <div class="space-y-1.5 pt-1 border-t border-gray-800/80">
+          <span class="text-gray-300 font-semibold block">WAN mode</span>
+          <div class="flex flex-wrap items-center gap-4 pl-1">
+            <label class="flex items-center gap-1.5 cursor-pointer text-gray-400 text-[11px]">
+              <input type="radio" name="wanTypeRadio" value="DHCP" onchange="toggleWanFields()"> DHCP
+            </label>
+            <label class="flex items-center gap-1.5 cursor-pointer text-white font-semibold text-[11px]">
+              <input type="radio" name="wanTypeRadio" value="Static" checked onchange="toggleWanFields()"> Static IP
+            </label>
+            <label class="flex items-center gap-1.5 cursor-pointer text-gray-400 text-[11px]">
+              <input type="radio" name="wanTypeRadio" value="PPPoE" onchange="toggleWanFields()"> PPPoE
+            </label>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between py-1 border-t border-gray-800/80">
+          <span class="text-gray-300 font-semibold">Config method</span>
+          <div class="flex items-center gap-4">
+            <label class="flex items-center gap-1.5 cursor-pointer text-gray-300 text-[11px]">
+              <input type="radio" name="wanConfigMethodRadio" value="OMCI"> OMCI
+            </label>
+            <label class="flex items-center gap-1.5 cursor-pointer text-sky-400 font-bold text-[11px]">
+              <input type="radio" name="wanConfigMethodRadio" value="TR069" checked> TR069
+            </label>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between py-1 border-t border-gray-800/80">
+          <span class="text-gray-300 font-semibold">IP Protocol</span>
+          <div class="flex items-center gap-4">
+            <label class="flex items-center gap-1.5 cursor-pointer text-gray-300 text-[11px]">
+              <input type="radio" name="wanIpProtocolRadio" value="IPv4"> IPv4
+            </label>
+            <label class="flex items-center gap-1.5 cursor-pointer text-emerald-400 font-bold text-[11px]">
+              <input type="radio" name="wanIpProtocolRadio" value="DualStack" checked> Dual stack IPv4/IPv6
+            </label>
+          </div>
+        </div>
+
+        <div id="wanStaticDetailsContainer" class="space-y-2.5 p-3.5 rounded-xl bg-gray-950/80 border border-gray-800">
+          <div>
+            <label class="text-gray-400 uppercase text-[10px] font-bold block mb-1">IPv4 ADDRESS</label>
+            <input type="text" id="wanModalIp" placeholder="172.19.60.100" class="w-full bg-gray-900 border border-gray-800 rounded-lg p-2 text-white font-mono text-xs focus:outline-none focus:border-indigo-500">
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-gray-400 uppercase text-[10px] font-bold block mb-1">SUBNET MASK</label>
+              <input type="text" id="wanModalMask" value="255.255.255.0" class="w-full bg-gray-900 border border-gray-800 rounded-lg p-2 text-white font-mono text-xs focus:outline-none focus:border-indigo-500">
+            </div>
+            <div>
+              <label class="text-gray-400 uppercase text-[10px] font-bold block mb-1">DEFAULT GATEWAY</label>
+              <input type="text" id="wanModalGw" placeholder="172.19.60.1" class="w-full bg-gray-900 border border-gray-800 rounded-lg p-2 text-white font-mono text-xs focus:outline-none focus:border-indigo-500">
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-gray-400 uppercase text-[10px] font-bold block mb-1">DNS 1</label>
+              <input type="text" id="wanModalDns1" value="8.8.8.8" class="w-full bg-gray-900 border border-gray-800 rounded-lg p-2 text-white font-mono text-xs focus:outline-none focus:border-indigo-500">
+            </div>
+            <div>
+              <label class="text-gray-400 uppercase text-[10px] font-bold block mb-1">DNS 2</label>
+              <input type="text" id="wanModalDns2" value="8.8.4.4" class="w-full bg-gray-900 border border-gray-800 rounded-lg p-2 text-white font-mono text-xs focus:outline-none focus:border-indigo-500">
+            </div>
+          </div>
+        </div>
+
+        <div id="wanPppoeDetailsContainer" class="hidden space-y-2.5 p-3.5 rounded-xl bg-gray-950/80 border border-gray-800">
+          <div>
+            <label class="text-gray-400 uppercase text-[10px] font-bold block mb-1">PPPoE Username</label>
+            <input type="text" id="wanModalPppoeUser" placeholder="usuario@cloudware" class="w-full bg-gray-900 border border-gray-800 rounded-lg p-2 text-white text-xs">
+          </div>
+          <div>
+            <label class="text-gray-400 uppercase text-[10px] font-bold block mb-1">PPPoE Password</label>
+            <input type="password" id="wanModalPppoePass" placeholder="••••••••" class="w-full bg-gray-900 border border-gray-800 rounded-lg p-2 text-white text-xs">
+          </div>
+        </div>
+
+        <div class="space-y-1.5 pt-1 border-t border-gray-800/80">
+          <div class="flex items-center justify-between">
+            <span class="text-gray-300 font-semibold">IPv6 address</span>
+            <div class="flex items-center gap-3">
+              <label class="flex items-center gap-1 cursor-pointer text-emerald-400 font-bold text-[11px]"><input type="radio" name="wanIpv6AddrRadio" value="DHCPv6" checked> DHCPv6</label>
+              <label class="flex items-center gap-1 cursor-pointer text-gray-400 text-[11px]"><input type="radio" name="wanIpv6AddrRadio" value="Auto"> Auto</label>
+              <label class="flex items-center gap-1 cursor-pointer text-gray-400 text-[11px]"><input type="radio" name="wanIpv6AddrRadio" value="None"> None</label>
+            </div>
+          </div>
+          <div class="flex items-center justify-between pt-1">
+            <span class="text-gray-300 font-semibold">IPv6 prefix</span>
+            <div class="flex items-center gap-3">
+              <label class="flex items-center gap-1 cursor-pointer text-emerald-400 font-bold text-[11px]"><input type="radio" name="wanIpv6PrefixRadio" value="DHCPv6-PD" checked> DHCPv6-PD</label>
+              <label class="flex items-center gap-1 cursor-pointer text-gray-400 text-[11px]"><input type="radio" name="wanIpv6PrefixRadio" value="None"> None</label>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-2.5 pt-3 border-t border-gray-800">
+          <button type="button" onclick="closeUpdateWanModal()" class="px-4 py-2 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-300 font-semibold">Close</button>
+          <button type="submit" id="btnSubmitWanUpdate" class="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold flex items-center gap-1.5 shadow-lg shadow-emerald-600/25 transition">
+            <i class="fa-solid fa-check"></i> Update
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL 7: CAMBIO DE WI-FI (SSID / PASSWORD) -->
+  <!-- ========================================== -->
+  <div id="changeWifiModal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-[65] hidden flex items-center justify-center p-4">
+    <div class="glass-card w-full max-w-md rounded-2xl p-6 border border-emerald-500/40 space-y-4 shadow-2xl">
+      <div class="flex justify-between items-center pb-2.5 border-b border-gray-800">
+        <h3 class="text-base font-bold text-white flex items-center gap-2">
+          <i class="fa-solid fa-wifi text-emerald-400"></i> Cambiar Wi-Fi (TR-069)
+        </h3>
+        <button onclick="closeChangeWifiModal()" class="text-gray-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+
+      <form onsubmit="submitChangeWifi(event)" class="space-y-3.5 text-xs">
+        <div>
+          <label class="text-gray-300 font-semibold block mb-1">Nombre de Red Wi-Fi (SSID)</label>
+          <input type="text" id="wifiModalSsid" required placeholder="MiRedWifi" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white focus:outline-none focus:border-emerald-500">
+        </div>
+        <div>
+          <label class="text-gray-300 font-semibold block mb-1">Nueva Contraseña Wi-Fi (WPA2-PSK)</label>
+          <input type="text" id="wifiModalPass" required minlength="8" placeholder="Mínimo 8 caracteres" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white font-mono focus:outline-none focus:border-emerald-500">
+        </div>
+
+        <div class="flex justify-end gap-2.5 pt-3 border-t border-gray-800">
+          <button type="button" onclick="closeChangeWifiModal()" class="px-4 py-2 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-300 font-semibold">Cancelar</button>
+          <button type="submit" id="btnSubmitWifiModal" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold flex items-center gap-1.5 shadow-lg shadow-emerald-600/25 transition">
+            <i class="fa-solid fa-floppy-disk"></i> Aplicar en ONT
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL 8: CAMBIAR CONTRASEÑA WEB DEL MÓDEM -->
+  <!-- ========================================== -->
+  <div id="changeWebPassModal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-[65] hidden flex items-center justify-center p-4">
+    <div class="glass-card w-full max-w-md rounded-2xl p-6 border border-indigo-500/40 space-y-4 shadow-2xl">
+      <div class="flex justify-between items-center pb-2.5 border-b border-gray-800">
+        <h3 class="text-base font-bold text-white flex items-center gap-2">
+          <i class="fa-solid fa-key text-indigo-400"></i> Cambiar Contraseña Web del Módem
+        </h3>
+        <button onclick="closeChangeWebPassModal()" class="text-gray-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+
+      <form onsubmit="submitChangeWebPass(event)" class="space-y-3.5 text-xs">
+        <div>
+          <label class="text-gray-300 font-semibold block mb-1">Nueva Contraseña Web de Administración</label>
+          <input type="password" id="webPassModalPass" required minlength="6" placeholder="••••••••" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white font-mono focus:outline-none focus:border-indigo-500">
+        </div>
+
+        <div class="flex justify-end gap-2.5 pt-3 border-t border-gray-800">
+          <button type="button" onclick="closeChangeWebPassModal()" class="px-4 py-2 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-300 font-semibold">Cancelar</button>
+          <button type="submit" id="btnSubmitWebPassModal" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold flex items-center gap-1.5 shadow-lg shadow-indigo-600/25 transition">
+            <i class="fa-solid fa-floppy-disk"></i> Guardar en ONT
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
   <!-- SISTEMA DE TOASTS EN VIVO -->
   <!-- ========================================== -->
   <div id="toastContainer" class="fixed top-5 right-5 z-[9999] flex flex-col gap-2.5 max-w-sm pointer-events-none"></div>
@@ -1016,6 +1379,200 @@ app.post('/api/onus/reboot', async (req: Request, res: Response) => {
     const driver = new TpLinkDeltaStreamDriver(olt);
     const rebootRes = await driver.rebootOnt(gponPort || '1/0/1', parseInt(onuId, 10));
     res.json(rebootRes);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ==========================================
+// APIS TR-069 GENIEACS CWMP INTEGRATION
+// ==========================================
+
+// 3. Consultar todos los dispositivos TR-069 reportados en GenieACS
+app.get('/api/tr069/devices', async (_req: Request, res: Response) => {
+  try {
+    const devices = await acsClient.getDevices();
+    res.json({ success: true, count: devices.length, devices });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message, devices: [] });
+  }
+});
+
+// 4. Consultar un dispositivo TR-069 específico por número de serie
+app.get('/api/tr069/devices/:sn', async (req: Request, res: Response) => {
+  try {
+    const serial = req.params.sn;
+    const device = await acsClient.getDeviceBySerial(serial);
+    res.json({ success: true, device });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message, device: null });
+  }
+});
+
+// 5. Cambiar Wi-Fi (SSID y Contraseña WPA2) por TR-069
+app.post('/api/tr069/devices/:sn/wifi', async (req: Request, res: Response) => {
+  try {
+    const serial = req.params.sn;
+    const { ssid, password } = req.body;
+
+    if (!ssid || !password) {
+      return res.status(400).json({ success: false, error: 'SSID y Contraseña son requeridos' });
+    }
+
+    const dev = await acsClient.getDeviceBySerial(serial);
+    const deviceId = dev ? dev._id : serial;
+
+    const result = await acsClient.setWifi(deviceId, ssid, password);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 6. Cambiar Modo WAN (IP Estática / DHCP / PPPoE / IPv6) vía TR-069 y/o OMCI
+app.post('/api/tr069/devices/:sn/wan', async (req: Request, res: Response) => {
+  try {
+    const serial = req.params.sn;
+    const {
+      oltId,
+      gponPort,
+      onuId,
+      vlanId,
+      onuMode,
+      wanMode,
+      configMethod,
+      ipProtocol,
+      ip,
+      mask,
+      gateway,
+      dns1,
+      dns2,
+      pppoeUser,
+      pppoePass,
+      enableIpv6
+    } = req.body;
+
+    let omciResult: any = { success: true };
+
+    // Si se especificó método OMCI o OLT presente, aplicar configuración en OLT CLI
+    if (configMethod === 'OMCI' && oltId && gponPort && onuId !== undefined) {
+      const db = getOltDb();
+      const resDb = await db.execute({ sql: 'SELECT * FROM olts WHERE id = ?', args: [oltId] });
+      const olt = resDb.rows[0] as unknown as OltDevice;
+      if (olt) {
+        const driver = new TpLinkDeltaStreamDriver(olt);
+        omciResult = await driver.configureOntWanOmci(gponPort, parseInt(onuId, 10), {
+          mode: wanMode || 'Static',
+          ip,
+          mask,
+          gateway,
+          vlanId: vlanId ? parseInt(vlanId, 10) : undefined
+        });
+      }
+    }
+
+    // Configuración por TR-069 GenieACS
+    const dev = await acsClient.getDeviceBySerial(serial);
+    const deviceId = dev ? dev._id : serial;
+
+    const acsResult = await acsClient.setWanMode(deviceId, {
+      mode: wanMode || 'Static',
+      ip,
+      mask,
+      gateway,
+      dns1,
+      dns2,
+      pppoeUser,
+      pppoePass,
+      vlanId: vlanId ? parseInt(vlanId, 10) : undefined,
+      enableIpv6: ipProtocol === 'DualStack' || !!enableIpv6
+    });
+
+    res.json({
+      success: acsResult.success || omciResult.success,
+      acs: acsResult,
+      omci: omciResult
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 7. Cambiar Contraseña Web del Módem por TR-069
+app.post('/api/tr069/devices/:sn/password', async (req: Request, res: Response) => {
+  try {
+    const serial = req.params.sn;
+    const { password } = req.body;
+    if (!password) {
+      return res.status(400).json({ success: false, error: 'La nueva contraseña es requerida' });
+    }
+
+    const dev = await acsClient.getDeviceBySerial(serial);
+    const deviceId = dev ? dev._id : serial;
+
+    const result = await acsClient.setWebPassword(deviceId, password);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 8. Acciones avanzadas SmartOLT (Reboot, Resync, Restore defaults, Toggle Active, Delete)
+app.post('/api/onus/action', async (req: Request, res: Response) => {
+  try {
+    const { action, oltId, gponPort, onuId, serial, active } = req.body;
+    const db = getOltDb();
+
+    let olt: OltDevice | null = null;
+    if (oltId) {
+      const resDb = await db.execute({ sql: 'SELECT * FROM olts WHERE id = ?', args: [oltId] });
+      olt = (resDb.rows[0] as unknown as OltDevice) || null;
+    }
+
+    let result: any = { success: true };
+
+    if (action === 'reboot') {
+      if (olt && gponPort && onuId !== undefined) {
+        const driver = new TpLinkDeltaStreamDriver(olt);
+        result = await driver.rebootOnt(gponPort, parseInt(onuId, 10));
+      }
+      if (serial) {
+        const dev = await acsClient.getDeviceBySerial(serial);
+        if (dev) await acsClient.reboot(dev._id);
+      }
+    } else if (action === 'restore-defaults') {
+      if (olt && gponPort && onuId !== undefined) {
+        const driver = new TpLinkDeltaStreamDriver(olt);
+        result = await driver.restoreOntFactory(gponPort, parseInt(onuId, 10));
+      }
+      if (serial) {
+        const dev = await acsClient.getDeviceBySerial(serial);
+        if (dev) await acsClient.factoryReset(dev._id);
+      }
+    } else if (action === 'toggle-active') {
+      if (olt && gponPort && onuId !== undefined) {
+        const driver = new TpLinkDeltaStreamDriver(olt);
+        result = await driver.setOntAdminState(gponPort, parseInt(onuId, 10), !!active);
+      }
+    } else if (action === 'delete') {
+      if (olt && gponPort && onuId !== undefined) {
+        const driver = new TpLinkDeltaStreamDriver(olt);
+        result = await driver.deleteOnt(gponPort, parseInt(onuId, 10));
+      }
+      if (serial) {
+        await db.execute({ sql: 'DELETE FROM provisioned_onts WHERE serial = ?', args: [serial] });
+      }
+    } else if (action === 'resync') {
+      if (olt && gponPort) {
+        const driver = new TpLinkDeltaStreamDriver(olt);
+        const optical = await driver.getOpticalLevels(gponPort);
+        result = { success: true, optical };
+      }
+    } else {
+      return res.status(400).json({ success: false, error: `Acción '${action}' no reconocida` });
+    }
+
+    res.json(result);
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
