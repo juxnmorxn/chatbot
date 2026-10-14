@@ -118,8 +118,9 @@ export function getWireguardStats(): Map<string, WireguardPeerStats> {
         const rx = parseInt(rxStr, 10) || 0;
         const tx = parseInt(txStr, 10) || 0;
         const secondsAgo = handshake > 0 ? (now - handshake) : null;
-        // Keepalive en MikroTik es de 25s; si no hay respuesta en 55s (más de 2 ciclos), se considera desconectado
-        const isConnected = handshake > 0 && secondsAgo !== null && secondsAgo <= 55;
+        // En WireGuard el re-keying completo de sesión ocurre cada 120-180 segundos.
+        // Si no hay handshake en más de 160 segundos, se considera caído.
+        const isConnected = handshake > 0 && secondsAgo !== null && secondsAgo <= 160;
 
         statsMap.set(pubKey, {
           publicKey: pubKey,
