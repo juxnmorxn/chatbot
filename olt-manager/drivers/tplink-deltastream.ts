@@ -1,6 +1,6 @@
 import { Client } from 'ssh2';
 
-export interface OltConfig {
+export interface OltDevice {
   id: string;
   name: string;
   model: string;
@@ -8,18 +8,20 @@ export interface OltConfig {
   port: number;
   username: string;
   password?: string;
-  totalGponPorts: number;
-  defaultVlan: number;
+  total_gpon_ports?: number;
+  default_vlan: number;
   community: string;
+  mikrotik_ip?: string;
+  mikrotik_name?: string;
+  status?: string;
+  last_latency_ms?: number;
+  last_checked_at?: string;
 }
 
 export interface AutofindOnt {
   gponPort: string;
-  onuIndex?: number;
   sn: string;
   vendor: string;
-  model?: string;
-  softwareVer?: string;
   discoveredAt: string;
 }
 
@@ -33,29 +35,32 @@ export interface OpticalInfo {
 }
 
 export class TpLinkDeltaStreamDriver {
-  private config: OltConfig;
+  private config: OltDevice;
 
-  constructor(config: OltConfig) {
+  constructor(config: OltDevice) {
     this.config = config;
   }
 
   /**
-   * Ejecuta comandos en la OLT vía SSH
+   * Ejecuta comandos en la OLT vía SSH con timeout configurable
    */
-  public async executeCommand(command: string): Promise<string> {
+  public async executeCommand(command: string, timeoutMs: number = 8000): Promise<string> {
     return new Promise((resolve, reject) => {
       const conn = new Client();
       let output = '';
+      let timer: NodeJS.Timeout;
 
       conn.on('ready', () => {
         conn.exec(command, (err, stream) => {
           if (err) {
+            clearTimeout(timer);
             conn.end();
             return reject(err);
           }
           stream.on('data', (d: Buffer) => { output += d.toString(); });
           stream.stderr.on('data', (d: Buffer) => { output += d.toString(); });
           stream.on('close', () => {
+            clearTimeout(timer);
             conn.end();
             resolve(output);
           });
@@ -63,17 +68,38 @@ export class TpLinkDeltaStreamDriver {
       });
 
       conn.on('error', (err) => {
+        clearTimeout(timer);
         reject(err);
       });
+
+      timer = setTimeout(() => {
+        conn.end();
+        reject(new Error(`Timeout SSH (${timeoutMs}ms) conectando a OLT ${this.config.ip}`));
+      }, timeoutMs);
 
       conn.connect({
         host: this.config.ip,
         port: this.config.port || 22,
         username: this.config.username,
         password: this.config.password || '',
-        readyTimeout: 10000,
+        readyTimeout: timeoutMs,
       });
     });
+  }
+
+  /**
+   * Prueba de conexión en tiempo real: mide latencia y obtiene modelo de la OLT
+   */
+  public async testConnection(): Promise<{ online: boolean; latencyMs: number; rawInfo?: string; error?: string }> {
+    const start = Date.now();
+    try {
+      // Comando básico de consulta en TP-Link DeltaStream
+      const raw = await this.executeCommand('show system-info\n', 5000);
+      const latencyMs = Date.now() - start;
+      return { online: true, latencyMs, rawInfo: raw };
+    } catch (err: any) {
+      return { online: false, latencyMs: 0, error: err.message || String(err) };
+    }
   }
 
   /**
@@ -81,7 +107,7 @@ export class TpLinkDeltaStreamDriver {
    */
   public async getAutofindOnts(port: string = '1/0/1'): Promise<AutofindOnt[]> {
     try {
-      const raw = await this.executeCommand(`show ont autofind gpon ${port}`);
+      const raw = await this.executeCommand(`show ont autofind gpon ${port}\n`);
       return this.parseAutofind(raw, port);
     } catch (error) {
       console.error(`[OLT ${this.config.name}] Error leyendo autofind:`, error);
@@ -95,10 +121,7 @@ export class TpLinkDeltaStreamDriver {
   public parseAutofind(cliOutput: string, gponPort: string): AutofindOnt[] {
     const onts: AutofindOnt[] = [];
     const lines = cliOutput.split('\n');
-
-    // Patrón típico: GPON Port / SN / Vendor / EquipID
-    // Ejemplo: 1/0/1   HWTC-6841F9B6   HWTC
-    const snRegex = /(HWTC|48575443|ALCL|ZTEG|ISPR)[0-9A-Za-z\-_]+/i;
+    const snRegex = /(HWTC|48575443|ALCL|ZTEG|ISPR|TPLG)[0-9A-Za-z\-_]+/i;
 
     for (const line of lines) {
       const match = line.match(snRegex);
@@ -118,7 +141,7 @@ export class TpLinkDeltaStreamDriver {
   }
 
   /**
-   * Aprovisionamiento en 1-Click de una ONT Huawei en TP-Link DeltaStream
+   * Aprovisionamiento en 1-Click de una ONT
    */
   public async provisionOnt(params: {
     gponPort: string;
@@ -146,9 +169,30 @@ copy running-config startup-config
 `;
 
     try {
-      const log = await this.executeCommand(cliScript);
+      const log = await this.executeCommand(cliScript, 15000);
       const isFailed = /error|invalid|failed/i.test(log);
       return { success: !isFailed, log };
+    } catch (err: any) {
+      return { success: false, log: err.message || String(err) };
+    }
+  }
+
+  /**
+   * Eliminar o desaprovisionar ONT
+   */
+  public async deleteOnt(gponPort: string, onuId: number): Promise<{ success: boolean; log: string }> {
+    const cliScript = `
+configure
+no service-port ${onuId}
+interface gpon ${gponPort}
+ ont delete ${onuId}
+exit
+end
+copy running-config startup-config
+`;
+    try {
+      const log = await this.executeCommand(cliScript, 10000);
+      return { success: true, log };
     } catch (err: any) {
       return { success: false, log: err.message || String(err) };
     }
@@ -159,7 +203,7 @@ copy running-config startup-config
    */
   public async getOpticalLevels(port: string = '1/0/1'): Promise<OpticalInfo[]> {
     try {
-      const raw = await this.executeCommand(`show ont optical-info gpon ${port}`);
+      const raw = await this.executeCommand(`show ont optical-info gpon ${port}\n`);
       return this.parseOpticalInfo(raw);
     } catch (err) {
       console.error(`[OLT ${this.config.name}] Error leyendo niveles ópticos:`, err);
@@ -174,7 +218,6 @@ copy running-config startup-config
     const list: OpticalInfo[] = [];
     const lines = output.split('\n');
 
-    // Ejemplo: ONU_ID | RX (dBm) | TX (dBm) | Status
     for (const line of lines) {
       const m = line.match(/^\s*(\d+)\s+([-\d.]+)\s+([-\d.]+)\s+(\w+)/);
       if (m) {
