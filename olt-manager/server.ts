@@ -118,6 +118,10 @@ app.get('/', async (req: Request, res: Response) => {
           <button id="tab-btn-olts" onclick="switchTab('olts')" class="nav-tab-btn px-3 py-1.5 rounded-lg text-xs font-bold transition bg-indigo-600 text-white shadow-md shadow-indigo-500/30 flex items-center gap-1.5">
             <i class="fa-solid fa-server"></i> OLTs
           </button>
+          <button id="tab-btn-onus" onclick="switchTab('onus')" class="nav-tab-btn px-3 py-1.5 rounded-lg text-xs font-medium text-gray-400 hover:text-white hover:bg-gray-800/50 transition flex items-center gap-1.5">
+            <i class="fa-solid fa-network-wired text-sky-400"></i> ONUs
+            <span id="onusCountBadge" class="px-1.5 py-0.2 rounded-full bg-sky-500/20 text-sky-300 text-[10px] font-bold">0</span>
+          </button>
           <button id="tab-btn-unconfigured" onclick="switchTab('unconfigured')" class="nav-tab-btn px-3 py-1.5 rounded-lg text-xs font-medium text-gray-400 hover:text-white hover:bg-gray-800/50 transition flex items-center gap-1.5">
             <i class="fa-solid fa-satellite-dish"></i> Unconfigured
             <span id="unconfiguredBadge" class="px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-bold">0</span>
@@ -265,6 +269,99 @@ app.get('/', async (req: Request, res: Response) => {
 
       <div id="autofindContainer" class="glass-card p-6 rounded-2xl min-h-[220px]">
         <!-- Renderizado dinámicamente -->
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- VISTA 4: ONUS CONFIGURADAS (SmartOLT Style) -->
+    <!-- ========================================== -->
+    <section id="view-onus" class="hidden space-y-4">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div>
+          <h2 class="text-xl font-extrabold text-white tracking-tight flex items-center gap-2">
+            ONUs <span id="onusTotalBadge" class="text-xs px-2.5 py-0.5 rounded-full bg-sky-500/20 text-sky-300 font-mono">0 ONUs</span>
+          </h2>
+          <p class="text-xs text-gray-400">Listado de abonados y ONTs configuradas en la OLT con lectura óptica en vivo (dBm), paquetes y estado.</p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <div class="relative">
+            <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-gray-500 text-xs"></i>
+            <input type="text" id="onusSearchInput" oninput="filterOnusTable()" placeholder="Buscar cliente o SN..." class="bg-gray-950 border border-gray-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white focus:outline-none focus:border-sky-500 w-48 sm:w-60">
+          </div>
+
+          <select id="onusOltSelect" onchange="loadOnus()" class="bg-gray-950 border border-gray-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-sky-500">
+            <!-- OLT options -->
+          </select>
+
+          <button onclick="loadOnus(true)" class="px-3 py-1.5 bg-gray-900 hover:bg-gray-800 border border-gray-800 text-gray-300 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition">
+            <i class="fa-solid fa-rotate" id="btnRefreshOnusIcon"></i> Actualizar Señales
+          </button>
+        </div>
+      </div>
+
+      <!-- Métricas rápidas de fibra -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div class="glass-card p-3 rounded-xl border border-gray-800 flex items-center gap-3">
+          <div class="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center text-sm">
+            <i class="fa-solid fa-circle-check"></i>
+          </div>
+          <div>
+            <div class="text-[10px] text-gray-400 uppercase font-semibold">Online</div>
+            <div id="statOnusOnline" class="text-sm font-bold text-white font-mono">0</div>
+          </div>
+        </div>
+        <div class="glass-card p-3 rounded-xl border border-gray-800 flex items-center gap-3">
+          <div class="w-8 h-8 rounded-lg bg-rose-500/10 text-rose-400 flex items-center justify-center text-sm">
+            <i class="fa-solid fa-circle-xmark"></i>
+          </div>
+          <div>
+            <div class="text-[10px] text-gray-400 uppercase font-semibold">Offline / Caídas</div>
+            <div id="statOnusOffline" class="text-sm font-bold text-white font-mono">0</div>
+          </div>
+        </div>
+        <div class="glass-card p-3 rounded-xl border border-gray-800 flex items-center gap-3">
+          <div class="w-8 h-8 rounded-lg bg-sky-500/10 text-sky-400 flex items-center justify-center text-sm">
+            <i class="fa-solid fa-bolt"></i>
+          </div>
+          <div>
+            <div class="text-[10px] text-gray-400 uppercase font-semibold">Señal Óptima (&gt; -25)</div>
+            <div id="statOnusOptimal" class="text-sm font-bold text-white font-mono">0</div>
+          </div>
+        </div>
+        <div class="glass-card p-3 rounded-xl border border-gray-800 flex items-center gap-3">
+          <div class="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center text-sm">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+          </div>
+          <div>
+            <div class="text-[10px] text-gray-400 uppercase font-semibold">Atenuación Alta (&lt; -25)</div>
+            <div id="statOnusWarning" class="text-sm font-bold text-white font-mono">0</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tabla SmartOLT de ONUs -->
+      <div class="glass-card rounded-2xl overflow-hidden border border-gray-800">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-gray-950/60 border-b border-gray-800 text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+                <th class="py-3 px-4 w-12">#</th>
+                <th class="py-3 px-4">Estado</th>
+                <th class="py-3 px-4">Cliente / Nombre</th>
+                <th class="py-3 px-4">Serial (SN)</th>
+                <th class="py-3 px-4">Puerto GPON</th>
+                <th class="py-3 px-4">Potencia RX (ONU)</th>
+                <th class="py-3 px-4">Potencia TX</th>
+                <th class="py-3 px-4">VLAN / Perfil</th>
+                <th class="py-3 px-4 text-right">Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="onusTableBody">
+              <!-- Renderizado dinámicamente -->
+            </tbody>
+          </table>
+        </div>
       </div>
     </section>
 
@@ -475,6 +572,8 @@ app.get('/', async (req: Request, res: Response) => {
         </div>
       </form>
     </div>
+  </div>
+
   <!-- ========================================== -->
   <!-- SISTEMA DE TOASTS EN VIVO -->
   <!-- ========================================== -->
@@ -847,6 +946,79 @@ app.get('/api/optical-info', async (req: Request, res: Response) => {
   const driver = new TpLinkDeltaStreamDriver(olt);
   const levels = await driver.getOpticalLevels('1/0/1');
   res.json({ oltId: olt.id, levels });
+});
+
+app.get('/favicon.ico', (req: Request, res: Response) => {
+  res.type('image/svg+xml');
+  res.send(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" rx="20" fill="#4f46e5"/><path d="M25 50h50M50 25v50" stroke="#fff" stroke-width="12" stroke-linecap="round"/><circle cx="50" cy="50" r="10" fill="#38bdf8"/></svg>`);
+});
+
+// ==========================================
+// APIS DE ONUS CONFIGURADAS (SmartOLT Style)
+// ==========================================
+
+// 1. Listar todas las ONUs configuradas en la OLT con lectura óptica y nombres
+app.get('/api/onus', async (req: Request, res: Response) => {
+  try {
+    const oltId = req.query.oltId as string;
+    const db = getOltDb();
+
+    let oltRows: any[] = [];
+    if (oltId) {
+      const resDb = await db.execute({ sql: 'SELECT * FROM olts WHERE id = ?', args: [oltId] });
+      oltRows = resDb.rows;
+    } else {
+      const resDb = await db.execute('SELECT * FROM olts ORDER BY created_at ASC');
+      oltRows = resDb.rows;
+    }
+
+    if (oltRows.length === 0) {
+      return res.json({ onts: [] });
+    }
+
+    const allOnts: any[] = [];
+    for (const row of oltRows) {
+      const olt = row as unknown as OltDevice;
+      try {
+        const driver = new TpLinkDeltaStreamDriver(olt);
+        const onts = await driver.getConfiguredOnts('1/0/1');
+        const enriched = onts.map(o => ({
+          ...o,
+          oltId: olt.id,
+          oltName: olt.name,
+          oltIp: olt.ip
+        }));
+        allOnts.push(...enriched);
+      } catch (e) {
+        console.error(`[API /api/onus] Error en OLT ${olt.name}:`, e);
+      }
+    }
+
+    res.json({ onts: allOnts });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message, onts: [] });
+  }
+});
+
+// 2. Reiniciar remotamente una ONT por software
+app.post('/api/onus/reboot', async (req: Request, res: Response) => {
+  try {
+    const { oltId, gponPort, onuId } = req.body;
+    if (!oltId || onuId === undefined) {
+      return res.status(400).json({ error: 'oltId y onuId son obligatorios' });
+    }
+
+    const db = getOltDb();
+    const result = await db.execute({ sql: 'SELECT * FROM olts WHERE id = ?', args: [oltId] });
+    const olt = result.rows[0] as unknown as OltDevice;
+    if (!olt) return res.status(404).json({ error: 'OLT no encontrada' });
+
+    const driver = new TpLinkDeltaStreamDriver(olt);
+    const rebootRes = await driver.rebootOnt(gponPort || '1/0/1', parseInt(onuId, 10));
+    res.json(rebootRes);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 app.listen(PORT, () => {

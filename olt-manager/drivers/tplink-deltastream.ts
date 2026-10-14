@@ -34,6 +34,18 @@ export interface OpticalInfo {
   lastDownCause?: string;
 }
 
+export interface ConfiguredOnt {
+  onuId: number;
+  sn: string;
+  gponPort: string;
+  name: string;
+  status: 'online' | 'offline';
+  rxPower: string;
+  txPower: string;
+  vlan: number;
+  profile: string;
+}
+
 export class TpLinkDeltaStreamDriver {
   private config: OltDevice;
 
@@ -330,6 +342,85 @@ export class TpLinkDeltaStreamDriver {
     }
 
     return onts;
+  }
+
+  /**
+   * Consulta todas las ONTs ya configuradas y autorizadas en la OLT con sus potencias ópticas y nombres de cliente
+   */
+  public async getConfiguredOnts(gponPort: string = '1/0/1'): Promise<ConfiguredOnt[]> {
+    try {
+      // 1. Obtener potencias ópticas y estado online/offline
+      const optOutput = await this.executeCommand(`enable\nterminal length 0\nshow ont optical-info gpon ${gponPort}\n`, 6000);
+      // 2. Obtener nombres de clientes desde la configuración activa usando filtro rápido
+      const cfgOutput = await this.executeCommand(`enable\nterminal length 0\nshow running-config | include ont\n`, 6000)
+        .catch(() => '');
+
+      return this.parseConfiguredOnts(optOutput, cfgOutput, gponPort);
+    } catch (err) {
+      console.error(`[OLT ${this.config.name}] Error leyendo ONTs configuradas:`, err);
+      return [];
+    }
+  }
+
+  /**
+   * Parseador de ONTs autorizadas con cruce de descripciones y mediciones ópticas
+   */
+  public parseConfiguredOnts(optOutput: string, cfgOutput: string, gponPort: string): ConfiguredOnt[] {
+    const descMap = new Map<number, string>();
+    // ont add 1 sn-auth HWTC-685E10B6 desc "GustavoAdolfo" ...
+    const cfgLines = cfgOutput.split('\n');
+    for (const line of cfgLines) {
+      const m = line.match(/ont\s+add\s+(\d+)\s+sn-auth\s+([A-Za-z0-9_-]+)/);
+      if (m) {
+        const onuId = parseInt(m[1], 10);
+        const descMatch = line.match(/desc\s+"([^"]+)"/);
+        if (descMatch) {
+          descMap.set(onuId, descMatch[1]);
+        }
+      }
+    }
+
+    const onts: ConfiguredOnt[] = [];
+    const lines = optOutput.split('\n');
+    for (const line of lines) {
+      // 1    1/0/1  0   HWTC-6841F9B6 online    active    -23.98   2.29     -25.53   3340.00   13.00  50.00
+      const match = line.match(/^\s*\d+\s+([\d/]+)\s+(\d+)\s+([A-Za-z0-9_-]+)\s+(\w+)\s+\w+\s+([\d.-]+|-)\s+([\d.-]+|-)/);
+      if (match) {
+        const port = match[1];
+        const onuId = parseInt(match[2], 10);
+        const sn = match[3];
+        const status = match[4].toLowerCase() === 'online' ? 'online' : 'offline';
+        const rx = match[5];
+        const tx = match[6];
+        const name = descMap.get(onuId) || `Cliente ONU #${onuId}`;
+
+        onts.push({
+          onuId,
+          sn,
+          gponPort: port || gponPort,
+          name,
+          status,
+          rxPower: rx !== '-' ? `${rx} dBm` : 'N/A',
+          txPower: tx !== '-' ? `${tx} dBm` : 'N/A',
+          vlan: this.config.default_vlan || 400,
+          profile: 'LINE_VLAN400'
+        });
+      }
+    }
+
+    return onts;
+  }
+
+  /**
+   * Reiniciar remotamente una ONT por software desde la OLT
+   */
+  public async rebootOnt(gponPort: string = '1/0/1', onuId: number): Promise<{ success: boolean; message: string }> {
+    try {
+      const output = await this.executeCommand(`enable\nterminal length 0\nont reset gpon ${gponPort} ${onuId}\n`, 5000);
+      return { success: true, message: output };
+    } catch (err: any) {
+      return { success: false, message: err.message };
+    }
   }
 
   /**

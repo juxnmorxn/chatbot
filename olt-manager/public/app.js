@@ -197,13 +197,20 @@ function switchTab(tab) {
   }
 
   // Mostrar / ocultar paneles
-  document.getElementById('view-olts').classList.toggle('hidden', tab !== 'olts');
-  document.getElementById('view-tunnels').classList.toggle('hidden', tab !== 'tunnels');
-  document.getElementById('view-unconfigured').classList.toggle('hidden', tab !== 'unconfigured');
+  const viewOlts = document.getElementById('view-olts');
+  const viewTunnels = document.getElementById('view-tunnels');
+  const viewUnconfigured = document.getElementById('view-unconfigured');
+  const viewOnus = document.getElementById('view-onus');
+
+  if (viewOlts) viewOlts.classList.toggle('hidden', tab !== 'olts');
+  if (viewTunnels) viewTunnels.classList.toggle('hidden', tab !== 'tunnels');
+  if (viewUnconfigured) viewUnconfigured.classList.toggle('hidden', tab !== 'unconfigured');
+  if (viewOnus) viewOnus.classList.toggle('hidden', tab !== 'onus');
 
   if (tab === 'olts') loadOlts();
   if (tab === 'tunnels') loadTunnels();
   if (tab === 'unconfigured') refreshAutofind();
+  if (tab === 'onus') loadOnus();
 }
 
 // ==========================================
@@ -470,7 +477,7 @@ function renderOltsTable() {
         <td class="py-3 px-4 font-mono text-xs text-gray-400">${o.port || 22}</td>
         <td class="py-3 px-4 text-xs text-gray-300">${o.model}</td>
         <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
-          <button onclick="testOltConnection('${o.id}')" title="Probar conexión SSH" class="px-2.5 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 text-indigo-300 rounded-lg text-xs font-semibold inline-flex items-center gap-1 transition">
+          <button id="btn-test-olt-${o.id}" onclick="testOltConnection('${o.id}')" title="Probar conexión SSH" class="px-2.5 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 text-indigo-300 rounded-lg text-xs font-semibold inline-flex items-center gap-1 transition">
             <i class="fa-solid fa-bolt"></i> Test
           </button>
           <button onclick="editOlt('${o.id}')" class="px-2.5 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-xs font-semibold inline-flex items-center transition">
@@ -654,24 +661,47 @@ async function deleteOlt(id) {
 }
 
 async function testOltConnection(id) {
+  const btn = document.getElementById('btn-test-olt-' + id);
+  const origHtml = btn ? btn.innerHTML : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Testeando...';
+  }
+
+  showToast('Probando OLT...', 'Consultando sesión SSH interactiva con la OLT', 'info', 2000);
+
   try {
-    showToast('Probando OLT...', 'Consultando estado vía SSH interactivo', 'info', 2000);
     const res = await fetch('/api/olts/' + id + '/test', { method: 'POST' });
     const data = await res.json();
     if (data.online) {
-      showToast('OLT en Línea', `Respuesta exitosa: ${data.latencyMs}ms`, 'success');
+      showToast('OLT en Línea', `Respuesta exitosa: ${data.latencyMs}ms`, 'success', 4000);
+      await showAlertModal(
+        '¡Test de Conexión Exitoso!',
+        `Se estableció enlace interactivo SSH con la OLT exitosamente.\n\n• Prompt CLI: ${data.prompt || 'DS-P7001-01'}\n• Latencia: ${data.latencyMs}ms\n• Estado: ONLINE (En línea)`,
+        'success'
+      );
     } else {
-      showToast('OLT Fuera de Línea', data.error || 'Timeout de conexión', 'error');
+      showToast('OLT Fuera de Línea', data.error || 'Timeout de conexión', 'error', 5000);
+      await showAlertModal(
+        'Test de Conexión Fallido',
+        `No se pudo comunicar con la OLT:\n${data.error || 'Verifica que el MikroTik tenga el túnel activo y que la IP/puerto sean accesibles.'}`,
+        'error'
+      );
     }
     loadOlts();
-  } catch {
+  } catch (err) {
     showToast('Error de Red', 'Error al probar conexión con la OLT', 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = origHtml;
+    }
   }
 }
 
 function viewOlt(id) {
   activeOltId = id;
-  switchTab('unconfigured');
+  switchTab('onus');
 }
 
 // ==========================================
@@ -791,6 +821,221 @@ async function submitProvision(e) {
 }
 
 // ==========================================
+// GESTIÓN DE ONUS CONFIGURADAS (SmartOLT Style)
+// ==========================================
+let configuredOnus = [];
+
+async function loadOnus(force = false) {
+  const tbody = document.getElementById('onusTableBody');
+  const refreshIcon = document.getElementById('btnRefreshOnusIcon');
+  const select = document.getElementById('onusOltSelect');
+
+  if (refreshIcon) refreshIcon.classList.add('fa-spin');
+
+  // Llenar selector de OLTs si está disponible
+  if (select && olts.length > 0) {
+    const currentVal = select.value;
+    select.innerHTML = '<option value="">-- Todas las OLTs --</option>' + olts.map(o => `<option value="${o.id}">${o.name} (${o.ip})</option>`).join('');
+    if (activeOltId && olts.find(o => o.id === activeOltId)) {
+      select.value = activeOltId;
+    } else if (currentVal) {
+      select.value = currentVal;
+    }
+  }
+
+  if (tbody && (!configuredOnus || configuredOnus.length === 0)) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="9" class="text-center py-12 text-gray-400 text-xs">
+          <i class="fa-solid fa-spinner fa-spin text-xl text-sky-400 mb-2 block"></i>
+          Leyendo ONTs y potencias ópticas en vivo desde la OLT...
+        </td>
+      </tr>
+    `;
+  }
+
+  try {
+    const oltFilter = select && select.value ? `?oltId=${select.value}` : (activeOltId ? `?oltId=${activeOltId}` : '');
+    const res = await fetch('/api/onus' + oltFilter);
+    const data = await res.json();
+    configuredOnus = data.onts || [];
+
+    // Actualizar Badges
+    const totalBadge = document.getElementById('onusTotalBadge');
+    const navBadge = document.getElementById('onusCountBadge');
+    if (totalBadge) totalBadge.innerText = `${configuredOnus.length} ONUs`;
+    if (navBadge) navBadge.innerText = configuredOnus.length;
+
+    // Calcular estadísticas
+    let onlineCount = 0;
+    let offlineCount = 0;
+    let optimalCount = 0;
+    let warningCount = 0;
+
+    configuredOnus.forEach(o => {
+      if (o.status === 'online') {
+        onlineCount++;
+        const rxNum = parseFloat(o.rxPower);
+        if (!isNaN(rxNum)) {
+          if (rxNum >= -25.0) optimalCount++;
+          else warningCount++;
+        }
+      } else {
+        offlineCount++;
+      }
+    });
+
+    const elOnline = document.getElementById('statOnusOnline');
+    const elOffline = document.getElementById('statOnusOffline');
+    const elOptimal = document.getElementById('statOnusOptimal');
+    const elWarning = document.getElementById('statOnusWarning');
+
+    if (elOnline) elOnline.innerText = onlineCount;
+    if (elOffline) elOffline.innerText = offlineCount;
+    if (elOptimal) elOptimal.innerText = optimalCount;
+    if (elWarning) elWarning.innerText = warningCount;
+
+    renderOnusTable(configuredOnus);
+
+    if (force) {
+      showToast('Señales Actualizadas', `${configuredOnus.length} ONTs leídas en vivo con éxito`, 'success', 3000);
+    }
+  } catch (err) {
+    console.error('Error cargando ONUs:', err);
+    if (tbody) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="9" class="text-center py-12 text-rose-400 text-xs">
+            <i class="fa-solid fa-triangle-exclamation text-2xl mb-2 block"></i>
+            Error conectando con la OLT para leer ONUs. Verifica el túnel WireGuard.
+          </td>
+        </tr>
+      `;
+    }
+  } finally {
+    if (refreshIcon) refreshIcon.classList.remove('fa-spin');
+  }
+}
+
+function renderOnusTable(list) {
+  const tbody = document.getElementById('onusTableBody');
+  if (!tbody) return;
+
+  if (list.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="9" class="text-center py-12 text-gray-500 text-xs">
+          <i class="fa-solid fa-network-wired text-3xl mb-2 text-gray-600 block"></i>
+          No hay ONUs configuradas encontradas en la OLT seleccionada.
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  tbody.innerHTML = list.map((o, idx) => {
+    const isOnline = o.status === 'online';
+    const statusHtml = isOnline
+      ? `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold">
+           <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> ONLINE
+         </span>`
+      : `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/20 text-[10px] font-bold">
+           <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span> OFFLINE
+         </span>`;
+
+    let rxBadge = `<span class="text-gray-500 font-mono text-xs">-</span>`;
+    if (isOnline && o.rxPower && o.rxPower !== 'N/A') {
+      const rxVal = parseFloat(o.rxPower);
+      if (!isNaN(rxVal)) {
+        if (rxVal >= -24.5) {
+          rxBadge = `<span class="font-mono text-xs font-bold text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-500/30 flex items-center gap-1 w-max">
+            <i class="fa-solid fa-signal text-[10px]"></i> ${o.rxPower}
+          </span>`;
+        } else if (rxVal >= -27.0) {
+          rxBadge = `<span class="font-mono text-xs font-bold text-amber-400 bg-amber-950/40 px-2 py-0.5 rounded border border-amber-500/30 flex items-center gap-1 w-max">
+            <i class="fa-solid fa-signal text-[10px]"></i> ${o.rxPower}
+          </span>`;
+        } else {
+          rxBadge = `<span class="font-mono text-xs font-bold text-rose-400 bg-rose-950/40 px-2 py-0.5 rounded border border-rose-500/30 flex items-center gap-1 w-max">
+            <i class="fa-solid fa-triangle-exclamation text-[10px]"></i> ${o.rxPower}
+          </span>`;
+        }
+      } else {
+        rxBadge = `<span class="font-mono text-xs text-gray-300">${o.rxPower}</span>`;
+      }
+    }
+
+    return `
+      <tr class="border-b border-gray-800/60 hover:bg-gray-900/40 transition">
+        <td class="py-3 px-4 font-mono text-xs text-gray-400">${idx + 1}</td>
+        <td class="py-3 px-4">${statusHtml}</td>
+        <td class="py-3 px-4">
+          <div class="font-bold text-white text-xs flex items-center gap-1.5">
+            <i class="fa-solid fa-user text-sky-400 text-[10px]"></i> ${o.name}
+          </div>
+          <div class="text-[10px] text-gray-400 font-mono mt-0.5">OLT: ${o.oltName || 'fray'}</div>
+        </td>
+        <td class="py-3 px-4">
+          <span class="font-mono text-xs text-sky-300 font-semibold bg-sky-950/40 px-2 py-0.5 rounded border border-sky-800/40">${o.sn}</span>
+        </td>
+        <td class="py-3 px-4 font-mono text-xs text-gray-300">${o.gponPort}:${o.onuId}</td>
+        <td class="py-3 px-4">${rxBadge}</td>
+        <td class="py-3 px-4 font-mono text-xs text-gray-400">${o.txPower}</td>
+        <td class="py-3 px-4">
+          <span class="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 text-[10px] font-mono">VLAN ${o.vlan || 400}</span>
+        </td>
+        <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
+          <button onclick="promptRebootOnt('${o.oltId}', '${o.gponPort}', ${o.onuId}, '${o.name}')" title="Reiniciar ONT remotamente" class="px-2.5 py-1.5 bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/30 text-rose-300 rounded-lg text-xs font-semibold inline-flex items-center gap-1 transition">
+            <i class="fa-solid fa-power-off"></i> Reiniciar
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function filterOnusTable() {
+  const query = (document.getElementById('onusSearchInput')?.value || '').toLowerCase().trim();
+  if (!query) {
+    renderOnusTable(configuredOnus);
+    return;
+  }
+  const filtered = configuredOnus.filter(o => 
+    o.name.toLowerCase().includes(query) ||
+    o.sn.toLowerCase().includes(query) ||
+    `${o.gponPort}:${o.onuId}`.includes(query)
+  );
+  renderOnusTable(filtered);
+}
+
+async function promptRebootOnt(oltId, gponPort, onuId, clientName) {
+  const ok = await showConfirmModal(
+    '¿Reiniciar ONT?',
+    `Se enviará la orden de reinicio por software a la ONT de "${clientName}" (${gponPort}:${onuId}). La fibra se reenganchará en ~30 segundos.`,
+    'Reiniciar Ahora',
+    'rose'
+  );
+  if (!ok) return;
+
+  try {
+    showToast('Reiniciando ONT...', `Enviando comando CLI ont reset ${gponPort} ${onuId}`, 'info', 3000);
+    const res = await fetch('/api/onus/reboot', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ oltId, gponPort, onuId })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast('Comando Enviado', 'La ONT se está reiniciando en este momento', 'success', 5000);
+    } else {
+      showToast('Error', data.message || 'No se pudo reiniciar la ONT', 'error');
+    }
+  } catch {
+    showToast('Error de Red', 'No se pudo contactar al servidor', 'error');
+  }
+}
+
+// ==========================================
 // EXPONER GLOBALMENTE EN WINDOW
 // ==========================================
 window.switchTab = switchTab;
@@ -817,16 +1062,21 @@ window.showToast = showToast;
 window.showConfirmModal = showConfirmModal;
 window.showAlertModal = showAlertModal;
 
+window.loadOnus = loadOnus;
+window.filterOnusTable = filterOnusTable;
+window.promptRebootOnt = promptRebootOnt;
+
 window.refreshAutofind = refreshAutofind;
 window.onAutofindOltChange = onAutofindOltChange;
 window.openProvisionModal = openProvisionModal;
 window.closeProvisionModal = closeProvisionModal;
 window.submitProvision = submitProvision;
 
-// Carga inicial y sondeo en tiempo real (cada 3 segundos)
+// Carga inicial y sondeo en tiempo real
 document.addEventListener('DOMContentLoaded', () => {
   loadTunnels();
   loadOlts();
+  loadOnus();
 
   // Actualización en tiempo real sin recargar la página (sondeo cada 2 segundos)
   setInterval(() => {
