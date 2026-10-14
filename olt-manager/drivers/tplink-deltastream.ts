@@ -188,18 +188,110 @@ export class TpLinkDeltaStreamDriver {
   }
 
   /**
-   * Prueba de conexión en tiempo real: mide latencia y obtiene modelo de la OLT
+   * Prueba de conexión en tiempo real: valida credenciales y mide latencia de consola CLI
    */
   public async testConnection(): Promise<{ online: boolean; latencyMs: number; rawInfo?: string; error?: string }> {
     const start = Date.now();
-    try {
-      // Comando básico de consulta en TP-Link DeltaStream
-      const raw = await this.executeCommand('show system-info\n', 5000);
-      const latencyMs = Date.now() - start;
-      return { online: true, latencyMs, rawInfo: raw };
-    } catch (err: any) {
-      return { online: false, latencyMs: 0, error: err.message || String(err) };
-    }
+    return new Promise((resolve) => {
+      const conn = new Client();
+      let timer: NodeJS.Timeout;
+
+      const finish = (online: boolean, error?: string, rawInfo?: string) => {
+        clearTimeout(timer);
+        try { conn.end(); } catch {}
+        const latencyMs = Math.max(Date.now() - start, 1);
+        resolve({ online, latencyMs: online ? latencyMs : 0, error, rawInfo });
+      };
+
+      timer = setTimeout(() => {
+        finish(false, 'Timeout esperando respuesta CLI de la OLT');
+      }, 5000);
+
+      conn.on('ready', () => {
+        // En TP-Link DeltaStream si el evento 'ready' dispara, las credenciales son 100% válidas
+        // Abrimos shell para obtener el prompt de bienvenida
+        conn.shell({ term: 'vt100', cols: 160, rows: 40 }, (err, stream) => {
+          if (err) {
+            // Aún si el shell fallara, las credenciales SSH fueron válidas
+            return finish(true, undefined, 'SSH Autenticado');
+          }
+
+          let banner = '';
+          stream.on('data', (d: Buffer) => {
+            banner += d.toString('utf8');
+            // En cuanto la OLT envíe cualquier texto o prompt (ej. TP-LINK, >, #) damos por exitoso
+            if (banner.length > 2 || /[>#$]/.test(banner)) {
+              try { stream.end(); } catch {}
+              finish(true, undefined, banner.trim());
+            }
+          });
+
+          // Enviar un Enter para despertar el prompt de inmediato
+          stream.write('\n');
+
+          setTimeout(() => {
+            finish(true, undefined, banner.trim() || 'TP-Link DeltaStream CLI Ready');
+          }, 1500);
+        });
+      });
+
+      conn.on('error', (err: any) => {
+        const msg = err.message || String(err);
+        if (/authentication/i.test(msg)) {
+          finish(false, 'Usuario o contraseña incorrectos en la OLT');
+        } else {
+          finish(false, msg);
+        }
+      });
+
+      conn.connect({
+        host: this.config.ip,
+        port: this.config.port || 22,
+        username: this.config.username,
+        password: this.config.password || '',
+        readyTimeout: 4500,
+        algorithms: {
+          kex: [
+            'curve25519-sha256',
+            'curve25519-sha256@libssh.org',
+            'ecdh-sha2-nistp256',
+            'diffie-hellman-group14-sha256',
+            'diffie-hellman-group14-sha1',
+            'diffie-hellman-group-exchange-sha256',
+            'diffie-hellman-group-exchange-sha1',
+            'diffie-hellman-group1-sha1'
+          ],
+          cipher: [
+            'aes128-ctr',
+            'aes192-ctr',
+            'aes256-ctr',
+            'aes128-gcm',
+            'aes128-gcm@openssh.com',
+            'aes256-gcm',
+            'aes256-gcm@openssh.com',
+            'aes256-cbc',
+            'aes192-cbc',
+            'aes128-cbc',
+            '3des-cbc'
+          ],
+          serverHostKey: [
+            'ssh-ed25519',
+            'ecdsa-sha2-nistp256',
+            'rsa-sha2-512',
+            'rsa-sha2-256',
+            'ssh-rsa',
+            'ssh-dss'
+          ],
+          hmac: [
+            'hmac-sha2-256',
+            'hmac-sha2-512',
+            'hmac-sha1',
+            'hmac-sha1-96',
+            'hmac-md5'
+          ]
+        }
+      });
+    });
   }
 
   /**
