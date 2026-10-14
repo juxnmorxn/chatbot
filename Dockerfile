@@ -1,39 +1,34 @@
-# ==========================================
-# Dockerfile para Chatbot ISP en Hostinger VPS
-# ==========================================
 FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-# Copiar manifiestos e instalar dependencias
+# Copiar manifiestos
 COPY package.json package-lock.json* bun.lock* ./
 RUN npm install --legacy-peer-deps
 
-# Copiar código fuente y compilar
+# Copiar todo el código y compilar tanto el chatbot como olt-manager
 COPY . .
 RUN npm run build
 
-# ==========================================
-# Imagen final de producción
-# ==========================================
+# Imagen final ligera de producción
 FROM node:22-alpine AS runner
 
 WORKDIR /app
 
 ENV NODE_ENV=production
-ENV PORT=3000
 
-# Instalar sólo dependencias de producción
+# Instalar dependencias necesarias
 COPY package.json package-lock.json* bun.lock* ./
 RUN npm install --omit=dev --legacy-peer-deps
 
-# Copiar bundle compilado y archivos necesarios
+# Copiar dist y configuraciones
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/server.js ./server.js
 COPY --from=builder /app/data ./data
+COPY --from=builder /app/olt-manager/config ./dist/config
 
-# Puerto expuesto
 EXPOSE 3000
+EXPOSE 3001
 
-# Comando de inicio
-CMD ["node", "dist/server.js"]
+# Script de arranque para ambos procesos (Chatbot en 3000 y OLT Manager en 3001)
+CMD ["sh", "-c", "node dist/olt-server.js & node dist/server.js"]
