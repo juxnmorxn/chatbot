@@ -1,0 +1,11 @@
+FROM node:20-alpine
+
+RUN apk add --no-cache bash
+RUN npm install -g genieacs@1.2.13
+
+WORKDIR /opt/genieacs
+
+COPY genieacs-start.sh /start.sh
+RUN chmod +x /start.sh
+
+CMD ["/start.sh"]

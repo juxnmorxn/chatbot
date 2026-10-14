@@ -52,9 +52,41 @@ services:
       - ./data:/app/data
       - /etc/wireguard:/etc/wireguard
 
+  genieacs_mongo:
+    image: mongo:6.0
+    container_name: genieacs_mongo
+    restart: always
+    volumes:
+      - mongodata:/data/db
+    networks:
+      - chatbot_net
+
+  genieacs:
+    build:
+      context: .
+      dockerfile: Dockerfile.genieacs
+    container_name: genieacs
+    restart: always
+    depends_on:
+      - genieacs_mongo
+    environment:
+      - GENIEACS_MONGODB_CONNECTION_URL=mongodb://genieacs_mongo:27017/genieacs
+      - GENIEACS_CWMP_PORT=7547
+      - GENIEACS_NBI_PORT=7557
+      - GENIEACS_FS_PORT=7567
+      - GENIEACS_UI_PORT=7558
+    ports:
+      - "7547:7547"
+      - "7557:7557"
+      - "7567:7567"
+      - "7558:7558"
+    networks:
+      - chatbot_net
+
 volumes:
   pgdata:
   evolution_instances:
+  mongodata:
 
 networks:
   chatbot_net:
