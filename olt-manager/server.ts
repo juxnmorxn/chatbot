@@ -297,6 +297,55 @@ app.get('/', async (req: Request, res: Response) => {
     </div>
   </div>
 
+  <!-- MODAL: ENLAZAR MIKROTIK CON WIREGUARD -->
+  <div id="wgModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="glass-card w-full max-w-xl rounded-2xl p-6 border border-emerald-500/30 space-y-4">
+      <div class="flex justify-between items-center pb-3 border-b border-gray-800">
+        <h3 class="text-base font-bold text-white flex items-center gap-2">
+          <i class="fa-solid fa-shield-halved text-emerald-400"></i> Enlazar MikroTik v7 a Hostinger (WireGuard)
+        </h3>
+        <button onclick="closeWgModal()" class="text-gray-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+
+      <div class="space-y-4 text-xs">
+        <div class="p-3 bg-emerald-950/30 rounded-xl border border-emerald-800/40 text-emerald-200">
+          <p class="font-bold mb-1">¿Cómo funciona este enlace?</p>
+          <p class="text-gray-300">Crea un túnel seguro cifrado directo entre tu MikroTik Cabecera y este VPS. Permite al servidor administrar tus OLTs e inyectar VLANs sin necesidad de IPs públicas fijas en campo.</p>
+        </div>
+
+        <form id="wgForm" onsubmit="generateMikrotikScript(event)" class="space-y-3">
+          <div>
+            <label class="text-gray-400 block mb-1">Nombre del Router Cabecera</label>
+            <input type="text" id="wgRouterName" required placeholder="Ej. RB-XIDEJE-FRAY" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white focus:outline-none focus:border-emerald-500">
+          </div>
+
+          <div>
+            <label class="text-gray-400 block mb-1">Red Privada de la OLT (Subred que alcanzará el VPS)</label>
+            <input type="text" id="wgSubnet" required placeholder="Ej. 172.19.60.0/24" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white font-mono focus:outline-none focus:border-emerald-500">
+            <span class="text-[10px] text-gray-500 mt-0.5 block">La subred donde vive la OLT (ej. 172.19.60.0/24 para 172.19.60.2)</span>
+          </div>
+
+          <div class="flex justify-end pt-1">
+            <button type="submit" id="btnGenWg" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg flex items-center gap-2 shadow-lg shadow-emerald-600/30">
+              <i class="fa-solid fa-terminal"></i> Generar Script MikroTik
+            </button>
+          </div>
+        </form>
+
+        <div id="wgScriptResult" class="hidden space-y-2 pt-2 border-t border-gray-800">
+          <div class="flex justify-between items-center">
+            <label class="text-emerald-400 font-bold">Comandos para copiar en Winbox (New Terminal):</label>
+            <button onclick="copyWgScript()" class="px-2.5 py-1 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded font-semibold text-[11px] flex items-center gap-1">
+              <i class="fa-solid fa-copy"></i> Copiar Todo
+            </button>
+          </div>
+          <textarea id="wgScriptContent" readonly rows="8" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-3 text-[11px] font-mono text-emerald-300 focus:outline-none"></textarea>
+          <p class="text-[11px] text-gray-400">💡 Pega estos comandos en tu MikroTik en <b>Terminal</b> y el enlace quedará activo de inmediato.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script>
     let olts = [];
 
@@ -577,59 +626,10 @@ app.get('/', async (req: Request, res: Response) => {
       const olt = olts.find(o => o.id === oltId);
       document.getElementById('modalSn').value = sn;
       document.getElementById('modalVlan').value = olt ? olt.default_vlan : 400;
-      document.getElementById('provisionModal').classList.remove('hidden');
+      function closeProvisionModal() {
+      document.getElementById('provisionModal').classList.add('hidden');
     }
 
-  <!-- MODAL: ENLAZAR MIKROTIK CON WIREGUARD -->
-  <div id="wgModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-    <div class="glass-card w-full max-w-xl rounded-2xl p-6 border border-emerald-500/30 space-y-4">
-      <div class="flex justify-between items-center pb-3 border-b border-gray-800">
-        <h3 class="text-base font-bold text-white flex items-center gap-2">
-          <i class="fa-solid fa-shield-halved text-emerald-400"></i> Enlazar MikroTik v7 a Hostinger (WireGuard)
-        </h3>
-        <button onclick="closeWgModal()" class="text-gray-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
-      </div>
-
-      <div class="space-y-4 text-xs">
-        <div class="p-3 bg-emerald-950/30 rounded-xl border border-emerald-800/40 text-emerald-200">
-          <p class="font-bold mb-1">¿Cómo funciona este enlace?</p>
-          <p class="text-gray-300">Crea un túnel seguro cifrado directo entre tu MikroTik Cabecera y este VPS. Permite al servidor administrar tus OLTs e inyectar VLANs sin necesidad de IPs públicas fijas en campo.</p>
-        </div>
-
-        <form id="wgForm" onsubmit="generateMikrotikScript(event)" class="space-y-3">
-          <div>
-            <label class="text-gray-400 block mb-1">Nombre del Router Cabecera</label>
-            <input type="text" id="wgRouterName" required placeholder="Ej. RB-XIDEJE-FRAY" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white focus:outline-none focus:border-emerald-500">
-          </div>
-
-          <div>
-            <label class="text-gray-400 block mb-1">Red Privada de la OLT (Subred que alcanzará el VPS)</label>
-            <input type="text" id="wgSubnet" required placeholder="Ej. 172.19.60.0/24" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white font-mono focus:outline-none focus:border-emerald-500">
-            <span class="text-[10px] text-gray-500 mt-0.5 block">La subred donde vive la OLT (ej. 172.19.60.0/24 para 172.19.60.2)</span>
-          </div>
-
-          <div class="flex justify-end pt-1">
-            <button type="submit" id="btnGenWg" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg flex items-center gap-2 shadow-lg shadow-emerald-600/30">
-              <i class="fa-solid fa-terminal"></i> Generar Script MikroTik
-            </button>
-          </div>
-        </form>
-
-        <div id="wgScriptResult" class="hidden space-y-2 pt-2 border-t border-gray-800">
-          <div class="flex justify-between items-center">
-            <label class="text-emerald-400 font-bold">Comandos para copiar en Winbox (New Terminal):</label>
-            <button onclick="copyWgScript()" class="px-2.5 py-1 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded font-semibold text-[11px] flex items-center gap-1">
-              <i class="fa-solid fa-copy"></i> Copiar Todo
-            </button>
-          </div>
-          <textarea id="wgScriptContent" readonly rows="8" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-3 text-[11px] font-mono text-emerald-300 focus:outline-none"></textarea>
-          <p class="text-[11px] text-gray-400">💡 Pega estos comandos en tu MikroTik en <b>Terminal</b> y el enlace quedará activo de inmediato.</p>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <script>
     function openWgModal() {
       document.getElementById('wgModal').classList.remove('hidden');
       document.getElementById('wgScriptResult').classList.add('hidden');
