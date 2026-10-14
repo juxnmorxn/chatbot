@@ -131,6 +131,10 @@ app.get('/', async (req: Request, res: Response) => {
 
       <!-- Action Buttons -->
       <div class="flex items-center space-x-2.5">
+        <div class="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-gray-950/70 border border-emerald-500/20 text-[11px] text-emerald-300">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span>En vivo (2s)</span>
+        </div>
         <button onclick="openCreateTunnelModal()" class="px-3 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 rounded-xl text-xs font-bold flex items-center gap-1.5 transition">
           <i class="fa-solid fa-plus text-emerald-400"></i> Create a new tunnel
         </button>
@@ -497,6 +501,7 @@ app.get('/api/tunnels', async (req: Request, res: Response) => {
       return {
         ...row,
         status: isConnected ? 'connected' : 'disconnected',
+        seconds_ago: stats ? stats.secondsAgo : null,
         transfer_rx: stats ? stats.transferRx : 0,
         transfer_tx: stats ? stats.transferTx : 0,
         latest_handshake: stats ? stats.latestHandshake : 0
@@ -735,7 +740,20 @@ app.post('/api/olts/test-raw', async (req: Request, res: Response) => {
         const ipParts = ip.split('.');
         if (ipParts.length === 4) {
           const autoSubnet = `${ipParts[0]}.${ipParts[1]}.${ipParts[2]}.0/24`;
-          applyWireguardPeer(tunnel.public_key, tunnel.client_ip, autoSubnet);
+          const currentSubnets = tunnel.allowed_subnets || '';
+          if (!currentSubnets.includes(autoSubnet)) {
+            const updatedSubnets = currentSubnets ? `${currentSubnets},${autoSubnet}` : autoSubnet;
+            applyWireguardPeer(tunnel.public_key, tunnel.client_ip, updatedSubnets);
+            await db.execute({
+              sql: 'UPDATE wireguard_peers SET allowed_subnets = ? WHERE id = ?',
+              args: [updatedSubnets, tunnel.id]
+            });
+            // Breve espera para que la tabla de rutas del kernel aplique la interfaz
+            await new Promise(r => setTimeout(r, 200));
+          } else {
+            // Asegurar que la ruta esté activa en wg0
+            applyWireguardPeer(tunnel.public_key, tunnel.client_ip, currentSubnets);
+          }
         }
       }
     }

@@ -12,6 +12,7 @@ export interface WireguardPeerStats {
   endpoint: string;
   allowedIps: string;
   latestHandshake: number;
+  secondsAgo: number | null;
   transferRx: number;
   transferTx: number;
   isConnected: boolean;
@@ -116,13 +117,16 @@ export function getWireguardStats(): Map<string, WireguardPeerStats> {
         const handshake = parseInt(handshakeStr, 10) || 0;
         const rx = parseInt(rxStr, 10) || 0;
         const tx = parseInt(txStr, 10) || 0;
-        const isConnected = handshake > 0 && (now - handshake) < 180; // Activo en los últimos 3 min
+        const secondsAgo = handshake > 0 ? (now - handshake) : null;
+        // Keepalive en MikroTik es de 25s; si no hay respuesta en 55s (más de 2 ciclos), se considera desconectado
+        const isConnected = handshake > 0 && secondsAgo !== null && secondsAgo <= 55;
 
         statsMap.set(pubKey, {
           publicKey: pubKey,
           endpoint,
           allowedIps,
           latestHandshake: handshake,
+          secondsAgo,
           transferRx: rx,
           transferTx: tx,
           isConnected

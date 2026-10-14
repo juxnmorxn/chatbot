@@ -79,12 +79,22 @@ function renderTunnelsTable() {
            <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
            <span class="text-emerald-400 font-semibold text-xs">Connected</span>
          </div>
-         <div class="text-[11px] text-gray-400 mt-0.5">IP: <span class="font-mono text-gray-300">${t.client_ip}</span></div>`
+         <div class="text-[11px] text-gray-400 mt-0.5 flex items-center gap-1.5">
+           <span class="text-emerald-400/90 font-mono text-[10px] bg-emerald-950/50 px-1.5 py-0.5 rounded border border-emerald-500/20">
+             <i class="fa-solid fa-signal text-[9px] mr-0.5"></i> ${t.seconds_ago !== null ? 'hace ' + t.seconds_ago + 's' : 'online'}
+           </span>
+           <span class="font-mono text-gray-300">IP: ${t.client_ip}</span>
+         </div>`
       : `<div class="flex items-center gap-2">
-           <span class="w-2.5 h-2.5 rounded-full bg-gray-500"></span>
-           <span class="text-gray-400 text-xs">Disconnected</span>
+           <span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+           <span class="text-rose-400 text-xs font-semibold">Disconnected</span>
          </div>
-         <div class="text-[11px] text-gray-500 mt-0.5">IP: <span class="font-mono">${t.client_ip}</span></div>`;
+         <div class="text-[11px] text-gray-500 mt-0.5 flex items-center gap-1.5">
+           <span class="text-rose-400/80 font-mono text-[10px] bg-rose-950/40 px-1.5 py-0.5 rounded border border-rose-500/20">
+             ${t.seconds_ago !== null ? 'caído hace ' + t.seconds_ago + 's' : 'sin señal'}
+           </span>
+           <span class="font-mono">${t.client_ip}</span>
+         </div>`;
 
     const usedByOlts = olts.filter(o => o.tunnel_id === t.id || o.mikrotik_name === t.name);
     const usedByHtml = usedByOlts.length > 0 
@@ -616,12 +626,12 @@ document.addEventListener('DOMContentLoaded', () => {
   loadTunnels();
   loadOlts();
 
-  // Actualización en tiempo real sin recargar la página
+  // Actualización en tiempo real sin recargar la página (sondeo cada 2 segundos)
   setInterval(() => {
     if (activeTab === 'tunnels') {
       loadTunnels();
     } else if (activeTab === 'olts') {
       loadOlts();
     }
-  }, 3000);
+  }, 2000);
 });
