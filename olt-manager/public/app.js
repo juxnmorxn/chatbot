@@ -1102,9 +1102,25 @@ async function viewOnuDetail(oltId, gponPort, onuId, sn, encodedName, vlan) {
   document.getElementById('viewWanGw').innerText = realGw;
   document.getElementById('viewWanIpv6Prefix').innerText = 'DHCPv6-PD (Auto)';
 
-  document.getElementById('viewWifiSsid').innerText = 'Pendiente sincronización TR-069';
-  document.getElementById('viewWifiPass').innerText = '••••••••••••';
-  currentViewOnu.realWifiPass = null;
+  // Mostrar Wi-Fi guardado en base de datos si existe
+  const savedSsid = cached?.wifi_ssid;
+  const savedPass = cached?.wifi_password;
+  if (savedSsid) {
+    document.getElementById('viewWifiSsid').innerText = savedSsid;
+  } else {
+    document.getElementById('viewWifiSsid').innerText = 'Sin registrar (Usa "Cambiar Wi-Fi")';
+  }
+  if (savedPass) {
+    currentViewOnu.realWifiPass = savedPass;
+    if (currentViewOnu.wifiVisible) {
+      document.getElementById('viewWifiPass').innerText = savedPass;
+    } else {
+      document.getElementById('viewWifiPass').innerText = '••••••••••••';
+    }
+  } else {
+    currentViewOnu.realWifiPass = null;
+    document.getElementById('viewWifiPass').innerText = '••••••••••••';
+  }
 
   document.getElementById('viewOnuModal').classList.remove('hidden');
 
@@ -1124,18 +1140,16 @@ async function viewOnuDetail(oltId, gponPort, onuId, sn, encodedName, vlan) {
 
       if (dev.wifiSsid) {
         document.getElementById('viewWifiSsid').innerText = dev.wifiSsid;
-      } else {
-        document.getElementById('viewWifiSsid').innerText = 'Pendiente sincronización TR-069';
       }
-
       if (dev.wifiPassword) {
         currentViewOnu.realWifiPass = dev.wifiPassword;
+        if (currentViewOnu.wifiVisible) {
+          document.getElementById('viewWifiPass').innerText = dev.wifiPassword;
+        }
       }
-    } else {
-      document.getElementById('viewWifiSsid').innerText = 'Pendiente sincronización TR-069';
     }
   } catch (err) {
-    document.getElementById('viewWifiSsid').innerText = 'Pendiente sincronización TR-069';
+    // Mantener los datos locales
   }
 }
 
@@ -1264,11 +1278,18 @@ async function submitUpdateWan(e) {
       showToast('Modo ONU Actualizado', `Configuración enviada por ${configMethod} a la ONT exitosamente`, 'success', 5000);
       document.getElementById('viewWanOnuMode').innerText = onuMode;
       document.getElementById('viewWanSetupMode').innerText = `${wanMode} (${configMethod})`;
-      if (ip) document.getElementById('viewWanIp').innerText = ip;
+      if (ip) {
+        document.getElementById('viewWanIp').innerText = ip;
+        if (currentViewOnu.cached) currentViewOnu.cached.ip = ip;
+      }
       if (mask) document.getElementById('viewWanMask').innerText = mask;
-      if (gateway) document.getElementById('viewWanGw').innerText = gateway;
+      if (gateway) {
+        document.getElementById('viewWanGw').innerText = gateway;
+        if (currentViewOnu.cached) currentViewOnu.cached.gateway = gateway;
+      }
       if (vlanId) document.getElementById('viewOnuVlanBadge').innerText = `VLAN ${vlanId}`;
       closeUpdateWanModal();
+      if (typeof loadOnus === 'function') loadOnus();
     } else {
       showToast('Error', data.error || 'No se pudo aplicar la configuración en la ONT', 'error');
     }
@@ -1286,7 +1307,7 @@ async function submitUpdateWan(e) {
 function openChangeWifiModal() {
   if (!currentViewOnu) return;
   const currentSsid = document.getElementById('viewWifiSsid')?.innerText || 'CloudWare_Fibra';
-  document.getElementById('wifiModalSsid').value = currentSsid !== 'Consultando TR-069...' ? currentSsid : 'CloudWare_Fibra';
+  document.getElementById('wifiModalSsid').value = (currentSsid && !currentSsid.includes('Sin registrar') && !currentSsid.includes('Consultando')) ? currentSsid : 'CloudWare_Fibra';
   document.getElementById('wifiModalPass').value = '';
   document.getElementById('changeWifiModal')?.classList.remove('hidden');
 }
@@ -1305,25 +1326,34 @@ async function submitChangeWifi(e) {
   const origText = btn.innerHTML;
 
   btn.disabled = true;
-  btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Enviando...';
+  btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Guardando...';
 
   try {
     const res = await fetch(`/api/tr069/devices/${encodeURIComponent(currentViewOnu.sn)}/wifi`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ssid, password })
+      body: JSON.stringify({
+        ssid,
+        password,
+        oltId: currentViewOnu.oltId,
+        onuId: currentViewOnu.onuId
+      })
     });
     const data = await res.json();
     if (data.success) {
-      showToast('Wi-Fi Actualizado', `SSID "${ssid}" y contraseña cambiados vía TR-069`, 'success', 5000);
+      showToast('Wi-Fi Guardado', `Red: "${ssid}" guardada correctamente para esta ONT`, 'success', 5000);
       document.getElementById('viewWifiSsid').innerText = ssid;
       currentViewOnu.realWifiPass = password;
+      if (currentViewOnu.cached) {
+        currentViewOnu.cached.wifi_ssid = ssid;
+        currentViewOnu.cached.wifi_password = password;
+      }
       if (currentViewOnu.wifiVisible) {
         document.getElementById('viewWifiPass').innerText = password;
       }
       closeChangeWifiModal();
     } else {
-      showToast('Error', data.error || 'No se pudo actualizar el Wi-Fi vía TR-069', 'error');
+      showToast('Error', data.error || 'No se pudo guardar la configuración Wi-Fi', 'error');
     }
   } catch {
     showToast('Error de Red', 'Fallo de conexión con el servidor', 'error');

@@ -85,10 +85,16 @@ export async function initOltDatabase(): Promise<void> {
     await db.execute('ALTER TABLE wireguard_peers ADD COLUMN bytes_rcvd INTEGER DEFAULT 0');
   } catch {}
   try {
-    await db.execute('ALTER TABLE wireguard_peers ADD COLUMN bytes_sent INTEGER DEFAULT 0');
+    await db.execute('ALTER TABLE provisioned_onts ADD COLUMN ip_address TEXT');
   } catch {}
   try {
-    await db.execute("ALTER TABLE wireguard_peers ADD COLUMN status TEXT DEFAULT 'disconnected'");
+    await db.execute('ALTER TABLE provisioned_onts ADD COLUMN gateway TEXT');
+  } catch {}
+  try {
+    await db.execute('ALTER TABLE provisioned_onts ADD COLUMN wifi_ssid TEXT');
+  } catch {}
+  try {
+    await db.execute('ALTER TABLE provisioned_onts ADD COLUMN wifi_password TEXT');
   } catch {}
 
   console.log('[CloudOLT Database] Tablas "olts", "wireguard_peers" y "provisioned_onts" listas en olt_manager.db');

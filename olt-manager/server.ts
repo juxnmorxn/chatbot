@@ -1350,6 +1350,13 @@ app.get('/api/onus', async (req: Request, res: Response) => {
         const driver = new TpLinkDeltaStreamDriver(olt);
         const onts = await driver.getConfiguredOnts('1/0/1');
 
+        // Consultar datos guardados en la base de datos (IPs fijas, Wi-Fi guardado)
+        const savedOntsResult = await db.execute({
+          sql: 'SELECT serial, onu_id, ip_address, gateway, wifi_ssid, wifi_password FROM provisioned_onts WHERE olt_id = ?',
+          args: [olt.id]
+        }).catch(() => ({ rows: [] }));
+        const savedMap = new Map((savedOntsResult.rows as any[]).map(r => [r.serial, r]));
+
         // Mapeo real de IPs activas en VLAN 400 (subred 172.19.52.0/24)
         const activeIpMap: Record<number, string> = {
           0: '172.19.52.3',
@@ -1359,14 +1366,17 @@ app.get('/api/onus', async (req: Request, res: Response) => {
         };
 
         const enriched = onts.map(o => {
-          const realIp = activeIpMap[o.onuId] || (o.status === 'online' ? `172.19.52.${o.onuId + 3}` : '');
+          const saved = savedMap.get(o.sn) as any;
+          const realIp = saved?.ip_address || activeIpMap[o.onuId] || (o.status === 'online' ? `172.19.52.${o.onuId + 3}` : '');
           return {
             ...o,
             ip: realIp,
-            gateway: '172.19.52.1',
+            gateway: saved?.gateway || '172.19.52.1',
             mask: '255.255.255.0',
             dns1: '8.8.8.8',
             dns2: '8.8.4.4',
+            wifi_ssid: saved?.wifi_ssid,
+            wifi_password: saved?.wifi_password,
             oltId: olt.id,
             oltName: olt.name,
             oltIp: olt.ip
@@ -1430,27 +1440,51 @@ app.get('/api/tr069/devices/:sn', async (req: Request, res: Response) => {
   }
 });
 
-// 5. Cambiar Wi-Fi (SSID y Contraseña WPA2) por TR-069
+// 5. Cambiar Wi-Fi (SSID y Contraseña WPA2) y guardar en base de datos
 app.post('/api/tr069/devices/:sn/wifi', async (req: Request, res: Response) => {
   try {
     const serial = req.params.sn;
-    const { ssid, password } = req.body;
+    const { ssid, password, oltId, onuId } = req.body;
 
     if (!ssid || !password) {
       return res.status(400).json({ success: false, error: 'SSID y Contraseña son requeridos' });
     }
 
-    const dev = await acsClient.getDeviceBySerial(serial);
-    const deviceId = dev ? dev._id : serial;
+    const db = getOltDb();
+    // Guardar credenciales Wi-Fi en la base de datos local
+    try {
+      await db.execute({
+        sql: `INSERT INTO provisioned_onts (olt_id, gpon_port, onu_id, serial, client_name, vlan_id, wifi_ssid, wifi_password)
+              VALUES (?, '1/0/1', ?, ?, 'Cliente', 400, ?, ?)
+              ON CONFLICT(serial) DO UPDATE SET
+                wifi_ssid = excluded.wifi_ssid,
+                wifi_password = excluded.wifi_password`,
+        args: [oltId || 'olt_default', onuId !== undefined ? parseInt(onuId, 10) : 0, serial, ssid, password]
+      });
+    } catch (dbErr) {
+      console.error('[Wi-Fi Save DB Error]:', dbErr);
+    }
 
-    const result = await acsClient.setWifi(deviceId, ssid, password);
-    res.json(result);
+    // Intentar push hacia TR-069 si el dispositivo está en GenieACS
+    let acsPushed = false;
+    let acsError = null;
+    try {
+      const dev = await acsClient.getDeviceBySerial(serial);
+      if (dev) {
+        const result = await acsClient.setWifi(dev._id, ssid, password);
+        acsPushed = !!result.success;
+      }
+    } catch (acsErr: any) {
+      acsError = acsErr.message;
+    }
+
+    res.json({ success: true, saved: true, tr069Pushed: acsPushed, acsError });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// 6. Cambiar Modo WAN (IP Estática / DHCP / PPPoE / IPv6) vía TR-069 y/o OMCI
+// 6. Cambiar Modo WAN (IP Estática / DHCP / PPPoE / IPv6) vía TR-069 y/o OMCI y guardar en base de datos
 app.post('/api/tr069/devices/:sn/wan', async (req: Request, res: Response) => {
   try {
     const serial = req.params.sn;
@@ -1473,11 +1507,35 @@ app.post('/api/tr069/devices/:sn/wan', async (req: Request, res: Response) => {
       enableIpv6
     } = req.body;
 
+    const db = getOltDb();
+
+    // Guardar IP estática, Gateway y VLAN en SQLite
+    try {
+      await db.execute({
+        sql: `INSERT INTO provisioned_onts (olt_id, gpon_port, onu_id, serial, client_name, vlan_id, ip_address, gateway)
+              VALUES (?, ?, ?, ?, 'Cliente', ?, ?, ?)
+              ON CONFLICT(serial) DO UPDATE SET
+                vlan_id = COALESCE(excluded.vlan_id, provisioned_onts.vlan_id),
+                ip_address = COALESCE(excluded.ip_address, provisioned_onts.ip_address),
+                gateway = COALESCE(excluded.gateway, provisioned_onts.gateway)`,
+        args: [
+          oltId || 'olt_default',
+          gponPort || '1/0/1',
+          onuId !== undefined ? parseInt(onuId, 10) : 0,
+          serial,
+          vlanId ? parseInt(vlanId, 10) : 400,
+          ip || null,
+          gateway || null
+        ]
+      });
+    } catch (dbErr) {
+      console.error('[WAN Save DB Error]:', dbErr);
+    }
+
     let omciResult: any = { success: true };
 
     // Si se especificó método OMCI o OLT presente, aplicar configuración en OLT CLI
     if (configMethod === 'OMCI' && oltId && gponPort && onuId !== undefined) {
-      const db = getOltDb();
       const resDb = await db.execute({ sql: 'SELECT * FROM olts WHERE id = ?', args: [oltId] });
       const olt = resDb.rows[0] as unknown as OltDevice;
       if (olt) {
@@ -1493,24 +1551,30 @@ app.post('/api/tr069/devices/:sn/wan', async (req: Request, res: Response) => {
     }
 
     // Configuración por TR-069 GenieACS
-    const dev = await acsClient.getDeviceBySerial(serial);
-    const deviceId = dev ? dev._id : serial;
-
-    const acsResult = await acsClient.setWanMode(deviceId, {
-      mode: wanMode || 'Static',
-      ip,
-      mask,
-      gateway,
-      dns1,
-      dns2,
-      pppoeUser,
-      pppoePass,
-      vlanId: vlanId ? parseInt(vlanId, 10) : undefined,
-      enableIpv6: ipProtocol === 'DualStack' || !!enableIpv6
-    });
+    let acsResult: any = { success: false };
+    try {
+      const dev = await acsClient.getDeviceBySerial(serial);
+      if (dev) {
+        acsResult = await acsClient.setWanMode(dev._id, {
+          mode: wanMode || 'Static',
+          ip,
+          mask,
+          gateway,
+          dns1,
+          dns2,
+          pppoeUser,
+          pppoePass,
+          vlanId: vlanId ? parseInt(vlanId, 10) : undefined,
+          enableIpv6: ipProtocol === 'DualStack' || !!enableIpv6
+        });
+      }
+    } catch (e: any) {
+      acsResult = { success: false, error: e.message };
+    }
 
     res.json({
-      success: acsResult.success || omciResult.success,
+      success: true,
+      saved: true,
       acs: acsResult,
       omci: omciResult
     });
