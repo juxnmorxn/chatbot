@@ -589,6 +589,9 @@ app.get('/', async (req: Request, res: Response) => {
           <div>
             <h3 class="text-base font-extrabold text-white flex items-center gap-2">
               <span id="viewOnuTitleName">Cliente</span>
+              <button onclick="renameCurrentOnu()" title="Editar nombre de cliente en OLT" class="text-gray-400 hover:text-sky-400 text-xs p-1">
+                <i class="fa-solid fa-pen-to-square"></i>
+              </button>
               <span id="viewOnuStatusPill" class="text-[10px] px-2 py-0.5 rounded-full font-bold">ONLINE</span>
             </h3>
             <p class="text-xs text-gray-400 font-mono" id="viewOnuSubtitle">gpon-onu_1/0/1:1 &bull; HWTC-685E10B6</p>
@@ -1350,15 +1353,15 @@ app.get('/api/onus', async (req: Request, res: Response) => {
         const driver = new TpLinkDeltaStreamDriver(olt);
         const onts = await driver.getConfiguredOnts('1/0/1');
 
-        // Consultar datos guardados en la base de datos (IPs fijas, Wi-Fi guardado)
+        // Consultar datos guardados en la base de datos (IPs fijas, Wi-Fi guardado, nombres)
         const savedOntsResult = await db.execute({
-          sql: 'SELECT serial, onu_id, ip_address, gateway, wifi_ssid, wifi_password FROM provisioned_onts WHERE olt_id = ?',
+          sql: 'SELECT serial, onu_id, client_name, ip_address, gateway, wifi_ssid, wifi_password FROM provisioned_onts WHERE olt_id = ?',
           args: [olt.id]
         }).catch(() => ({ rows: [] }));
         const savedMap = new Map((savedOntsResult.rows as any[]).map(r => [r.serial, r]));
 
-        // Mapeo real de IPs activas en VLAN 400 (subred 172.19.52.0/24)
-        const activeIpMap: Record<number, string> = {
+        // Mapeo de IPs reales configuradas dentro de cada módem en la VLAN 400
+        const modemRealIpMap: Record<number, string> = {
           0: '172.19.52.3',
           1: '172.19.52.5',
           2: '172.19.52.10',
@@ -1367,14 +1370,22 @@ app.get('/api/onus', async (req: Request, res: Response) => {
 
         const enriched = onts.map(o => {
           const saved = savedMap.get(o.sn) as any;
-          const realIp = saved?.ip_address || activeIpMap[o.onuId] || (o.status === 'online' ? `172.19.52.${o.onuId + 3}` : '');
+          // Respetar estrictamente la descripción de la OLT o el nombre asignado en la DB
+          let finalName = o.name;
+          if (saved?.client_name && saved.client_name !== 'Cliente') {
+            finalName = saved.client_name;
+          }
+
+          // IPs estáticas reales de los módems
+          const realIp = saved?.ip_address || modemRealIpMap[o.onuId] || '';
           return {
             ...o,
+            name: finalName,
             ip: realIp,
-            gateway: saved?.gateway || '172.19.52.1',
-            mask: '255.255.255.0',
-            dns1: '8.8.8.8',
-            dns2: '8.8.4.4',
+            gateway: saved?.gateway || (realIp ? '172.19.52.1' : ''),
+            mask: realIp ? '255.255.255.0' : '',
+            dns1: realIp ? '8.8.8.8' : '',
+            dns2: realIp ? '8.8.4.4' : '',
             wifi_ssid: saved?.wifi_ssid,
             wifi_password: saved?.wifi_password,
             oltId: olt.id,
@@ -1391,6 +1402,41 @@ app.get('/api/onus', async (req: Request, res: Response) => {
     res.json({ onts: allOnts });
   } catch (err: any) {
     res.status(500).json({ error: err.message, onts: [] });
+  }
+});
+
+// 2b. Renombrar ONT / Asignar Nombre de Cliente en OLT y DB
+app.post('/api/onus/rename', async (req: Request, res: Response) => {
+  try {
+    const { oltId, gponPort, onuId, serial, name } = req.body;
+    if (!name || onuId === undefined) {
+      return res.status(400).json({ success: false, error: 'onuId y name son requeridos' });
+    }
+
+    const cleanName = String(name).trim();
+    const db = getOltDb();
+
+    // Guardar en la base de datos
+    await db.execute({
+      sql: `INSERT INTO provisioned_onts (olt_id, gpon_port, onu_id, serial, client_name, vlan_id)
+            VALUES (?, ?, ?, ?, ?, 400)
+            ON CONFLICT(serial) DO UPDATE SET client_name = excluded.client_name`,
+      args: [oltId || 'olt_default', gponPort || '1/0/1', parseInt(onuId, 10), serial, cleanName]
+    });
+
+    // Guardar directamente en la memoria y configuración de la OLT TP-Link
+    if (oltId) {
+      const resDb = await db.execute({ sql: 'SELECT * FROM olts WHERE id = ?', args: [oltId] });
+      const olt = resDb.rows[0] as unknown as OltDevice;
+      if (olt) {
+        const driver = new TpLinkDeltaStreamDriver(olt);
+        await driver.setOntDescription(gponPort || '1/0/1', parseInt(onuId, 10), cleanName);
+      }
+    }
+
+    res.json({ success: true, name: cleanName });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 

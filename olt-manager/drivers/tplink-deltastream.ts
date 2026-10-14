@@ -390,7 +390,12 @@ export class TpLinkDeltaStreamDriver {
           10000
         );
 
-        const onts = this.parseConfiguredOnts(combinedOutput, combinedOutput, gponPort);
+        // Separar secciones para evitar solapamiento de líneas entre optical-info y version
+        const opticalPart = combinedOutput.split(/show ont optical-info/i)[1]?.split(/show ont version/i)[0] || combinedOutput;
+        const versionPart = combinedOutput.split(/show ont version/i)[1]?.split(/show running-config/i)[0] || combinedOutput;
+        const configPart = combinedOutput.split(/show running-config/i)[1] || combinedOutput;
+
+        const onts = this.parseConfiguredOnts(opticalPart, configPart, gponPort, versionPart);
         if (onts && onts.length > 0) {
           TpLinkDeltaStreamDriver.ontsCache.set(cacheKey, { timestamp: Date.now(), onts });
           return onts;
@@ -418,7 +423,7 @@ export class TpLinkDeltaStreamDriver {
   /**
    * Parseador de ONTs autorizadas con cruce de descripciones, versiones de hardware y mediciones ópticas
    */
-  public parseConfiguredOnts(optOutput: string, cfgOutput: string, gponPort: string): ConfiguredOnt[] {
+  public parseConfiguredOnts(optOutput: string, cfgOutput: string, gponPort: string, verOutput?: string): ConfiguredOnt[] {
     const descMap = new Map<number, string>();
     // ont add 1 sn-auth HWTC-685E10B6 desc "GustavoAdolfo" ...
     const cfgLines = cfgOutput.split('\n');
@@ -428,14 +433,15 @@ export class TpLinkDeltaStreamDriver {
         const onuId = parseInt(m[1], 10);
         const descMatch = line.match(/desc\s+"([^"]+)"/);
         if (descMatch) {
-          descMap.set(onuId, descMatch[1]);
+          descMap.set(onuId, descMatch[1].trim());
         }
       }
     }
 
     // Parsear modelos y versiones de show ont version gpon 1/0/1
     const versionMap = new Map<number, { vendor: string; model: string; hw: string; sw: string }>();
-    for (const line of cfgLines) {
+    const verLines = (verOutput || cfgOutput).split('\n');
+    for (const line of verLines) {
       // 1    1/0/1  2   HWTC-685311B6 online  active   HWTC   EG8041V5             799     31FD.A         AC)V5R021C00S230     V5R021C00S230
       const vm = line.match(/^\s*\d+\s+[\d/]+\s+(\d+)\s+[A-Za-z0-9_-]+\s+\w+\s+\w+\s+([A-Za-z0-9_-]+)\s+([A-Za-z0-9_-]+)\s+\d+\s+([A-Za-z0-9._-]+)\s+.*?\s*([A-Za-z0-9._()\-]+)/);
       if (vm) {
@@ -451,6 +457,7 @@ export class TpLinkDeltaStreamDriver {
     }
 
     const onts: ConfiguredOnt[] = [];
+    const seenOnuIds = new Set<number>();
     const lines = optOutput.split('\n');
     for (const line of lines) {
       // 1    1/0/1  0   HWTC-6841F9B6 online    active    -23.98   2.29     -25.53   3340.00   13.00  50.00
@@ -459,6 +466,11 @@ export class TpLinkDeltaStreamDriver {
         const port = match[1];
         const onuId = parseInt(match[2], 10);
         const sn = match[3];
+
+        // Deduplicación estricta para garantizar que ningún cliente salga doble
+        if (seenOnuIds.has(onuId)) continue;
+        seenOnuIds.add(onuId);
+
         const status = match[4].toLowerCase() === 'online' ? 'online' : 'offline';
         const rx = match[5];
         const tx = match[6];
@@ -468,7 +480,9 @@ export class TpLinkDeltaStreamDriver {
         const temp = match[10];
 
         const ver = versionMap.get(onuId);
-        const name = descMap.get(onuId) || `Cliente ONU #${onuId}`;
+        // Respetar estrictamente la descripción de la OLT
+        const oltDesc = descMap.get(onuId);
+        const name = oltDesc || `ONT #${onuId}`;
 
         onts.push({
           onuId,
@@ -493,6 +507,23 @@ export class TpLinkDeltaStreamDriver {
     }
 
     return onts;
+  }
+
+  /**
+   * Modifica la descripción / nombre de cliente de la ONT en la OLT TP-Link
+   */
+  public async setOntDescription(gponPort: string, onuId: number, desc: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const cleanDesc = desc.replace(/["\r\n]/g, '').trim();
+      await this.executeCommand(
+        `enable\nconfig\ninterface gpon ${gponPort}\nont modify ${onuId} desc "${cleanDesc}"\nexit\nwrite\n`,
+        6000
+      );
+      TpLinkDeltaStreamDriver.ontsCache.clear();
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
   }
 
   /**

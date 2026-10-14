@@ -1157,6 +1157,39 @@ function closeViewOnuModal() {
   document.getElementById('viewOnuModal')?.classList.add('hidden');
 }
 
+async function renameCurrentOnu() {
+  if (!currentViewOnu) return;
+  const currentName = document.getElementById('viewOnuTitleName')?.innerText || '';
+  const newName = prompt('Ingresa el nuevo nombre o descripción para esta ONT (se guardará en la OLT y en CloudOLT):', currentName);
+  if (!newName || newName.trim() === '' || newName.trim() === currentName) return;
+
+  try {
+    const res = await fetch('/api/onus/rename', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        oltId: currentViewOnu.oltId,
+        gponPort: currentViewOnu.gponPort,
+        onuId: currentViewOnu.onuId,
+        serial: currentViewOnu.sn,
+        name: newName.trim()
+      })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast('Nombre Actualizado', `ONT renombrada a "${data.name}" con éxito en OLT y sistema`, 'success');
+      document.getElementById('viewOnuTitleName').innerText = data.name;
+      const cached = configuredOnus.find(o => o.sn === currentViewOnu.sn);
+      if (cached) cached.name = data.name;
+      loadOnus();
+    } else {
+      showToast('Error', data.error || 'No se pudo actualizar el nombre', 'error');
+    }
+  } catch (err) {
+    showToast('Error de Red', 'Fallo de conexión al renombrar', 'error');
+  }
+}
+
 function toggleWifiPassVisibility() {
   if (!currentViewOnu) return;
   currentViewOnu.wifiVisible = !currentViewOnu.wifiVisible;
@@ -1603,6 +1636,7 @@ window.promptRebootOnt = promptRebootOnt;
 // Funciones SmartOLT / TR-069
 window.viewOnuDetail = viewOnuDetail;
 window.closeViewOnuModal = closeViewOnuModal;
+window.renameCurrentOnu = renameCurrentOnu;
 window.toggleWifiPassVisibility = toggleWifiPassVisibility;
 window.openUpdateWanModal = openUpdateWanModal;
 window.closeUpdateWanModal = closeUpdateWanModal;
