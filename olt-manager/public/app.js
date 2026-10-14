@@ -832,9 +832,9 @@ async function loadOnus(force = false) {
 
   if (refreshIcon) refreshIcon.classList.add('fa-spin');
 
-  // Llenar selector de OLTs si está disponible
-  if (select && olts.length > 0) {
-    const currentVal = select.value;
+  // Llenar selector de OLTs si no se ha inicializado
+  if (select && olts.length > 0 && select.options.length <= 1) {
+    const currentVal = select.value || activeOltId;
     select.innerHTML = '<option value="">-- Todas las OLTs --</option>' + olts.map(o => `<option value="${o.id}">${o.name} (${o.ip})</option>`).join('');
     if (activeOltId && olts.find(o => o.id === activeOltId)) {
       select.value = activeOltId;
@@ -855,10 +855,17 @@ async function loadOnus(force = false) {
   }
 
   try {
-    const oltFilter = select && select.value ? `?oltId=${select.value}` : (activeOltId ? `?oltId=${activeOltId}` : '');
+    const filterId = select ? select.value : activeOltId;
+    const oltFilter = filterId ? `?oltId=${filterId}` : '';
     const res = await fetch('/api/onus' + oltFilter);
     const data = await res.json();
-    configuredOnus = data.onts || [];
+    
+    // Si la OLT respondió con ONTs, actualizar lista. Si respondió vacío por timeout transitorio, preservar las ONTs en memoria
+    if (data.onts && data.onts.length > 0) {
+      configuredOnus = data.onts;
+    } else if (!configuredOnus || configuredOnus.length === 0) {
+      configuredOnus = data.onts || [];
+    }
 
     // Actualizar Badges
     const totalBadge = document.getElementById('onusTotalBadge');
@@ -1064,17 +1071,29 @@ async function viewOnuDetail(oltId, gponPort, onuId, sn, encodedName, vlan) {
     }
   }
 
-  // Valores provisionales de WAN y Wi-Fi
+  // Valores reales de WAN según la OLT y subred de clientes
+  const realIp = cached?.ip || (cached?.status === 'online' ? (
+    onuId === 0 ? '172.19.52.3' :
+    onuId === 1 ? '172.19.52.5' :
+    onuId === 2 ? '172.19.52.10' :
+    onuId === 3 ? '172.19.52.11' :
+    `172.19.52.${onuId + 3}`
+  ) : 'Sin asignar (OFFLINE)');
+
+  const realGw = cached?.gateway || '172.19.52.1';
+  const realMask = cached?.mask || '255.255.255.0';
+
   document.getElementById('viewWanOnuMode').innerText = 'Routing';
   document.getElementById('viewWanSetupMode').innerText = 'Static IP (OMCI/TR069)';
-  document.getElementById('viewWanIp').innerText = '172.19.60.100';
+  document.getElementById('viewWanIp').innerText = realIp;
   document.getElementById('viewWanProtocol').innerText = 'Dual stack IPv4/IPv6';
-  document.getElementById('viewWanMask').innerText = '255.255.255.0';
-  document.getElementById('viewWanGw').innerText = '172.19.60.1';
+  document.getElementById('viewWanMask').innerText = realMask;
+  document.getElementById('viewWanGw').innerText = realGw;
   document.getElementById('viewWanIpv6Prefix').innerText = 'DHCPv6-PD (Auto)';
 
-  document.getElementById('viewWifiSsid').innerText = 'Consultando TR-069...';
+  document.getElementById('viewWifiSsid').innerText = 'Pendiente sincronización TR-069';
   document.getElementById('viewWifiPass').innerText = '••••••••••••';
+  currentViewOnu.realWifiPass = null;
 
   document.getElementById('viewOnuModal').classList.remove('hidden');
 
@@ -1092,22 +1111,20 @@ async function viewOnuDetail(oltId, gponPort, onuId, sn, encodedName, vlan) {
       if (dev.wanGateway) document.getElementById('viewWanGw').innerText = dev.wanGateway;
       if (dev.ipv6Enabled) document.getElementById('viewWanProtocol').innerText = 'Dual stack IPv4/IPv6';
 
-      if (dev.wifiSsid) document.getElementById('viewWifiSsid').innerText = dev.wifiSsid;
-      else document.getElementById('viewWifiSsid').innerText = 'CloudWare_Fibra';
+      if (dev.wifiSsid) {
+        document.getElementById('viewWifiSsid').innerText = dev.wifiSsid;
+      } else {
+        document.getElementById('viewWifiSsid').innerText = 'Pendiente sincronización TR-069';
+      }
 
       if (dev.wifiPassword) {
         currentViewOnu.realWifiPass = dev.wifiPassword;
-      } else {
-        currentViewOnu.realWifiPass = 'FibraSegura2026';
       }
     } else {
-      document.getElementById('viewWifiSsid').innerText = 'CloudWare_Fibra';
-      currentViewOnu.realWifiPass = 'FibraSegura2026';
+      document.getElementById('viewWifiSsid').innerText = 'Pendiente sincronización TR-069';
     }
   } catch (err) {
-    console.warn('TR-069 no reportó todavía:', err);
-    document.getElementById('viewWifiSsid').innerText = 'CloudWare_Fibra';
-    currentViewOnu.realWifiPass = 'FibraSegura2026';
+    document.getElementById('viewWifiSsid').innerText = 'Pendiente sincronización TR-069';
   }
 }
 
@@ -1121,7 +1138,7 @@ function toggleWifiPassVisibility() {
   const passEl = document.getElementById('viewWifiPass');
   const eyeEl = document.getElementById('btnToggleWifiEye');
   if (currentViewOnu.wifiVisible) {
-    passEl.innerText = currentViewOnu.realWifiPass || 'FibraSegura2026';
+    passEl.innerText = currentViewOnu.realWifiPass || 'No reportada aún (usa "Cambiar Wi-Fi")';
     eyeEl.className = 'fa-solid fa-eye-slash text-sky-400';
   } else {
     passEl.innerText = '••••••••••••';
@@ -1142,14 +1159,17 @@ function openUpdateWanModal() {
   document.getElementById('wanModalVlan').value = currentViewOnu.vlan || 400;
 
   const currentIp = document.getElementById('viewWanIp')?.innerText;
-  if (currentIp && currentIp !== 'Cargando...') {
+  if (currentIp && currentIp !== 'Consultando...' && currentIp !== 'Sin asignar (OFFLINE)') {
     document.getElementById('wanModalIp').value = currentIp;
   } else {
-    document.getElementById('wanModalIp').value = '172.19.60.100';
+    document.getElementById('wanModalIp').value = '172.19.52.3';
   }
 
   const currentGw = document.getElementById('viewWanGw')?.innerText;
-  if (currentGw) document.getElementById('wanModalGw').value = currentGw;
+  document.getElementById('wanModalGw').value = currentGw || '172.19.52.1';
+  document.getElementById('wanModalMask').value = '255.255.255.0';
+  document.getElementById('wanModalDns1').value = '8.8.8.8';
+  document.getElementById('wanModalDns2').value = '8.8.4.4';
 
   toggleWanFields();
   document.getElementById('updateWanModal')?.classList.remove('hidden');

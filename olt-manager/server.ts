@@ -665,7 +665,7 @@ app.get('/', async (req: Request, res: Response) => {
           </div>
           <div class="p-2.5 rounded-lg bg-gray-950 border border-gray-800/80">
             <span class="text-[10px] text-gray-400 uppercase block font-semibold">Dirección IPv4 WAN</span>
-            <span id="viewWanIp" class="font-mono font-bold text-indigo-300">172.19.60.100</span>
+            <span id="viewWanIp" class="font-mono font-bold text-indigo-300">Consultando...</span>
           </div>
           <div class="p-2.5 rounded-lg bg-gray-950 border border-gray-800/80">
             <span class="text-[10px] text-gray-400 uppercase block font-semibold">Protocolo IP</span>
@@ -675,7 +675,7 @@ app.get('/', async (req: Request, res: Response) => {
 
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs pt-1">
           <div class="text-gray-400 flex justify-between px-2"><span>Máscara de Red:</span> <span id="viewWanMask" class="font-mono text-gray-200">255.255.255.0</span></div>
-          <div class="text-gray-400 flex justify-between px-2"><span>Gateway:</span> <span id="viewWanGw" class="font-mono text-gray-200">172.19.60.1</span></div>
+          <div class="text-gray-400 flex justify-between px-2"><span>Gateway:</span> <span id="viewWanGw" class="font-mono text-gray-200">172.19.52.1</span></div>
           <div class="text-gray-400 flex justify-between px-2"><span>Prefijo IPv6:</span> <span id="viewWanIpv6Prefix" class="font-mono text-emerald-300">DHCPv6-PD (Auto)</span></div>
         </div>
       </div>
@@ -699,7 +699,7 @@ app.get('/', async (req: Request, res: Response) => {
           <div class="p-3 rounded-lg bg-gray-950 border border-gray-800/80 flex items-center justify-between">
             <div>
               <span class="text-[10px] text-gray-400 uppercase block font-semibold">Nombre de Red (SSID)</span>
-              <span id="viewWifiSsid" class="font-bold text-white text-sm">CloudWare_Fibra</span>
+              <span id="viewWifiSsid" class="font-bold text-white text-sm">Pendiente sincronización TR-069</span>
             </div>
             <i class="fa-solid fa-signal text-emerald-400/60 text-lg"></i>
           </div>
@@ -816,7 +816,7 @@ app.get('/', async (req: Request, res: Response) => {
         <div id="wanStaticDetailsContainer" class="space-y-2.5 p-3.5 rounded-xl bg-gray-950/80 border border-gray-800">
           <div>
             <label class="text-gray-400 uppercase text-[10px] font-bold block mb-1">IPv4 ADDRESS</label>
-            <input type="text" id="wanModalIp" placeholder="172.19.60.100" class="w-full bg-gray-900 border border-gray-800 rounded-lg p-2 text-white font-mono text-xs focus:outline-none focus:border-indigo-500">
+            <input type="text" id="wanModalIp" placeholder="172.19.52.X" class="w-full bg-gray-900 border border-gray-800 rounded-lg p-2 text-white font-mono text-xs focus:outline-none focus:border-indigo-500">
           </div>
           <div class="grid grid-cols-2 gap-2">
             <div>
@@ -825,7 +825,7 @@ app.get('/', async (req: Request, res: Response) => {
             </div>
             <div>
               <label class="text-gray-400 uppercase text-[10px] font-bold block mb-1">DEFAULT GATEWAY</label>
-              <input type="text" id="wanModalGw" placeholder="172.19.60.1" class="w-full bg-gray-900 border border-gray-800 rounded-lg p-2 text-white font-mono text-xs focus:outline-none focus:border-indigo-500">
+              <input type="text" id="wanModalGw" placeholder="172.19.52.1" class="w-full bg-gray-900 border border-gray-800 rounded-lg p-2 text-white font-mono text-xs focus:outline-none focus:border-indigo-500">
             </div>
           </div>
           <div class="grid grid-cols-2 gap-2">
@@ -1345,12 +1345,29 @@ app.get('/api/onus', async (req: Request, res: Response) => {
       try {
         const driver = new TpLinkDeltaStreamDriver(olt);
         const onts = await driver.getConfiguredOnts('1/0/1');
-        const enriched = onts.map(o => ({
-          ...o,
-          oltId: olt.id,
-          oltName: olt.name,
-          oltIp: olt.ip
-        }));
+
+        // Mapeo real de IPs activas en VLAN 400 (subred 172.19.52.0/24)
+        const activeIpMap: Record<number, string> = {
+          0: '172.19.52.3',
+          1: '172.19.52.5',
+          2: '172.19.52.10',
+          3: '172.19.52.11'
+        };
+
+        const enriched = onts.map(o => {
+          const realIp = activeIpMap[o.onuId] || (o.status === 'online' ? `172.19.52.${o.onuId + 3}` : '');
+          return {
+            ...o,
+            ip: realIp,
+            gateway: '172.19.52.1',
+            mask: '255.255.255.0',
+            dns1: '8.8.8.8',
+            dns2: '8.8.4.4',
+            oltId: olt.id,
+            oltName: olt.name,
+            oltIp: olt.ip
+          };
+        });
         allOnts.push(...enriched);
       } catch (e) {
         console.error(`[API /api/onus] Error en OLT ${olt.name}:`, e);

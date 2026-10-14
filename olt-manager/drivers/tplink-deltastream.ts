@@ -48,6 +48,8 @@ export interface ConfiguredOnt {
 
 export class TpLinkDeltaStreamDriver {
   private config: OltDevice;
+  private static ontsCache = new Map<string, { timestamp: number; onts: ConfiguredOnt[] }>();
+  private static ontsQueryPromise = new Map<string, Promise<ConfiguredOnt[]>>();
 
   constructor(config: OltDevice) {
     this.config = config;
@@ -358,18 +360,51 @@ export class TpLinkDeltaStreamDriver {
    * Consulta todas las ONTs ya configuradas y autorizadas en la OLT con sus potencias ópticas y nombres de cliente
    */
   public async getConfiguredOnts(gponPort: string = '1/0/1'): Promise<ConfiguredOnt[]> {
-    try {
-      // 1. Obtener potencias ópticas y estado online/offline
-      const optOutput = await this.executeCommand(`enable\nterminal length 0\nshow ont optical-info gpon ${gponPort}\n`, 6000);
-      // 2. Obtener nombres de clientes desde la configuración activa usando filtro rápido
-      const cfgOutput = await this.executeCommand(`enable\nterminal length 0\nshow running-config | include ont\n`, 6000)
-        .catch(() => '');
+    const cacheKey = `${this.config.id || this.config.ip}_${gponPort}`;
+    const cached = TpLinkDeltaStreamDriver.ontsCache.get(cacheKey);
+    const now = Date.now();
 
-      return this.parseConfiguredOnts(optOutput, cfgOutput, gponPort);
-    } catch (err) {
-      console.error(`[OLT ${this.config.name}] Error leyendo ONTs configuradas:`, err);
-      return [];
+    // 1. Si tenemos cache fresco (< 45 segundos), responder de inmediato en 0ms
+    if (cached && (now - cached.timestamp < 45000)) {
+      return cached.onts;
     }
+
+    // 2. Si ya hay una consulta en curso a la OLT, esperar esa misma promesa (evita colisiones SSH concurrentes)
+    if (TpLinkDeltaStreamDriver.ontsQueryPromise.has(cacheKey)) {
+      return TpLinkDeltaStreamDriver.ontsQueryPromise.get(cacheKey)!;
+    }
+
+    const queryPromise = (async () => {
+      try {
+        // 3. Ejecutar lectura óptica y configuración activa en UNA SOLA sesión interactiva SSH
+        const combinedOutput = await this.executeCommand(
+          `enable\nterminal length 0\nshow ont optical-info gpon ${gponPort}\nshow running-config | include ont\n`,
+          10000
+        );
+
+        const onts = this.parseConfiguredOnts(combinedOutput, combinedOutput, gponPort);
+        if (onts && onts.length > 0) {
+          TpLinkDeltaStreamDriver.ontsCache.set(cacheKey, { timestamp: Date.now(), onts });
+          return onts;
+        } else if (cached && cached.onts.length > 0) {
+          // Si la OLT respondió vacío temporalmente por retardo de CLI, preservar cache previo
+          return cached.onts;
+        }
+        return onts;
+      } catch (err) {
+        console.error(`[OLT ${this.config.name}] Error leyendo ONTs configuradas:`, err);
+        // Si falló el SSH pero tenemos cache previo, nunca dejar la tabla vacía
+        if (cached && cached.onts.length > 0) {
+          return cached.onts;
+        }
+        return [];
+      } finally {
+        TpLinkDeltaStreamDriver.ontsQueryPromise.delete(cacheKey);
+      }
+    })();
+
+    TpLinkDeltaStreamDriver.ontsQueryPromise.set(cacheKey, queryPromise);
+    return queryPromise;
   }
 
   /**
