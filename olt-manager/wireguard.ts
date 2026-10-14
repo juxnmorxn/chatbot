@@ -65,8 +65,8 @@ export function applyWireguardPeer(publicKey: string, clientIp: string, subnets?
   // Rutas en el kernel de Linux para que el VPS pueda alcanzar la OLT a través del MikroTik
   for (const subnet of sanitizedSubnets) {
     try {
-      execSync(`ip route replace ${subnet} via ${clientIp} dev wg0`);
-      console.log(`[WireGuard] Ruta agregada: ${subnet} via ${clientIp} dev wg0`);
+      execSync(`ip route replace ${subnet} dev wg0`);
+      console.log(`[WireGuard] Ruta agregada: ${subnet} dev wg0`);
     } catch (err: any) {
       console.warn(`[WireGuard] Advertencia al agregar ruta ${subnet}:`, err.message);
     }

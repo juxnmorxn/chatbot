@@ -611,8 +611,17 @@ window.openProvisionModal = openProvisionModal;
 window.closeProvisionModal = closeProvisionModal;
 window.submitProvision = submitProvision;
 
-// Carga inicial
+// Carga inicial y sondeo en tiempo real (cada 3 segundos)
 document.addEventListener('DOMContentLoaded', () => {
   loadTunnels();
   loadOlts();
+
+  // Actualización en tiempo real sin recargar la página
+  setInterval(() => {
+    if (activeTab === 'tunnels') {
+      loadTunnels();
+    } else if (activeTab === 'olts') {
+      loadOlts();
+    }
+  }, 3000);
 });
