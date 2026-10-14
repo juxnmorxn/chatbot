@@ -44,6 +44,20 @@ export async function initOltDatabase(): Promise<void> {
     )
   `);
 
+  // Tabla independiente de Túneles WireGuard de MikroTiks
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS wireguard_peers (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      client_ip TEXT NOT NULL UNIQUE,
+      public_key TEXT NOT NULL,
+      private_key TEXT NOT NULL,
+      allowed_subnets TEXT NOT NULL,
+      last_handshake TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+
   // Tabla independiente de ONTs aprovisionadas
   await db.execute(`
     CREATE TABLE IF NOT EXISTS provisioned_onts (
