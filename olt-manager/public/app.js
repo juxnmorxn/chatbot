@@ -677,7 +677,7 @@ async function testOltConnection(id) {
       showToast('OLT en Línea', `Respuesta exitosa: ${data.latencyMs}ms`, 'success', 4000);
       await showAlertModal(
         '¡Test de Conexión Exitoso!',
-        `Se estableció enlace interactivo SSH con la OLT exitosamente.\n\n• Prompt CLI: ${data.prompt || 'DS-P7001-01'}\n• Latencia: ${data.latencyMs}ms\n• Estado: ONLINE (En línea)`,
+        `Se estableció enlace interactivo SSH con la OLT exitosamente.\n\n• Prompt CLI: ${data.rawInfo || data.prompt || 'DS-P7001-01'}\n• Latencia: ${data.latencyMs}ms\n• Estado: ONLINE (En línea)`,
         'success'
       );
     } else {

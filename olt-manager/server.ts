@@ -145,7 +145,7 @@ app.get('/', async (req: Request, res: Response) => {
         <button onclick="openOltModal()" class="px-3.5 py-2 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-indigo-500/25 transition">
           <i class="fa-solid fa-plus"></i> Add OLT
         </button>
-        <button onclick="activeTab === 'tunnels' ? loadTunnels() : (activeTab === 'unconfigured' ? refreshAutofind() : loadOlts())" class="px-2.5 py-2 bg-gray-900 hover:bg-gray-800 border border-gray-800 text-gray-300 rounded-xl text-xs transition" title="Actualizar datos">
+        <button onclick="activeTab === 'tunnels' ? loadTunnels() : (activeTab === 'unconfigured' ? refreshAutofind() : (activeTab === 'onus' ? loadOnus(true) : loadOlts()))" class="px-2.5 py-2 bg-gray-900 hover:bg-gray-800 border border-gray-800 text-gray-300 rounded-xl text-xs transition" title="Actualizar datos">
           <i class="fa-solid fa-rotate"></i>
         </button>
       </div>
