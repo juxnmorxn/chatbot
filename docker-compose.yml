@@ -10,7 +10,10 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     networks:
-      - chatbot_net
+      chatbot_net:
+        aliases:
+          - postgres
+          - evolution_postgres
 
   evolution_api:
     image: evoapicloud/evolution-api:latest
@@ -24,7 +27,7 @@ services:
       - AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES=true
       - DATABASE_ENABLED=true
       - DATABASE_PROVIDER=postgresql
-      - DATABASE_CONNECTION_URI=postgresql://evolution:evolution_password@postgres:5432/evolution_db?schema=public
+      - DATABASE_CONNECTION_URI=postgresql://evolution:evolution_password@evolution_postgres:5432/evolution_db?schema=public
       - CACHE_REDIS_ENABLED=false
       - QRCODE_LIMIT=30
     ports:
