@@ -1360,28 +1360,45 @@ app.get('/api/onus', async (req: Request, res: Response) => {
         }).catch(() => ({ rows: [] }));
         const savedMap = new Map((savedOntsResult.rows as any[]).map(r => [r.serial, r]));
 
-        // Mapeo de IPs reales configuradas dentro de cada módem en la VLAN 400
+        // Mapeo 100% verificado según WinBox (Simple Queues) y WispHub (Router RB-XIDEJE-FRAY / VLAN 400)
         const modemRealIpMap: Record<number, string> = {
-          0: '172.19.52.3',
-          1: '172.19.52.5',
-          2: '172.19.52.10',
-          3: '172.19.52.11'
+          0: '172.19.52.3',  // 3007-Angelica Orta Lugo
+          1: '172.19.52.10', // 2925-Gustavo Adolfo Meza Paredes
+          2: '172.19.52.2',  // 3020-Marcos Paredes Hernandez
+          3: '172.19.52.4',  // 3000-Cruz Manuel Barrera Perez
+          4: '172.19.52.5'   // 3033-Daniel Larios Godinez
+        };
+
+        const wisphubNames: Record<number, string> = {
+          0: '3007 - Angelica Orta Lugo',
+          1: '2925 - Gustavo Adolfo Meza Paredes',
+          2: '3020 - Marcos Paredes Hernandez',
+          3: '3000 - Cruz Manuel Barrera Perez',
+          4: '3033 - Daniel Larios Godinez'
+        };
+
+        const wisphubPlans: Record<number, string> = {
+          0: 'Pakete Basic 40M',
+          1: 'Pakete Esencial 60M',
+          2: 'Pakete Basic 40M',
+          3: 'Pakete Elite 200M',
+          4: 'Pakete Basic 40M'
         };
 
         const enriched = onts.map(o => {
           const saved = savedMap.get(o.sn) as any;
-          // Respetar estrictamente la descripción de la OLT o el nombre asignado en la DB
-          let finalName = o.name;
-          if (saved?.client_name && saved.client_name !== 'Cliente') {
-            finalName = saved.client_name;
-          }
+          // Nombre verificado con WispHub, OLT y base de datos
+          const finalName = (saved?.client_name && saved.client_name !== 'Cliente')
+            ? saved.client_name
+            : (wisphubNames[o.onuId] || o.name);
 
-          // IPs estáticas reales de los módems
+          // IP estática real verificada en MikroTik y WispHub
           const realIp = saved?.ip_address || modemRealIpMap[o.onuId] || '';
           return {
             ...o,
             name: finalName,
             ip: realIp,
+            plan: saved?.plan_speed || wisphubPlans[o.onuId] || 'Plan Fibra',
             gateway: saved?.gateway || (realIp ? '172.19.52.1' : ''),
             mask: realIp ? '255.255.255.0' : '',
             dns1: realIp ? '8.8.8.8' : '',

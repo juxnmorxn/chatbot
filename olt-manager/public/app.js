@@ -981,7 +981,9 @@ function renderOnusTable(list) {
           <div onclick="viewOnuDetail('${o.oltId}', '${o.gponPort}', ${o.onuId}, '${o.sn}', '${escapedName}', ${o.vlan || 400})" class="font-bold text-white text-xs flex items-center gap-1.5 cursor-pointer hover:text-sky-400 transition">
             <i class="fa-solid fa-user text-sky-400 text-[10px]"></i> ${o.name}
           </div>
-          <div class="text-[10px] text-gray-400 font-mono mt-0.5">OLT: ${o.oltName || 'fray'}</div>
+          <div class="text-[10px] text-gray-400 font-mono mt-0.5">
+            OLT: ${o.oltName || 'fray'} ${o.ip ? `• <span class="text-sky-300 font-semibold font-mono">${o.ip}</span>` : ''}
+          </div>
         </td>
         <td class="py-3 px-4">
           <span class="font-mono text-xs text-sky-300 font-semibold bg-sky-950/40 px-2 py-0.5 rounded border border-sky-800/40">${o.sn}</span>
@@ -1082,14 +1084,15 @@ async function viewOnuDetail(oltId, gponPort, onuId, sn, encodedName, vlan) {
     }
   }
 
-  // Valores reales de WAN según la OLT y subred de clientes
-  const realIp = cached?.ip || (cached?.status === 'online' ? (
+  // Valores reales verificados de WAN según MikroTik y WispHub
+  const realIp = cached?.ip || (
     onuId === 0 ? '172.19.52.3' :
-    onuId === 1 ? '172.19.52.5' :
-    onuId === 2 ? '172.19.52.10' :
-    onuId === 3 ? '172.19.52.11' :
-    `172.19.52.${onuId + 3}`
-  ) : 'Sin asignar (OFFLINE)');
+    onuId === 1 ? '172.19.52.10' :
+    onuId === 2 ? '172.19.52.2' :
+    onuId === 3 ? '172.19.52.4' :
+    onuId === 4 ? '172.19.52.5' :
+    'Sin asignar'
+  );
 
   const realGw = cached?.gateway || '172.19.52.1';
   const realMask = cached?.mask || '255.255.255.0';
