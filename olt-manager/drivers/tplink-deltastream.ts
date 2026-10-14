@@ -332,7 +332,8 @@ export class TpLinkDeltaStreamDriver {
    */
   public async getAutofindOnts(port: string = '1/0/1'): Promise<AutofindOnt[]> {
     try {
-      const raw = await this.executeCommand(`show ont autofind gpon ${port}\n`);
+      // En TP-Link DeltaStream 'show ont autofind' REQUIERE modo privilegiado (enable)
+      const raw = await this.executeCommand(`enable\nterminal length 0\nshow ont autofind gpon ${port}\n`, 8000);
       return this.parseAutofind(raw, port);
     } catch (error) {
       console.error(`[OLT ${this.config.name}] Error leyendo autofind:`, error);
@@ -346,19 +347,38 @@ export class TpLinkDeltaStreamDriver {
   public parseAutofind(cliOutput: string, gponPort: string): AutofindOnt[] {
     const onts: AutofindOnt[] = [];
     const lines = cliOutput.split('\n');
-    const snRegex = /(HWTC|48575443|ALCL|ZTEG|ISPR|TPLG)[0-9A-Za-z\-_]+/i;
-
     for (const line of lines) {
-      const match = line.match(snRegex);
-      if (match) {
-        const sn = match[0].trim();
-        const vendor = sn.substring(0, 4);
+      // 1    1/0/1   HWTC-C19217D7  -  -  -  31FD.A  V5R021C00S230  EG8041V5  HWTC
+      const m = line.match(/^\s*\d+\s+([\d/]+)\s+([A-Za-z0-9_-]+)\s+.*?\s+([A-Za-z0-9._-]+)\s+([A-Za-z0-9._()\-]+)\s+([A-Za-z0-9._-]+)\s+([A-Za-z0-9._-]+)/);
+      if (m) {
+        const port = m[1] || gponPort;
+        const sn = m[2];
+        const hw = m[3] !== '-' ? m[3] : undefined;
+        const sw = m[4] !== '-' ? m[4] : undefined;
+        const equip = m[5] !== '-' ? m[5] : undefined;
+        const vendor = m[6] === 'HWTC' ? 'Huawei' : m[6];
         onts.push({
-          gponPort,
+          gponPort: port,
           sn,
-          vendor,
+          vendor: vendor || sn.substring(0, 4),
+          model: equip ? `Huawei ${equip}` : 'Huawei GPON ONT',
+          hardwareVersion: hw,
+          softwareVersion: sw,
           discoveredAt: new Date().toISOString()
         });
+      } else {
+        const snRegex = /(HWTC|48575443|ALCL|ZTEG|ISPR|TPLG)[0-9A-Za-z\-_]+/i;
+        const match = line.match(snRegex);
+        if (match && !line.includes('SERIAL') && !line.includes('NUMBER')) {
+          const sn = match[0].trim();
+          onts.push({
+            gponPort,
+            sn,
+            vendor: sn.startsWith('HWTC') ? 'Huawei' : sn.substring(0, 4),
+            model: 'Huawei GPON ONT',
+            discoveredAt: new Date().toISOString()
+          });
+        }
       }
     }
 

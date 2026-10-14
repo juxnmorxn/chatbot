@@ -776,6 +776,14 @@ function openProvisionModal(sn, port) {
   document.getElementById('modalSn').value = sn;
   document.getElementById('modalPort').value = port || '1/0/1';
   document.getElementById('modalVlan').value = olt ? olt.default_vlan : 400;
+
+  // Calcular automáticamente el siguiente ONU ID libre
+  const usedIds = (configuredOnus || []).map(o => o.onuId);
+  let nextId = 0;
+  while (usedIds.includes(nextId)) nextId++;
+  const onuInput = document.getElementById('modalOnuId');
+  if (onuInput) onuInput.value = nextId;
+
   document.getElementById('provisionModal').classList.remove('hidden');
 }
 

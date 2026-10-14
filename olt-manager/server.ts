@@ -562,7 +562,7 @@ app.get('/', async (req: Request, res: Response) => {
           </div>
           <div>
             <label class="text-gray-400 block mb-1">ONU ID</label>
-            <input type="number" id="modalOnuId" value="1" min="1" max="128" required class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white font-mono">
+            <input type="number" id="modalOnuId" value="0" min="0" max="128" required class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white font-mono">
           </div>
         </div>
 
