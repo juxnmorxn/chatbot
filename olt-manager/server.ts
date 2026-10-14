@@ -357,13 +357,13 @@ app.get('/', async (req: Request, res: Response) => {
         <form id="wgForm" onsubmit="generateMikrotikScript(event)" class="space-y-3">
           <div>
             <label class="text-gray-400 block mb-1">Nombre del Router Cabecera</label>
-            <input type="text" id="wgRouterName" required placeholder="Ej. RB-XIDEJE-FRAY" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white focus:outline-none focus:border-emerald-500">
+            <input type="text" id="wgRouterName" required placeholder="Ej. fray" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white focus:outline-none focus:border-emerald-500">
           </div>
 
           <div>
-            <label class="text-gray-400 block mb-1">Red Privada de la OLT (Subred que alcanzará el VPS)</label>
-            <input type="text" id="wgSubnet" required placeholder="Ej. 172.19.60.0/24" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white font-mono focus:outline-none focus:border-emerald-500">
-            <span class="text-[10px] text-gray-500 mt-0.5 block">La subred donde vive la OLT (ej. 172.19.60.0/24 para 172.19.60.2)</span>
+            <label class="text-gray-400 block mb-1">Red Privada de la OLT <span class="text-gray-500 text-[10px]">(Opcional)</span></label>
+            <input type="text" id="wgSubnet" placeholder="Ej. 172.19.60.0/24 (o déjalo en blanco)" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white font-mono focus:outline-none focus:border-emerald-500">
+            <span class="text-[10px] text-gray-500 mt-0.5 block">Opcional. Si lo dejas vacío, el túnel conectará el MikroTik directo con el VPS.</span>
           </div>
 
           <div class="flex justify-end pt-1">
@@ -426,9 +426,10 @@ app.post('/api/wireguard/generate-peer', async (req: Request, res: Response) => 
     const serverPort = 51820;
 
     // 3. Registrar peer en el servidor WireGuard del VPS
-    const sanitizedSubnet = subnet.trim();
+    const sanitizedSubnet = (subnet && typeof subnet === 'string') ? subnet.trim() : '';
+    const allowedIpsParam = sanitizedSubnet ? `${clientIp}/32,${sanitizedSubnet}` : `${clientIp}/32`;
     try {
-      execSync(`wg set wg0 peer "${clientPub}" allowed-ips "${clientIp}/32,${sanitizedSubnet}"`);
+      execSync(`wg set wg0 peer "${clientPub}" allowed-ips "${allowedIpsParam}"`);
     } catch (e) {
       console.warn('Aviso: No se pudo ejecutar wg set en VPS local (posiblemente dentro de contenedor):', e);
     }
@@ -438,7 +439,7 @@ app.post('/api/wireguard/generate-peer', async (req: Request, res: Response) => 
     await db.execute({
       sql: `INSERT INTO wireguard_peers (id, name, client_ip, public_key, private_key, allowed_subnets)
             VALUES (?, ?, ?, ?, ?, ?)`,
-      args: [peerId, routerName, clientIp, clientPub, clientPriv, sanitizedSubnet]
+      args: [peerId, routerName, clientIp, clientPub, clientPriv, sanitizedSubnet || '10.200.0.0/24']
     });
 
     // 5. Script RouterOS v7 para MikroTik
