@@ -52,6 +52,7 @@ export interface ConfiguredOnt {
   softwareVersion?: string;
   vlan: number;
   profile: string;
+  mac?: string;
 }
 
 export class TpLinkDeltaStreamDriver {
@@ -384,18 +385,19 @@ export class TpLinkDeltaStreamDriver {
 
     const queryPromise = (async () => {
       try {
-        // 3. Ejecutar lectura óptica, versiones/modelos y configuración en UNA SOLA sesión interactiva SSH
+        // 3. Ejecutar lectura óptica, versiones/modelos, tabla MAC de hardware y configuración en UNA SOLA sesión interactiva SSH
         const combinedOutput = await this.executeCommand(
-          `enable\nterminal length 0\nshow ont optical-info gpon ${gponPort}\nshow ont version gpon ${gponPort}\nshow running-config | include ont\n`,
-          10000
+          `enable\nterminal length 0\nshow ont optical-info gpon ${gponPort}\nshow ont version gpon ${gponPort}\nshow mac address-table\nshow running-config | include ont\n`,
+          12000
         );
 
-        // Separar secciones para evitar solapamiento de líneas entre optical-info y version
+        // Separar secciones para evitar solapamiento de líneas
         const opticalPart = combinedOutput.split(/show ont optical-info/i)[1]?.split(/show ont version/i)[0] || combinedOutput;
-        const versionPart = combinedOutput.split(/show ont version/i)[1]?.split(/show running-config/i)[0] || combinedOutput;
+        const versionPart = combinedOutput.split(/show ont version/i)[1]?.split(/show mac address-table/i)[0] || combinedOutput;
+        const macPart = combinedOutput.split(/show mac address-table/i)[1]?.split(/show running-config/i)[0] || '';
         const configPart = combinedOutput.split(/show running-config/i)[1] || combinedOutput;
 
-        const onts = this.parseConfiguredOnts(opticalPart, configPart, gponPort, versionPart);
+        const onts = this.parseConfiguredOnts(opticalPart, configPart, gponPort, versionPart, macPart);
         if (onts && onts.length > 0) {
           TpLinkDeltaStreamDriver.ontsCache.set(cacheKey, { timestamp: Date.now(), onts });
           return onts;
@@ -423,7 +425,7 @@ export class TpLinkDeltaStreamDriver {
   /**
    * Parseador de ONTs autorizadas con cruce de descripciones, versiones de hardware y mediciones ópticas
    */
-  public parseConfiguredOnts(optOutput: string, cfgOutput: string, gponPort: string, verOutput?: string): ConfiguredOnt[] {
+  public parseConfiguredOnts(optOutput: string, cfgOutput: string, gponPort: string, verOutput?: string, macOutput?: string): ConfiguredOnt[] {
     const descMap = new Map<number, string>();
     // ont add 1 sn-auth HWTC-685E10B6 desc "GustavoAdolfo" ...
     const cfgLines = cfgOutput.split('\n');
@@ -453,6 +455,19 @@ export class TpLinkDeltaStreamDriver {
           hw: vm[4] !== '-' ? vm[4] : 'N/A',
           sw: vm[5] ? vm[5].replace('AC)', '').trim() : 'N/A'
         });
+      }
+    }
+
+    // Parsear tabla MAC de hardware real directamente de los frames del módem
+    const macMap = new Map<number, string>();
+    if (macOutput) {
+      const macLines = macOutput.split('\n');
+      for (const line of macLines) {
+        // 90:5e:44:16:0e:fa  400           GPON1/0/1     0     1     dynamic         aging
+        const mm = line.match(/^\s*([0-9a-fA-F:]{17})\s+\d+\s+GPON[\d/]+\s+(\d+)/);
+        if (mm) {
+          macMap.set(parseInt(mm[2], 10), mm[1].toUpperCase());
+        }
       }
     }
 
@@ -501,7 +516,8 @@ export class TpLinkDeltaStreamDriver {
           hardwareVersion: ver?.hw,
           softwareVersion: ver?.sw,
           vlan: this.config.default_vlan || 400,
-          profile: 'LINE_VLAN400'
+          profile: 'LINE_VLAN400',
+          mac: macMap.get(onuId)
         });
       }
     }

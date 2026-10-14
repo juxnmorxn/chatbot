@@ -987,6 +987,7 @@ function renderOnusTable(list) {
         </td>
         <td class="py-3 px-4">
           <span class="font-mono text-xs text-sky-300 font-semibold bg-sky-950/40 px-2 py-0.5 rounded border border-sky-800/40">${o.sn}</span>
+          ${o.mac ? `<div class="text-[10px] text-gray-400 font-mono mt-0.5 flex items-center gap-1"><i class="fa-solid fa-ethernet text-[9px] text-gray-500"></i> ${o.mac}</div>` : ''}
         </td>
         <td class="py-3 px-4 font-mono text-xs text-gray-300">${o.gponPort}:${o.onuId}</td>
         <td class="py-3 px-4">${rxBadge}</td>
@@ -1016,6 +1017,8 @@ function filterOnusTable() {
   const filtered = configuredOnus.filter(o => 
     o.name.toLowerCase().includes(query) ||
     o.sn.toLowerCase().includes(query) ||
+    (o.mac && o.mac.toLowerCase().includes(query)) ||
+    (o.ip && o.ip.toLowerCase().includes(query)) ||
     `${o.gponPort}:${o.onuId}`.includes(query)
   );
   renderOnusTable(filtered);
@@ -1048,7 +1051,7 @@ async function viewOnuDetail(oltId, gponPort, onuId, sn, encodedName, vlan) {
   document.getElementById('viewOnuSubtitle').innerText = `gpon-onu_${gponPort}:${onuId} • ${sn}`;
   document.getElementById('viewOnuOltName').innerText = cached?.oltName || 'fray';
   document.getElementById('viewOnuPort').innerText = `${gponPort}:${onuId}`;
-  document.getElementById('viewOnuSn').innerText = sn;
+  document.getElementById('viewOnuSn').innerHTML = `${sn} ${cached?.mac ? `<span class="ml-2 px-1.5 py-0.5 rounded bg-gray-800 text-[10px] text-sky-300 font-mono"><i class="fa-solid fa-ethernet text-[9px] mr-1"></i>${cached.mac}</span>` : ''}`;
   document.getElementById('viewOnuModel').innerText = cached?.model || 'Huawei EG8041V5';
 
   const hwSwEl = document.getElementById('viewOnuHwSw');
