@@ -76,6 +76,7 @@ export class TpLinkDeltaStreamDriver {
           }
 
           let commandSent = false;
+          let allLinesSent = false;
           let idleTimer: NodeJS.Timeout;
 
           const finish = () => {
@@ -89,10 +90,19 @@ export class TpLinkDeltaStreamDriver {
           const sendCommand = () => {
             if (!commandSent) {
               commandSent = true;
-              stream.write('\n');
-              setTimeout(() => {
-                stream.write(`${command.trim()}\n`);
-              }, 250);
+              const lines = command.trim().split('\n').map(l => l.trim()).filter(Boolean);
+              let delay = 250;
+              stream.write('\r\n');
+              for (let i = 0; i < lines.length; i++) {
+                const cmdLine = lines[i];
+                setTimeout(() => {
+                  try { stream.write(cmdLine + '\r\n'); } catch {}
+                  if (i === lines.length - 1) {
+                    allLinesSent = true;
+                  }
+                }, delay);
+                delay += 550;
+              }
             }
           };
 
@@ -110,12 +120,12 @@ export class TpLinkDeltaStreamDriver {
               if (/[>#$]\s*$/.test(output.trim()) || output.includes('>') || output.includes('#')) {
                 sendCommand();
               }
-            } else {
+            } else if (allLinesSent) {
               clearTimeout(idleTimer);
               if (/[>#$]\s*$/.test(output.trim())) {
                 idleTimer = setTimeout(finish, 600);
               } else {
-                idleTimer = setTimeout(finish, 1400);
+                idleTimer = setTimeout(finish, 1200);
               }
             }
           });
@@ -123,7 +133,7 @@ export class TpLinkDeltaStreamDriver {
           // Timeout de seguridad para enviar comando si no llega prompt inicial
           setTimeout(() => {
             if (!commandSent) sendCommand();
-          }, 1000);
+          }, 1200);
 
           stream.stderr.on('data', (d: Buffer) => {
             output += d.toString('utf8');
