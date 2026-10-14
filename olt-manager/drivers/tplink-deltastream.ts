@@ -42,6 +42,14 @@ export interface ConfiguredOnt {
   status: 'online' | 'offline';
   rxPower: string;
   txPower: string;
+  rxOltPower?: string;
+  voltage?: string;
+  biasCurrent?: string;
+  temperature?: string;
+  vendor?: string;
+  model?: string;
+  hardwareVersion?: string;
+  softwareVersion?: string;
   vlan: number;
   profile: string;
 }
@@ -376,9 +384,9 @@ export class TpLinkDeltaStreamDriver {
 
     const queryPromise = (async () => {
       try {
-        // 3. Ejecutar lectura óptica y configuración activa en UNA SOLA sesión interactiva SSH
+        // 3. Ejecutar lectura óptica, versiones/modelos y configuración en UNA SOLA sesión interactiva SSH
         const combinedOutput = await this.executeCommand(
-          `enable\nterminal length 0\nshow ont optical-info gpon ${gponPort}\nshow running-config | include ont\n`,
+          `enable\nterminal length 0\nshow ont optical-info gpon ${gponPort}\nshow ont version gpon ${gponPort}\nshow running-config | include ont\n`,
           10000
         );
 
@@ -408,7 +416,7 @@ export class TpLinkDeltaStreamDriver {
   }
 
   /**
-   * Parseador de ONTs autorizadas con cruce de descripciones y mediciones ópticas
+   * Parseador de ONTs autorizadas con cruce de descripciones, versiones de hardware y mediciones ópticas
    */
   public parseConfiguredOnts(optOutput: string, cfgOutput: string, gponPort: string): ConfiguredOnt[] {
     const descMap = new Map<number, string>();
@@ -425,11 +433,28 @@ export class TpLinkDeltaStreamDriver {
       }
     }
 
+    // Parsear modelos y versiones de show ont version gpon 1/0/1
+    const versionMap = new Map<number, { vendor: string; model: string; hw: string; sw: string }>();
+    for (const line of cfgLines) {
+      // 1    1/0/1  2   HWTC-685311B6 online  active   HWTC   EG8041V5             799     31FD.A         AC)V5R021C00S230     V5R021C00S230
+      const vm = line.match(/^\s*\d+\s+[\d/]+\s+(\d+)\s+[A-Za-z0-9_-]+\s+\w+\s+\w+\s+([A-Za-z0-9_-]+)\s+([A-Za-z0-9_-]+)\s+\d+\s+([A-Za-z0-9._-]+)\s+.*?\s*([A-Za-z0-9._()\-]+)/);
+      if (vm) {
+        const id = parseInt(vm[1], 10);
+        const equip = vm[3];
+        versionMap.set(id, {
+          vendor: vm[2] === 'HWTC' ? 'Huawei' : vm[2],
+          model: equip && equip !== '-' ? `Huawei ${equip}` : 'Huawei GPON ONT',
+          hw: vm[4] !== '-' ? vm[4] : 'N/A',
+          sw: vm[5] ? vm[5].replace('AC)', '').trim() : 'N/A'
+        });
+      }
+    }
+
     const onts: ConfiguredOnt[] = [];
     const lines = optOutput.split('\n');
     for (const line of lines) {
       // 1    1/0/1  0   HWTC-6841F9B6 online    active    -23.98   2.29     -25.53   3340.00   13.00  50.00
-      const match = line.match(/^\s*\d+\s+([\d/]+)\s+(\d+)\s+([A-Za-z0-9_-]+)\s+(\w+)\s+\w+\s+([\d.-]+|-)\s+([\d.-]+|-)/);
+      const match = line.match(/^\s*\d+\s+([\d/]+)\s+(\d+)\s+([A-Za-z0-9_-]+)\s+(\w+)\s+\w+\s+([\d.-]+|-)\s+([\d.-]+|-)(?:\s+([\d.-]+|-)\s+([\d.-]+|-)\s+([\d.-]+|-)\s+([\d.-]+|-))?/);
       if (match) {
         const port = match[1];
         const onuId = parseInt(match[2], 10);
@@ -437,6 +462,12 @@ export class TpLinkDeltaStreamDriver {
         const status = match[4].toLowerCase() === 'online' ? 'online' : 'offline';
         const rx = match[5];
         const tx = match[6];
+        const rxOlt = match[7];
+        const vcc = match[8];
+        const bias = match[9];
+        const temp = match[10];
+
+        const ver = versionMap.get(onuId);
         const name = descMap.get(onuId) || `Cliente ONU #${onuId}`;
 
         onts.push({
@@ -445,8 +476,16 @@ export class TpLinkDeltaStreamDriver {
           gponPort: port || gponPort,
           name,
           status,
-          rxPower: rx !== '-' ? `${rx} dBm` : 'N/A',
-          txPower: tx !== '-' ? `${tx} dBm` : 'N/A',
+          rxPower: rx && rx !== '-' ? `${rx} dBm` : 'N/A',
+          txPower: tx && tx !== '-' ? `${tx} dBm` : 'N/A',
+          rxOltPower: rxOlt && rxOlt !== '-' ? `${rxOlt} dBm` : undefined,
+          voltage: vcc && vcc !== '-' ? `${(parseFloat(vcc) / 1000).toFixed(2)} V` : undefined,
+          biasCurrent: bias && bias !== '-' ? `${bias} mA` : undefined,
+          temperature: temp && temp !== '-' ? `${temp} °C` : undefined,
+          vendor: ver?.vendor || 'Huawei',
+          model: ver?.model || 'Huawei EG8041V5',
+          hardwareVersion: ver?.hw,
+          softwareVersion: ver?.sw,
           vlan: this.config.default_vlan || 400,
           profile: 'LINE_VLAN400'
         });

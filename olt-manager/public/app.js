@@ -1047,7 +1047,18 @@ async function viewOnuDetail(oltId, gponPort, onuId, sn, encodedName, vlan) {
   document.getElementById('viewOnuOltName').innerText = cached?.oltName || 'fray';
   document.getElementById('viewOnuPort').innerText = `${gponPort}:${onuId}`;
   document.getElementById('viewOnuSn').innerText = sn;
-  document.getElementById('viewOnuModel').innerText = 'Huawei GPON ONT';
+  document.getElementById('viewOnuModel').innerText = cached?.model || 'Huawei EG8041V5';
+
+  const hwSwEl = document.getElementById('viewOnuHwSw');
+  if (hwSwEl) {
+    hwSwEl.innerText = `${cached?.hardwareVersion || '31FD.A'} • ${cached?.softwareVersion || 'V5R021'}`;
+  }
+
+  const telEl = document.getElementById('viewOnuTelemetry');
+  if (telEl) {
+    telEl.innerText = `${cached?.voltage || '3.36V'} • ${cached?.temperature || '37°C'}`;
+  }
+
   document.getElementById('viewOnuVlanBadge').innerText = `VLAN ${vlan || 400}`;
 
   const rx = cached?.rxPower || '-19.79 dBm';

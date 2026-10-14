@@ -610,11 +610,15 @@ app.get('/', async (req: Request, res: Response) => {
           <div class="flex justify-between"><span class="text-gray-400">OLT:</span> <span id="viewOnuOltName" class="font-bold text-white">fray</span></div>
           <div class="flex justify-between"><span class="text-gray-400">Puerto GPON:</span> <span id="viewOnuPort" class="font-mono text-gray-200">1/0/1:1</span></div>
           <div class="flex justify-between"><span class="text-gray-400">Número de Serie:</span> <span id="viewOnuSn" class="font-mono text-sky-400 font-bold">HWTC-685E10B6</span></div>
-          <div class="flex justify-between"><span class="text-gray-400">Modelo:</span> <span id="viewOnuModel" class="text-gray-200">Huawei GPON ONT</span></div>
+          <div class="flex justify-between"><span class="text-gray-400">Modelo:</span> <span id="viewOnuModel" class="text-gray-200 font-semibold">Huawei EG8041V5</span></div>
+          <div class="flex justify-between"><span class="text-gray-400">Hardware / FW:</span> <span id="viewOnuHwSw" class="text-xs text-gray-300 font-mono">31FD.A • V5R021</span></div>
         </div>
 
         <div class="p-3.5 rounded-xl bg-gray-950/80 border border-gray-800/80 space-y-2 text-xs">
-          <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Potencia Óptica (dBm)</div>
+          <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex justify-between items-center">
+            <span>Potencia Óptica (dBm)</span>
+            <span id="viewOnuTelemetry" class="text-[10px] font-mono text-sky-400 font-normal">3.36V • 37°C</span>
+          </div>
           <div class="flex items-center justify-between">
             <span class="text-gray-400">Rx Power (ONU):</span>
             <span id="viewOnuRxDbm" class="font-mono font-bold text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-500/30 text-xs">-19.79 dBm</span>
