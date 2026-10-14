@@ -77,5 +77,19 @@ export async function initOltDatabase(): Promise<void> {
     )
   `);
 
-  console.log('[OLT Database] Tablas "olts" y "provisioned_onts" inicializadas correctamente en olt_manager.db');
+  // Migraciones seguras para columnas adicionales
+  try {
+    await db.execute('ALTER TABLE olts ADD COLUMN tunnel_id TEXT');
+  } catch {}
+  try {
+    await db.execute('ALTER TABLE wireguard_peers ADD COLUMN bytes_rcvd INTEGER DEFAULT 0');
+  } catch {}
+  try {
+    await db.execute('ALTER TABLE wireguard_peers ADD COLUMN bytes_sent INTEGER DEFAULT 0');
+  } catch {}
+  try {
+    await db.execute("ALTER TABLE wireguard_peers ADD COLUMN status TEXT DEFAULT 'disconnected'");
+  } catch {}
+
+  console.log('[CloudOLT Database] Tablas "olts", "wireguard_peers" y "provisioned_onts" listas en olt_manager.db');
 }

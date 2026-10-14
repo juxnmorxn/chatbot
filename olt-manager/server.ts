@@ -5,6 +5,13 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { TpLinkDeltaStreamDriver, OltDevice } from './drivers/tplink-deltastream.js';
 import { getOltDb, initOltDatabase } from './db.js';
+import {
+  generateWireguardKeypair,
+  applyWireguardPeer,
+  removeWireguardPeer,
+  getWireguardStats,
+  buildMikrotikScript
+} from './wireguard.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -46,21 +53,29 @@ await initOltDatabase().catch(err => {
   console.error('Error inicializando base de datos OLT:', err);
 });
 
-// Interfaz Web Dashboard
-app.get('/', async (req: Request, res: Response) => {
+// Sincronizar todos los peers existentes en la DB con WireGuard al arrancar
+try {
   const db = getOltDb();
-  const oltsResult = await db.execute('SELECT * FROM olts ORDER BY created_at DESC');
-  const olts = oltsResult.rows as unknown as OltDevice[];
+  const existingPeers = await db.execute('SELECT * FROM wireguard_peers');
+  for (const peer of existingPeers.rows as any[]) {
+    applyWireguardPeer(peer.public_key, peer.client_ip, peer.allowed_subnets);
+  }
+} catch (e) {
+  console.warn('[CloudOLT] Aviso sincronizando peers al inicio:', e);
+}
 
+// ==========================================
+// INTERFAZ WEB DASHBOARD (CloudOLT)
+// ==========================================
+app.get('/', async (req: Request, res: Response) => {
   const html = `
 <!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SmartOLT CloudWare - Gestión de Fibra Óptica</title>
+  <title>CloudOLT - Gestión Centralizada de OLTs y Fibra Óptica</title>
   <script>
-    // Silenciar advertencia informativa de desarrollo de Tailwind CDN
     if (typeof console !== 'undefined' && console.warn) {
       const _origWarn = console.warn;
       console.warn = function(...args) {
@@ -75,36 +90,55 @@ app.get('/', async (req: Request, res: Response) => {
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
     body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #080c14; color: #f3f4f6; }
     .glass-card { background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(14px); border: 1px solid rgba(255, 255, 255, 0.08); }
-    .glass-card-hover:hover { border-color: rgba(99, 102, 241, 0.5); transform: translateY(-2px); transition: all 0.2s ease; }
+    .glass-card-hover:hover { border-color: rgba(99, 102, 241, 0.5); transform: translateY(-1px); transition: all 0.2s ease; }
     .font-mono { font-family: 'JetBrains Mono', monospace; }
   </style>
 </head>
 <body class="min-h-screen flex flex-col">
 
-  <!-- Header Superior -->
-  <header class="glass-card sticky top-0 z-50 px-6 py-4 border-b border-gray-800/80">
+  <!-- Header Superior (SmartOLT Style) -->
+  <header class="glass-card sticky top-0 z-50 px-6 py-3.5 border-b border-gray-800/80">
     <div class="max-w-7xl mx-auto flex items-center justify-between">
-      <div class="flex items-center space-x-3">
-        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-cyan-400 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-          <i class="fa-solid fa-network-wired text-white text-lg"></i>
-        </div>
-        <div>
-          <h1 class="text-lg font-extrabold tracking-tight text-white flex items-center gap-2">
-            CloudWare <span class="text-xs px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 font-bold uppercase tracking-wider">SmartOLT Core</span>
-          </h1>
-          <p class="text-[11px] text-gray-400">Zero-Touch Provisioning & Multi-OLT Controller</p>
-        </div>
-      </div>
       
-      <div class="flex items-center space-x-3">
-        <button onclick="openWgModal()" class="px-3.5 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 rounded-xl text-xs font-bold flex items-center gap-2 transition">
-          <i class="fa-solid fa-shield-halved text-emerald-400"></i> Enlazar MikroTik (VPN)
+      <!-- Brand & Navigation Tabs -->
+      <div class="flex items-center space-x-6">
+        <div class="flex items-center space-x-3 cursor-pointer" onclick="switchTab('olts')">
+          <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-cyan-400 flex items-center justify-center shadow-lg shadow-indigo-500/25">
+            <i class="fa-solid fa-network-wired text-white text-base"></i>
+          </div>
+          <div>
+            <h1 class="text-base font-extrabold tracking-tight text-white flex items-center gap-1.5">
+              CloudOLT <span class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 font-bold uppercase tracking-wider">Core v3.6</span>
+            </h1>
+          </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <nav class="hidden md:flex items-center space-x-1.5 bg-gray-950/80 p-1 rounded-xl border border-gray-800">
+          <button id="tab-btn-olts" onclick="switchTab('olts')" class="nav-tab-btn px-3 py-1.5 rounded-lg text-xs font-bold transition bg-indigo-600 text-white shadow-md shadow-indigo-500/30 flex items-center gap-1.5">
+            <i class="fa-solid fa-server"></i> OLTs
+          </button>
+          <button id="tab-btn-unconfigured" onclick="switchTab('unconfigured')" class="nav-tab-btn px-3 py-1.5 rounded-lg text-xs font-medium text-gray-400 hover:text-white hover:bg-gray-800/50 transition flex items-center gap-1.5">
+            <i class="fa-solid fa-satellite-dish"></i> Unconfigured
+            <span id="unconfiguredBadge" class="px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-bold">0</span>
+          </button>
+          <button id="tab-btn-tunnels" onclick="switchTab('tunnels')" class="nav-tab-btn px-3 py-1.5 rounded-lg text-xs font-medium text-gray-400 hover:text-white hover:bg-gray-800/50 transition flex items-center gap-1.5">
+            <i class="fa-solid fa-shield-halved text-emerald-400"></i> VPN Tunnels
+            <span id="tunnelsCountBadge" class="text-[10px] text-gray-500 font-mono">0</span>
+          </button>
+        </nav>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="flex items-center space-x-2.5">
+        <button onclick="openCreateTunnelModal()" class="px-3 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 rounded-xl text-xs font-bold flex items-center gap-1.5 transition">
+          <i class="fa-solid fa-plus text-emerald-400"></i> Create a new tunnel
         </button>
-        <button onclick="openOltModal()" class="px-3.5 py-2 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg shadow-indigo-500/25 transition">
-          <i class="fa-solid fa-plus"></i> Dar de Alta OLT
+        <button onclick="openOltModal()" class="px-3.5 py-2 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-indigo-500/25 transition">
+          <i class="fa-solid fa-plus"></i> Add OLT
         </button>
-        <button onclick="refreshData()" class="px-3 py-2 bg-gray-900 hover:bg-gray-800 border border-gray-800 text-gray-300 rounded-xl text-xs font-semibold flex items-center gap-2 transition">
-          <i class="fa-solid fa-rotate"></i> Actualizar
+        <button onclick="activeTab === 'tunnels' ? loadTunnels() : (activeTab === 'unconfigured' ? refreshAutofind() : loadOlts())" class="px-2.5 py-2 bg-gray-900 hover:bg-gray-800 border border-gray-800 text-gray-300 rounded-xl text-xs transition" title="Actualizar datos">
+          <i class="fa-solid fa-rotate"></i>
         </button>
       </div>
     </div>
@@ -113,173 +147,205 @@ app.get('/', async (req: Request, res: Response) => {
   <!-- Contenedor Principal -->
   <main class="flex-1 max-w-7xl w-full mx-auto p-6 space-y-6">
 
-    <!-- Fila Superior: Selector & Métricas -->
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-      
-      <!-- Selector de OLT Activa -->
-      <div class="glass-card p-4 rounded-2xl md:col-span-1 flex flex-col justify-between">
+    <!-- ========================================== -->
+    <!-- VISTA 1: TABLA PRINCIPAL DE OLTS (Screenshot 2) -->
+    <!-- ========================================== -->
+    <section id="view-olts" class="space-y-4">
+      <div class="flex items-center justify-between">
         <div>
-          <div class="flex justify-between items-center mb-2">
-            <label class="text-[11px] font-bold text-gray-400 uppercase tracking-wider">OLT Seleccionada</label>
-            <span id="oltCountBadge" class="text-[10px] px-2 py-0.5 rounded bg-gray-800 text-gray-400 font-mono">${olts.length} registradas</span>
-          </div>
-          <select id="oltSelect" onchange="onOltChange()" class="w-full bg-gray-950 border border-gray-800 rounded-xl px-3 py-2 text-sm text-gray-100 focus:outline-none focus:border-indigo-500 transition">
-            ${olts.length === 0 ? '<option value="">-- Sin OLTs registradas --</option>' : ''}
-            ${olts.map(o => `<option value="${o.id}">${o.name} (${o.community})</option>`).join('')}
+          <h2 class="text-xl font-extrabold text-white tracking-tight flex items-center gap-2">
+            OLTs <span id="oltsCountBadge" class="text-xs px-2.5 py-0.5 rounded-full bg-gray-800 text-gray-400 font-mono">0 OLTs</span>
+          </h2>
+          <p class="text-xs text-gray-400">Add and manage the OLTs that CloudOLT connects to.</p>
+        </div>
+
+        <button onclick="openOltModal()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg shadow-emerald-600/25 transition">
+          <i class="fa-solid fa-plus"></i> Add OLT
+        </button>
+      </div>
+
+      <div class="glass-card rounded-2xl overflow-hidden border border-gray-800">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-gray-950/60 border-b border-gray-800 text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+                <th class="py-3 px-4 w-20">View</th>
+                <th class="py-3 px-4 w-12">ID</th>
+                <th class="py-3 px-4 w-10 text-center">&bull;</th>
+                <th class="py-3 px-4">VPN</th>
+                <th class="py-3 px-4">Name</th>
+                <th class="py-3 px-4">OLT IP</th>
+                <th class="py-3 px-4">TCP</th>
+                <th class="py-3 px-4">OLT hardware version</th>
+                <th class="py-3 px-4 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody id="oltsTableBody">
+              <!-- Renderizado por app.js -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- VISTA 2: VPN TUNNELS (Screenshot 4) -->
+    <!-- ========================================== -->
+    <section id="view-tunnels" class="hidden space-y-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-xl font-extrabold text-white tracking-tight flex items-center gap-2">
+            System Config &bull; <span class="text-emerald-400">VPN Tunnels</span>
+          </h2>
+          <p class="text-xs text-gray-400">Set up the WireGuard VPN tunnels from your MikroTik routers to reach your OLTs.</p>
+        </div>
+
+        <button onclick="openCreateTunnelModal()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg shadow-emerald-600/25 transition">
+          <i class="fa-solid fa-plus"></i> Create a new tunnel
+        </button>
+      </div>
+
+      <!-- Banner Informativo WireGuard -->
+      <div class="p-3.5 rounded-xl bg-sky-950/40 border border-sky-800/50 text-sky-200 text-xs flex items-center gap-3">
+        <i class="fa-solid fa-circle-info text-sky-400 text-base"></i>
+        <div>
+          <p class="font-bold">WireGuard is faster and uses less router CPU.</p>
+          <p class="text-[11px] text-gray-300">Funciona de forma nativa en MikroTik RouterOS v7.12.1 o superior. No requiere IPs públicas fijas en campo.</p>
+        </div>
+      </div>
+
+      <div class="glass-card rounded-2xl overflow-hidden border border-gray-800">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-gray-950/60 border-b border-gray-800 text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+                <th class="py-3 px-4 w-12">#</th>
+                <th class="py-3 px-4">User / tunnel name</th>
+                <th class="py-3 px-4">Status</th>
+                <th class="py-3 px-4">Subnet</th>
+                <th class="py-3 px-4">Connected subnets</th>
+                <th class="py-3 px-4">Used by</th>
+                <th class="py-3 px-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="tunnelsTableBody">
+              <!-- Renderizado por app.js -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- VISTA 3: UNCONFIGURED ONTS (Autofind) -->
+    <!-- ========================================== -->
+    <section id="view-unconfigured" class="hidden space-y-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-xl font-extrabold text-white tracking-tight flex items-center gap-2">
+            Unconfigured ONTs (Autofind en Vivo)
+          </h2>
+          <p class="text-xs text-gray-400">ONTs conectadas en campo pendientes por autorizar. 1-Click Activate.</p>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <label class="text-xs font-semibold text-gray-400">Filtrar por OLT:</label>
+          <select id="autofindOltSelect" onchange="onAutofindOltChange()" class="bg-gray-950 border border-gray-800 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500">
+            <!-- OLT options -->
           </select>
-        </div>
-
-        <div id="oltLiveStatus" class="mt-4 pt-3 border-t border-gray-800/80 text-xs flex items-center justify-between">
-          <span class="text-gray-400">Verificando enlace...</span>
-        </div>
-      </div>
-
-      <!-- Métricas Rápidas -->
-      <div class="glass-card p-4 rounded-2xl flex items-center space-x-4">
-        <div class="w-12 h-12 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center border border-amber-500/20">
-          <i class="fa-solid fa-satellite-dish text-xl"></i>
-        </div>
-        <div>
-          <p class="text-xs text-gray-400 font-medium">Nuevas sin autorizar</p>
-          <h3 id="statAutofind" class="text-2xl font-black text-white font-mono">0</h3>
+          <button onclick="refreshAutofind()" class="px-3 py-1.5 bg-gray-900 hover:bg-gray-800 border border-gray-800 text-gray-300 rounded-xl text-xs font-semibold flex items-center gap-1.5">
+            <i class="fa-solid fa-rotate"></i> Escanear
+          </button>
         </div>
       </div>
 
-      <div class="glass-card p-4 rounded-2xl flex items-center space-x-4">
-        <div class="w-12 h-12 rounded-xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center border border-emerald-500/20">
-          <i class="fa-solid fa-circle-check text-xl"></i>
-        </div>
-        <div>
-          <p class="text-xs text-gray-400 font-medium">OLTs en Línea</p>
-          <h3 id="statOltsOnline" class="text-2xl font-black text-emerald-400 font-mono">--</h3>
-        </div>
+      <div id="autofindContainer" class="glass-card p-6 rounded-2xl min-h-[220px]">
+        <!-- Renderizado dinámicamente -->
       </div>
-
-      <div class="glass-card p-4 rounded-2xl flex items-center space-x-4">
-        <div class="w-12 h-12 rounded-xl bg-rose-500/10 text-rose-400 flex items-center justify-center border border-rose-500/20">
-          <i class="fa-solid fa-triangle-exclamation text-xl"></i>
-        </div>
-        <div>
-          <p class="text-xs text-gray-400 font-medium">Atenuadas / Caídas</p>
-          <h3 id="statAlerts" class="text-2xl font-black text-white font-mono">0</h3>
-        </div>
-      </div>
-    </div>
-
-    <!-- Sección 1: Descubrimiento Automático (Autofind) -->
-    <div class="glass-card rounded-2xl overflow-hidden">
-      <div class="px-6 py-4 border-b border-gray-800 flex items-center justify-between">
-        <div class="flex items-center space-x-3">
-          <span class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping"></span>
-          <h2 class="text-sm font-bold text-white tracking-wide">Descubrimiento Automático (Autofind en Vivo)</h2>
-        </div>
-        <span class="text-xs text-gray-400">ONTs conectadas en campo listas para 1-Click Activate</span>
-      </div>
-
-      <div id="autofindContainer" class="p-6">
-        <div class="text-center py-8 text-gray-400 text-xs">
-          <i class="fa-solid fa-spinner fa-spin text-xl text-indigo-400 mb-2"></i>
-          <p>Consultando OLT por SSH...</p>
-        </div>
-      </div>
-    </div>
-
-    <!-- Sección 2: OLTs Registradas y Estado de Enlace -->
-    <div>
-      <div class="flex items-center justify-between mb-3">
-        <h2 class="text-sm font-bold text-gray-300 flex items-center gap-2">
-          <i class="fa-solid fa-server text-indigo-400"></i> OLTs Registradas y Estado de Enlace
-        </h2>
-        <span class="text-xs text-gray-500">Haz clic en "Probar Conexión" para verificar el túnel VPN y credenciales</span>
-      </div>
-
-      <div id="oltsGrid" class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <!-- Renderizado dinámico de OLTs -->
-      </div>
-    </div>
+    </section>
 
   </main>
 
-  <!-- MODAL: DAR DE ALTA O EDITAR OLT -->
+  <!-- ========================================== -->
+  <!-- MODAL 1: ADD / EDIT OLT (Screenshot 3) -->
+  <!-- ========================================== -->
   <div id="oltModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-    <div class="glass-card w-full max-w-lg rounded-2xl p-6 border border-gray-700/80 space-y-4">
+    <div class="glass-card w-full max-w-xl rounded-2xl p-6 border border-indigo-500/30 space-y-4 max-h-[90vh] overflow-y-auto">
       <div class="flex justify-between items-center pb-3 border-b border-gray-800">
         <h3 id="oltModalTitle" class="text-base font-bold text-white flex items-center gap-2">
-          <i class="fa-solid fa-plus-circle text-indigo-400"></i> Registrar Nueva OLT
+          <i class="fa-solid fa-server text-indigo-400"></i> Add OLT (Dar de Alta OLT)
         </h3>
         <button onclick="closeOltModal()" class="text-gray-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
       </div>
 
-      <form id="oltForm" onsubmit="saveOlt(event)" class="space-y-4 text-xs">
+      <form onsubmit="saveOlt(event)" class="space-y-3.5 text-xs">
         <input type="hidden" id="formOltId">
 
-        <div class="grid grid-cols-2 gap-3">
-          <div class="col-span-2">
-            <label class="text-gray-400 block mb-1">Nombre Descriptivo de la OLT</label>
-            <input type="text" id="formOltName" required placeholder="Ej. OLT Fray Bartolomé" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white focus:outline-none focus:border-indigo-500">
-          </div>
+        <div>
+          <label class="text-gray-300 block mb-1 font-semibold">Name (Nombre Descriptivo de la OLT)</label>
+          <input type="text" id="formOltName" required placeholder="Ej. OLT-FrayBartolome o OLT-SanAgustin" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white focus:outline-none focus:border-indigo-500">
+        </div>
 
-          <div>
-            <label class="text-gray-400 block mb-1">Modelo de Hardware</label>
-            <select id="formOltModel" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white">
-              <option value="TP-Link DS-P7001-01">TP-Link DeltaStream DS-P7001-01 (1 Puerto)</option>
-              <option value="TP-Link DS-P7001-04">TP-Link DeltaStream DS-P7001-04 (4 Puertos)</option>
-              <option value="TP-Link DS-P7001-08">TP-Link DeltaStream DS-P7001-08 (8 Puertos)</option>
-              <option value="TP-Link DS-P7001-16">TP-Link DeltaStream DS-P7001-16 (16 Puertos)</option>
-              <option value="Huawei MA5608T">Huawei SmartAX MA5608T</option>
-              <option value="Huawei MA5800-X7">Huawei MA5800-X7</option>
-              <option value="ZTE C320">ZTE ZXA10 C320</option>
-            </select>
-          </div>
-
-          <div>
-            <label class="text-gray-400 block mb-1">Comunidad / Zona</label>
-            <input type="text" id="formOltCommunity" required placeholder="Ej. Fray Bartolomé" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white">
-          </div>
+        <div>
+          <label class="text-emerald-400 block mb-1 font-bold flex items-center justify-between">
+            <span>VPN Tunnel (MikroTik Cabecera)</span>
+            <button type="button" onclick="closeOltModal(); openCreateTunnelModal();" class="text-[11px] text-indigo-400 hover:underline font-normal">+ Crear nuevo túnel</button>
+          </label>
+          <select id="formOltTunnel" required class="w-full bg-gray-950 border border-emerald-500/40 rounded-lg p-2.5 text-white focus:outline-none focus:border-emerald-500 font-mono">
+            <!-- Tunnels options -->
+          </select>
+          <span class="text-[10px] text-gray-500 mt-0.5 block">Selecciona el túnel del MikroTik al que está conectada la OLT.</span>
         </div>
 
         <div class="grid grid-cols-3 gap-3">
           <div class="col-span-2">
-            <label class="text-gray-400 block mb-1">IP de Gestión (Enlace VPN)</label>
-            <input type="text" id="formOltIp" required placeholder="Ej. 172.19.60.2" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white font-mono">
+            <label class="text-gray-300 block mb-1 font-semibold">OLT IP or FQDN</label>
+            <input type="text" id="formOltIp" required placeholder="172.19.60.2" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white font-mono focus:outline-none focus:border-indigo-500">
           </div>
           <div>
-            <label class="text-gray-400 block mb-1">Puerto SSH</label>
-            <input type="number" id="formOltPort" value="22" required class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white font-mono">
+            <label class="text-gray-300 block mb-1 font-semibold">TCP port (SSH)</label>
+            <input type="number" id="formOltPort" value="22" required class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white font-mono focus:outline-none focus:border-indigo-500">
           </div>
         </div>
 
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="text-gray-400 block mb-1">Usuario SSH</label>
-            <input type="text" id="formOltUser" required placeholder="admin" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white">
+            <label class="text-gray-300 block mb-1 font-semibold">OLT username</label>
+            <input type="text" id="formOltUser" value="admin" required class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white focus:outline-none focus:border-indigo-500">
           </div>
           <div>
-            <label class="text-gray-400 block mb-1">Contraseña SSH</label>
-            <input type="password" id="formOltPass" required placeholder="••••••••" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white">
+            <label class="text-gray-300 block mb-1 font-semibold">OLT password</label>
+            <input type="password" id="formOltPass" placeholder="••••••••" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white focus:outline-none focus:border-indigo-500">
           </div>
         </div>
 
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="text-gray-400 block mb-1">VLAN de Clientes</label>
-            <input type="number" id="formOltVlan" required placeholder="400" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white font-mono">
+            <label class="text-gray-300 block mb-1 font-semibold">Manufacturer & Hardware version</label>
+            <select id="formOltModel" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white focus:outline-none focus:border-indigo-500">
+              <option value="TP-Link DeltaStream DS-P7001-01">TP-Link DeltaStream DS-P7001-01 (1 Puerto)</option>
+              <option value="TP-Link DeltaStream DS-P7001-04">TP-Link DeltaStream DS-P7001-04 (4 Puertos)</option>
+              <option value="Huawei-MA5608T">Huawei SmartAX MA5608T</option>
+              <option value="Huawei-EA5800-X15">Huawei EA5800-X15</option>
+            </select>
           </div>
           <div>
-            <label class="text-gray-400 block mb-1">Router MikroTik Cabecera</label>
-            <input type="text" id="formOltMikrotik" placeholder="RB-XIDEJE-FRAY" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white">
+            <label class="text-gray-300 block mb-1 font-semibold">VLAN Clientes por Defecto</label>
+            <input type="number" id="formOltVlan" value="400" required class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white font-mono focus:outline-none focus:border-indigo-500">
           </div>
         </div>
+
+        <input type="hidden" id="formOltCommunity" value="public">
 
         <div class="flex items-center justify-between pt-3 border-t border-gray-800">
-          <button type="button" onclick="testModalConnection()" class="px-3 py-2 bg-gray-800 hover:bg-gray-700 text-indigo-300 font-semibold rounded-lg flex items-center gap-1.5 transition">
-            <i class="fa-solid fa-bolt"></i> Probar Conexión
+          <button type="button" id="btnTestModal" onclick="testModalConnection()" class="px-3.5 py-2 bg-sky-600/20 hover:bg-sky-600/30 border border-sky-500/40 text-sky-300 rounded-xl font-bold flex items-center gap-1.5 transition">
+            <i class="fa-solid fa-bolt"></i> Test connection
           </button>
-          
-          <div class="flex gap-2">
-            <button type="button" onclick="closeOltModal()" class="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg font-semibold">Cancelar</button>
-            <button type="submit" id="btnSaveOlt" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-bold flex items-center gap-1.5 shadow-lg shadow-indigo-600/30">
-              <i class="fa-solid fa-check"></i> Guardar OLT
+
+          <div class="flex items-center gap-2">
+            <button type="button" onclick="closeOltModal()" class="px-4 py-2 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-300 font-semibold">Cancel</button>
+            <button type="submit" id="btnSaveOlt" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold shadow-lg shadow-emerald-600/25 flex items-center gap-1.5 transition">
+              <i class="fa-solid fa-check"></i> Save
             </button>
           </div>
         </div>
@@ -287,25 +353,103 @@ app.get('/', async (req: Request, res: Response) => {
     </div>
   </div>
 
-  <!-- MODAL: APROVISIONAR EN 1-CLICK -->
+  <!-- ========================================== -->
+  <!-- MODAL 2: CREATE / EDIT VPN TUNNEL (Screenshot 4) -->
+  <!-- ========================================== -->
+  <div id="tunnelModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="glass-card w-full max-w-lg rounded-2xl p-6 border border-emerald-500/30 space-y-4">
+      <div class="flex justify-between items-center pb-3 border-b border-gray-800">
+        <h3 id="tunnelModalTitle" class="text-base font-bold text-white flex items-center gap-2">
+          <i class="fa-solid fa-shield-halved text-emerald-400"></i> Crear Nuevo Túnel VPN MikroTik
+        </h3>
+        <button onclick="closeTunnelModal()" class="text-gray-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+
+      <form onsubmit="saveTunnel(event)" class="space-y-3.5 text-xs">
+        <input type="hidden" id="formTunnelId">
+
+        <div>
+          <label class="text-gray-300 block mb-1 font-semibold">User / tunnel name (Nombre del MikroTik)</label>
+          <input type="text" id="formTunnelName" required placeholder="Ej. fray o plomosas" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white focus:outline-none focus:border-emerald-500">
+        </div>
+
+        <div>
+          <label class="text-gray-300 block mb-1 font-semibold">Connected subnets (Red Privada de la OLT)</label>
+          <input type="text" id="formTunnelSubnets" placeholder="Ej. 172.19.60.0/24" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white font-mono focus:outline-none focus:border-emerald-500">
+          <span class="text-[10px] text-gray-500 mt-0.5 block">La subred local donde vive tu OLT (ej. 172.19.60.0/24 para la IP 172.19.60.2). El VPS creará la ruta en Linux automáticamente.</span>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 pt-3 border-t border-gray-800">
+          <button type="button" onclick="closeTunnelModal()" class="px-4 py-2 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-300 font-semibold">Cancelar</button>
+          <button type="submit" id="btnSaveTunnel" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-bold shadow-lg shadow-emerald-600/25 flex items-center gap-1.5 transition">
+            <i class="fa-solid fa-shield-halved"></i> Guardar y Generar Script
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL 3: VPN SETUP SCRIPT (SmartOLT exact style) -->
+  <!-- ========================================== -->
+  <div id="setupModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="glass-card w-full max-w-2xl rounded-2xl p-6 border border-sky-500/30 space-y-4">
+      <div class="flex justify-between items-center pb-3 border-b border-gray-800">
+        <div>
+          <h3 class="text-base font-bold text-white flex items-center gap-2">
+            <i class="fa-solid fa-terminal text-sky-400"></i> VPN Setup - RouterOS Terminal Commands
+          </h3>
+          <p class="text-[11px] text-gray-400 mt-0.5">
+            Tunnel: <span id="setupModalTunnelName" class="font-mono text-emerald-400 font-semibold">tunnel1@cloudware.cloudolt.com</span> &bull; Protocol: <span class="text-sky-300 font-semibold">WireGuard</span>
+          </p>
+        </div>
+        <button onclick="closeSetupModal()" class="text-gray-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <p class="text-gray-300">
+          Copia y pega el siguiente bloque de comandos en la consola (Terminal) de tu RouterOS. El túnel quedará enlazado al instante y permitirá alcanzar la OLT sin necesidad de IPs públicas fijas.
+        </p>
+
+        <textarea id="setupModalScript" readonly rows="9" class="w-full bg-gray-950 border border-gray-800 rounded-xl p-3.5 text-[11px] font-mono text-emerald-300 focus:outline-none"></textarea>
+
+        <div class="flex items-center justify-between pt-2">
+          <p class="text-[11px] text-gray-400 flex items-center gap-1">
+            <i class="fa-solid fa-lightbulb text-amber-400"></i> Pega estos comandos en New Terminal de Winbox.
+          </p>
+          <div class="flex items-center gap-2">
+            <button onclick="closeSetupModal()" class="px-4 py-2 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-300 font-semibold">Cerrar</button>
+            <button onclick="copySetupScript()" class="px-4 py-2 bg-gradient-to-r from-sky-600 to-sky-500 hover:from-sky-500 hover:to-sky-400 text-white rounded-xl font-bold flex items-center gap-1.5 shadow-lg shadow-sky-500/20">
+              <i class="fa-solid fa-copy"></i> Copiar Todo
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL 4: PROVISION ONT -->
+  <!-- ========================================== -->
   <div id="provisionModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-    <div class="glass-card w-full max-w-lg rounded-2xl p-6 border border-gray-700 space-y-4">
+    <div class="glass-card w-full max-w-lg rounded-2xl p-6 border border-amber-500/30 space-y-4">
       <div class="flex justify-between items-center pb-3 border-b border-gray-800">
         <h3 class="text-base font-bold text-white flex items-center gap-2">
-          <i class="fa-solid fa-bolt text-amber-400"></i> Aprovisionar ONT en 1-Click
+          <i class="fa-solid fa-bolt text-amber-400"></i> Aprovisionar ONT en OLT
         </h3>
         <button onclick="closeProvisionModal()" class="text-gray-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
       </div>
 
-      <form id="provisionForm" onsubmit="submitProvision(event)" class="space-y-4 text-xs">
+      <form onsubmit="submitProvision(event)" class="space-y-3 text-xs">
+        <input type="hidden" id="modalPort">
         <div>
-          <label class="text-gray-400 block mb-1">Número de Serie (SN ONT)</label>
-          <input type="text" id="modalSn" readonly class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-indigo-400 font-mono font-bold">
+          <label class="text-gray-400 block mb-1">Serial Number (SN)</label>
+          <input type="text" id="modalSn" readonly class="w-full bg-gray-900 border border-gray-800 rounded-lg p-2.5 text-white font-mono">
         </div>
 
         <div>
           <label class="text-gray-400 block mb-1">Nombre Completo del Cliente / ID Contrato</label>
-          <input type="text" id="modalClient" required placeholder="Ej. Juan Pérez - Casa Fray" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white focus:outline-none focus:border-indigo-500">
+          <input type="text" id="modalClient" required placeholder="Ej. Juan Pérez - Plan 50M" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white focus:outline-none focus:border-indigo-500">
         </div>
 
         <div class="grid grid-cols-2 gap-3">
@@ -314,76 +458,18 @@ app.get('/', async (req: Request, res: Response) => {
             <input type="number" id="modalVlan" required class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white font-mono">
           </div>
           <div>
-            <label class="text-gray-400 block mb-1">ONU ID (Asignado)</label>
+            <label class="text-gray-400 block mb-1">ONU ID</label>
             <input type="number" id="modalOnuId" value="1" min="1" max="128" required class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white font-mono">
           </div>
         </div>
 
-        <div class="p-3 bg-indigo-950/30 rounded-xl border border-indigo-800/40 text-indigo-200">
-          <p class="font-semibold mb-1"><i class="fa-solid fa-circle-info"></i> Acciones al Activar:</p>
-          <ul class="list-disc list-inside space-y-0.5 text-gray-300">
-            <li>Inyección de Service-Port y VLAN en OLT TP-Link</li>
-            <li>Autorización GPON y perfiles Huawei</li>
-            <li>Persistencia en base de datos independiente</li>
-          </ul>
-        </div>
-
-        <div class="flex justify-end gap-2 pt-2">
-          <button type="button" onclick="closeProvisionModal()" class="px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 font-semibold">Cancelar</button>
-          <button type="submit" id="btnSubmitModal" class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-bold flex items-center gap-2">
+        <div class="flex justify-end gap-2 pt-2 border-t border-gray-800">
+          <button type="button" onclick="closeProvisionModal()" class="px-4 py-2 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-300 font-semibold">Cancelar</button>
+          <button type="submit" id="btnSubmitModal" class="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-gray-950 font-bold flex items-center gap-1.5 transition">
             <i class="fa-solid fa-play"></i> Ejecutar Activación
           </button>
         </div>
       </form>
-    </div>
-  </div>
-
-  <!-- MODAL: ENLAZAR MIKROTIK CON WIREGUARD -->
-  <div id="wgModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-    <div class="glass-card w-full max-w-xl rounded-2xl p-6 border border-emerald-500/30 space-y-4">
-      <div class="flex justify-between items-center pb-3 border-b border-gray-800">
-        <h3 class="text-base font-bold text-white flex items-center gap-2">
-          <i class="fa-solid fa-shield-halved text-emerald-400"></i> Enlazar MikroTik v7 a Hostinger (WireGuard)
-        </h3>
-        <button onclick="closeWgModal()" class="text-gray-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
-      </div>
-
-      <div class="space-y-4 text-xs">
-        <div class="p-3 bg-emerald-950/30 rounded-xl border border-emerald-800/40 text-emerald-200">
-          <p class="font-bold mb-1">¿Cómo funciona este enlace?</p>
-          <p class="text-gray-300">Crea un túnel seguro cifrado directo entre tu MikroTik Cabecera y este VPS. Permite al servidor administrar tus OLTs e inyectar VLANs sin necesidad de IPs públicas fijas en campo.</p>
-        </div>
-
-        <form id="wgForm" onsubmit="generateMikrotikScript(event)" class="space-y-3">
-          <div>
-            <label class="text-gray-400 block mb-1">Nombre del Router Cabecera</label>
-            <input type="text" id="wgRouterName" required placeholder="Ej. fray" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white focus:outline-none focus:border-emerald-500">
-          </div>
-
-          <div>
-            <label class="text-gray-400 block mb-1">Red Privada de la OLT <span class="text-gray-500 text-[10px]">(Opcional)</span></label>
-            <input type="text" id="wgSubnet" placeholder="Ej. 172.19.60.0/24 (o déjalo en blanco)" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white font-mono focus:outline-none focus:border-emerald-500">
-            <span class="text-[10px] text-gray-500 mt-0.5 block">Opcional. Si lo dejas vacío, el túnel conectará el MikroTik directo con el VPS.</span>
-          </div>
-
-          <div class="flex justify-end pt-1">
-            <button type="submit" id="btnGenWg" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg flex items-center gap-2 shadow-lg shadow-emerald-600/30">
-              <i class="fa-solid fa-terminal"></i> Generar Script MikroTik
-            </button>
-          </div>
-        </form>
-
-        <div id="wgScriptResult" class="hidden space-y-2 pt-2 border-t border-gray-800">
-          <div class="flex justify-between items-center">
-            <label class="text-emerald-400 font-bold">Comandos para copiar en Winbox (New Terminal):</label>
-            <button onclick="copyWgScript()" class="px-2.5 py-1 bg-gray-800 hover:bg-gray-700 text-gray-200 rounded font-semibold text-[11px] flex items-center gap-1">
-              <i class="fa-solid fa-copy"></i> Copiar Todo
-            </button>
-          </div>
-          <textarea id="wgScriptContent" readonly rows="8" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-3 text-[11px] font-mono text-emerald-300 focus:outline-none"></textarea>
-          <p class="text-[11px] text-gray-400">💡 Pega estos comandos en tu MikroTik en <b>Terminal</b> y el enlace quedará activo de inmediato.</p>
-        </div>
-      </div>
     </div>
   </div>
 
@@ -395,76 +481,127 @@ app.get('/', async (req: Request, res: Response) => {
 });
 
 // ==========================================
-// APIS WIREGUARD (MikroTik RouterOS v7)
+// APIS CRUD DE TÚNELES VPN (RouterOS WireGuard)
 // ==========================================
-app.post('/api/wireguard/generate-peer', async (req: Request, res: Response) => {
-  try {
-    const { routerName, subnet } = req.body;
-    const db = getOltDb();
 
-    // 1. Obtener última IP asignada en el rango 10.200.0.X
+// 1. Listar todos los túneles con estadísticas en vivo
+app.get('/api/tunnels', async (req: Request, res: Response) => {
+  try {
+    const db = getOltDb();
+    const result = await db.execute('SELECT * FROM wireguard_peers ORDER BY created_at DESC');
+    const liveStats = getWireguardStats();
+
+    const tunnels = result.rows.map((row: any) => {
+      const stats = liveStats.get(row.public_key);
+      const isConnected = stats ? stats.isConnected : false;
+      return {
+        ...row,
+        status: isConnected ? 'connected' : 'disconnected',
+        transfer_rx: stats ? stats.transferRx : 0,
+        transfer_tx: stats ? stats.transferTx : 0,
+        latest_handshake: stats ? stats.latestHandshake : 0
+      };
+    });
+
+    res.json(tunnels);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 2. Crear un nuevo túnel VPN
+app.post('/api/tunnels', async (req: Request, res: Response) => {
+  try {
+    const { name, subnets } = req.body;
+    if (!name || name.trim() === '') {
+      return res.status(400).json({ error: 'El nombre del túnel es obligatorio' });
+    }
+
+    const db = getOltDb();
     const countResult = await db.execute('SELECT COUNT(*) as count FROM wireguard_peers');
     const index = Number(countResult.rows[0]?.count || 0) + 2; // 10.200.0.2 en adelante
     const clientIp = `10.200.0.${index}`;
 
-    // 2. Generar par de llaves en el host (VPS)
-    const { execSync } = await import('child_process');
-    let clientPriv = '';
-    let clientPub = '';
-    try {
-      clientPriv = execSync('wg genkey').toString().trim();
-      clientPub = execSync(`echo "${clientPriv}" | wg pubkey`).toString().trim();
-    } catch {
-      // Fallback si corre en entorno sin wg binario
-      const crypto = await import('crypto');
-      clientPriv = crypto.randomBytes(32).toString('base64');
-      clientPub = crypto.randomBytes(32).toString('base64');
-    }
+    // Generar llaves Curve25519
+    const keypair = generateWireguardKeypair();
 
-    const serverPublicKey = 'uqHcuPxy68PPholZRE6tTP7iYhfPKLPsxAjCCkTBp2E=';
-    const serverPublicIp = '2.25.241.239';
-    const serverPort = 51820;
+    // Aplicar peer y rutas en el kernel de Linux
+    const sanitizedSubnets = (subnets && typeof subnets === 'string') ? subnets.trim() : '';
+    applyWireguardPeer(keypair.publicKey, clientIp, sanitizedSubnets);
 
-    // 3. Registrar peer en el servidor WireGuard del VPS
-    const sanitizedSubnet = (subnet && typeof subnet === 'string') ? subnet.trim() : '';
-    const allowedIpsParam = sanitizedSubnet ? `${clientIp}/32,${sanitizedSubnet}` : `${clientIp}/32`;
-    try {
-      execSync(`wg set wg0 peer "${clientPub}" allowed-ips "${allowedIpsParam}"`);
-    } catch (e) {
-      console.warn('Aviso: No se pudo ejecutar wg set en VPS local (posiblemente dentro de contenedor):', e);
-    }
-
-    // 4. Guardar peer en la base de datos independiente
-    const peerId = 'peer-' + Date.now();
+    const tunnelId = 'tunnel-' + Date.now();
     await db.execute({
       sql: `INSERT INTO wireguard_peers (id, name, client_ip, public_key, private_key, allowed_subnets)
             VALUES (?, ?, ?, ?, ?, ?)`,
-      args: [peerId, routerName, clientIp, clientPub, clientPriv, sanitizedSubnet || '10.200.0.0/24']
+      args: [tunnelId, name.trim(), clientIp, keypair.publicKey, keypair.privateKey, sanitizedSubnets]
     });
 
-    // 5. Script RouterOS v7 para MikroTik
-    const mikrotikScript = `# ========================================================
-# CONEXIÓN WIREGUARD: ${routerName} -> HOSTINGER VPS
-# ========================================================
-/interface wireguard add name=wg-cloudware listen-port=13231 private-key="${clientPriv}" comment="Tunel SmartOLT CloudWare"
+    res.json({ success: true, id: tunnelId });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
-/ip address add address=${clientIp}/24 interface=wg-cloudware network=10.200.0.0
+// 3. Editar subredes de un túnel
+app.put('/api/tunnels/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { name, subnets } = req.body;
+    const db = getOltDb();
 
-/interface wireguard peers add interface=wg-cloudware public-key="${serverPublicKey}" endpoint-address="${serverPublicIp}" endpoint-port=${serverPort} allowed-address=10.200.0.0/24 persistent-keepalive=25s comment="VPS Hostinger"
+    const existingResult = await db.execute({ sql: 'SELECT * FROM wireguard_peers WHERE id = ?', args: [id] });
+    const peer = existingResult.rows[0] as any;
+    if (!peer) return res.status(404).json({ error: 'Túnel no encontrado' });
 
-# Ruta para permitir que el VPS alcance la OLT
-/ip firewall filter add chain=input protocol=udp dst-port=13231 action=accept place-before=0 comment="Permitir WireGuard SmartOLT"
-/ip firewall filter add chain=forward in-interface=wg-cloudware action=accept place-before=0 comment="Permitir Trafico SmartOLT hacia OLT"
-`;
+    const sanitizedSubnets = (subnets && typeof subnets === 'string') ? subnets.trim() : '';
+    applyWireguardPeer(peer.public_key, peer.client_ip, sanitizedSubnets);
 
-    res.json({ success: true, script: mikrotikScript, clientIp });
+    await db.execute({
+      sql: 'UPDATE wireguard_peers SET name = ?, allowed_subnets = ? WHERE id = ?',
+      args: [name.trim(), sanitizedSubnets, id]
+    });
+
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 4. Obtener script de configuración MikroTik para un túnel
+app.get('/api/tunnels/:id/script', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const db = getOltDb();
+    const result = await db.execute({ sql: 'SELECT * FROM wireguard_peers WHERE id = ?', args: [id] });
+    const peer = result.rows[0] as any;
+    if (!peer) return res.status(404).json({ error: 'Túnel no encontrado' });
+
+    const script = buildMikrotikScript(peer.name, peer.client_ip, peer.private_key);
+    res.json({ success: true, script, peer });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 5. Eliminar un túnel VPN
+app.delete('/api/tunnels/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const db = getOltDb();
+    const result = await db.execute({ sql: 'SELECT * FROM wireguard_peers WHERE id = ?', args: [id] });
+    const peer = result.rows[0] as any;
+    if (peer) {
+      removeWireguardPeer(peer.public_key, peer.allowed_subnets);
+      await db.execute({ sql: 'DELETE FROM wireguard_peers WHERE id = ?', args: [id] });
+    }
+    res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
 
 // ==========================================
-// APIS CRUD DE OLTS (Base de Datos Independiente)
+// APIS CRUD DE OLTS
 // ==========================================
 
 // 1. Listar todas las OLTs registradas
@@ -482,17 +619,39 @@ app.get('/api/olts', async (req: Request, res: Response) => {
 app.post('/api/olts', async (req: Request, res: Response) => {
   try {
     const db = getOltDb();
-    const { name, model, ip, port, username, password, default_vlan, community, mikrotik_name } = req.body;
+    const { name, model, ip, port, username, password, default_vlan, community, tunnel_id, mikrotik_name } = req.body;
     const id = 'olt-' + Date.now();
+
+    // Auto-enrutar la subred de la OLT si hay un túnel asociado
+    if (tunnel_id) {
+      const tunnelResult = await db.execute({ sql: 'SELECT * FROM wireguard_peers WHERE id = ?', args: [tunnel_id] });
+      const tunnel = tunnelResult.rows[0] as any;
+      if (tunnel) {
+        // Extraer subred /24 de la IP de la OLT
+        const ipParts = ip.split('.');
+        if (ipParts.length === 4) {
+          const autoSubnet = `${ipParts[0]}.${ipParts[1]}.${ipParts[2]}.0/24`;
+          const currentSubnets = tunnel.allowed_subnets || '';
+          if (!currentSubnets.includes(autoSubnet)) {
+            const updatedSubnets = currentSubnets ? `${currentSubnets},${autoSubnet}` : autoSubnet;
+            applyWireguardPeer(tunnel.public_key, tunnel.client_ip, updatedSubnets);
+            await db.execute({
+              sql: 'UPDATE wireguard_peers SET allowed_subnets = ? WHERE id = ?',
+              args: [updatedSubnets, tunnel.id]
+            });
+          }
+        }
+      }
+    }
 
     // Probar conexión inicial
     const driver = new TpLinkDeltaStreamDriver({ id, name, model, ip, port, username, password, default_vlan, community });
     const test = await driver.testConnection();
 
     await db.execute({
-      sql: `INSERT INTO olts (id, name, model, ip, port, username, password, default_vlan, community, mikrotik_name, status, last_latency_ms, last_checked_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
-      args: [id, name, model, ip, port || 22, username, password || '', default_vlan || 100, community, mikrotik_name || '', test.online ? 'online' : 'offline', test.latencyMs]
+      sql: `INSERT INTO olts (id, name, model, ip, port, username, password, default_vlan, community, tunnel_id, mikrotik_name, status, last_latency_ms, last_checked_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
+      args: [id, name, model, ip, port || 22, username, password || '', default_vlan || 400, community, tunnel_id || '', mikrotik_name || '', test.online ? 'online' : 'offline', test.latencyMs]
     });
 
     res.json({ success: true, id, online: test.online });
@@ -506,13 +665,13 @@ app.put('/api/olts/:id', async (req: Request, res: Response) => {
   try {
     const db = getOltDb();
     const { id } = req.params;
-    const { name, model, ip, port, username, password, default_vlan, community, mikrotik_name } = req.body;
+    const { name, model, ip, port, username, password, default_vlan, community, tunnel_id, mikrotik_name } = req.body;
 
     let updateSql = `
       UPDATE olts 
-      SET name = ?, model = ?, ip = ?, port = ?, username = ?, default_vlan = ?, community = ?, mikrotik_name = ?
+      SET name = ?, model = ?, ip = ?, port = ?, username = ?, default_vlan = ?, community = ?, tunnel_id = ?, mikrotik_name = ?
     `;
-    const args: any[] = [name, model, ip, port, username, default_vlan, community, mikrotik_name];
+    const args: any[] = [name, model, ip, port, username, default_vlan, community, tunnel_id || '', mikrotik_name || ''];
 
     if (password && password.trim() !== '') {
       updateSql += `, password = ?`;
@@ -551,7 +710,6 @@ app.post('/api/olts/:id/test', async (req: Request, res: Response) => {
     const driver = new TpLinkDeltaStreamDriver(olt);
     const test = await driver.testConnection();
 
-    // Actualizar estado en DB
     await db.execute({
       sql: `UPDATE olts SET status = ?, last_latency_ms = ?, last_checked_at = datetime('now') WHERE id = ?`,
       args: [test.online ? 'online' : 'offline', test.latencyMs, olt.id]
@@ -566,7 +724,22 @@ app.post('/api/olts/:id/test', async (req: Request, res: Response) => {
 // 6. Probar conexión "en frío" desde el formulario antes de guardar
 app.post('/api/olts/test-raw', async (req: Request, res: Response) => {
   try {
-    const { ip, port, username, password } = req.body;
+    const { ip, port, username, password, tunnelId } = req.body;
+
+    // Asegurar enrutamiento hacia el túnel si se envió tunnelId
+    if (tunnelId) {
+      const db = getOltDb();
+      const tunnelResult = await db.execute({ sql: 'SELECT * FROM wireguard_peers WHERE id = ?', args: [tunnelId] });
+      const tunnel = tunnelResult.rows[0] as any;
+      if (tunnel) {
+        const ipParts = ip.split('.');
+        if (ipParts.length === 4) {
+          const autoSubnet = `${ipParts[0]}.${ipParts[1]}.${ipParts[2]}.0/24`;
+          applyWireguardPeer(tunnel.public_key, tunnel.client_ip, autoSubnet);
+        }
+      }
+    }
+
     const driver = new TpLinkDeltaStreamDriver({ id: 'temp', name: 'temp', model: 'temp', ip, port, username, password, default_vlan: 100, community: 'temp' });
     const test = await driver.testConnection();
     res.json(test);
@@ -578,8 +751,6 @@ app.post('/api/olts/test-raw', async (req: Request, res: Response) => {
 // ==========================================
 // APIS DE APROVISIONAMIENTO Y AUTOFIND
 // ==========================================
-
-// Endpoint: Listar Autofind de la OLT seleccionada
 app.get('/api/autofind', async (req: Request, res: Response) => {
   const oltId = req.query.oltId as string;
   if (!oltId) return res.json({ onts: [] });
@@ -595,7 +766,6 @@ app.get('/api/autofind', async (req: Request, res: Response) => {
   res.json({ oltId: olt.id, onts });
 });
 
-// Endpoint: Aprovisionamiento en 1-Click
 app.post('/api/provision', async (req: Request, res: Response) => {
   const { oltId, serial, clientName, vlanId, onuId, gponPort } = req.body;
   const db = getOltDb();
@@ -617,7 +787,6 @@ app.post('/api/provision', async (req: Request, res: Response) => {
   });
 
   if (provResult.success) {
-    // Guardar en tabla independiente de ONTs aprovisionadas
     await db.execute({
       sql: `INSERT OR REPLACE INTO provisioned_onts (olt_id, gpon_port, onu_id, serial, client_name, vlan_id, status)
             VALUES (?, ?, ?, ?, ?, ?, 'online')`,
@@ -628,7 +797,6 @@ app.post('/api/provision', async (req: Request, res: Response) => {
   res.json(provResult);
 });
 
-// Endpoint: Niveles Ópticos (dBm)
 app.get('/api/optical-info', async (req: Request, res: Response) => {
   const oltId = req.query.oltId as string;
   if (!oltId) return res.json({ levels: [] });
@@ -645,5 +813,5 @@ app.get('/api/optical-info', async (req: Request, res: Response) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 OLT Manager Core corriendo en http://localhost:${PORT}`);
+  console.log(`🚀 CloudOLT Core corriendo en http://localhost:${PORT}`);
 });

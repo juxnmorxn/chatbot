@@ -17,6 +17,9 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
+# Herramientas de red para WireGuard y enrutamiento a OLTs
+RUN apk add --no-cache wireguard-tools iproute2 iptables
+
 # Instalar dependencias necesarias
 COPY package.json package-lock.json* bun.lock* ./
 RUN npm install --omit=dev --legacy-peer-deps

@@ -43,15 +43,14 @@ services:
     env_file:
       - .env
     environment:
-      - EVOLUTION_URL=http://evolution_api:8080
+      - EVOLUTION_URL=http://127.0.0.1:8080
       - EVOLUTION_API_KEY=429644-cloudware-key-auth
+    network_mode: "host"
+    cap_add:
+      - NET_ADMIN
     volumes:
       - ./data:/app/data
-    ports:
-      - "3000:3000"
-      - "3001:3001"
-    networks:
-      - chatbot_net
+      - /etc/wireguard:/etc/wireguard
 
 volumes:
   pgdata:
