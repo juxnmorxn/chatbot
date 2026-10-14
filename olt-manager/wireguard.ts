@@ -144,17 +144,21 @@ export function buildMikrotikScript(tunnelName: string, clientIp: string, client
 # Tunel: ${tunnelName}@cloudware.cloudolt.com
 # ========================================================
 
-# 1. Crear Interfaz WireGuard
+# 1. Crear Interfaz WireGuard (remueve previa si existiera para evitar colisión de puerto)
+/interface wireguard remove [find where name="wg-cloudolt"]
 /interface wireguard add name=wg-cloudolt listen-port=13231 private-key="${clientPriv}" comment="CloudOLT VPN (${tunnelName})"
 
 # 2. Asignar Direccion IP al Tunel
+/ip address remove [find where interface="wg-cloudolt"]
 /ip address add address=${clientIp}/24 interface=wg-cloudolt network=10.200.0.0
 
 # 3. Registrar el Servidor VPS CloudOLT como Peer
+/interface wireguard peers remove [find where interface="wg-cloudolt"]
 /interface wireguard peers add interface=wg-cloudolt public-key="${SERVER_PUBLIC_KEY}" endpoint-address="${SERVER_PUBLIC_IP}" endpoint-port=${SERVER_PORT} allowed-address=10.200.0.0/24 persistent-keepalive=25s comment="CloudOLT Hostinger VPS"
 
-# 4. Permitir Trafico de Gestion hacia la OLT
-/ip firewall filter add chain=input protocol=udp dst-port=13231 action=accept comment="CloudOLT WG Input"
+# 4. Permitir Trafico de Gestion, Ping y Forward hacia la OLT
+/ip firewall filter remove [find where comment~"CloudOLT"]
+/ip firewall filter add chain=input in-interface=wg-cloudolt action=accept comment="CloudOLT Input y Ping"
 /ip firewall filter add chain=forward in-interface=wg-cloudolt action=accept comment="CloudOLT Traffic to OLT"
 `;
 }
