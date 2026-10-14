@@ -475,6 +475,25 @@ app.get('/', async (req: Request, res: Response) => {
         </div>
       </form>
     </div>
+  <!-- ========================================== -->
+  <!-- SISTEMA DE TOASTS EN VIVO -->
+  <!-- ========================================== -->
+  <div id="toastContainer" class="fixed top-5 right-5 z-[9999] flex flex-col gap-2.5 max-w-sm pointer-events-none"></div>
+
+  <!-- ========================================== -->
+  <!-- MODAL DE DIÁLOGO / CONFIRMACIÓN PERSONALIZADO -->
+  <!-- ========================================== -->
+  <div id="customDialogModal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-[9998] hidden flex items-center justify-center p-4">
+    <div id="customDialogBox" class="glass-card w-full max-w-md rounded-2xl p-6 border border-gray-700/60 space-y-4 shadow-2xl transform transition-all scale-95 opacity-0 duration-200">
+      <div class="flex items-start gap-3.5">
+        <div id="customDialogIconContainer" class="w-10 h-10 rounded-xl flex items-center justify-center text-lg shrink-0"></div>
+        <div class="flex-1 min-w-0">
+          <h3 id="customDialogTitle" class="text-base font-bold text-white mb-1.5"></h3>
+          <p id="customDialogMessage" class="text-xs text-gray-300 leading-relaxed"></p>
+        </div>
+      </div>
+      <div class="flex justify-end gap-2.5 pt-3 border-t border-gray-800/80" id="customDialogButtons"></div>
+    </div>
   </div>
 
   <script src="/app.js"></script>

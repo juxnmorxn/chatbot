@@ -8,6 +8,177 @@ let activeTab = 'olts';
 let activeOltId = '';
 
 // ==========================================
+// SISTEMA DE TOASTS Y MODALES PERSONALIZADOS
+// ==========================================
+function showToast(title, message = '', type = 'info', durationMs = 4000) {
+  const container = document.getElementById('toastContainer');
+  if (!container) return;
+
+  const colors = {
+    success: {
+      border: 'border-emerald-500/40',
+      bg: 'bg-gray-950/90',
+      iconBg: 'bg-emerald-500/20 text-emerald-400',
+      icon: 'fa-solid fa-check',
+      progress: 'bg-emerald-500'
+    },
+    error: {
+      border: 'border-rose-500/40',
+      bg: 'bg-gray-950/90',
+      iconBg: 'bg-rose-500/20 text-rose-400',
+      icon: 'fa-solid fa-circle-exclamation',
+      progress: 'bg-rose-500'
+    },
+    warning: {
+      border: 'border-amber-500/40',
+      bg: 'bg-gray-950/90',
+      iconBg: 'bg-amber-500/20 text-amber-400',
+      icon: 'fa-solid fa-triangle-exclamation',
+      progress: 'bg-amber-500'
+    },
+    info: {
+      border: 'border-sky-500/40',
+      bg: 'bg-gray-950/90',
+      iconBg: 'bg-sky-500/20 text-sky-400',
+      icon: 'fa-solid fa-circle-info',
+      progress: 'bg-sky-500'
+    }
+  };
+
+  const style = colors[type] || colors.info;
+  const toast = document.createElement('div');
+  toast.className = `glass-card ${style.border} ${style.bg} pointer-events-auto rounded-xl p-3.5 shadow-2xl flex items-start gap-3 transform transition-all duration-300 translate-x-12 opacity-0 overflow-hidden relative`;
+
+  toast.innerHTML = `
+    <div class="w-8 h-8 rounded-lg ${style.iconBg} flex items-center justify-center text-sm shrink-0 mt-0.5">
+      <i class="${style.icon}"></i>
+    </div>
+    <div class="flex-1 min-w-0 pr-3">
+      <div class="text-xs font-bold text-white tracking-wide">${title}</div>
+      ${message ? `<div class="text-[11px] text-gray-300 mt-0.5 leading-snug break-words">${message}</div>` : ''}
+    </div>
+    <button class="text-gray-400 hover:text-white text-xs shrink-0 p-1" onclick="this.closest('.glass-card').remove()">
+      <i class="fa-solid fa-xmark"></i>
+    </button>
+    <div class="absolute bottom-0 left-0 right-0 h-0.5 bg-gray-800">
+      <div class="h-full ${style.progress} transition-all ease-linear" style="width: 100%; transition-duration: ${durationMs}ms;"></div>
+    </div>
+  `;
+
+  container.appendChild(toast);
+
+  // Animar entrada
+  requestAnimationFrame(() => {
+    toast.classList.remove('translate-x-12', 'opacity-0');
+    const bar = toast.querySelector(`.${style.progress}`);
+    if (bar) setTimeout(() => { bar.style.width = '0%'; }, 50);
+  });
+
+  // Auto descartar
+  setTimeout(() => {
+    toast.classList.add('translate-x-12', 'opacity-0');
+    setTimeout(() => toast.remove(), 300);
+  }, durationMs);
+}
+
+function showConfirmModal(title, message, confirmText = 'Confirmar', variant = 'rose') {
+  return new Promise((resolve) => {
+    const modal = document.getElementById('customDialogModal');
+    const box = document.getElementById('customDialogBox');
+    const titleEl = document.getElementById('customDialogTitle');
+    const msgEl = document.getElementById('customDialogMessage');
+    const iconContainer = document.getElementById('customDialogIconContainer');
+    const btnContainer = document.getElementById('customDialogButtons');
+
+    titleEl.innerText = title;
+    msgEl.innerText = message;
+
+    if (variant === 'rose') {
+      iconContainer.className = 'w-10 h-10 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center text-lg shrink-0';
+      iconContainer.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i>';
+    } else {
+      iconContainer.className = 'w-10 h-10 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-lg shrink-0';
+      iconContainer.innerHTML = '<i class="fa-solid fa-circle-question"></i>';
+    }
+
+    const confirmBtnClass = variant === 'rose'
+      ? 'bg-rose-600 hover:bg-rose-500 text-white'
+      : 'bg-indigo-600 hover:bg-indigo-500 text-white';
+
+    btnContainer.innerHTML = `
+      <button type="button" id="customDialogCancelBtn" class="px-4 py-2 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-semibold transition">
+        Cancelar
+      </button>
+      <button type="button" id="customDialogConfirmBtn" class="px-4 py-2 rounded-xl ${confirmBtnClass} text-xs font-bold transition shadow-lg">
+        ${confirmText}
+      </button>
+    `;
+
+    const close = (res) => {
+      box.classList.add('scale-95', 'opacity-0');
+      setTimeout(() => {
+        modal.classList.add('hidden');
+        resolve(res);
+      }, 150);
+    };
+
+    document.getElementById('customDialogCancelBtn').onclick = () => close(false);
+    document.getElementById('customDialogConfirmBtn').onclick = () => close(true);
+
+    modal.classList.remove('hidden');
+    requestAnimationFrame(() => {
+      box.classList.remove('scale-95', 'opacity-0');
+    });
+  });
+}
+
+function showAlertModal(title, message, type = 'error') {
+  return new Promise((resolve) => {
+    const modal = document.getElementById('customDialogModal');
+    const box = document.getElementById('customDialogBox');
+    const titleEl = document.getElementById('customDialogTitle');
+    const msgEl = document.getElementById('customDialogMessage');
+    const iconContainer = document.getElementById('customDialogIconContainer');
+    const btnContainer = document.getElementById('customDialogButtons');
+
+    titleEl.innerText = title;
+    msgEl.innerText = message;
+
+    if (type === 'error') {
+      iconContainer.className = 'w-10 h-10 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center text-lg shrink-0';
+      iconContainer.innerHTML = '<i class="fa-solid fa-circle-xmark"></i>';
+    } else if (type === 'success') {
+      iconContainer.className = 'w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-lg shrink-0';
+      iconContainer.innerHTML = '<i class="fa-solid fa-circle-check"></i>';
+    } else {
+      iconContainer.className = 'w-10 h-10 rounded-xl bg-sky-500/20 text-sky-400 flex items-center justify-center text-lg shrink-0';
+      iconContainer.innerHTML = '<i class="fa-solid fa-circle-info"></i>';
+    }
+
+    btnContainer.innerHTML = `
+      <button type="button" id="customDialogOkBtn" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition shadow-lg">
+        Entendido
+      </button>
+    `;
+
+    const close = () => {
+      box.classList.add('scale-95', 'opacity-0');
+      setTimeout(() => {
+        modal.classList.add('hidden');
+        resolve();
+      }, 150);
+    };
+
+    document.getElementById('customDialogOkBtn').onclick = close;
+
+    modal.classList.remove('hidden');
+    requestAnimationFrame(() => {
+      box.classList.remove('scale-95', 'opacity-0');
+    });
+  });
+}
+
+// ==========================================
 // NAVEGACIÓN ENTRE PESTAÑAS (TABS)
 // ==========================================
 function switchTab(tab) {
@@ -171,13 +342,14 @@ async function saveTunnel(e) {
     if (data.success) {
       closeTunnelModal();
       await loadTunnels();
+      showToast('Túnel Guardado', 'Configuración guardada correctamente', 'success');
       // Mostrar de inmediato la ventana con el script
       showTunnelSetup(data.id || id);
     } else {
-      alert('❌ Error guardando túnel: ' + (data.error || 'Desconocido'));
+      showToast('Error guardando túnel', data.error || 'Desconocido', 'error');
     }
   } catch (err) {
-    alert('❌ Error de comunicación con el servidor');
+    showToast('Error de comunicación', 'No se pudo contactar al servidor', 'error');
   } finally {
     btn.disabled = false;
     btn.innerHTML = '<i class="fa-solid fa-shield-halved"></i> Guardar y Generar Script';
@@ -195,7 +367,7 @@ async function showTunnelSetup(id) {
       document.getElementById('setupModal').classList.remove('hidden');
     }
   } catch (err) {
-    alert('Error obteniendo script del túnel');
+    showToast('Error', 'No se pudo obtener el script del túnel', 'error');
   }
 }
 
@@ -207,21 +379,29 @@ function copySetupScript() {
   const textarea = document.getElementById('setupModalScript');
   textarea.select();
   document.execCommand('copy');
-  alert('📋 ¡Script copiado al portapapeles! Pégalo en New Terminal de Winbox.');
+  showToast('Copiado al Portapapeles', 'Pégalo en New Terminal de Winbox RouterOS', 'success');
 }
 
 async function deleteTunnel(id) {
-  if (!confirm('¿Estás seguro de eliminar este túnel? La OLT asociada perderá acceso.')) return;
+  const ok = await showConfirmModal(
+    '¿Eliminar Túnel MikroTik?',
+    'Si eliminas este túnel, la OLT y las ONTs conectadas a este router perderán comunicación con CloudOLT.',
+    'Eliminar Túnel',
+    'rose'
+  );
+  if (!ok) return;
+
   try {
     const res = await fetch('/api/tunnels/' + id, { method: 'DELETE' });
     const data = await res.json();
     if (data.success) {
+      showToast('Túnel Eliminado', 'El túnel VPN fue eliminado con éxito', 'info');
       loadTunnels();
     } else {
-      alert('❌ Error al eliminar túnel');
+      showToast('Error', 'No se pudo eliminar el túnel', 'error');
     }
   } catch {
-    alert('❌ Error de conexión');
+    showToast('Error de conexión', 'No se pudo contactar al servidor', 'error');
   }
 }
 
@@ -365,14 +545,14 @@ async function testModalConnection() {
   const tunnelId = document.getElementById('formOltTunnel').value;
 
   if (!ip || !username) {
-    alert('Ingresa al menos la IP y el usuario SSH para probar la conexión.');
+    showToast('Campos requeridos', 'Ingresa al menos la IP y el usuario SSH para probar la conexión.', 'warning');
     return;
   }
 
   const btn = document.getElementById('btnTestModal');
   const origText = btn.innerHTML;
   btn.disabled = true;
-  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Probando...';
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Probando SSH...';
 
   try {
     const res = await fetch('/api/olts/test-raw', {
@@ -382,12 +562,21 @@ async function testModalConnection() {
     });
     const data = await res.json();
     if (data.online) {
-      alert(`✅ ¡Conexión Exitosa con la OLT! Latencia: ${data.latencyMs}ms`);
+      showToast(
+        '¡Conexión Exitosa con la OLT!',
+        `Sesión CLI interactiva establecida con latencia de ${data.latencyMs}ms`,
+        'success',
+        5000
+      );
     } else {
-      alert('❌ No se pudo conectar a la OLT: ' + (data.error || 'Verifica que el MikroTik tenga el túnel activo.'));
+      showAlertModal(
+        'No se pudo conectar a la OLT',
+        data.error || 'Verifica que el MikroTik tenga el túnel activo y que la contraseña sea la correcta.',
+        'error'
+      );
     }
   } catch {
-    alert('❌ Error al contactar el servidor');
+    showToast('Error de Red', 'No se pudo contactar al servidor CloudOLT', 'error');
   } finally {
     btn.disabled = false;
     btn.innerHTML = origText;
@@ -428,12 +617,13 @@ async function saveOlt(e) {
     const data = await res.json();
     if (data.success) {
       closeOltModal();
+      showToast('OLT Guardada', 'La OLT fue registrada exitosamente en el sistema', 'success');
       loadOlts();
     } else {
-      alert('❌ Error guardando OLT: ' + (data.error || 'Error desconocido'));
+      showAlertModal('Error al Guardar OLT', data.error || 'Error desconocido al registrar la OLT.', 'error');
     }
   } catch {
-    alert('❌ Error de comunicación con el servidor');
+    showToast('Error de Red', 'Error de comunicación con el servidor', 'error');
   } finally {
     btn.disabled = false;
     btn.innerHTML = '<i class="fa-solid fa-check"></i> Save (Guardar)';
@@ -441,32 +631,41 @@ async function saveOlt(e) {
 }
 
 async function deleteOlt(id) {
-  if (!confirm('¿Estás seguro de eliminar esta OLT?')) return;
+  const ok = await showConfirmModal(
+    '¿Eliminar OLT?',
+    'Se eliminará el registro de la OLT y sus ONTs asociadas en CloudOLT.',
+    'Eliminar OLT',
+    'rose'
+  );
+  if (!ok) return;
+
   try {
     const res = await fetch('/api/olts/' + id, { method: 'DELETE' });
     const data = await res.json();
     if (data.success) {
+      showToast('OLT Eliminada', 'La OLT fue dada de baja con éxito', 'info');
       loadOlts();
     } else {
-      alert('❌ Error al eliminar OLT');
+      showToast('Error', 'No se pudo eliminar la OLT', 'error');
     }
   } catch {
-    alert('❌ Error de red');
+    showToast('Error de Red', 'No se pudo contactar al servidor', 'error');
   }
 }
 
 async function testOltConnection(id) {
   try {
+    showToast('Probando OLT...', 'Consultando estado vía SSH interactivo', 'info', 2000);
     const res = await fetch('/api/olts/' + id + '/test', { method: 'POST' });
     const data = await res.json();
     if (data.online) {
-      alert(`✅ OLT en línea (${data.latencyMs}ms)`);
+      showToast('OLT en Línea', `Respuesta exitosa: ${data.latencyMs}ms`, 'success');
     } else {
-      alert(`❌ OLT fuera de línea: ${data.error || 'Timeout'}`);
+      showToast('OLT Fuera de Línea', data.error || 'Timeout de conexión', 'error');
     }
     loadOlts();
   } catch {
-    alert('❌ Error al probar conexión');
+    showToast('Error de Red', 'Error al probar conexión con la OLT', 'error');
   }
 }
 
@@ -577,14 +776,14 @@ async function submitProvision(e) {
     });
     const data = await res.json();
     if (data.success) {
-      alert('✅ ¡ONT activada y aprovisionada con éxito en la OLT!');
+      showToast('¡ONT Activada!', 'La ONT fue aprovisionada y autorizada con éxito en la OLT', 'success', 6000);
       closeProvisionModal();
       refreshAutofind();
     } else {
-      alert('❌ Error al aprovisionar: ' + (data.log || data.error));
+      showAlertModal('Error al aprovisionar ONT', data.log || data.error || 'La OLT no completó la activación.', 'error');
     }
   } catch {
-    alert('❌ Error de red con el servidor');
+    showToast('Error de Red', 'No se pudo contactar al servidor CloudOLT', 'error');
   } finally {
     btn.disabled = false;
     btn.innerHTML = '<i class="fa-solid fa-play"></i> Ejecutar Activación';
@@ -614,6 +813,9 @@ window.saveOlt = saveOlt;
 window.deleteOlt = deleteOlt;
 window.testOltConnection = testOltConnection;
 window.viewOlt = viewOlt;
+window.showToast = showToast;
+window.showConfirmModal = showConfirmModal;
+window.showAlertModal = showAlertModal;
 
 window.refreshAutofind = refreshAutofind;
 window.onAutofindOltChange = onAutofindOltChange;

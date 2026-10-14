@@ -50,31 +50,91 @@ export class TpLinkDeltaStreamDriver {
       let output = '';
       let timer: NodeJS.Timeout;
 
+      const cleanup = () => {
+        clearTimeout(timer);
+        try { conn.end(); } catch {}
+      };
+
       conn.on('ready', () => {
-        conn.exec(command, (err, stream) => {
+        // En TP-Link DeltaStream y OLTs se debe usar terminal interactiva VT100
+        conn.shell({ term: 'vt100', cols: 160, rows: 40 }, (err, stream) => {
           if (err) {
-            clearTimeout(timer);
-            conn.end();
+            cleanup();
             return reject(err);
           }
-          stream.on('data', (d: Buffer) => { output += d.toString(); });
-          stream.stderr.on('data', (d: Buffer) => { output += d.toString(); });
-          stream.on('close', () => {
+
+          let commandSent = false;
+          let idleTimer: NodeJS.Timeout;
+
+          const finish = () => {
             clearTimeout(timer);
-            conn.end();
+            clearTimeout(idleTimer);
+            try { stream.end(); } catch {}
+            try { conn.end(); } catch {}
             resolve(output);
+          };
+
+          const sendCommand = () => {
+            if (!commandSent) {
+              commandSent = true;
+              stream.write('\n');
+              setTimeout(() => {
+                stream.write(`${command.trim()}\n`);
+              }, 250);
+            }
+          };
+
+          stream.on('data', (d: Buffer) => {
+            const chunk = d.toString('utf8');
+            output += chunk;
+
+            // Manejar paginador --More-- si la OLT pausa la salida
+            if (/--More--|-- More --/i.test(chunk)) {
+              stream.write(' ');
+            }
+
+            if (!commandSent) {
+              // Esperar prompt inicial de la OLT
+              if (/[>#$]\s*$/.test(output.trim()) || output.includes('>') || output.includes('#')) {
+                sendCommand();
+              }
+            } else {
+              clearTimeout(idleTimer);
+              if (/[>#$]\s*$/.test(output.trim())) {
+                idleTimer = setTimeout(finish, 600);
+              } else {
+                idleTimer = setTimeout(finish, 1400);
+              }
+            }
+          });
+
+          // Timeout de seguridad para enviar comando si no llega prompt inicial
+          setTimeout(() => {
+            if (!commandSent) sendCommand();
+          }, 1000);
+
+          stream.stderr.on('data', (d: Buffer) => {
+            output += d.toString('utf8');
+          });
+
+          stream.on('close', () => {
+            finish();
           });
         });
       });
 
       conn.on('error', (err) => {
-        clearTimeout(timer);
+        cleanup();
         reject(err);
       });
 
       timer = setTimeout(() => {
-        conn.end();
-        reject(new Error(`Timeout SSH (${timeoutMs}ms) conectando a OLT ${this.config.ip}`));
+        cleanup();
+        if (output.trim()) {
+          resolve(output);
+        } else {
+          reject(new Error(`Timeout SSH (${timeoutMs}ms) conectando a OLT ${this.config.ip}`));
+        }
       }, timeoutMs);
 
       conn.connect({
