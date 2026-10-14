@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx src/server.ts",
-    "build": "esbuild src/server.ts --bundle --platform=node --packages=external --format=esm --target=node22 --outfile=dist/server.js && esbuild olt-manager/server.ts --bundle --platform=node --packages=external --format=esm --target=node22 --outfile=dist/olt-server.js",
+    "build": "esbuild src/server.ts --bundle --platform=node --packages=external --format=esm --target=node22 --outfile=dist/server.js && esbuild olt-manager/server.ts --bundle --platform=node --packages=external --format=esm --target=node22 --outfile=dist/olt-server.js && node scripts/copy-public.mjs",
     "start": "node dist/server.js",
     "preview": "node dist/server.js",
     "deploy": "node scripts/deploy-hostinger.js",

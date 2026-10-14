@@ -26,6 +26,9 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/server.js ./server.js
 COPY --from=builder /app/data ./data
 COPY --from=builder /app/olt-manager/config ./dist/config
+COPY --from=builder /app/olt-manager/public ./public
+COPY --from=builder /app/olt-manager/public ./dist/public
+COPY --from=builder /app/olt-manager/public ./olt-manager/public
 
 EXPOSE 3000
 EXPOSE 3001
