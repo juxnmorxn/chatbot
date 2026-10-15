@@ -254,6 +254,7 @@ export class AdminController {
       const phone10 = cleanPhoneDigits.slice(-10);
       const soportePhone10 = SettingsService.get('SOPORTE_HUMANO_PHONE', '').replace(/\D/g, '').slice(-10);
       const officePhone10 = SettingsService.get('PAYMENT_OFFICE_PHONE', '').replace(/\D/g, '').slice(-10);
+      const isStaffConfigured = Boolean((soportePhone10 && phone10 === soportePhone10) || (officePhone10 && phone10 === officePhone10));
       const isTech = phone10 ? Boolean(await DbService.isAuthorizedTechnician(phone10).catch(() => null)) : false;
       const isStaffOrTech = isStaffConfigured || isTech;
 

@@ -3838,6 +3838,10 @@ export class DbService {
     }
   }
 
+  static async getWhatsAppInstance(instanceName: string): Promise<WhatsAppInstanceRecord | null> {
+    return this.getInstanceByArea(instanceName);
+  }
+
   /**
    * Obtiene el número telefónico de la instancia designada para Oficina / Atención a Clientes / Pagos
    */

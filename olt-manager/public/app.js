@@ -775,14 +775,63 @@ function openProvisionModal(sn, port) {
   const olt = olts.find(o => o.id === activeOltId);
   document.getElementById('modalSn').value = sn;
   document.getElementById('modalPort').value = port || '1/0/1';
+  const portDisplay = document.getElementById('modalPortDisplay');
+  if (portDisplay) portDisplay.value = port || '1/0/1';
   document.getElementById('modalVlan').value = olt ? olt.default_vlan : 400;
 
-  // Calcular automáticamente el siguiente ONU ID libre
-  const usedIds = (configuredOnus || []).map(o => o.onuId);
+  // 1. Calcular automáticamente el siguiente ONU ID libre en ese puerto GPON
+  const usedIds = (configuredOnus || [])
+    .filter(o => !port || o.gponPort === port)
+    .map(o => o.onuId);
   let nextId = 0;
   while (usedIds.includes(nextId)) nextId++;
   const onuInput = document.getElementById('modalOnuId');
   if (onuInput) onuInput.value = nextId;
+
+  // 2. Calcular sugerencia de IP Estática en la subred activa de la OLT
+  let detectedSubnet = '172.19.52.';
+  let usedOctets = new Set();
+
+  for (const o of (configuredOnus || [])) {
+    if (o.ip && o.ip.includes('.')) {
+      const parts = o.ip.split('.');
+      if (parts.length === 4) {
+        detectedSubnet = `${parts[0]}.${parts[1]}.${parts[2]}.`;
+        usedOctets.add(parseInt(parts[3], 10));
+      }
+    }
+  }
+
+  // Buscar el primer host libre entre .2 y .254
+  let nextHost = 2;
+  while (usedOctets.has(nextHost) && nextHost < 254) {
+    nextHost++;
+  }
+
+  const suggestedIp = `${detectedSubnet}${nextHost}`;
+  const suggestedGateway = `${detectedSubnet}1`;
+
+  const ipInput = document.getElementById('modalIp');
+  if (ipInput) ipInput.value = suggestedIp;
+
+  const gwInput = document.getElementById('modalGateway');
+  if (gwInput) gwInput.value = suggestedGateway;
+
+  const maskInput = document.getElementById('modalMask');
+  if (maskInput && !maskInput.value) maskInput.value = '255.255.255.0';
+
+  const dns1Input = document.getElementById('modalDns1');
+  if (dns1Input && !dns1Input.value) dns1Input.value = '8.8.8.8';
+
+  const dns2Input = document.getElementById('modalDns2');
+  if (dns2Input && !dns2Input.value) dns2Input.value = '8.8.4.4';
+
+  const cleanSn = sn.replace(/[-_]/g, '');
+  const wifiInput = document.getElementById('modalWifiSsid');
+  if (wifiInput) wifiInput.value = `Fibra-${cleanSn.slice(-4)}`;
+
+  const wifiPassInput = document.getElementById('modalWifiPassword');
+  if (wifiPassInput) wifiPassInput.value = '';
 
   document.getElementById('provisionModal').classList.remove('hidden');
 }
@@ -794,8 +843,15 @@ function closeProvisionModal() {
 async function submitProvision(e) {
   e.preventDefault();
   const btn = document.getElementById('btnSubmitModal');
+  const ipValue = (document.getElementById('modalIp')?.value || '').trim();
+
+  if (!ipValue) {
+    showToast('IP Estática Requerida', 'Debes ingresar la IP Estática que tendrá la ONT', 'error');
+    return;
+  }
+
   btn.disabled = true;
-  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Aprovisionando en OLT...';
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Aprovisionando ONT con IP Estática...';
 
   const payload = {
     oltId: activeOltId,
@@ -803,7 +859,14 @@ async function submitProvision(e) {
     gponPort: document.getElementById('modalPort').value,
     clientName: document.getElementById('modalClient').value,
     vlanId: parseInt(document.getElementById('modalVlan').value, 10),
-    onuId: parseInt(document.getElementById('modalOnuId').value, 10)
+    onuId: parseInt(document.getElementById('modalOnuId').value, 10),
+    ipAddress: ipValue,
+    gateway: (document.getElementById('modalGateway')?.value || '').trim(),
+    subnetMask: (document.getElementById('modalMask')?.value || '255.255.255.0').trim(),
+    dns1: (document.getElementById('modalDns1')?.value || '8.8.8.8').trim(),
+    dns2: (document.getElementById('modalDns2')?.value || '8.8.4.4').trim(),
+    wifiSsid: (document.getElementById('modalWifiSsid')?.value || '').trim(),
+    wifiPassword: (document.getElementById('modalWifiPassword')?.value || '').trim()
   };
 
   try {
@@ -814,17 +877,23 @@ async function submitProvision(e) {
     });
     const data = await res.json();
     if (data.success) {
-      showToast('¡ONT Activada!', 'La ONT fue aprovisionada y autorizada con éxito en la OLT', 'success', 6000);
+      showToast(
+        '¡ONT Activada en Modo Estático!',
+        `ONU #${data.onuId} asignada con IP Estática ${data.ipAddress || ipValue}. TR-069 programado.`,
+        'success',
+        7000
+      );
       closeProvisionModal();
       refreshAutofind();
+      loadOnus(true);
     } else {
       showAlertModal('Error al aprovisionar ONT', data.log || data.error || 'La OLT no completó la activación.', 'error');
     }
-  } catch {
+  } catch (err) {
     showToast('Error de Red', 'No se pudo contactar al servidor CloudOLT', 'error');
   } finally {
     btn.disabled = false;
-    btn.innerHTML = '<i class="fa-solid fa-play"></i> Ejecutar Activación';
+    btn.innerHTML = '<i class="fa-solid fa-play"></i> Ejecutar Activación con IP Estática';
   }
 }
 
@@ -1474,6 +1543,44 @@ async function actionViewOnuReboot() {
   }
 }
 
+async function actionViewOnuLinkTr069() {
+  if (!currentViewOnu) return;
+  const btn = document.getElementById('btnViewOnuLinkTr069');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Vinculando...';
+  }
+
+  try {
+    const res = await fetch('/api/onus/sync-tr069', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        oltId: currentViewOnu.oltId,
+        gponPort: currentViewOnu.gponPort,
+        onuId: currentViewOnu.onuId,
+        serial: currentViewOnu.sn,
+        ipAddress: currentViewOnu.ip,
+        gateway: currentViewOnu.gateway
+      })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast('¡TR-069 Vinculado!', 'Perfil TR-069 y Preset de GenieACS aplicados a la ONT', 'success', 5000);
+      viewOnu(currentViewOnu.sn);
+    } else {
+      showToast('Aviso TR-069', data.error || 'No se pudo vincular TR-069', 'warning');
+    }
+  } catch {
+    showToast('Error', 'Fallo de conexión al vincular TR-069', 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-satellite-dish"></i> Activar TR-069';
+    }
+  }
+}
+
 async function actionViewOnuResync() {
   if (!currentViewOnu) return;
   showToast('Sincronizando...', 'Leyendo señales y parámetros en tiempo real', 'info', 2000);
@@ -1663,6 +1770,7 @@ window.openChangePasswordModal = openChangePasswordModal;
 window.closeChangeWebPassModal = closeChangeWebPassModal;
 window.submitChangeWebPass = submitChangeWebPass;
 window.actionViewOnuReboot = actionViewOnuReboot;
+window.actionViewOnuLinkTr069 = actionViewOnuLinkTr069;
 window.actionViewOnuResync = actionViewOnuResync;
 window.actionViewOnuRestoreDefaults = actionViewOnuRestoreDefaults;
 window.actionViewOnuToggleActive = actionViewOnuToggleActive;

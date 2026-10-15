@@ -535,7 +535,7 @@ app.get('/', async (req: Request, res: Response) => {
   <!-- MODAL 4: PROVISION ONT -->
   <!-- ========================================== -->
   <div id="provisionModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
-    <div class="glass-card w-full max-w-lg rounded-2xl p-6 border border-amber-500/30 space-y-4">
+    <div class="glass-card w-full max-w-lg rounded-2xl p-6 border border-amber-500/30 space-y-4 max-h-[90vh] overflow-y-auto">
       <div class="flex justify-between items-center pb-3 border-b border-gray-800">
         <h3 class="text-base font-bold text-white flex items-center gap-2">
           <i class="fa-solid fa-bolt text-amber-400"></i> Aprovisionar ONT en OLT
@@ -543,33 +543,90 @@ app.get('/', async (req: Request, res: Response) => {
         <button onclick="closeProvisionModal()" class="text-gray-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
       </div>
 
-      <form onsubmit="submitProvision(event)" class="space-y-3 text-xs">
+      <form onsubmit="submitProvision(event)" class="space-y-3.5 text-xs">
         <input type="hidden" id="modalPort">
-        <div>
-          <label class="text-gray-400 block mb-1">Serial Number (SN)</label>
-          <input type="text" id="modalSn" readonly class="w-full bg-gray-900 border border-gray-800 rounded-lg p-2.5 text-white font-mono">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-gray-400 block mb-1 font-semibold">Serial Number (SN)</label>
+            <input type="text" id="modalSn" readonly class="w-full bg-gray-900 border border-gray-800 rounded-lg p-2.5 text-white font-mono">
+          </div>
+          <div>
+            <label class="text-gray-400 block mb-1 font-semibold">Puerto GPON</label>
+            <input type="text" id="modalPortDisplay" readonly class="w-full bg-gray-900 border border-gray-800 rounded-lg p-2.5 text-white font-mono">
+          </div>
         </div>
 
         <div>
-          <label class="text-gray-400 block mb-1">Nombre Completo del Cliente / ID Contrato</label>
-          <input type="text" id="modalClient" required placeholder="Ej. Juan Pérez - Plan 50M" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white focus:outline-none focus:border-indigo-500">
+          <label class="text-gray-300 block mb-1 font-semibold">Nombre Completo del Cliente / Contrato <span class="text-rose-400">*</span></label>
+          <input type="text" id="modalClient" required placeholder="Ej. Juan Pérez - Plan 50M" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white focus:outline-none focus:border-amber-400">
         </div>
 
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="text-gray-400 block mb-1">VLAN de Servicio</label>
+            <label class="text-gray-400 block mb-1 font-semibold">VLAN de Servicio</label>
             <input type="number" id="modalVlan" required class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white font-mono">
           </div>
           <div>
-            <label class="text-gray-400 block mb-1">ONU ID</label>
-            <input type="number" id="modalOnuId" value="0" min="0" max="128" required class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white font-mono">
+            <label class="text-gray-400 block mb-1 font-semibold">ONU ID (Asignado)</label>
+            <input type="number" id="modalOnuId" value="0" min="0" max="127" required class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white font-mono">
+          </div>
+        </div>
+
+        <!-- SECCIÓN DE RED WAN ESTÁTICA OBLIGATORIA -->
+        <div class="p-3.5 bg-indigo-950/40 border border-indigo-500/30 rounded-xl space-y-2.5">
+          <div class="flex items-center justify-between">
+            <span class="text-indigo-300 font-bold flex items-center gap-1.5">
+              <i class="fa-solid fa-network-wired text-indigo-400"></i> Modo WAN: IP Estática
+            </span>
+            <span class="px-2 py-0.5 rounded text-[10px] bg-indigo-500/20 text-indigo-300 font-semibold border border-indigo-500/30">Router / Static IP</span>
+          </div>
+          <div class="grid grid-cols-2 gap-2.5">
+            <div>
+              <label class="text-gray-300 block mb-1 font-semibold">IP Estática WAN <span class="text-rose-400">*</span></label>
+              <input type="text" id="modalIp" required placeholder="Ej. 172.19.52.25" class="w-full bg-gray-950 border border-indigo-500/60 rounded-lg p-2 text-white font-mono focus:border-indigo-400 focus:outline-none">
+            </div>
+            <div>
+              <label class="text-gray-300 block mb-1 font-semibold">Puerta de Enlace (Gateway) <span class="text-rose-400">*</span></label>
+              <input type="text" id="modalGateway" required placeholder="Ej. 172.19.52.1" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2 text-white font-mono focus:border-indigo-400 focus:outline-none">
+            </div>
+          </div>
+          <div class="grid grid-cols-3 gap-2">
+            <div>
+              <label class="text-gray-400 block mb-1">Máscara de Red</label>
+              <input type="text" id="modalMask" value="255.255.255.0" required class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2 text-white font-mono">
+            </div>
+            <div>
+              <label class="text-gray-400 block mb-1">DNS Primario</label>
+              <input type="text" id="modalDns1" value="8.8.8.8" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2 text-white font-mono">
+            </div>
+            <div>
+              <label class="text-gray-400 block mb-1">DNS Secundario</label>
+              <input type="text" id="modalDns2" value="8.8.4.4" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2 text-white font-mono">
+            </div>
+          </div>
+        </div>
+
+        <!-- SECCIÓN WI-FI INICIAL -->
+        <div class="p-3 bg-gray-900/60 border border-gray-800 rounded-xl space-y-2">
+          <div class="flex items-center gap-1.5 text-gray-300 font-semibold">
+            <i class="fa-solid fa-wifi text-emerald-400"></i> Configuración Wi-Fi (TR-069)
+          </div>
+          <div class="grid grid-cols-2 gap-2.5">
+            <div>
+              <label class="text-gray-400 block mb-1">Nombre SSID</label>
+              <input type="text" id="modalWifiSsid" placeholder="Ej. Fibra-WiFi" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2 text-white">
+            </div>
+            <div>
+              <label class="text-gray-400 block mb-1">Contraseña Wi-Fi</label>
+              <input type="text" id="modalWifiPassword" placeholder="Mínimo 8 caracteres" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2 text-white font-mono">
+            </div>
           </div>
         </div>
 
         <div class="flex justify-end gap-2 pt-2 border-t border-gray-800">
           <button type="button" onclick="closeProvisionModal()" class="px-4 py-2 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-300 font-semibold">Cancelar</button>
-          <button type="submit" id="btnSubmitModal" class="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-gray-950 font-bold flex items-center gap-1.5 transition">
-            <i class="fa-solid fa-play"></i> Ejecutar Activación
+          <button type="submit" id="btnSubmitModal" class="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-gray-950 font-bold flex items-center gap-1.5 transition shadow-lg shadow-amber-500/20">
+            <i class="fa-solid fa-play"></i> Ejecutar Activación con IP Estática
           </button>
         </div>
       </form>
@@ -726,6 +783,9 @@ app.get('/', async (req: Request, res: Response) => {
         <div class="flex flex-wrap items-center gap-2">
           <button onclick="actionViewOnuReboot()" class="px-3 py-2 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5">
             <i class="fa-solid fa-power-off"></i> Reboot
+          </button>
+          <button onclick="actionViewOnuLinkTr069()" id="btnViewOnuLinkTr069" class="px-3 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5" title="Activar TR-069 y programar Preset de Wi-Fi">
+            <i class="fa-solid fa-satellite-dish"></i> Activar TR-069
           </button>
           <button onclick="actionViewOnuResync()" class="px-3 py-2 bg-sky-600/20 hover:bg-sky-600/30 border border-sky-500/40 text-sky-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5">
             <i class="fa-solid fa-rotate"></i> Resync config
@@ -1259,7 +1319,8 @@ app.post('/api/olts/test-raw', async (req: Request, res: Response) => {
 // ==========================================
 app.get('/api/autofind', async (req: Request, res: Response) => {
   const oltId = req.query.oltId as string;
-  if (!oltId) return res.json({ onts: [] });
+  const port = (req.query.port as string) || '1/0/1';
+  if (!oltId) return res.json({ onts: [], nextFreeOnuId: 0 });
 
   const db = getOltDb();
   const result = await db.execute({ sql: 'SELECT * FROM olts WHERE id = ?', args: [oltId] });
@@ -1268,39 +1329,174 @@ app.get('/api/autofind', async (req: Request, res: Response) => {
   if (!olt) return res.status(404).json({ error: 'OLT no encontrada' });
 
   const driver = new TpLinkDeltaStreamDriver(olt);
-  const onts = await driver.getAutofindOnts('1/0/1');
-  res.json({ oltId: olt.id, onts });
+  const onts = await driver.getAutofindOnts(port);
+  const nextFreeOnuId = await driver.getNextFreeOnuId(port);
+
+  // Consultar IPs ya asignadas en esta OLT para sugerir la siguiente IP libre
+  const usedIpsResult = await db.execute({
+    sql: 'SELECT ip_address FROM provisioned_onts WHERE olt_id = ? AND ip_address IS NOT NULL',
+    args: [olt.id]
+  }).catch(() => ({ rows: [] }));
+
+  res.json({ oltId: olt.id, port, onts, nextFreeOnuId, usedIps: usedIpsResult.rows.map((r: any) => r.ip_address) });
 });
 
 app.post('/api/provision', async (req: Request, res: Response) => {
-  const { oltId, serial, clientName, vlanId, onuId, gponPort } = req.body;
-  const db = getOltDb();
-  const result = await db.execute({ sql: 'SELECT * FROM olts WHERE id = ?', args: [oltId] });
-  const olt = result.rows[0] as unknown as OltDevice;
+  try {
+    const {
+      oltId,
+      serial,
+      clientName,
+      vlanId,
+      onuId,
+      gponPort,
+      ipAddress,
+      gateway,
+      subnetMask,
+      dns1,
+      dns2,
+      wifiSsid,
+      wifiPassword
+    } = req.body;
 
-  if (!olt) return res.status(404).json({ error: 'OLT no encontrada' });
+    if (!oltId || !serial || !clientName) {
+      return res.status(400).json({ success: false, error: 'oltId, serial y clientName son obligatorios' });
+    }
 
-  const driver = new TpLinkDeltaStreamDriver(olt);
-  const provResult = await driver.provisionOnt({
-    gponPort: gponPort || '1/0/1',
-    onuId: onuId || 1,
-    serial,
-    clientName,
-    vlanId: vlanId || olt.default_vlan,
-    lineProfileId: 4,
-    srvProfileId: 10,
-    srvPortProfileId: 4
-  });
+    const cleanIp = (ipAddress || '').trim();
+    if (!cleanIp) {
+      return res.status(400).json({ success: false, error: 'La IP Estática WAN es obligatoria para la activación de la ONT' });
+    }
 
-  if (provResult.success) {
-    await db.execute({
-      sql: `INSERT OR REPLACE INTO provisioned_onts (olt_id, gpon_port, onu_id, serial, client_name, vlan_id, status)
-            VALUES (?, ?, ?, ?, ?, ?, 'online')`,
-      args: [olt.id, gponPort || '1/0/1', onuId || 1, serial, clientName, vlanId || olt.default_vlan]
+    const db = getOltDb();
+    const result = await db.execute({ sql: 'SELECT * FROM olts WHERE id = ?', args: [oltId] });
+    const olt = result.rows[0] as unknown as OltDevice;
+
+    if (!olt) return res.status(404).json({ success: false, error: 'OLT no encontrada' });
+
+    const driver = new TpLinkDeltaStreamDriver(olt);
+    const targetPort = gponPort || '1/0/1';
+    const targetOnuId = onuId !== undefined && onuId !== null ? parseInt(onuId, 10) : await driver.getNextFreeOnuId(targetPort);
+    const targetVlan = vlanId ? parseInt(vlanId, 10) : (olt.default_vlan || 400);
+
+    // 1. Preparar parámetros de red estática
+    const cleanGw = (gateway || cleanIp.replace(/\.\d+$/, '.254')).trim();
+    const cleanMask = (subnetMask || '255.255.255.0').trim();
+    const cleanDns1 = (dns1 || '8.8.8.8').trim();
+    const cleanDns2 = (dns2 || '8.8.4.4').trim();
+    const cleanSsid = (wifiSsid || '').trim();
+    const cleanPass = (wifiPassword || '').trim();
+
+    // 2. Aprovisionamiento por CLI/OMCI en la OLT TP-Link DeltaStream
+    const provResult = await driver.provisionOnt({
+      gponPort: targetPort,
+      onuId: targetOnuId,
+      serial,
+      clientName,
+      vlanId: targetVlan,
+      ipAddress: cleanIp,
+      subnetMask: cleanMask,
+      gateway: cleanGw,
+      lineProfileId: 4,
+      srvProfileId: 10,
+      srvPortProfileId: 4
     });
-  }
 
-  res.json(provResult);
+    if (!provResult.success) {
+      return res.status(500).json({ success: false, error: 'Fallo al aprovisionar en la OLT', log: provResult.log });
+    }
+
+    // 3. Guardar en SQLite con IP Estática obligatoria y datos TR-069
+    await db.execute({
+      sql: `INSERT INTO provisioned_onts (
+              olt_id, gpon_port, onu_id, serial, client_name, vlan_id,
+              ip_address, gateway, subnet_mask, dns1, dns2, wan_mode,
+              wifi_ssid, wifi_password, status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Static', ?, ?, 'online')
+            ON CONFLICT(serial) DO UPDATE SET
+              olt_id = excluded.olt_id,
+              gpon_port = excluded.gpon_port,
+              onu_id = excluded.onu_id,
+              client_name = excluded.client_name,
+              vlan_id = excluded.vlan_id,
+              ip_address = excluded.ip_address,
+              gateway = excluded.gateway,
+              subnet_mask = excluded.subnet_mask,
+              dns1 = excluded.dns1,
+              dns2 = excluded.dns2,
+              wan_mode = 'Static',
+              wifi_ssid = coalesce(excluded.wifi_ssid, provisioned_onts.wifi_ssid),
+              wifi_password = coalesce(excluded.wifi_password, provisioned_onts.wifi_password),
+              status = 'online'`,
+      args: [
+        olt.id,
+        targetPort,
+        targetOnuId,
+        serial,
+        clientName,
+        targetVlan,
+        cleanIp,
+        cleanGw,
+        cleanMask,
+        cleanDns1,
+        cleanDns2,
+        cleanSsid || null,
+        cleanPass || null
+      ]
+    });
+
+    // 3. Empujar configuración TR-069 hacia GenieACS
+    let tr069Pushed = false;
+    let tr069Error = null;
+
+    try {
+      // Pre-aprovisionar Preset por serial para auto-aplicar al momento del Inform
+      await acsClient.createPresetForOnt({
+        serial,
+        ip: cleanIp,
+        mask: cleanMask,
+        gateway: cleanGw,
+        dns1: cleanDns1,
+        dns2: cleanDns2,
+        wifiSsid: cleanSsid || undefined,
+        wifiPassword: cleanPass || undefined
+      });
+
+      // Si el dispositivo ya está conectado en GenieACS, aplicar tarea inmediatamente
+      const dev = await acsClient.getDeviceBySerial(serial);
+      if (dev) {
+        const wanRes = await acsClient.setWanMode(dev._id, {
+          mode: 'Static',
+          ip: cleanIp,
+          mask: cleanMask,
+          gateway: cleanGw,
+          dns1: cleanDns1,
+          dns2: cleanDns2
+        });
+        if (cleanSsid && cleanPass) {
+          await acsClient.setWifi(dev._id, cleanSsid, cleanPass);
+        }
+        tr069Pushed = !!wanRes.success;
+      } else {
+        tr069Pushed = true; // Registrado en Preset
+      }
+    } catch (acsErr: any) {
+      tr069Error = acsErr.message;
+    }
+
+    res.json({
+      success: true,
+      onuId: targetOnuId,
+      ipAddress: cleanIp,
+      gponPort: targetPort,
+      tr069Pushed,
+      tr069Error,
+      log: provResult.log,
+      message: `ONT activada en GPON ${targetPort} ONU ID #${targetOnuId} con IP Estática ${cleanIp}`
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 app.get('/api/optical-info', async (req: Request, res: Response) => {
@@ -1473,6 +1669,56 @@ app.post('/api/onus/reboot', async (req: Request, res: Response) => {
     const driver = new TpLinkDeltaStreamDriver(olt);
     const rebootRes = await driver.rebootOnt(gponPort || '1/0/1', parseInt(onuId, 10));
     res.json(rebootRes);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 2c. Sincronizar o Activar TR-069 en una ONT existente
+app.post('/api/onus/sync-tr069', async (req: Request, res: Response) => {
+  try {
+    const { oltId, gponPort, onuId, serial, ipAddress, gateway } = req.body;
+    if (!serial) {
+      return res.status(400).json({ success: false, error: 'serial es requerido' });
+    }
+
+    const cleanIp = (ipAddress || '').trim();
+    const cleanGw = (gateway || cleanIp.replace(/\.\d+$/, '.254')).trim();
+
+    // 1. Programar Preset en GenieACS
+    await acsClient.createPresetForOnt({
+      serial,
+      ip: cleanIp,
+      gateway: cleanGw,
+      mask: '255.255.255.0',
+      dns1: '8.8.8.8',
+      dns2: '8.8.4.4'
+    });
+
+    // 2. Si la OLT está disponible, inyectar el perfil TR-069 por OMCI
+    let omciLog = '';
+    if (oltId && gponPort && onuId !== undefined) {
+      const db = getOltDb();
+      const resDb = await db.execute({ sql: 'SELECT * FROM olts WHERE id = ?', args: [oltId] });
+      const olt = resDb.rows[0] as unknown as OltDevice;
+      if (olt) {
+        const driver = new TpLinkDeltaStreamDriver(olt);
+        const omciRes = await driver.attachTr069Profile(gponPort, parseInt(onuId, 10));
+        omciLog = omciRes.log;
+      }
+    }
+
+    // 3. Si el dispositivo ya está en GenieACS, forzar tarea inmediata
+    const dev = await acsClient.getDeviceBySerial(serial);
+    let pushed = false;
+    if (dev) {
+      if (cleanIp) {
+        await acsClient.setWanMode(dev._id, { mode: 'Static', ip: cleanIp, gateway: cleanGw });
+      }
+      pushed = true;
+    }
+
+    res.json({ success: true, tr069Pushed: pushed, omciLog, message: 'Perfil TR-069 vinculado a la ONT exitosamente' });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -1726,6 +1972,11 @@ app.post('/api/onus/action', async (req: Request, res: Response) => {
   }
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`🚀 CloudOLT Core corriendo en http://localhost:${PORT}`);
+  try {
+    await acsClient.initializeDefaultProvisions();
+  } catch (err: any) {
+    console.warn('[GenieACS Warning] No se pudo inicializar provisions al arrancar:', err.message);
+  }
 });

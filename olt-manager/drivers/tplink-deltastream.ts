@@ -22,6 +22,9 @@ export interface AutofindOnt {
   gponPort: string;
   sn: string;
   vendor: string;
+  model?: string;
+  hardwareVersion?: string;
+  softwareVersion?: string;
   discoveredAt: string;
 }
 
@@ -348,6 +351,7 @@ export class TpLinkDeltaStreamDriver {
     const onts: AutofindOnt[] = [];
     const lines = cliOutput.split('\n');
     for (const line of lines) {
+      if (line.includes('Index') || line.includes('Port') || line.includes('show ont') || line.includes('terminal length')) continue;
       // 1    1/0/1   HWTC-C19217D7  -  -  -  31FD.A  V5R021C00S230  EG8041V5  HWTC
       const m = line.match(/^\s*\d+\s+([\d/]+)\s+([A-Za-z0-9_-]+)\s+.*?\s+([A-Za-z0-9._-]+)\s+([A-Za-z0-9._()\-]+)\s+([A-Za-z0-9._-]+)\s+([A-Za-z0-9._-]+)/);
       if (m) {
@@ -356,26 +360,42 @@ export class TpLinkDeltaStreamDriver {
         const hw = m[3] !== '-' ? m[3] : undefined;
         const sw = m[4] !== '-' ? m[4] : undefined;
         const equip = m[5] !== '-' ? m[5] : undefined;
-        const vendor = m[6] === 'HWTC' ? 'Huawei' : m[6];
+        const rawVendor = m[6] || sn.substring(0, 4);
+        let vendor = rawVendor;
+        if (/HWTC|48575443/i.test(rawVendor)) vendor = 'Huawei';
+        else if (/TPLG/i.test(rawVendor)) vendor = 'TP-Link';
+        else if (/ZTEG/i.test(rawVendor)) vendor = 'ZTE';
+        else if (/ALCL/i.test(rawVendor)) vendor = 'Nokia/Alcatel';
+        else if (/ISPR/i.test(rawVendor)) vendor = 'VSOL';
+        else if (/FHTT/i.test(rawVendor)) vendor = 'FiberHome';
+
         onts.push({
           gponPort: port,
           sn,
-          vendor: vendor || sn.substring(0, 4),
-          model: equip ? `Huawei ${equip}` : 'Huawei GPON ONT',
+          vendor,
+          model: equip ? `${vendor} ${equip}` : `${vendor} GPON ONT`,
           hardwareVersion: hw,
           softwareVersion: sw,
           discoveredAt: new Date().toISOString()
         });
       } else {
-        const snRegex = /(HWTC|48575443|ALCL|ZTEG|ISPR|TPLG)[0-9A-Za-z\-_]+/i;
+        const snRegex = /([A-Za-z0-9]{4}-?[A-Za-z0-9]{8,12})/i;
         const match = line.match(snRegex);
         if (match && !line.includes('SERIAL') && !line.includes('NUMBER')) {
           const sn = match[0].trim();
+          let vendor = sn.substring(0, 4).toUpperCase();
+          if (/HWTC|4857/i.test(vendor)) vendor = 'Huawei';
+          else if (/TPLG/i.test(vendor)) vendor = 'TP-Link';
+          else if (/ZTEG/i.test(vendor)) vendor = 'ZTE';
+          else if (/ALCL/i.test(vendor)) vendor = 'Nokia/Alcatel';
+          else if (/ISPR/i.test(vendor)) vendor = 'VSOL';
+          else if (/FHTT/i.test(vendor)) vendor = 'FiberHome';
+
           onts.push({
             gponPort,
             sn,
-            vendor: sn.startsWith('HWTC') ? 'Huawei' : sn.substring(0, 4),
-            model: 'Huawei GPON ONT',
+            vendor,
+            model: `${vendor} GPON ONT`,
             discoveredAt: new Date().toISOString()
           });
         }
@@ -383,6 +403,22 @@ export class TpLinkDeltaStreamDriver {
     }
 
     return onts;
+  }
+
+  /**
+   * Obtiene el siguiente ONU ID disponible en el puerto GPON (0 a 127)
+   */
+  public async getNextFreeOnuId(gponPort: string = '1/0/1'): Promise<number> {
+    try {
+      const configured = await this.getConfiguredOnts(gponPort);
+      const usedIds = new Set(configured.map(o => o.onuId));
+      for (let i = 0; i <= 127; i++) {
+        if (!usedIds.has(i)) return i;
+      }
+      return 1;
+    } catch {
+      return 0;
+    }
   }
 
   /**
@@ -447,16 +483,18 @@ export class TpLinkDeltaStreamDriver {
    */
   public parseConfiguredOnts(optOutput: string, cfgOutput: string, gponPort: string, verOutput?: string, macOutput?: string): ConfiguredOnt[] {
     const descMap = new Map<number, string>();
+    const cfgMap = new Map<number, { sn: string; desc: string }>();
     // ont add 1 sn-auth HWTC-685E10B6 desc "GustavoAdolfo" ...
     const cfgLines = cfgOutput.split('\n');
     for (const line of cfgLines) {
       const m = line.match(/ont\s+add\s+(\d+)\s+sn-auth\s+([A-Za-z0-9_-]+)/);
       if (m) {
         const onuId = parseInt(m[1], 10);
+        const sn = m[2];
         const descMatch = line.match(/desc\s+"([^"]+)"/);
-        if (descMatch) {
-          descMap.set(onuId, descMatch[1].trim());
-        }
+        const desc = descMatch ? descMatch[1].trim() : `ONT #${onuId}`;
+        descMap.set(onuId, desc);
+        cfgMap.set(onuId, { sn, desc });
       }
     }
 
@@ -542,6 +580,31 @@ export class TpLinkDeltaStreamDriver {
       }
     }
 
+    // Agregar ONTs registradas en la OLT que se encuentran offline o sin transmisión óptica
+    for (const [onuId, cfg] of cfgMap.entries()) {
+      if (!seenOnuIds.has(onuId)) {
+        seenOnuIds.add(onuId);
+        const ver = versionMap.get(onuId);
+        let vendor = ver?.vendor || (cfg.sn.startsWith('HWTC') ? 'Huawei' : (cfg.sn.startsWith('TPLG') ? 'TP-Link' : 'GPON'));
+        onts.push({
+          onuId,
+          sn: cfg.sn,
+          gponPort,
+          name: cfg.desc,
+          status: 'offline',
+          rxPower: 'N/A',
+          txPower: 'N/A',
+          vendor,
+          model: ver?.model || `${vendor} GPON ONT`,
+          hardwareVersion: ver?.hw,
+          softwareVersion: ver?.sw,
+          vlan: this.config.default_vlan || 400,
+          profile: 'LINE_VLAN400',
+          mac: macMap.get(onuId)
+        });
+      }
+    }
+
     return onts;
   }
 
@@ -583,6 +646,9 @@ export class TpLinkDeltaStreamDriver {
     serial: string;
     clientName: string;
     vlanId: number;
+    ipAddress?: string;
+    subnetMask?: string;
+    gateway?: string;
     lineProfileId?: number;
     srvProfileId?: number;
     srvPortProfileId?: number;
@@ -591,13 +657,21 @@ export class TpLinkDeltaStreamDriver {
     const srvProf = params.srvProfileId ?? 10;
     const srvPortProf = params.srvPortProfileId ?? 4;
     const sanitizedName = params.clientName.replace(/["';]/g, '').trim();
+    const cleanOnuId = params.onuId !== undefined ? params.onuId : 0;
+    const portNum = parseInt((params.gponPort || '1/0/1').split('/').pop() || '1', 10);
+    const servicePortId = cleanOnuId === 0 ? (portNum * 128) : ((portNum - 1) * 128 + cleanOnuId);
+
+    const ipConfigCmd = params.ipAddress
+      ? ` ont ipconfig ${cleanOnuId} static ip-address ${params.ipAddress} mask ${params.subnetMask || '255.255.255.0'} ${params.gateway ? `gateway ${params.gateway}` : ''}`
+      : '';
 
     const cliScript = `
 configure
 interface gpon ${params.gponPort}
- ont add ${params.onuId} sn-auth ${params.serial} desc "${sanitizedName}" ont-lineprofile-id ${lineProf} ont-srvprofile-id ${srvProf} ont-srvport-profile-id ${srvPortProf}
+ ont add ${cleanOnuId} sn-auth ${params.serial} desc "${sanitizedName}" ont-lineprofile-id ${lineProf} ont-srvprofile-id ${srvProf} ont-srvport-profile-id ${srvPortProf}
+${ipConfigCmd}
 exit
-service-port ${params.onuId} config gpon ${params.gponPort} ont ${params.onuId} gem-id 1 svlan ${params.vlanId} user-vlan ${params.vlanId} tag-action translate desc "${sanitizedName}"
+service-port ${servicePortId} config gpon ${params.gponPort} ont ${cleanOnuId} gem-id 1 svlan ${params.vlanId} user-vlan ${params.vlanId} tag-action translate desc "${sanitizedName}"
 end
 copy running-config startup-config
 `;
@@ -615,8 +689,11 @@ copy running-config startup-config
    * Eliminar o desaprovisionar ONT
    */
   public async deleteOnt(gponPort: string, onuId: number): Promise<{ success: boolean; log: string }> {
+    const portNum = parseInt((gponPort || '1/0/1').split('/').pop() || '1', 10);
+    const servicePortId = onuId === 0 ? (portNum * 128) : ((portNum - 1) * 128 + onuId);
     const cliScript = `
 configure
+no service-port ${servicePortId}
 no service-port ${onuId}
 interface gpon ${gponPort}
  ont delete ${onuId}
@@ -710,6 +787,20 @@ copy running-config startup-config
     try {
       const log = await this.executeCommand(cmd, 10000);
       return { success: true, log };
+    } catch (err: any) {
+      return { success: false, log: err.message || String(err) };
+    }
+  }
+
+  /**
+   * Asociar Perfil TR-069 a la ONT vía OMCI a través de la OLT
+   */
+  public async attachTr069Profile(gponPort: string, onuId: number, profileId: number = 1): Promise<{ success: boolean; log: string }> {
+    const cmd = `configure\ninterface gpon ${gponPort}\n ont tr069-server-profile ${onuId} profile-id ${profileId}\nexit\nend\ncopy running-config startup-config\n`;
+    try {
+      const log = await this.executeCommand(cmd, 10000);
+      const isFailed = /error|invalid|failed/i.test(log);
+      return { success: !isFailed, log };
     } catch (err: any) {
       return { success: false, log: err.message || String(err) };
     }

@@ -29,6 +29,60 @@ export class GenieAcsClient {
   }
 
   /**
+   * Inicializar Script de Aprovisionamiento y Presets por defecto en GenieACS
+   */
+  public async initializeDefaultProvisions(): Promise<void> {
+    try {
+      const script = `
+declare("InternetGatewayDevice.DeviceInfo.SerialNumber", {value: 1});
+declare("InternetGatewayDevice.DeviceInfo.Manufacturer", {value: 1});
+declare("InternetGatewayDevice.DeviceInfo.ModelName", {value: 1});
+declare("InternetGatewayDevice.DeviceInfo.SoftwareVersion", {value: 1});
+declare("InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID", {value: 1});
+declare("InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.KeyPassphrase", {value: 1});
+declare("InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.PreSharedKey.1.KeyPassphrase", {value: 1});
+declare("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.ExternalIPAddress", {value: 1});
+declare("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.SubnetMask", {value: 1});
+declare("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.DefaultGateway", {value: 1});
+declare("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.AddressingType", {value: 1});
+declare("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.DNSServers", {value: 1});
+declare("Device.WiFi.SSID.1.SSID", {value: 1});
+declare("Device.WiFi.AccessPoint.1.Security.KeyPassphrase", {value: 1});
+declare("Device.IP.Interface.1.IPv4Address.1.IPAddress", {value: 1});
+`;
+      await fetch(`${this.baseUrl}/provisions/default_inform`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'text/plain' },
+        body: script
+      });
+
+      const preset = {
+        weight: 0,
+        precondition: 'true',
+        events: {
+          '0 BOOTSTRAP': true,
+          '1 BOOT': true,
+          '2 PERIODIC': true
+        },
+        configurations: [
+          {
+            type: 'provision',
+            name: 'default_inform'
+          }
+        ]
+      };
+      await fetch(`${this.baseUrl}/presets/default_inform_preset`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(preset)
+      });
+      console.log('[GenieACS] Presets y script de aprovisionamiento default_inform registrados');
+    } catch (err: any) {
+      console.warn('[GenieACS] Aviso al inicializar preset inform:', err.message);
+    }
+  }
+
+  /**
    * Listar todos los dispositivos / ONTs reportados en GenieACS
    */
   public async getDevices(): Promise<AcsDevice[]> {
@@ -42,13 +96,17 @@ export class GenieAcsClient {
         'InternetGatewayDevice.DeviceInfo.SoftwareVersion',
         'InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID',
         'InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.KeyPassphrase',
+        'InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.PreSharedKey.1.KeyPassphrase',
         'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.ExternalIPAddress',
         'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.SubnetMask',
         'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.DefaultGateway',
         'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.AddressingType',
+        'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.DNSServers',
         'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.Username',
         'Device.WiFi.SSID.1.SSID',
-        'Device.WiFi.AccessPoint.1.Security.KeyPassphrase'
+        'Device.WiFi.AccessPoint.1.Security.KeyPassphrase',
+        'Device.IP.Interface.1.IPv4Address.1.IPAddress',
+        'Device.IP.Interface.1.IPv4Address.1.SubnetMask'
       ].join(',');
 
       const url = `${this.baseUrl}/devices/?projection=${encodeURIComponent(projection)}`;
@@ -98,6 +156,7 @@ export class GenieAcsClient {
       const parameterValues: [string, string, string][] = [
         ['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID', ssid, 'xsd:string'],
         ['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.KeyPassphrase', keyPassphrase, 'xsd:string'],
+        ['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.PreSharedKey.1.KeyPassphrase', keyPassphrase, 'xsd:string'],
         ['Device.WiFi.SSID.1.SSID', ssid, 'xsd:string'],
         ['Device.WiFi.AccessPoint.1.Security.KeyPassphrase', keyPassphrase, 'xsd:string']
       ];
@@ -133,13 +192,26 @@ export class GenieAcsClient {
       const parameterValues: [string, string, string][] = [];
 
       if (params.mode === 'Static') {
-        if (params.ip) parameterValues.push(['InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.AddressingType', 'Static', 'xsd:string']);
-        if (params.ip) parameterValues.push(['InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.ExternalIPAddress', params.ip, 'xsd:string']);
-        if (params.mask) parameterValues.push(['InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.SubnetMask', params.mask, 'xsd:string']);
-        if (params.gateway) parameterValues.push(['InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.DefaultGateway', params.gateway, 'xsd:string']);
-        if (params.dns1) {
-          const dnsStr = params.dns2 ? `${params.dns1},${params.dns2}` : params.dns1;
-          parameterValues.push(['InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.DNSServers', dnsStr, 'xsd:string']);
+        const dnsStr = params.dns1 ? (params.dns2 ? `${params.dns1},${params.dns2}` : params.dns1) : '8.8.8.8,8.8.4.4';
+        if (params.ip) {
+          // TR-098
+          parameterValues.push(
+            ['InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.Enable', 'true', 'xsd:boolean'],
+            ['InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.AddressingType', 'Static', 'xsd:string'],
+            ['InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.ConnectionType', 'IP_Routed', 'xsd:string'],
+            ['InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.ExternalIPAddress', params.ip, 'xsd:string'],
+            ['InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.SubnetMask', params.mask || '255.255.255.0', 'xsd:string'],
+            ['InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.DefaultGateway', params.gateway || '', 'xsd:string'],
+            ['InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.DNSServers', dnsStr, 'xsd:string']
+          );
+          // TR-181
+          parameterValues.push(
+            ['Device.IP.Interface.1.Enable', 'true', 'xsd:boolean'],
+            ['Device.IP.Interface.1.IPv4Address.1.Enable', 'true', 'xsd:boolean'],
+            ['Device.IP.Interface.1.IPv4Address.1.IPAddress', params.ip, 'xsd:string'],
+            ['Device.IP.Interface.1.IPv4Address.1.SubnetMask', params.mask || '255.255.255.0', 'xsd:string'],
+            ['Device.Routing.Router.1.IPv4Forwarding.1.GatewayIPAddress', params.gateway || '', 'xsd:string']
+          );
         }
       } else if (params.mode === 'DHCP') {
         parameterValues.push(['InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.AddressingType', 'DHCP', 'xsd:string']);
@@ -156,6 +228,82 @@ export class GenieAcsClient {
         name: 'setParameterValues',
         parameterValues
       });
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  }
+
+  /**
+   * Pre-aprovisionar un dispositivo por Preset en GenieACS (se aplica automáticamente al arrancar)
+   */
+  public async createPresetForOnt(params: {
+    serial: string;
+    ip: string;
+    mask?: string;
+    gateway?: string;
+    dns1?: string;
+    dns2?: string;
+    wifiSsid?: string;
+    wifiPassword?: string;
+  }): Promise<{ success: boolean; error?: string }> {
+    try {
+      const cleanSn = params.serial.replace(/[-_]/g, '');
+      const dnsStr = params.dns1 ? (params.dns2 ? `${params.dns1},${params.dns2}` : params.dns1) : '8.8.8.8,8.8.4.4';
+      const provName = `prov_${cleanSn}`;
+
+      let script = `
+declare("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.Enable", {value: true});
+declare("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.AddressingType", {value: "Static"});
+declare("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.ConnectionType", {value: "IP_Routed"});
+declare("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.ExternalIPAddress", {value: "${params.ip}"});
+declare("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.SubnetMask", {value: "${params.mask || '255.255.255.0'}"});
+declare("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.DefaultGateway", {value: "${params.gateway || ''}"});
+declare("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.DNSServers", {value: "${dnsStr}"});
+`;
+
+      if (params.wifiSsid) {
+        script += `
+declare("InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID", {value: "${params.wifiSsid}"});
+declare("Device.WiFi.SSID.1.SSID", {value: "${params.wifiSsid}"});
+`;
+      }
+      if (params.wifiPassword) {
+        script += `
+declare("InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.KeyPassphrase", {value: "${params.wifiPassword}"});
+declare("InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.PreSharedKey.1.KeyPassphrase", {value: "${params.wifiPassword}"});
+declare("Device.WiFi.AccessPoint.1.Security.KeyPassphrase", {value: "${params.wifiPassword}"});
+`;
+      }
+
+      await fetch(`${this.baseUrl}/provisions/${encodeURIComponent(provName)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'text/plain' },
+        body: script
+      });
+
+      const preset = {
+        weight: 10,
+        precondition: `_id LIKE "%${cleanSn}%"`,
+        events: {
+          '0 BOOTSTRAP': true,
+          '1 BOOT': true,
+          '2 PERIODIC': true
+        },
+        configurations: [
+          {
+            type: 'provision',
+            name: provName
+          }
+        ]
+      };
+
+      const presetRes = await fetch(`${this.baseUrl}/presets/${encodeURIComponent('PRESET_' + cleanSn)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(preset)
+      });
+
+      return { success: presetRes.ok };
     } catch (err: any) {
       return { success: false, error: err.message };
     }
