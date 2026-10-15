@@ -1705,6 +1705,10 @@ app.post('/api/onus/sync-tr069', async (req: Request, res: Response) => {
         const driver = new TpLinkDeltaStreamDriver(olt);
         const omciRes = await driver.attachTr069Profile(gponPort, parseInt(onuId, 10));
         omciLog = omciRes.log;
+        if (cleanIp) {
+          const wanRes = await driver.configureOntWanOmci(gponPort, parseInt(onuId, 10), { mode: 'Static', ip: cleanIp, gateway: cleanGw });
+          omciLog += '\n' + wanRes.log;
+        }
       }
     }
 
