@@ -666,6 +666,7 @@ export class TpLinkDeltaStreamDriver {
       : '';
 
     const cliScript = `
+enable
 configure
 interface gpon ${params.gponPort}
  ont add ${cleanOnuId} sn-auth ${params.serial} desc "${sanitizedName}" ont-lineprofile-id ${lineProf} ont-srvprofile-id ${srvProf} ont-srvport-profile-id ${srvPortProf}
@@ -692,6 +693,7 @@ copy running-config startup-config
     const portNum = parseInt((gponPort || '1/0/1').split('/').pop() || '1', 10);
     const servicePortId = onuId === 0 ? (portNum * 128) : ((portNum - 1) * 128 + onuId);
     const cliScript = `
+enable
 configure
 no service-port ${servicePortId}
 no service-port ${onuId}
@@ -750,7 +752,7 @@ copy running-config startup-config
    * Configurar modo IP / WAN via OMCI (para OLTs que soportan ont ipconfig)
    */
   public async configureOntWanOmci(gponPort: string, onuId: number, params: { mode: string; ip?: string; mask?: string; gateway?: string; vlanId?: number }): Promise<{ success: boolean; log: string }> {
-    let cmd = `configure\ninterface gpon ${gponPort}\n`;
+    let cmd = `enable\nconfigure\ninterface gpon ${gponPort}\n`;
     if (params.mode === 'Static' && params.ip && params.mask) {
       cmd += ` ont ipconfig ${onuId} static ip-address ${params.ip} mask ${params.mask} ${params.gateway ? `gateway ${params.gateway}` : ''}\n`;
     } else if (params.mode === 'DHCP') {
@@ -770,7 +772,7 @@ copy running-config startup-config
    */
   public async setOntAdminState(gponPort: string, onuId: number, active: boolean): Promise<{ success: boolean; log: string }> {
     const action = active ? 'activate' : 'deactivate';
-    const cmd = `configure\ninterface gpon ${gponPort}\n ont ${action} ${onuId}\nexit\nend\n`;
+    const cmd = `enable\nconfigure\ninterface gpon ${gponPort}\n ont ${action} ${onuId}\nexit\nend\n`;
     try {
       const log = await this.executeCommand(cmd, 10000);
       return { success: true, log };
@@ -783,7 +785,7 @@ copy running-config startup-config
    * Restaurar ONT a valores de fábrica desde OLT
    */
   public async restoreOntFactory(gponPort: string, onuId: number): Promise<{ success: boolean; log: string }> {
-    const cmd = `configure\ninterface gpon ${gponPort}\n ont reset ${onuId}\nexit\nend\n`;
+    const cmd = `enable\nconfigure\ninterface gpon ${gponPort}\n ont reset ${onuId}\nexit\nend\n`;
     try {
       const log = await this.executeCommand(cmd, 10000);
       return { success: true, log };
@@ -796,7 +798,7 @@ copy running-config startup-config
    * Asociar Perfil TR-069 a la ONT vía OMCI a través de la OLT
    */
   public async attachTr069Profile(gponPort: string, onuId: number, profileId: number = 1): Promise<{ success: boolean; log: string }> {
-    const cmd = `configure\ninterface gpon ${gponPort}\n ont tr069-server-profile ${onuId} profile-id ${profileId}\nexit\nend\ncopy running-config startup-config\n`;
+    const cmd = `enable\nconfigure\ninterface gpon ${gponPort}\n ont tr069-server-profile ${onuId} profile-id ${profileId}\nexit\nend\ncopy running-config startup-config\n`;
     try {
       const log = await this.executeCommand(cmd, 10000);
       const isFailed = /error|invalid|failed/i.test(log);
