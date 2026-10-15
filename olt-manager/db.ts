@@ -108,6 +108,12 @@ export async function initOltDatabase(): Promise<void> {
   try {
     await db.execute("ALTER TABLE provisioned_onts ADD COLUMN wan_mode TEXT DEFAULT 'Static'");
   } catch {}
+  try {
+    await db.execute('ALTER TABLE provisioned_onts ADD COLUMN wifi_ssid_5g TEXT');
+  } catch {}
+  try {
+    await db.execute('ALTER TABLE provisioned_onts ADD COLUMN wifi_password_5g TEXT');
+  } catch {}
 
   console.log('[CloudOLT Database] Tablas "olts", "wireguard_peers" y "provisioned_onts" listas en olt_manager.db');
 }

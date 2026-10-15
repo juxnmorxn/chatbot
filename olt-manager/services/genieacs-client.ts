@@ -13,6 +13,8 @@ export interface AcsDevice {
   lastInform?: string;
   wifiSsid?: string;
   wifiPassword?: string;
+  wifi5gSsid?: string;
+  wifi5gPassword?: string;
   wanMode?: 'DHCP' | 'Static' | 'PPPoE';
   wanIp?: string;
   wanGateway?: string;
@@ -41,13 +43,19 @@ declare("InternetGatewayDevice.DeviceInfo.SoftwareVersion", {value: 1});
 declare("InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID", {value: 1});
 declare("InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.KeyPassphrase", {value: 1});
 declare("InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.PreSharedKey.1.KeyPassphrase", {value: 1});
+declare("InternetGatewayDevice.LANDevice.1.WLANConfiguration.2.SSID", {value: 1});
+declare("InternetGatewayDevice.LANDevice.1.WLANConfiguration.2.KeyPassphrase", {value: 1});
+declare("InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.SSID", {value: 1});
+declare("InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.KeyPassphrase", {value: 1});
 declare("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.ExternalIPAddress", {value: 1});
 declare("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.SubnetMask", {value: 1});
 declare("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.DefaultGateway", {value: 1});
 declare("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.AddressingType", {value: 1});
 declare("InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.DNSServers", {value: 1});
 declare("Device.WiFi.SSID.1.SSID", {value: 1});
+declare("Device.WiFi.SSID.2.SSID", {value: 1});
 declare("Device.WiFi.AccessPoint.1.Security.KeyPassphrase", {value: 1});
+declare("Device.WiFi.AccessPoint.2.Security.KeyPassphrase", {value: 1});
 declare("Device.IP.Interface.1.IPv4Address.1.IPAddress", {value: 1});
 `;
       await fetch(`${this.baseUrl}/provisions/default_inform`, {
@@ -97,6 +105,10 @@ declare("Device.IP.Interface.1.IPv4Address.1.IPAddress", {value: 1});
         'InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID',
         'InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.KeyPassphrase',
         'InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.PreSharedKey.1.KeyPassphrase',
+        'InternetGatewayDevice.LANDevice.1.WLANConfiguration.2.SSID',
+        'InternetGatewayDevice.LANDevice.1.WLANConfiguration.2.KeyPassphrase',
+        'InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.SSID',
+        'InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.KeyPassphrase',
         'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.ExternalIPAddress',
         'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.SubnetMask',
         'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.DefaultGateway',
@@ -104,7 +116,9 @@ declare("Device.IP.Interface.1.IPv4Address.1.IPAddress", {value: 1});
         'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.DNSServers',
         'InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANPPPConnection.1.Username',
         'Device.WiFi.SSID.1.SSID',
+        'Device.WiFi.SSID.2.SSID',
         'Device.WiFi.AccessPoint.1.Security.KeyPassphrase',
+        'Device.WiFi.AccessPoint.2.Security.KeyPassphrase',
         'Device.IP.Interface.1.IPv4Address.1.IPAddress',
         'Device.IP.Interface.1.IPv4Address.1.SubnetMask'
       ].join(',');
@@ -151,7 +165,16 @@ declare("Device.IP.Interface.1.IPv4Address.1.IPAddress", {value: 1});
   /**
    * Cambiar Nombre de Red (SSID) y Contraseña de Wi-Fi de forma remota
    */
-  public async setWifi(deviceId: string, ssid: string, keyPassphrase: string): Promise<{ success: boolean; error?: string }> {
+  /**
+   * Cambiar Nombre de Red (SSID) y Contraseña de Wi-Fi (2.4 GHz y 5 GHz) de forma remota
+   */
+  public async setWifi(
+    deviceId: string,
+    ssid: string,
+    keyPassphrase: string,
+    ssid5g?: string,
+    keyPassphrase5g?: string
+  ): Promise<{ success: boolean; error?: string }> {
     try {
       const parameterValues: [string, string, string][] = [
         ['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID', ssid, 'xsd:string'],
@@ -160,6 +183,20 @@ declare("Device.IP.Interface.1.IPv4Address.1.IPAddress", {value: 1});
         ['Device.WiFi.SSID.1.SSID', ssid, 'xsd:string'],
         ['Device.WiFi.AccessPoint.1.Security.KeyPassphrase', keyPassphrase, 'xsd:string']
       ];
+
+      const pass5 = keyPassphrase5g || keyPassphrase;
+      if (ssid5g) {
+        parameterValues.push(
+          ['InternetGatewayDevice.LANDevice.1.WLANConfiguration.2.SSID', ssid5g, 'xsd:string'],
+          ['InternetGatewayDevice.LANDevice.1.WLANConfiguration.2.KeyPassphrase', pass5, 'xsd:string'],
+          ['InternetGatewayDevice.LANDevice.1.WLANConfiguration.2.PreSharedKey.1.KeyPassphrase', pass5, 'xsd:string'],
+          ['InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.SSID', ssid5g, 'xsd:string'],
+          ['InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.KeyPassphrase', pass5, 'xsd:string'],
+          ['InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.PreSharedKey.1.KeyPassphrase', pass5, 'xsd:string'],
+          ['Device.WiFi.SSID.2.SSID', ssid5g, 'xsd:string'],
+          ['Device.WiFi.AccessPoint.2.Security.KeyPassphrase', pass5, 'xsd:string']
+        );
+      }
 
       return await this.createTask(deviceId, {
         name: 'setParameterValues',
@@ -245,6 +282,8 @@ declare("Device.IP.Interface.1.IPv4Address.1.IPAddress", {value: 1});
     dns2?: string;
     wifiSsid?: string;
     wifiPassword?: string;
+    wifi5gSsid?: string;
+    wifi5gPassword?: string;
   }): Promise<{ success: boolean; error?: string }> {
     try {
       const cleanSn = params.serial.replace(/[-_]/g, '');
@@ -272,6 +311,25 @@ declare("Device.WiFi.SSID.1.SSID", {value: "${params.wifiSsid}"});
 declare("InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.KeyPassphrase", {value: "${params.wifiPassword}"});
 declare("InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.PreSharedKey.1.KeyPassphrase", {value: "${params.wifiPassword}"});
 declare("Device.WiFi.AccessPoint.1.Security.KeyPassphrase", {value: "${params.wifiPassword}"});
+`;
+      }
+
+      const ssid5 = params.wifi5gSsid;
+      const pass5 = params.wifi5gPassword || params.wifiPassword;
+      if (ssid5) {
+        script += `
+declare("InternetGatewayDevice.LANDevice.1.WLANConfiguration.2.SSID", {value: "${ssid5}"});
+declare("InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.SSID", {value: "${ssid5}"});
+declare("Device.WiFi.SSID.2.SSID", {value: "${ssid5}"});
+`;
+      }
+      if (pass5 && (ssid5 || params.wifi5gPassword)) {
+        script += `
+declare("InternetGatewayDevice.LANDevice.1.WLANConfiguration.2.KeyPassphrase", {value: "${pass5}"});
+declare("InternetGatewayDevice.LANDevice.1.WLANConfiguration.2.PreSharedKey.1.KeyPassphrase", {value: "${pass5}"});
+declare("InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.KeyPassphrase", {value: "${pass5}"});
+declare("InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.PreSharedKey.1.KeyPassphrase", {value: "${pass5}"});
+declare("Device.WiFi.AccessPoint.2.Security.KeyPassphrase", {value: "${pass5}"});
 `;
       }
 
@@ -388,6 +446,8 @@ declare("Device.WiFi.AccessPoint.1.Security.KeyPassphrase", {value: "${params.wi
       lastInform: item._lastInform,
       wifiSsid: getVal('InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.SSID') || getVal('Device.WiFi.SSID.1.SSID'),
       wifiPassword: getVal('InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.KeyPassphrase') || getVal('Device.WiFi.AccessPoint.1.Security.KeyPassphrase'),
+      wifi5gSsid: getVal('InternetGatewayDevice.LANDevice.1.WLANConfiguration.2.SSID') || getVal('InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.SSID') || getVal('Device.WiFi.SSID.2.SSID'),
+      wifi5gPassword: getVal('InternetGatewayDevice.LANDevice.1.WLANConfiguration.2.KeyPassphrase') || getVal('InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.KeyPassphrase') || getVal('Device.WiFi.AccessPoint.2.Security.KeyPassphrase'),
       wanMode: getVal('InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.AddressingType') || 'DHCP',
       wanIp: getVal('InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.ExternalIPAddress'),
       wanMask: getVal('InternetGatewayDevice.WANDevice.1.WANConnectionDevice.1.WANIPConnection.1.SubnetMask'),

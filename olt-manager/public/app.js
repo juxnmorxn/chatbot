@@ -10,35 +10,49 @@ let activeOltId = '';
 // ==========================================
 // SISTEMA DE TOASTS Y MODALES PERSONALIZADOS
 // ==========================================
+const recentToasts = new Map();
+
 function showToast(title, message = '', type = 'info', durationMs = 4000) {
   const container = document.getElementById('toastContainer');
   if (!container) return;
 
+  const key = `${type}:${title}:${message}`;
+  const now = Date.now();
+  if (recentToasts.has(key) && (now - recentToasts.get(key)) < 2500) {
+    return; // Evitar mensajes duplicados seguidos
+  }
+  recentToasts.set(key, now);
+  if (recentToasts.size > 20) {
+    for (const [k, t] of recentToasts.entries()) {
+      if (now - t > 10000) recentToasts.delete(k);
+    }
+  }
+
   const colors = {
     success: {
       border: 'border-emerald-500/40',
-      bg: 'bg-gray-950/90',
+      bg: 'bg-gray-950/95',
       iconBg: 'bg-emerald-500/20 text-emerald-400',
       icon: 'fa-solid fa-check',
       progress: 'bg-emerald-500'
     },
     error: {
       border: 'border-rose-500/40',
-      bg: 'bg-gray-950/90',
+      bg: 'bg-gray-950/95',
       iconBg: 'bg-rose-500/20 text-rose-400',
       icon: 'fa-solid fa-circle-exclamation',
       progress: 'bg-rose-500'
     },
     warning: {
       border: 'border-amber-500/40',
-      bg: 'bg-gray-950/90',
+      bg: 'bg-gray-950/95',
       iconBg: 'bg-amber-500/20 text-amber-400',
       icon: 'fa-solid fa-triangle-exclamation',
       progress: 'bg-amber-500'
     },
     info: {
       border: 'border-sky-500/40',
-      bg: 'bg-gray-950/90',
+      bg: 'bg-gray-950/95',
       iconBg: 'bg-sky-500/20 text-sky-400',
       icon: 'fa-solid fa-circle-info',
       progress: 'bg-sky-500'
@@ -47,13 +61,13 @@ function showToast(title, message = '', type = 'info', durationMs = 4000) {
 
   const style = colors[type] || colors.info;
   const toast = document.createElement('div');
-  toast.className = `glass-card ${style.border} ${style.bg} pointer-events-auto rounded-xl p-3.5 shadow-2xl flex items-start gap-3 transform transition-all duration-300 translate-x-12 opacity-0 overflow-hidden relative`;
+  toast.className = `glass-card ${style.border} ${style.bg} pointer-events-auto rounded-xl p-3.5 shadow-2xl flex items-start gap-3 transform transition-all duration-300 translate-x-12 opacity-0 overflow-hidden relative max-w-sm`;
 
   toast.innerHTML = `
     <div class="w-8 h-8 rounded-lg ${style.iconBg} flex items-center justify-center text-sm shrink-0 mt-0.5">
       <i class="${style.icon}"></i>
     </div>
-    <div class="flex-1 min-w-0 pr-3">
+    <div class="flex-1 min-w-0 pr-2">
       <div class="text-xs font-bold text-white tracking-wide">${title}</div>
       ${message ? `<div class="text-[11px] text-gray-300 mt-0.5 leading-snug break-words">${message}</div>` : ''}
     </div>
@@ -179,21 +193,37 @@ function showAlertModal(title, message, type = 'error') {
 }
 
 // ==========================================
-// NAVEGACIÓN ENTRE PESTAÑAS (TABS)
+// NAVEGACIÓN ENTRE PESTAÑAS (TABS CON PERSISTENCIA)
 // ==========================================
-function switchTab(tab) {
+function switchTab(tab, updateHash = true) {
+  if (!['olts', 'tunnels', 'unconfigured', 'onus'].includes(tab)) {
+    tab = 'onus';
+  }
   activeTab = tab;
-  
+
+  // Persistir en localStorage
+  try {
+    localStorage.setItem('cloudolt_active_tab', tab);
+  } catch {}
+
+  // Actualizar hash en la URL sin recargar
+  if (updateHash && window.location.hash !== '#' + tab) {
+    history.replaceState(null, '', '#' + tab);
+  }
+
   // Actualizar estilos de los botones de pestaña
   document.querySelectorAll('.nav-tab-btn').forEach(btn => {
     btn.classList.remove('bg-indigo-600', 'text-white', 'shadow-indigo-500/30', 'shadow-md');
     btn.classList.add('text-gray-400', 'hover:text-white', 'hover:bg-gray-800/50');
   });
-  
+
   const activeBtn = document.getElementById('tab-btn-' + tab);
   if (activeBtn) {
     activeBtn.classList.remove('text-gray-400', 'hover:text-white', 'hover:bg-gray-800/50');
     activeBtn.classList.add('bg-indigo-600', 'text-white', 'shadow-indigo-500/30', 'shadow-md');
+    try {
+      activeBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+    } catch {}
   }
 
   // Mostrar / ocultar paneles
@@ -213,13 +243,37 @@ function switchTab(tab) {
   if (tab === 'onus') loadOnus();
 }
 
+function refreshCurrentTab() {
+  const iconD = document.getElementById('desktopRefreshIcon');
+  const iconM = document.getElementById('mobileRefreshIcon');
+  if (iconD) iconD.classList.add('fa-spin');
+  if (iconM) iconM.classList.add('fa-spin');
+  setTimeout(() => {
+    if (iconD) iconD.classList.remove('fa-spin');
+    if (iconM) iconM.classList.remove('fa-spin');
+  }, 1000);
+
+  if (activeTab === 'tunnels') loadTunnels(true);
+  else if (activeTab === 'unconfigured') refreshAutofind();
+  else if (activeTab === 'onus') loadOnus(true);
+  else loadOlts(true);
+}
+
 // ==========================================
 // GESTIÓN DE TÚNELES VPN (RouterOS v7 WireGuard)
 // ==========================================
-async function loadTunnels() {
+let lastTunnelsJson = '';
+
+async function loadTunnels(force = false) {
   try {
     const res = await fetch('/api/tunnels');
-    tunnels = await res.json();
+    const data = await res.json();
+    const str = JSON.stringify(data);
+    if (!force && str === lastTunnelsJson) {
+      return; // No hubo cambios, mantener el DOM intacto
+    }
+    lastTunnelsJson = str;
+    tunnels = data;
     renderTunnelsTable();
     populateTunnelDropdown();
   } catch (err) {
@@ -230,7 +284,9 @@ async function loadTunnels() {
 function renderTunnelsTable() {
   const tbody = document.getElementById('tunnelsTableBody');
   const countBadge = document.getElementById('tunnelsCountBadge');
+  const navBadge = document.getElementById('tunnelsNavCountBadge');
   if (countBadge) countBadge.innerText = `${tunnels.length} túneles`;
+  if (navBadge) navBadge.innerText = tunnels.length;
 
   if (!tbody) return;
 
@@ -415,10 +471,18 @@ async function deleteTunnel(id) {
 // ==========================================
 // GESTIÓN DE OLTS (Tabla principal - Screenshot 2)
 // ==========================================
-async function loadOlts() {
+let lastOltsJson = '';
+
+async function loadOlts(force = false) {
   try {
     const res = await fetch('/api/olts');
-    olts = await res.json();
+    const data = await res.json();
+    const str = JSON.stringify(data);
+    if (!force && str === lastOltsJson) {
+      return; // Sin cambios, no parpadear
+    }
+    lastOltsJson = str;
+    olts = data;
     renderOltsTable();
     populateTunnelDropdown();
   } catch (err) {
@@ -429,7 +493,9 @@ async function loadOlts() {
 function renderOltsTable() {
   const tbody = document.getElementById('oltsTableBody');
   const countBadge = document.getElementById('oltsCountBadge');
+  const navBadge = document.getElementById('oltsNavCountBadge');
   if (countBadge) countBadge.innerText = `${olts.length} OLTs`;
+  if (navBadge) navBadge.innerText = olts.length;
 
   if (!tbody) return;
 
@@ -771,6 +837,14 @@ function onAutofindOltChange() {
   refreshAutofind();
 }
 
+function autoFill5gSsid() {
+  const s24 = document.getElementById('modalWifiSsid')?.value || '';
+  const s5 = document.getElementById('modalWifi5gSsid');
+  if (s5 && (!s5.value || s5.value.endsWith('_5G'))) {
+    s5.value = s24 ? (s24 + '_5G') : '';
+  }
+}
+
 function openProvisionModal(sn, port) {
   const olt = olts.find(o => o.id === activeOltId);
   document.getElementById('modalSn').value = sn;
@@ -830,8 +904,14 @@ function openProvisionModal(sn, port) {
   const wifiInput = document.getElementById('modalWifiSsid');
   if (wifiInput) wifiInput.value = `Fibra-${cleanSn.slice(-4)}`;
 
+  const wifi5gInput = document.getElementById('modalWifi5gSsid');
+  if (wifi5gInput) wifi5gInput.value = `Fibra-${cleanSn.slice(-4)}_5G`;
+
   const wifiPassInput = document.getElementById('modalWifiPassword');
   if (wifiPassInput) wifiPassInput.value = '';
+
+  const wifi5gPassInput = document.getElementById('modalWifi5gPassword');
+  if (wifi5gPassInput) wifi5gPassInput.value = '';
 
   document.getElementById('provisionModal').classList.remove('hidden');
 }
@@ -866,7 +946,9 @@ async function submitProvision(e) {
     dns1: (document.getElementById('modalDns1')?.value || '8.8.8.8').trim(),
     dns2: (document.getElementById('modalDns2')?.value || '8.8.4.4').trim(),
     wifiSsid: (document.getElementById('modalWifiSsid')?.value || '').trim(),
-    wifiPassword: (document.getElementById('modalWifiPassword')?.value || '').trim()
+    wifiPassword: (document.getElementById('modalWifiPassword')?.value || '').trim(),
+    wifiSsid5g: (document.getElementById('modalWifi5gSsid')?.value || '').trim(),
+    wifiPassword5g: (document.getElementById('modalWifi5gPassword')?.value || '').trim()
   };
 
   try {
@@ -1116,12 +1198,15 @@ async function viewOnuDetail(oltId, gponPort, onuId, sn, encodedName, vlan) {
     name: clientName,
     vlan: vlan || 400,
     realWifiPass: '••••••••',
+    realWifi5gPass: '••••••••',
     wifiVisible: false,
+    wifi5gVisible: false,
     isActive: true
   };
 
-  // Buscar datos ópticos en cache
+  // Buscar datos en cache
   const cached = configuredOnus.find(o => o.sn === sn || (o.gponPort === gponPort && o.onuId === onuId));
+  currentViewOnu.cached = cached;
 
   // Poblar UI inicial
   document.getElementById('viewOnuTitleName').innerText = clientName;
@@ -1148,23 +1233,43 @@ async function viewOnuDetail(oltId, gponPort, onuId, sn, encodedName, vlan) {
   document.getElementById('viewOnuRxDbm').innerText = rx;
   document.getElementById('viewOnuTxDbm').innerText = tx;
 
-  // Barra de señal visual
+  // Barra de señal visual y diagnóstico explicativo
   const rxNum = parseFloat(rx);
   const bar = document.getElementById('viewOnuSignalBar');
+  const rxStatus = document.getElementById('viewOnuRxStatus');
   if (bar) {
-    if (!isNaN(rxNum) && rxNum >= -27 && rxNum <= -14) {
+    if (!isNaN(rxNum) && rxNum >= -24.5 && rxNum <= -14) {
       bar.className = 'bg-emerald-400 h-1.5 rounded-full';
       bar.style.width = '85%';
-    } else if (!isNaN(rxNum) && rxNum < -27) {
-      bar.className = 'bg-rose-400 h-1.5 rounded-full';
-      bar.style.width = '35%';
-    } else {
+      if (rxStatus) {
+        rxStatus.innerText = 'ÓPTIMA';
+        rxStatus.className = 'text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold';
+      }
+    } else if (!isNaN(rxNum) && rxNum >= -27.0 && rxNum < -24.5) {
       bar.className = 'bg-amber-400 h-1.5 rounded-full';
-      bar.style.width = '60%';
+      bar.style.width = '55%';
+      if (rxStatus) {
+        rxStatus.innerText = 'REGULAR';
+        rxStatus.className = 'text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold';
+      }
+    } else if (!isNaN(rxNum) && rxNum < -27.0) {
+      bar.className = 'bg-rose-500 h-1.5 rounded-full';
+      bar.style.width = '25%';
+      if (rxStatus) {
+        rxStatus.innerText = 'CRÍTICA';
+        rxStatus.className = 'text-[9px] px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 font-bold';
+      }
+    } else {
+      bar.className = 'bg-sky-400 h-1.5 rounded-full';
+      bar.style.width = '70%';
+      if (rxStatus) {
+        rxStatus.innerText = 'NORMAL';
+        rxStatus.className = 'text-[9px] px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-300 font-bold';
+      }
     }
   }
 
-  // Valores reales verificados de WAN según MikroTik y WispHub
+  // Valores de WAN según base de datos y MikroTik
   const realIp = cached?.ip || (
     onuId === 0 ? '172.19.52.3' :
     onuId === 1 ? '172.19.52.10' :
@@ -1185,29 +1290,36 @@ async function viewOnuDetail(oltId, gponPort, onuId, sn, encodedName, vlan) {
   document.getElementById('viewWanGw').innerText = realGw;
   document.getElementById('viewWanIpv6Prefix').innerText = 'DHCPv6-PD (Auto)';
 
-  // Mostrar Wi-Fi guardado en base de datos si existe
+  // Wi-Fi 2.4 GHz inicial desde DB
   const savedSsid = cached?.wifi_ssid;
   const savedPass = cached?.wifi_password;
-  if (savedSsid) {
-    document.getElementById('viewWifiSsid').innerText = savedSsid;
-  } else {
-    document.getElementById('viewWifiSsid').innerText = 'Sin registrar (Usa "Cambiar Wi-Fi")';
-  }
+  document.getElementById('viewWifiSsid').innerText = savedSsid || 'Sin sincronizar aún';
   if (savedPass) {
     currentViewOnu.realWifiPass = savedPass;
-    if (currentViewOnu.wifiVisible) {
-      document.getElementById('viewWifiPass').innerText = savedPass;
-    } else {
-      document.getElementById('viewWifiPass').innerText = '••••••••••••';
-    }
+    document.getElementById('viewWifiPass').innerText = '••••••••••••';
   } else {
     currentViewOnu.realWifiPass = null;
     document.getElementById('viewWifiPass').innerText = '••••••••••••';
   }
 
+  // Wi-Fi 5 GHz inicial desde DB
+  const saved5gSsid = cached?.wifi_ssid_5g;
+  const saved5gPass = cached?.wifi_password_5g || savedPass;
+  const el5gSsid = document.getElementById('viewWifi5gSsid');
+  if (el5gSsid) el5gSsid.innerText = saved5gSsid || (savedSsid ? (savedSsid + '_5G') : 'Sin sincronizar aún');
+  if (saved5gPass) {
+    currentViewOnu.realWifi5gPass = saved5gPass;
+    const el5gPass = document.getElementById('viewWifi5gPass');
+    if (el5gPass) el5gPass.innerText = '••••••••••••';
+  } else {
+    currentViewOnu.realWifi5gPass = null;
+    const el5gPass = document.getElementById('viewWifi5gPass');
+    if (el5gPass) el5gPass.innerText = '••••••••••••';
+  }
+
   document.getElementById('viewOnuModal').classList.remove('hidden');
 
-  // Consultar datos reales de GenieACS TR-069
+  // Consultar datos reales en tiempo real desde GenieACS TR-069
   try {
     const res = await fetch(`/api/tr069/devices/${encodeURIComponent(sn)}`);
     const data = await res.json();
@@ -1221,6 +1333,7 @@ async function viewOnuDetail(oltId, gponPort, onuId, sn, encodedName, vlan) {
       if (dev.wanGateway) document.getElementById('viewWanGw').innerText = dev.wanGateway;
       if (dev.ipv6Enabled) document.getElementById('viewWanProtocol').innerText = 'Dual stack IPv4/IPv6';
 
+      // 2.4 GHz
       if (dev.wifiSsid) {
         document.getElementById('viewWifiSsid').innerText = dev.wifiSsid;
       }
@@ -1228,6 +1341,18 @@ async function viewOnuDetail(oltId, gponPort, onuId, sn, encodedName, vlan) {
         currentViewOnu.realWifiPass = dev.wifiPassword;
         if (currentViewOnu.wifiVisible) {
           document.getElementById('viewWifiPass').innerText = dev.wifiPassword;
+        }
+      }
+
+      // 5 GHz
+      if (dev.wifi5gSsid && el5gSsid) {
+        el5gSsid.innerText = dev.wifi5gSsid;
+      }
+      if (dev.wifi5gPassword) {
+        currentViewOnu.realWifi5gPass = dev.wifi5gPassword;
+        if (currentViewOnu.wifi5gVisible) {
+          const el5gPass = document.getElementById('viewWifi5gPass');
+          if (el5gPass) el5gPass.innerText = dev.wifi5gPassword;
         }
       }
     }
@@ -1240,51 +1365,53 @@ function closeViewOnuModal() {
   document.getElementById('viewOnuModal')?.classList.add('hidden');
 }
 
-async function renameCurrentOnu() {
+function toggleWifiPassVisibility(band = '2.4g') {
   if (!currentViewOnu) return;
-  const currentName = document.getElementById('viewOnuTitleName')?.innerText || '';
-  const newName = prompt('Ingresa el nuevo nombre o descripción para esta ONT (se guardará en la OLT y en CloudOLT):', currentName);
-  if (!newName || newName.trim() === '' || newName.trim() === currentName) return;
 
-  try {
-    const res = await fetch('/api/onus/rename', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        oltId: currentViewOnu.oltId,
-        gponPort: currentViewOnu.gponPort,
-        onuId: currentViewOnu.onuId,
-        serial: currentViewOnu.sn,
-        name: newName.trim()
-      })
-    });
-    const data = await res.json();
-    if (data.success) {
-      showToast('Nombre Actualizado', `ONT renombrada a "${data.name}" con éxito en OLT y sistema`, 'success');
-      document.getElementById('viewOnuTitleName').innerText = data.name;
-      const cached = configuredOnus.find(o => o.sn === currentViewOnu.sn);
-      if (cached) cached.name = data.name;
-      loadOnus();
+  if (band === '5g') {
+    currentViewOnu.wifi5gVisible = !currentViewOnu.wifi5gVisible;
+    const passEl = document.getElementById('viewWifi5gPass');
+    const eyeEl = document.getElementById('btnToggleWifi5gEye');
+    if (currentViewOnu.wifi5gVisible) {
+      if (passEl) passEl.innerText = currentViewOnu.realWifi5gPass || currentViewOnu.realWifiPass || 'No reportada aún';
+      if (eyeEl) eyeEl.className = 'fa-solid fa-eye-slash text-purple-400';
     } else {
-      showToast('Error', data.error || 'No se pudo actualizar el nombre', 'error');
+      if (passEl) passEl.innerText = '••••••••••••';
+      if (eyeEl) eyeEl.className = 'fa-solid fa-eye';
     }
-  } catch (err) {
-    showToast('Error de Red', 'Fallo de conexión al renombrar', 'error');
+  } else {
+    currentViewOnu.wifiVisible = !currentViewOnu.wifiVisible;
+    const passEl = document.getElementById('viewWifiPass');
+    const eyeEl = document.getElementById('btnToggleWifiEye');
+    if (currentViewOnu.wifiVisible) {
+      if (passEl) passEl.innerText = currentViewOnu.realWifiPass || 'No reportada aún';
+      if (eyeEl) eyeEl.className = 'fa-solid fa-eye-slash text-sky-400';
+    } else {
+      if (passEl) passEl.innerText = '••••••••••••';
+      if (eyeEl) eyeEl.className = 'fa-solid fa-eye';
+    }
   }
 }
 
-function toggleWifiPassVisibility() {
-  if (!currentViewOnu) return;
-  currentViewOnu.wifiVisible = !currentViewOnu.wifiVisible;
-  const passEl = document.getElementById('viewWifiPass');
-  const eyeEl = document.getElementById('btnToggleWifiEye');
-  if (currentViewOnu.wifiVisible) {
-    passEl.innerText = currentViewOnu.realWifiPass || 'No reportada aún (usa "Cambiar Wi-Fi")';
-    eyeEl.className = 'fa-solid fa-eye-slash text-sky-400';
-  } else {
-    passEl.innerText = '••••••••••••';
-    eyeEl.className = 'fa-solid fa-eye';
+function copyWifiSsid(band = '2.4g') {
+  const el = band === '5g' ? document.getElementById('viewWifi5gSsid') : document.getElementById('viewWifiSsid');
+  const text = el ? el.innerText.trim() : '';
+  if (!text || text.includes('Consultando') || text.includes('Sin sincronizar')) {
+    showToast('Aviso', 'No hay SSID configurado para copiar', 'warning');
+    return;
   }
+  navigator.clipboard.writeText(text);
+  showToast('SSID Copiado', `"${text}" copiado al portapapeles`, 'success', 2500);
+}
+
+function copyWifiPass(band = '2.4g') {
+  const pass = band === '5g' ? (currentViewOnu?.realWifi5gPass || currentViewOnu?.realWifiPass) : currentViewOnu?.realWifiPass;
+  if (!pass || pass.includes('••••')) {
+    showToast('Aviso', 'No hay contraseña disponible aún. Usa "Cambiar Wi-Fi".', 'warning');
+    return;
+  }
+  navigator.clipboard.writeText(pass);
+  showToast('Contraseña Copiada', 'Clave Wi-Fi copiada al portapapeles', 'success', 2500);
 }
 
 // ==========================================
@@ -1418,18 +1545,66 @@ async function submitUpdateWan(e) {
 }
 
 // ==========================================
-// MODAL 7: CAMBIO DE WI-FI (SSID / PASSWORD)
+// MODAL 7: CAMBIO DE WI-FI DUAL-BAND (2.4 GHz & 5 GHz)
 // ==========================================
 function openChangeWifiModal() {
   if (!currentViewOnu) return;
-  const currentSsid = document.getElementById('viewWifiSsid')?.innerText || 'CloudWare_Fibra';
-  document.getElementById('wifiModalSsid').value = (currentSsid && !currentSsid.includes('Sin registrar') && !currentSsid.includes('Consultando')) ? currentSsid : 'CloudWare_Fibra';
-  document.getElementById('wifiModalPass').value = '';
+  const currentSsid = document.getElementById('viewWifiSsid')?.innerText || '';
+  const current5gSsid = document.getElementById('viewWifi5gSsid')?.innerText || '';
+
+  const valid2g = (currentSsid && !currentSsid.includes('Sin sincronizar') && !currentSsid.includes('Consultando') && !currentSsid.includes('Sin registrar')) ? currentSsid : 'CloudWare_Fibra';
+  document.getElementById('wifiModalSsid').value = valid2g;
+
+  const valid5g = (current5gSsid && !current5gSsid.includes('Sin sincronizar') && !current5gSsid.includes('Consultando'))
+    ? current5gSsid
+    : (valid2g ? (valid2g.endsWith('_5G') ? valid2g : (valid2g + '_5G')) : 'CloudWare_Fibra_5G');
+
+  const el5g = document.getElementById('wifiModal5gSsid');
+  if (el5g) el5g.value = valid5g;
+
+  const pass = currentViewOnu.realWifiPass || '';
+  const pass5g = currentViewOnu.realWifi5gPass || pass;
+  document.getElementById('wifiModalPass').value = pass;
+
+  const pass5gInput = document.getElementById('wifiModal5gPass');
+  const syncCb = document.getElementById('wifiModalSyncPass');
+  if (syncCb) syncCb.checked = (pass === pass5g || !currentViewOnu.realWifi5gPass);
+  if (pass5gInput) {
+    pass5gInput.value = pass5g;
+    pass5gInput.disabled = syncCb ? syncCb.checked : false;
+    if (syncCb && syncCb.checked) pass5gInput.classList.add('opacity-50');
+    else pass5gInput.classList.remove('opacity-50');
+  }
+
   document.getElementById('changeWifiModal')?.classList.remove('hidden');
 }
 
 function closeChangeWifiModal() {
   document.getElementById('changeWifiModal')?.classList.add('hidden');
+}
+
+function onToggleSyncPass() {
+  const syncCb = document.getElementById('wifiModalSyncPass');
+  const pass2g = document.getElementById('wifiModalPass');
+  const pass5g = document.getElementById('wifiModal5gPass');
+  if (!syncCb || !pass5g || !pass2g) return;
+  if (syncCb.checked) {
+    pass5g.value = pass2g.value;
+    pass5g.disabled = true;
+    pass5g.classList.add('opacity-50');
+  } else {
+    pass5g.disabled = false;
+    pass5g.classList.remove('opacity-50');
+  }
+}
+
+function onWifiPassInput() {
+  const syncCb = document.getElementById('wifiModalSyncPass');
+  const pass2g = document.getElementById('wifiModalPass');
+  const pass5g = document.getElementById('wifiModal5gPass');
+  if (syncCb?.checked && pass2g && pass5g) {
+    pass5g.value = pass2g.value;
+  }
 }
 
 async function submitChangeWifi(e) {
@@ -1438,6 +1613,10 @@ async function submitChangeWifi(e) {
 
   const ssid = document.getElementById('wifiModalSsid').value.trim();
   const password = document.getElementById('wifiModalPass').value.trim();
+  const ssid5g = document.getElementById('wifiModal5gSsid')?.value.trim() || (ssid + '_5G');
+  const syncCb = document.getElementById('wifiModalSyncPass');
+  const password5g = (syncCb && syncCb.checked) ? password : (document.getElementById('wifiModal5gPass')?.value.trim() || password);
+
   const btn = document.getElementById('btnSubmitWifiModal');
   const origText = btn.innerHTML;
 
@@ -1451,21 +1630,34 @@ async function submitChangeWifi(e) {
       body: JSON.stringify({
         ssid,
         password,
+        ssid5g,
+        password5g,
         oltId: currentViewOnu.oltId,
         onuId: currentViewOnu.onuId
       })
     });
     const data = await res.json();
     if (data.success) {
-      showToast('Wi-Fi Guardado', `Red: "${ssid}" guardada correctamente para esta ONT`, 'success', 5000);
+      showToast('Wi-Fi Dual-Band Guardado', `Redes 2.4G ("${ssid}") y 5G ("${ssid5g}") sincronizadas con la ONT`, 'success', 5000);
       document.getElementById('viewWifiSsid').innerText = ssid;
+      const el5g = document.getElementById('viewWifi5gSsid');
+      if (el5g) el5g.innerText = ssid5g;
+
       currentViewOnu.realWifiPass = password;
+      currentViewOnu.realWifi5gPass = password5g;
+
       if (currentViewOnu.cached) {
         currentViewOnu.cached.wifi_ssid = ssid;
         currentViewOnu.cached.wifi_password = password;
+        currentViewOnu.cached.wifi_ssid_5g = ssid5g;
+        currentViewOnu.cached.wifi_password_5g = password5g;
       }
       if (currentViewOnu.wifiVisible) {
         document.getElementById('viewWifiPass').innerText = password;
+      }
+      if (currentViewOnu.wifi5gVisible) {
+        const el5gPass = document.getElementById('viewWifi5gPass');
+        if (el5gPass) el5gPass.innerText = password5g;
       }
       closeChangeWifiModal();
     } else {
@@ -1567,7 +1759,14 @@ async function actionViewOnuLinkTr069() {
     const data = await res.json();
     if (data.success) {
       showToast('¡TR-069 Vinculado!', 'Perfil TR-069 y Preset de GenieACS aplicados a la ONT', 'success', 5000);
-      viewOnu(currentViewOnu.sn);
+      viewOnuDetail(
+        currentViewOnu.oltId,
+        currentViewOnu.gponPort,
+        currentViewOnu.onuId,
+        currentViewOnu.sn,
+        encodeURIComponent(currentViewOnu.name),
+        currentViewOnu.vlan
+      );
     } else {
       showToast('Aviso TR-069', data.error || 'No se pudo vincular TR-069', 'warning');
     }
@@ -1727,6 +1926,7 @@ async function promptRebootOnt(oltId, gponPort, onuId, clientName) {
 // EXPONER GLOBALMENTE EN WINDOW
 // ==========================================
 window.switchTab = switchTab;
+window.refreshCurrentTab = refreshCurrentTab;
 window.loadTunnels = loadTunnels;
 window.openCreateTunnelModal = openCreateTunnelModal;
 window.editTunnel = editTunnel;
@@ -1759,12 +1959,16 @@ window.viewOnuDetail = viewOnuDetail;
 window.closeViewOnuModal = closeViewOnuModal;
 window.renameCurrentOnu = renameCurrentOnu;
 window.toggleWifiPassVisibility = toggleWifiPassVisibility;
+window.copyWifiSsid = copyWifiSsid;
+window.copyWifiPass = copyWifiPass;
 window.openUpdateWanModal = openUpdateWanModal;
 window.closeUpdateWanModal = closeUpdateWanModal;
 window.toggleWanFields = toggleWanFields;
 window.submitUpdateWan = submitUpdateWan;
 window.openChangeWifiModal = openChangeWifiModal;
 window.closeChangeWifiModal = closeChangeWifiModal;
+window.onToggleSyncPass = onToggleSyncPass;
+window.onWifiPassInput = onWifiPassInput;
 window.submitChangeWifi = submitChangeWifi;
 window.openChangePasswordModal = openChangePasswordModal;
 window.closeChangeWebPassModal = closeChangeWebPassModal;
@@ -1778,22 +1982,41 @@ window.actionViewOnuDelete = actionViewOnuDelete;
 
 window.refreshAutofind = refreshAutofind;
 window.onAutofindOltChange = onAutofindOltChange;
+window.autoFill5gSsid = autoFill5gSsid;
 window.openProvisionModal = openProvisionModal;
 window.closeProvisionModal = closeProvisionModal;
 window.submitProvision = submitProvision;
 
-// Carga inicial y sondeo en tiempo real
-document.addEventListener('DOMContentLoaded', () => {
-  loadTunnels();
-  loadOlts();
-  loadOnus();
+// Carga inicial y persistencia de pantalla exacta al recargar (F5)
+function getInitialTab() {
+  const hash = (window.location.hash || '').replace('#', '').trim().toLowerCase();
+  const validTabs = ['olts', 'tunnels', 'unconfigured', 'onus'];
+  if (validTabs.includes(hash)) return hash;
+  try {
+    const saved = localStorage.getItem('cloudolt_active_tab');
+    if (saved && validTabs.includes(saved)) return saved;
+  } catch {}
+  return 'onus'; // Tab de mayor utilidad por defecto
+}
 
-  // Actualización en tiempo real sin recargar la página (sondeo cada 2 segundos)
+document.addEventListener('DOMContentLoaded', () => {
+  const initialTab = getInitialTab();
+  switchTab(initialTab, true);
+
+  // Escuchar cambios de hash por navegación directa o botones
+  window.addEventListener('hashchange', () => {
+    const currentHash = (window.location.hash || '').replace('#', '').trim().toLowerCase();
+    if (['olts', 'tunnels', 'unconfigured', 'onus'].includes(currentHash) && currentHash !== activeTab) {
+      switchTab(currentHash, false);
+    }
+  });
+
+  // Sondeo inteligente sin parpadeos cada 4 segundos
   setInterval(() => {
     if (activeTab === 'tunnels') {
       loadTunnels();
     } else if (activeTab === 'olts') {
       loadOlts();
     }
-  }, 2000);
+  }, 4000);
 });

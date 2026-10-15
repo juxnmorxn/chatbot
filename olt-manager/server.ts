@@ -91,71 +91,90 @@ app.get('/', async (req: Request, res: Response) => {
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
     body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #080c14; color: #f3f4f6; }
-    .glass-card { background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(14px); border: 1px solid rgba(255, 255, 255, 0.08); }
+    .glass-card { background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(14px); border: 1px solid rgba(255, 255, 255, 0.08); }
     .glass-card-hover:hover { border-color: rgba(99, 102, 241, 0.5); transform: translateY(-1px); transition: all 0.2s ease; }
     .font-mono { font-family: 'JetBrains Mono', monospace; }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.4); }
+    ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.25); }
+    .table-min-w { min-width: 640px; }
   </style>
 </head>
-<body class="min-h-screen flex flex-col">
+<body class="min-h-screen flex flex-col antialiased">
 
-  <!-- Header Superior (SmartOLT Style) -->
-  <header class="glass-card sticky top-0 z-50 px-6 py-3.5 border-b border-gray-800/80">
-    <div class="max-w-7xl mx-auto flex items-center justify-between">
+  <!-- Header Superior (SmartOLT Style 100% Adaptativo) -->
+  <header class="glass-card sticky top-0 z-50 px-3 sm:px-6 py-2.5 sm:py-3.5 border-b border-gray-800/80">
+    <div class="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-2.5">
       
-      <!-- Brand & Navigation Tabs -->
-      <div class="flex items-center space-x-6">
-        <div class="flex items-center space-x-3 cursor-pointer" onclick="switchTab('olts')">
-          <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-cyan-400 flex items-center justify-center shadow-lg shadow-indigo-500/25">
-            <i class="fa-solid fa-network-wired text-white text-base"></i>
+      <!-- Top Row: Brand & Live indicator / Quick actions on mobile -->
+      <div class="flex items-center justify-between gap-4">
+        <div class="flex items-center space-x-2.5 cursor-pointer shrink-0" onclick="switchTab('onus')">
+          <div class="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-cyan-400 flex items-center justify-center shadow-lg shadow-indigo-500/25">
+            <i class="fa-solid fa-network-wired text-white text-sm sm:text-base"></i>
           </div>
           <div>
-            <h1 class="text-base font-extrabold tracking-tight text-white flex items-center gap-1.5">
-              CloudOLT <span class="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 font-bold uppercase tracking-wider">Core v3.6</span>
+            <h1 class="text-sm sm:text-base font-extrabold tracking-tight text-white flex items-center gap-1.5">
+              CloudOLT <span class="text-[9px] sm:text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 font-bold uppercase tracking-wider">v3.7 PRO</span>
             </h1>
           </div>
         </div>
 
-        <!-- Navigation Tabs -->
-        <nav class="hidden md:flex items-center space-x-1.5 bg-gray-950/80 p-1 rounded-xl border border-gray-800">
-          <button id="tab-btn-olts" onclick="switchTab('olts')" class="nav-tab-btn px-3 py-1.5 rounded-lg text-xs font-bold transition bg-indigo-600 text-white shadow-md shadow-indigo-500/30 flex items-center gap-1.5">
-            <i class="fa-solid fa-server"></i> OLTs
+        <!-- Quick actions visible on mobile header -->
+        <div class="flex items-center gap-1.5 md:hidden">
+          <button onclick="openOltModal()" class="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow-sm transition">
+            <i class="fa-solid fa-plus text-[10px]"></i> OLT
           </button>
-          <button id="tab-btn-onus" onclick="switchTab('onus')" class="nav-tab-btn px-3 py-1.5 rounded-lg text-xs font-medium text-gray-400 hover:text-white hover:bg-gray-800/50 transition flex items-center gap-1.5">
-            <i class="fa-solid fa-network-wired text-sky-400"></i> ONUs
-            <span id="onusCountBadge" class="px-1.5 py-0.2 rounded-full bg-sky-500/20 text-sky-300 text-[10px] font-bold">0</span>
+          <button onclick="refreshCurrentTab()" class="px-2 py-1.5 bg-gray-900 hover:bg-gray-800 border border-gray-800 text-gray-300 rounded-lg text-xs transition" title="Actualizar datos">
+            <i class="fa-solid fa-rotate" id="mobileRefreshIcon"></i>
           </button>
-          <button id="tab-btn-unconfigured" onclick="switchTab('unconfigured')" class="nav-tab-btn px-3 py-1.5 rounded-lg text-xs font-medium text-gray-400 hover:text-white hover:bg-gray-800/50 transition flex items-center gap-1.5">
-            <i class="fa-solid fa-satellite-dish"></i> Unconfigured
-            <span id="unconfiguredBadge" class="px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-bold">0</span>
-          </button>
-          <button id="tab-btn-tunnels" onclick="switchTab('tunnels')" class="nav-tab-btn px-3 py-1.5 rounded-lg text-xs font-medium text-gray-400 hover:text-white hover:bg-gray-800/50 transition flex items-center gap-1.5">
-            <i class="fa-solid fa-shield-halved text-emerald-400"></i> VPN Tunnels
-            <span id="tunnelsCountBadge" class="text-[10px] text-gray-500 font-mono">0</span>
-          </button>
-        </nav>
+        </div>
       </div>
 
-      <!-- Action Buttons -->
-      <div class="flex items-center space-x-2.5">
-        <div class="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-gray-950/70 border border-emerald-500/20 text-[11px] text-emerald-300">
-          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-          <span>En vivo (2s)</span>
-        </div>
-        <button onclick="openCreateTunnelModal()" class="px-3 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 rounded-xl text-xs font-bold flex items-center gap-1.5 transition">
-          <i class="fa-solid fa-plus text-emerald-400"></i> Create a new tunnel
+      <!-- Navigation Tabs (Scrollable on mobile, beautiful everywhere) -->
+      <nav class="flex items-center space-x-1 sm:space-x-1.5 bg-gray-950/90 p-1 rounded-xl border border-gray-800/80 overflow-x-auto no-scrollbar w-full md:w-auto shadow-inner">
+        <button id="tab-btn-onus" onclick="switchTab('onus')" class="nav-tab-btn px-3 py-1.5 rounded-lg text-xs font-bold transition bg-indigo-600 text-white shadow-md shadow-indigo-500/30 flex items-center gap-1.5 shrink-0">
+          <i class="fa-solid fa-users text-sky-400"></i> ONUs Abonados
+          <span id="onusCountBadge" class="px-1.5 py-0.2 rounded-full bg-sky-500/20 text-sky-300 text-[10px] font-bold">0</span>
         </button>
-        <button onclick="openOltModal()" class="px-3.5 py-2 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-indigo-500/25 transition">
+        <button id="tab-btn-unconfigured" onclick="switchTab('unconfigured')" class="nav-tab-btn px-3 py-1.5 rounded-lg text-xs font-medium text-gray-400 hover:text-white hover:bg-gray-800/50 transition flex items-center gap-1.5 shrink-0">
+          <i class="fa-solid fa-satellite-dish text-amber-400"></i> Unconfigured
+          <span id="unconfiguredBadge" class="px-1.5 py-0.2 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-bold">0</span>
+        </button>
+        <button id="tab-btn-olts" onclick="switchTab('olts')" class="nav-tab-btn px-3 py-1.5 rounded-lg text-xs font-medium text-gray-400 hover:text-white hover:bg-gray-800/50 transition flex items-center gap-1.5 shrink-0">
+          <i class="fa-solid fa-server text-indigo-400"></i> OLTs
+          <span id="oltsNavCountBadge" class="px-1.5 py-0.2 rounded-full bg-gray-800 text-gray-300 text-[10px] font-bold">0</span>
+        </button>
+        <button id="tab-btn-tunnels" onclick="switchTab('tunnels')" class="nav-tab-btn px-3 py-1.5 rounded-lg text-xs font-medium text-gray-400 hover:text-white hover:bg-gray-800/50 transition flex items-center gap-1.5 shrink-0">
+          <i class="fa-solid fa-shield-halved text-emerald-400"></i> Túneles VPN
+          <span id="tunnelsNavCountBadge" class="text-[10px] text-gray-500 font-mono">0</span>
+        </button>
+      </nav>
+
+      <!-- Desktop Action Buttons -->
+      <div class="hidden md:flex items-center space-x-2">
+        <div class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-gray-950/70 border border-emerald-500/20 text-[11px] text-emerald-300">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span class="font-mono">En vivo</span>
+        </div>
+        <button onclick="openCreateTunnelModal()" class="px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 rounded-xl text-xs font-bold flex items-center gap-1.5 transition">
+          <i class="fa-solid fa-plus text-emerald-400"></i> Nuevo Túnel
+        </button>
+        <button onclick="openOltModal()" class="px-3.5 py-1.5 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-indigo-500/25 transition">
           <i class="fa-solid fa-plus"></i> Add OLT
         </button>
-        <button onclick="activeTab === 'tunnels' ? loadTunnels() : (activeTab === 'unconfigured' ? refreshAutofind() : (activeTab === 'onus' ? loadOnus(true) : loadOlts()))" class="px-2.5 py-2 bg-gray-900 hover:bg-gray-800 border border-gray-800 text-gray-300 rounded-xl text-xs transition" title="Actualizar datos">
-          <i class="fa-solid fa-rotate"></i>
+        <button onclick="refreshCurrentTab()" class="px-2.5 py-1.5 bg-gray-900 hover:bg-gray-800 border border-gray-800 text-gray-300 rounded-xl text-xs transition" title="Actualizar datos">
+          <i class="fa-solid fa-rotate" id="desktopRefreshIcon"></i>
         </button>
       </div>
+
     </div>
   </header>
 
   <!-- Contenedor Principal -->
-  <main class="flex-1 max-w-7xl w-full mx-auto p-6 space-y-6">
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 space-y-6">
 
     <!-- ========================================== -->
     <!-- VISTA 1: TABLA PRINCIPAL DE OLTS (Screenshot 2) -->
@@ -176,7 +195,7 @@ app.get('/', async (req: Request, res: Response) => {
 
       <div class="glass-card rounded-2xl overflow-hidden border border-gray-800">
         <div class="overflow-x-auto">
-          <table class="w-full text-left border-collapse">
+          <table class="w-full text-left border-collapse table-min-w">
             <thead>
               <tr class="bg-gray-950/60 border-b border-gray-800 text-[11px] font-bold text-gray-400 uppercase tracking-wider">
                 <th class="py-3 px-4 w-20">View</th>
@@ -226,7 +245,7 @@ app.get('/', async (req: Request, res: Response) => {
 
       <div class="glass-card rounded-2xl overflow-hidden border border-gray-800">
         <div class="overflow-x-auto">
-          <table class="w-full text-left border-collapse">
+          <table class="w-full text-left border-collapse table-min-w">
             <thead>
               <tr class="bg-gray-950/60 border-b border-gray-800 text-[11px] font-bold text-gray-400 uppercase tracking-wider">
                 <th class="py-3 px-4 w-12">#</th>
@@ -345,7 +364,7 @@ app.get('/', async (req: Request, res: Response) => {
       <!-- Tabla SmartOLT de ONUs -->
       <div class="glass-card rounded-2xl overflow-hidden border border-gray-800">
         <div class="overflow-x-auto">
-          <table class="w-full text-left border-collapse">
+          <table class="w-full text-left border-collapse table-min-w">
             <thead>
               <tr class="bg-gray-950/60 border-b border-gray-800 text-[11px] font-bold text-gray-400 uppercase tracking-wider">
                 <th class="py-3 px-4 w-12">#</th>
@@ -606,19 +625,30 @@ app.get('/', async (req: Request, res: Response) => {
           </div>
         </div>
 
-        <!-- SECCIÓN WI-FI INICIAL -->
-        <div class="p-3 bg-gray-900/60 border border-gray-800 rounded-xl space-y-2">
-          <div class="flex items-center gap-1.5 text-gray-300 font-semibold">
-            <i class="fa-solid fa-wifi text-emerald-400"></i> Configuración Wi-Fi (TR-069)
+        <!-- SECCIÓN WI-FI DUAL-BAND INICIAL -->
+        <div class="p-3.5 bg-gray-900/60 border border-gray-800 rounded-xl space-y-2.5">
+          <div class="flex items-center justify-between text-gray-200 font-semibold">
+            <span class="flex items-center gap-1.5"><i class="fa-solid fa-wifi text-emerald-400"></i> Configuración Wi-Fi Dual-Band (TR-069)</span>
+            <span class="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono">2.4G + 5G</span>
           </div>
-          <div class="grid grid-cols-2 gap-2.5">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
             <div>
-              <label class="text-gray-400 block mb-1">Nombre SSID</label>
-              <input type="text" id="modalWifiSsid" placeholder="Ej. Fibra-WiFi" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2 text-white">
+              <label class="text-sky-400 block mb-1 text-[11px] font-semibold"><i class="fa-solid fa-wifi"></i> SSID 2.4 GHz</label>
+              <input type="text" id="modalWifiSsid" placeholder="Ej. Fibra-WiFi" oninput="autoFill5gSsid()" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2 text-white text-xs focus:outline-none focus:border-sky-500">
             </div>
             <div>
-              <label class="text-gray-400 block mb-1">Contraseña Wi-Fi</label>
-              <input type="text" id="modalWifiPassword" placeholder="Mínimo 8 caracteres" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2 text-white font-mono">
+              <label class="text-sky-400 block mb-1 text-[11px] font-semibold">Contraseña 2.4 GHz</label>
+              <input type="text" id="modalWifiPassword" placeholder="Mínimo 8 caracteres" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2 text-white font-mono text-xs focus:outline-none focus:border-sky-500">
+            </div>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1 border-t border-gray-800/60">
+            <div>
+              <label class="text-purple-400 block mb-1 text-[11px] font-semibold"><i class="fa-solid fa-bolt"></i> SSID 5 GHz (Opcional)</label>
+              <input type="text" id="modalWifi5gSsid" placeholder="Ej. Fibra-WiFi_5G" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2 text-white text-xs focus:outline-none focus:border-purple-500">
+            </div>
+            <div>
+              <label class="text-purple-400 block mb-1 text-[11px] font-semibold">Contraseña 5 GHz (Opcional)</label>
+              <input type="text" id="modalWifi5gPassword" placeholder="Dejar vacío para usar la misma" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2 text-white font-mono text-xs focus:outline-none focus:border-purple-500">
             </div>
           </div>
         </div>
@@ -637,26 +667,26 @@ app.get('/', async (req: Request, res: Response) => {
   <!-- MODAL 5: DETALLE DE LA ONU (SmartOLT Screenshot 3) -->
   <!-- ========================================== -->
   <div id="viewOnuModal" class="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 hidden flex items-center justify-center p-3 sm:p-5">
-    <div class="glass-card w-full max-w-4xl rounded-2xl p-6 border border-gray-700/60 space-y-4 max-h-[92vh] overflow-y-auto">
+    <div class="glass-card w-full max-w-4xl rounded-2xl p-4 sm:p-6 border border-gray-700/60 space-y-4 max-h-[92vh] overflow-y-auto">
       <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-gray-800 gap-2">
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-3 min-w-0">
           <div class="w-10 h-10 rounded-xl bg-sky-500/10 text-sky-400 flex items-center justify-center text-lg shrink-0">
             <i class="fa-solid fa-network-wired"></i>
           </div>
-          <div>
-            <h3 class="text-base font-extrabold text-white flex items-center gap-2">
-              <span id="viewOnuTitleName">Cliente</span>
-              <button onclick="renameCurrentOnu()" title="Editar nombre de cliente en OLT" class="text-gray-400 hover:text-sky-400 text-xs p-1">
+          <div class="min-w-0">
+            <h3 class="text-base font-extrabold text-white flex items-center gap-2 truncate">
+              <span id="viewOnuTitleName" class="truncate">Cliente</span>
+              <button onclick="renameCurrentOnu()" title="Editar nombre de cliente en OLT" class="text-gray-400 hover:text-sky-400 text-xs p-1 shrink-0">
                 <i class="fa-solid fa-pen-to-square"></i>
               </button>
-              <span id="viewOnuStatusPill" class="text-[10px] px-2 py-0.5 rounded-full font-bold">ONLINE</span>
+              <span id="viewOnuStatusPill" class="text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0">ONLINE</span>
             </h3>
-            <p class="text-xs text-gray-400 font-mono" id="viewOnuSubtitle">gpon-onu_1/0/1:1 &bull; HWTC-685E10B6</p>
+            <p class="text-xs text-gray-400 font-mono truncate" id="viewOnuSubtitle">gpon-onu_1/0/1:1 &bull; HWTC-685E10B6</p>
           </div>
         </div>
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 shrink-0">
           <span class="text-[11px] px-2.5 py-1 rounded-lg bg-emerald-950/60 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5 font-mono">
-            <i class="fa-solid fa-server text-[10px]"></i> TR-069 ACS: 10.200.0.1:7547
+            <i class="fa-solid fa-server text-[10px]"></i> TR-069: 10.200.0.1:7547
           </span>
           <button onclick="closeViewOnuModal()" class="text-gray-400 hover:text-white p-1 text-lg">
             <i class="fa-solid fa-xmark"></i>
@@ -665,49 +695,65 @@ app.get('/', async (req: Request, res: Response) => {
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <!-- Dispositivo & OLT -->
         <div class="p-3.5 rounded-xl bg-gray-950/80 border border-gray-800/80 space-y-1.5 text-xs">
           <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Dispositivo & OLT</div>
           <div class="flex justify-between"><span class="text-gray-400">OLT:</span> <span id="viewOnuOltName" class="font-bold text-white">fray</span></div>
           <div class="flex justify-between"><span class="text-gray-400">Puerto GPON:</span> <span id="viewOnuPort" class="font-mono text-gray-200">1/0/1:1</span></div>
-          <div class="flex justify-between"><span class="text-gray-400">Número de Serie:</span> <span id="viewOnuSn" class="font-mono text-sky-400 font-bold">HWTC-685E10B6</span></div>
-          <div class="flex justify-between"><span class="text-gray-400">Modelo:</span> <span id="viewOnuModel" class="text-gray-200 font-semibold">Huawei EG8041V5</span></div>
-          <div class="flex justify-between"><span class="text-gray-400">Hardware / FW:</span> <span id="viewOnuHwSw" class="text-xs text-gray-300 font-mono">31FD.A • V5R021</span></div>
+          <div class="flex justify-between items-center"><span class="text-gray-400">Número de Serie:</span> <span id="viewOnuSn" class="font-mono text-sky-400 font-bold text-right truncate">HWTC-685E10B6</span></div>
+          <div class="flex justify-between"><span class="text-gray-400">Modelo:</span> <span id="viewOnuModel" class="text-gray-200 font-semibold truncate max-w-[170px]">Huawei EG8041V5</span></div>
+          <div class="flex justify-between"><span class="text-gray-400">Hardware / FW:</span> <span id="viewOnuHwSw" class="text-xs text-gray-300 font-mono truncate max-w-[170px]">31FD.A • V5R021</span></div>
         </div>
 
+        <!-- Potencia Óptica GPON con diagnóstico -->
         <div class="p-3.5 rounded-xl bg-gray-950/80 border border-gray-800/80 space-y-2 text-xs">
           <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex justify-between items-center">
-            <span>Potencia Óptica (dBm)</span>
+            <span>Potencia Óptica GPON</span>
             <span id="viewOnuTelemetry" class="text-[10px] font-mono text-sky-400 font-normal">3.36V • 37°C</span>
           </div>
           <div class="flex items-center justify-between">
             <span class="text-gray-400">Rx Power (ONU):</span>
-            <span id="viewOnuRxDbm" class="font-mono font-bold text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-500/30 text-xs">-19.79 dBm</span>
+            <div class="flex items-center gap-1.5">
+              <span id="viewOnuRxDbm" class="font-mono font-bold text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-500/30 text-xs">-19.79 dBm</span>
+              <span id="viewOnuRxStatus" class="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold">ÓPTIMA</span>
+            </div>
           </div>
           <div class="flex items-center justify-between">
             <span class="text-gray-400">Tx Power (Láser):</span>
             <span id="viewOnuTxDbm" class="font-mono text-gray-300 text-xs">1.94 dBm</span>
           </div>
-          <div class="w-full bg-gray-900 rounded-full h-1.5 mt-1 overflow-hidden">
-            <div id="viewOnuSignalBar" class="bg-emerald-400 h-1.5 rounded-full" style="width: 85%;"></div>
+          <div class="w-full bg-gray-900 rounded-full h-1.5 mt-1 overflow-hidden relative">
+            <div id="viewOnuSignalBar" class="bg-emerald-400 h-1.5 rounded-full transition-all duration-500" style="width: 85%;"></div>
+          </div>
+          <div class="text-[9px] text-gray-500 flex justify-between pt-0.5 font-mono">
+            <span>-30 dBm (Límite)</span>
+            <span class="text-emerald-500/80">Rango: -14 a -25 dBm</span>
+            <span>-8 dBm</span>
           </div>
         </div>
 
+        <!-- Estado TR-069 CWMP -->
         <div class="p-3.5 rounded-xl bg-gray-950/80 border border-gray-800/80 space-y-2 text-xs">
-          <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Estado TR-069 CWMP</div>
+          <div class="text-[10px] font-bold text-gray-400 uppercase tracking-wider flex justify-between items-center">
+            <span>Gestión TR-069 CWMP</span>
+            <span id="viewOnuInformStatus" class="text-[10px] text-emerald-400 font-mono">Inform: 300s</span>
+          </div>
           <div class="flex items-center justify-between">
-            <span class="text-gray-400">Servidor CWMP:</span>
-            <span class="text-emerald-400 font-bold flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> GenieACS Online</span>
+            <span class="text-gray-400">Servidor ACS:</span>
+            <span class="text-emerald-400 font-bold flex items-center gap-1 text-[11px]"><span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> GenieACS Online</span>
           </div>
           <div class="flex items-center justify-between">
             <span class="text-gray-400">VLAN de Servicio:</span>
             <span id="viewOnuVlanBadge" class="font-mono text-indigo-300 px-2 py-0.5 rounded bg-indigo-950/40 border border-indigo-500/30">VLAN 400</span>
           </div>
-          <div class="text-[11px] text-gray-400 flex items-center gap-1">
-            <i class="fa-solid fa-circle-check text-emerald-400 text-[10px]"></i> TR-069 / OMCI Habilitado
+          <div class="text-[11px] text-gray-400 flex items-center justify-between pt-0.5 border-t border-gray-900">
+            <span class="flex items-center gap-1 text-emerald-400"><i class="fa-solid fa-circle-check text-[10px]"></i> CWMP / OMCI OK</span>
+            <span class="text-[10px] text-gray-500 font-mono">Preset Activo</span>
           </div>
         </div>
       </div>
 
+      <!-- Modo WAN & Enrutamiento -->
       <div class="p-4 rounded-xl bg-gray-900/50 border border-gray-800 space-y-3">
         <div class="flex items-center justify-between">
           <h4 class="text-xs font-bold text-white flex items-center gap-2">
@@ -718,7 +764,7 @@ app.get('/', async (req: Request, res: Response) => {
           </button>
         </div>
 
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
           <div class="p-2.5 rounded-lg bg-gray-950 border border-gray-800/80">
             <span class="text-[10px] text-gray-400 uppercase block font-semibold">Modo ONU</span>
             <span id="viewWanOnuMode" class="font-bold text-white">Routing</span>
@@ -737,44 +783,93 @@ app.get('/', async (req: Request, res: Response) => {
           </div>
         </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs pt-1">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs pt-1">
           <div class="text-gray-400 flex justify-between px-2"><span>Máscara de Red:</span> <span id="viewWanMask" class="font-mono text-gray-200">255.255.255.0</span></div>
           <div class="text-gray-400 flex justify-between px-2"><span>Gateway:</span> <span id="viewWanGw" class="font-mono text-gray-200">172.19.52.1</span></div>
           <div class="text-gray-400 flex justify-between px-2"><span>Prefijo IPv6:</span> <span id="viewWanIpv6Prefix" class="font-mono text-emerald-300">DHCPv6-PD (Auto)</span></div>
         </div>
       </div>
 
+      <!-- Red Inalámbrica Wi-Fi Dual-Band (2.4 GHz & 5 GHz) -->
       <div class="p-4 rounded-xl bg-gray-900/50 border border-gray-800 space-y-3">
-        <div class="flex items-center justify-between">
-          <h4 class="text-xs font-bold text-white flex items-center gap-2">
-            <i class="fa-solid fa-wifi text-emerald-400"></i> Red Inalámbrica Wi-Fi & Seguridad
-          </h4>
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <h4 class="text-xs font-bold text-white flex items-center gap-2">
+              <i class="fa-solid fa-wifi text-emerald-400"></i> Redes Inalámbricas Wi-Fi (Doble Banda 2.4G & 5G)
+            </h4>
+            <p class="text-[11px] text-gray-400">Configuración sincronizada en la ONT vía TR-069 CWMP</p>
+          </div>
           <div class="flex items-center gap-2">
-            <button onclick="openChangePasswordModal()" class="px-2.5 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-xs font-semibold transition flex items-center gap-1">
-              <i class="fa-solid fa-key"></i> Clave Web
+            <button onclick="openChangePasswordModal()" class="px-2.5 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-xs font-semibold transition flex items-center gap-1">
+              <i class="fa-solid fa-key text-gray-400"></i> Clave Web
             </button>
             <button onclick="openChangeWifiModal()" class="px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow-md shadow-emerald-500/20">
-              <i class="fa-solid fa-wifi"></i> Cambiar Wi-Fi
+              <i class="fa-solid fa-sliders"></i> Cambiar Wi-Fi (Dual-Band)
             </button>
           </div>
         </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-          <div class="p-3 rounded-lg bg-gray-950 border border-gray-800/80 flex items-center justify-between">
-            <div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+          <!-- Red 2.4 GHz -->
+          <div class="p-3.5 rounded-xl bg-gray-950/90 border border-sky-500/30 space-y-2 relative overflow-hidden">
+            <div class="flex items-center justify-between">
+              <span class="text-[11px] font-bold text-sky-400 flex items-center gap-1.5">
+                <i class="fa-solid fa-wifi text-sky-400"></i> Banda 2.4 GHz (Mayor Alcance)
+              </span>
+              <span class="text-[10px] px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 font-mono font-bold">2.4G b/g/n</span>
+            </div>
+            <div class="space-y-1">
               <span class="text-[10px] text-gray-400 uppercase block font-semibold">Nombre de Red (SSID)</span>
-              <span id="viewWifiSsid" class="font-bold text-white text-sm">Pendiente sincronización TR-069</span>
+              <div class="flex items-center justify-between">
+                <span id="viewWifiSsid" class="font-bold text-white text-sm tracking-wide truncate max-w-[220px]">Consultando...</span>
+                <button onclick="copyWifiSsid('2.4g')" class="text-gray-400 hover:text-sky-400 text-xs p-1" title="Copiar SSID"><i class="fa-regular fa-copy"></i></button>
+              </div>
             </div>
-            <i class="fa-solid fa-signal text-emerald-400/60 text-lg"></i>
+            <div class="space-y-1 pt-1 border-t border-gray-900">
+              <span class="text-[10px] text-gray-400 uppercase block font-semibold">Contraseña WPA2</span>
+              <div class="flex items-center justify-between">
+                <span id="viewWifiPass" class="font-mono text-gray-200 text-sm tracking-wider">••••••••••••</span>
+                <div class="flex items-center gap-1">
+                  <button onclick="toggleWifiPassVisibility('2.4g')" class="text-gray-400 hover:text-white p-1 text-xs" title="Mostrar/Ocultar">
+                    <i class="fa-solid fa-eye" id="btnToggleWifiEye"></i>
+                  </button>
+                  <button onclick="copyWifiPass('2.4g')" class="text-gray-400 hover:text-sky-400 p-1 text-xs" title="Copiar Contraseña">
+                    <i class="fa-regular fa-copy"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
-          <div class="p-3 rounded-lg bg-gray-950 border border-gray-800/80 flex items-center justify-between">
-            <div>
-              <span class="text-[10px] text-gray-400 uppercase block font-semibold">Contraseña Wi-Fi (WPA2)</span>
-              <span id="viewWifiPass" class="font-mono text-gray-200 text-sm">••••••••••••</span>
+
+          <!-- Red 5 GHz -->
+          <div class="p-3.5 rounded-xl bg-gray-950/90 border border-purple-500/30 space-y-2 relative overflow-hidden">
+            <div class="flex items-center justify-between">
+              <span class="text-[11px] font-bold text-purple-400 flex items-center gap-1.5">
+                <i class="fa-solid fa-bolt text-purple-400"></i> Banda 5 GHz (Alta Velocidad)
+              </span>
+              <span class="text-[10px] px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 font-mono font-bold">5G a/n/ac</span>
             </div>
-            <button onclick="toggleWifiPassVisibility()" class="text-gray-400 hover:text-white p-1 text-xs">
-              <i class="fa-solid fa-eye" id="btnToggleWifiEye"></i>
-            </button>
+            <div class="space-y-1">
+              <span class="text-[10px] text-gray-400 uppercase block font-semibold">Nombre de Red (SSID)</span>
+              <div class="flex items-center justify-between">
+                <span id="viewWifi5gSsid" class="font-bold text-white text-sm tracking-wide truncate max-w-[220px]">Consultando...</span>
+                <button onclick="copyWifiSsid('5g')" class="text-gray-400 hover:text-purple-400 text-xs p-1" title="Copiar SSID"><i class="fa-regular fa-copy"></i></button>
+              </div>
+            </div>
+            <div class="space-y-1 pt-1 border-t border-gray-900">
+              <span class="text-[10px] text-gray-400 uppercase block font-semibold">Contraseña WPA2</span>
+              <div class="flex items-center justify-between">
+                <span id="viewWifi5gPass" class="font-mono text-gray-200 text-sm tracking-wider">••••••••••••</span>
+                <div class="flex items-center gap-1">
+                  <button onclick="toggleWifiPassVisibility('5g')" class="text-gray-400 hover:text-white p-1 text-xs" title="Mostrar/Ocultar">
+                    <i class="fa-solid fa-eye" id="btnToggleWifi5gEye"></i>
+                  </button>
+                  <button onclick="copyWifiPass('5g')" class="text-gray-400 hover:text-purple-400 p-1 text-xs" title="Copiar Contraseña">
+                    <i class="fa-regular fa-copy"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -947,31 +1042,63 @@ app.get('/', async (req: Request, res: Response) => {
   </div>
 
   <!-- ========================================== -->
-  <!-- MODAL 7: CAMBIO DE WI-FI (SSID / PASSWORD) -->
+  <!-- MODAL 7: CAMBIO DE WI-FI DUAL-BAND (TR-069) -->
   <!-- ========================================== -->
-  <div id="changeWifiModal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-[65] hidden flex items-center justify-center p-4">
-    <div class="glass-card w-full max-w-md rounded-2xl p-6 border border-emerald-500/40 space-y-4 shadow-2xl">
+  <div id="changeWifiModal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-[65] hidden flex items-center justify-center p-3 sm:p-5">
+    <div class="glass-card w-full max-w-lg rounded-2xl p-5 sm:p-6 border border-emerald-500/40 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
       <div class="flex justify-between items-center pb-2.5 border-b border-gray-800">
-        <h3 class="text-base font-bold text-white flex items-center gap-2">
-          <i class="fa-solid fa-wifi text-emerald-400"></i> Cambiar Wi-Fi (TR-069)
-        </h3>
-        <button onclick="closeChangeWifiModal()" class="text-gray-400 hover:text-white"><i class="fa-solid fa-xmark text-lg"></i></button>
+        <div>
+          <h3 class="text-base font-bold text-white flex items-center gap-2">
+            <i class="fa-solid fa-wifi text-emerald-400"></i> Cambiar Red Wi-Fi Dual-Band (TR-069)
+          </h3>
+          <p class="text-[11px] text-gray-400 mt-0.5">Configuración de redes 2.4 GHz y 5 GHz remotamente</p>
+        </div>
+        <button onclick="closeChangeWifiModal()" class="text-gray-400 hover:text-white p-1 text-lg"><i class="fa-solid fa-xmark"></i></button>
       </div>
 
-      <form onsubmit="submitChangeWifi(event)" class="space-y-3.5 text-xs">
-        <div>
-          <label class="text-gray-300 font-semibold block mb-1">Nombre de Red Wi-Fi (SSID)</label>
-          <input type="text" id="wifiModalSsid" required placeholder="MiRedWifi" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white focus:outline-none focus:border-emerald-500">
-        </div>
-        <div>
-          <label class="text-gray-300 font-semibold block mb-1">Nueva Contraseña Wi-Fi (WPA2-PSK)</label>
-          <input type="text" id="wifiModalPass" required minlength="8" placeholder="Mínimo 8 caracteres" class="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-white font-mono focus:outline-none focus:border-emerald-500">
+      <form onsubmit="submitChangeWifi(event)" class="space-y-4 text-xs">
+        <!-- Red 2.4 GHz -->
+        <div class="p-3.5 rounded-xl bg-gray-950/80 border border-sky-500/30 space-y-2.5">
+          <div class="flex items-center justify-between text-xs font-bold text-sky-400">
+            <span class="flex items-center gap-1.5"><i class="fa-solid fa-wifi"></i> Red 2.4 GHz (Mayor Alcance)</span>
+            <span class="text-[10px] px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 font-mono">2.4 GHz</span>
+          </div>
+          <div>
+            <label class="text-gray-300 font-semibold block mb-1">Nombre SSID 2.4G</label>
+            <input type="text" id="wifiModalSsid" required placeholder="MiRed-2.4G" class="w-full bg-gray-900 border border-gray-800 rounded-lg p-2.5 text-white focus:outline-none focus:border-sky-500">
+          </div>
+          <div>
+            <label class="text-gray-300 font-semibold block mb-1">Contraseña 2.4G (WPA2-PSK)</label>
+            <input type="text" id="wifiModalPass" required minlength="8" placeholder="Mínimo 8 caracteres" oninput="onWifiPassInput()" class="w-full bg-gray-900 border border-gray-800 rounded-lg p-2.5 text-white font-mono focus:outline-none focus:border-sky-500">
+          </div>
         </div>
 
-        <div class="flex justify-end gap-2.5 pt-3 border-t border-gray-800">
+        <!-- Red 5 GHz -->
+        <div class="p-3.5 rounded-xl bg-gray-950/80 border border-purple-500/30 space-y-2.5">
+          <div class="flex items-center justify-between text-xs font-bold text-purple-400">
+            <span class="flex items-center gap-1.5"><i class="fa-solid fa-bolt"></i> Red 5 GHz (Alta Velocidad)</span>
+            <span class="text-[10px] px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 font-mono">5 GHz AC</span>
+          </div>
+          <div>
+            <label class="text-gray-300 font-semibold block mb-1">Nombre SSID 5G</label>
+            <input type="text" id="wifiModal5gSsid" placeholder="MiRed-5G" class="w-full bg-gray-900 border border-gray-800 rounded-lg p-2.5 text-white focus:outline-none focus:border-purple-500">
+          </div>
+          <div>
+            <div class="flex items-center justify-between mb-1">
+              <label class="text-gray-300 font-semibold">Contraseña 5G (WPA2-PSK)</label>
+              <label class="flex items-center gap-1.5 text-[11px] text-gray-400 cursor-pointer">
+                <input type="checkbox" id="wifiModalSyncPass" onchange="onToggleSyncPass()" checked class="rounded text-purple-500 focus:ring-0">
+                <span>Misma que 2.4G</span>
+              </label>
+            </div>
+            <input type="text" id="wifiModal5gPass" minlength="8" placeholder="Misma contraseña o personalizada" class="w-full bg-gray-900 border border-gray-800 rounded-lg p-2.5 text-white font-mono focus:outline-none focus:border-purple-500">
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-2.5 pt-2 border-t border-gray-800">
           <button type="button" onclick="closeChangeWifiModal()" class="px-4 py-2 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-300 font-semibold">Cancelar</button>
-          <button type="submit" id="btnSubmitWifiModal" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold flex items-center gap-1.5 shadow-lg shadow-emerald-600/25 transition">
-            <i class="fa-solid fa-floppy-disk"></i> Aplicar en ONT
+          <button type="submit" id="btnSubmitWifiModal" class="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold flex items-center gap-1.5 shadow-lg shadow-emerald-600/25 transition">
+            <i class="fa-solid fa-floppy-disk"></i> Guardar y Aplicar en ONT
           </button>
         </div>
       </form>
@@ -1356,7 +1483,9 @@ app.post('/api/provision', async (req: Request, res: Response) => {
       dns1,
       dns2,
       wifiSsid,
-      wifiPassword
+      wifiPassword,
+      wifiSsid5g,
+      wifiPassword5g
     } = req.body;
 
     if (!oltId || !serial || !clientName) {
@@ -1386,6 +1515,8 @@ app.post('/api/provision', async (req: Request, res: Response) => {
     const cleanDns2 = (dns2 || '8.8.4.4').trim();
     const cleanSsid = (wifiSsid || '').trim();
     const cleanPass = (wifiPassword || '').trim();
+    const cleanSsid5g = (wifiSsid5g || '').trim();
+    const cleanPass5g = (wifiPassword5g || cleanPass).trim();
 
     // 2. Aprovisionamiento por CLI/OMCI en la OLT TP-Link DeltaStream
     const provResult = await driver.provisionOnt({
@@ -1406,13 +1537,13 @@ app.post('/api/provision', async (req: Request, res: Response) => {
       return res.status(500).json({ success: false, error: 'Fallo al aprovisionar en la OLT', log: provResult.log });
     }
 
-    // 3. Guardar en SQLite con IP Estática obligatoria y datos TR-069
+    // 3. Guardar en SQLite con IP Estática obligatoria y datos TR-069 (Dual-Band)
     await db.execute({
       sql: `INSERT INTO provisioned_onts (
               olt_id, gpon_port, onu_id, serial, client_name, vlan_id,
               ip_address, gateway, subnet_mask, dns1, dns2, wan_mode,
-              wifi_ssid, wifi_password, status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Static', ?, ?, 'online')
+              wifi_ssid, wifi_password, wifi_ssid_5g, wifi_password_5g, status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'Static', ?, ?, ?, ?, 'online')
             ON CONFLICT(serial) DO UPDATE SET
               olt_id = excluded.olt_id,
               gpon_port = excluded.gpon_port,
@@ -1427,6 +1558,8 @@ app.post('/api/provision', async (req: Request, res: Response) => {
               wan_mode = 'Static',
               wifi_ssid = coalesce(excluded.wifi_ssid, provisioned_onts.wifi_ssid),
               wifi_password = coalesce(excluded.wifi_password, provisioned_onts.wifi_password),
+              wifi_ssid_5g = coalesce(excluded.wifi_ssid_5g, provisioned_onts.wifi_ssid_5g),
+              wifi_password_5g = coalesce(excluded.wifi_password_5g, provisioned_onts.wifi_password_5g),
               status = 'online'`,
       args: [
         olt.id,
@@ -1441,11 +1574,13 @@ app.post('/api/provision', async (req: Request, res: Response) => {
         cleanDns1,
         cleanDns2,
         cleanSsid || null,
-        cleanPass || null
+        cleanPass || null,
+        cleanSsid5g || null,
+        cleanPass5g || null
       ]
     });
 
-    // 3. Empujar configuración TR-069 hacia GenieACS
+    // 4. Empujar configuración TR-069 hacia GenieACS (Dual-Band 2.4G & 5G)
     let tr069Pushed = false;
     let tr069Error = null;
 
@@ -1459,7 +1594,9 @@ app.post('/api/provision', async (req: Request, res: Response) => {
         dns1: cleanDns1,
         dns2: cleanDns2,
         wifiSsid: cleanSsid || undefined,
-        wifiPassword: cleanPass || undefined
+        wifiPassword: cleanPass || undefined,
+        wifi5gSsid: cleanSsid5g || undefined,
+        wifi5gPassword: cleanPass5g || undefined
       });
 
       // Si el dispositivo ya está conectado en GenieACS, aplicar tarea inmediatamente
@@ -1474,7 +1611,7 @@ app.post('/api/provision', async (req: Request, res: Response) => {
           dns2: cleanDns2
         });
         if (cleanSsid && cleanPass) {
-          await acsClient.setWifi(dev._id, cleanSsid, cleanPass);
+          await acsClient.setWifi(dev._id, cleanSsid, cleanPass, cleanSsid5g, cleanPass5g);
         }
         tr069Pushed = !!wanRes.success;
       } else {
@@ -1551,7 +1688,7 @@ app.get('/api/onus', async (req: Request, res: Response) => {
 
         // Consultar datos guardados en la base de datos (IPs fijas, Wi-Fi guardado, nombres)
         const savedOntsResult = await db.execute({
-          sql: 'SELECT serial, onu_id, client_name, ip_address, gateway, wifi_ssid, wifi_password FROM provisioned_onts WHERE olt_id = ?',
+          sql: 'SELECT serial, onu_id, client_name, ip_address, gateway, wifi_ssid, wifi_password, wifi_ssid_5g, wifi_password_5g FROM provisioned_onts WHERE olt_id = ?',
           args: [olt.id]
         }).catch(() => ({ rows: [] }));
         const savedMap = new Map((savedOntsResult.rows as any[]).map(r => [r.serial, r]));
@@ -1601,6 +1738,8 @@ app.get('/api/onus', async (req: Request, res: Response) => {
             dns2: realIp ? '8.8.4.4' : '',
             wifi_ssid: saved?.wifi_ssid,
             wifi_password: saved?.wifi_password,
+            wifi_ssid_5g: saved?.wifi_ssid_5g,
+            wifi_password_5g: saved?.wifi_password_5g,
             oltId: olt.id,
             oltName: olt.name,
             oltIp: olt.ip
@@ -1685,20 +1824,29 @@ app.post('/api/onus/sync-tr069', async (req: Request, res: Response) => {
     const cleanIp = (ipAddress || '').trim();
     const cleanGw = (gateway || cleanIp.replace(/\.\d+$/, '.254')).trim();
 
-    // 1. Programar Preset en GenieACS
+    const db = getOltDb();
+    const savedOnt = await db.execute({
+      sql: 'SELECT wifi_ssid, wifi_password, wifi_ssid_5g, wifi_password_5g FROM provisioned_onts WHERE serial = ?',
+      args: [serial]
+    }).then(r => r.rows[0] as any).catch(() => null);
+
+    // 1. Programar Preset en GenieACS (con Wi-Fi Dual-Band si ya está registrado)
     await acsClient.createPresetForOnt({
       serial,
       ip: cleanIp,
       gateway: cleanGw,
       mask: '255.255.255.0',
       dns1: '8.8.8.8',
-      dns2: '8.8.4.4'
+      dns2: '8.8.4.4',
+      wifiSsid: savedOnt?.wifi_ssid || undefined,
+      wifiPassword: savedOnt?.wifi_password || undefined,
+      wifi5gSsid: savedOnt?.wifi_ssid_5g || undefined,
+      wifi5gPassword: savedOnt?.wifi_password_5g || undefined
     });
 
     // 2. Si la OLT está disponible, inyectar el perfil TR-069 por OMCI
     let omciLog = '';
     if (oltId && gponPort && onuId !== undefined) {
-      const db = getOltDb();
       const resDb = await db.execute({ sql: 'SELECT * FROM olts WHERE id = ?', args: [oltId] });
       const olt = resDb.rows[0] as unknown as OltDevice;
       if (olt) {
@@ -1712,12 +1860,15 @@ app.post('/api/onus/sync-tr069', async (req: Request, res: Response) => {
       }
     }
 
-    // 3. Si el dispositivo ya está en GenieACS, forzar tarea inmediata
+    // 3. Si el dispositivo ya está en GenieACS, forzar tarea inmediata (WAN + Wi-Fi)
     const dev = await acsClient.getDeviceBySerial(serial);
     let pushed = false;
     if (dev) {
       if (cleanIp) {
         await acsClient.setWanMode(dev._id, { mode: 'Static', ip: cleanIp, gateway: cleanGw });
+      }
+      if (savedOnt?.wifi_ssid && savedOnt?.wifi_password) {
+        await acsClient.setWifi(dev._id, savedOnt.wifi_ssid, savedOnt.wifi_password, savedOnt.wifi_ssid_5g, savedOnt.wifi_password_5g);
       }
       pushed = true;
     }
@@ -1753,26 +1904,42 @@ app.get('/api/tr069/devices/:sn', async (req: Request, res: Response) => {
   }
 });
 
-// 5. Cambiar Wi-Fi (SSID y Contraseña WPA2) y guardar en base de datos
+// 5. Cambiar Wi-Fi (Dual-Band 2.4 GHz & 5 GHz) y guardar en base de datos
 app.post('/api/tr069/devices/:sn/wifi', async (req: Request, res: Response) => {
   try {
     const serial = req.params.sn;
-    const { ssid, password, oltId, onuId } = req.body;
+    const { ssid, password, ssid5g, password5g, oltId, onuId } = req.body;
 
     if (!ssid || !password) {
-      return res.status(400).json({ success: false, error: 'SSID y Contraseña son requeridos' });
+      return res.status(400).json({ success: false, error: 'SSID y Contraseña de 2.4 GHz son requeridos' });
     }
 
+    const cleanSsid5g = (ssid5g || '').trim();
+    const cleanPass5g = (password5g || password).trim();
+
     const db = getOltDb();
-    // Guardar credenciales Wi-Fi en la base de datos local
+    // Guardar credenciales Wi-Fi Dual-Band en la base de datos local
     try {
       await db.execute({
-        sql: `INSERT INTO provisioned_onts (olt_id, gpon_port, onu_id, serial, client_name, vlan_id, wifi_ssid, wifi_password)
-              VALUES (?, '1/0/1', ?, ?, 'Cliente', 400, ?, ?)
+        sql: `INSERT INTO provisioned_onts (
+                olt_id, gpon_port, onu_id, serial, client_name, vlan_id,
+                wifi_ssid, wifi_password, wifi_ssid_5g, wifi_password_5g
+              )
+              VALUES (?, '1/0/1', ?, ?, 'Cliente', 400, ?, ?, ?, ?)
               ON CONFLICT(serial) DO UPDATE SET
                 wifi_ssid = excluded.wifi_ssid,
-                wifi_password = excluded.wifi_password`,
-        args: [oltId || 'olt_default', onuId !== undefined ? parseInt(onuId, 10) : 0, serial, ssid, password]
+                wifi_password = excluded.wifi_password,
+                wifi_ssid_5g = excluded.wifi_ssid_5g,
+                wifi_password_5g = excluded.wifi_password_5g`,
+        args: [
+          oltId || 'olt_default',
+          onuId !== undefined ? parseInt(onuId, 10) : 0,
+          serial,
+          ssid,
+          password,
+          cleanSsid5g || null,
+          cleanPass5g || null
+        ]
       });
     } catch (dbErr) {
       console.error('[Wi-Fi Save DB Error]:', dbErr);
@@ -1784,7 +1951,7 @@ app.post('/api/tr069/devices/:sn/wifi', async (req: Request, res: Response) => {
     try {
       const dev = await acsClient.getDeviceBySerial(serial);
       if (dev) {
-        const result = await acsClient.setWifi(dev._id, ssid, password);
+        const result = await acsClient.setWifi(dev._id, ssid, password, cleanSsid5g, cleanPass5g);
         acsPushed = !!result.success;
       }
     } catch (acsErr: any) {

@@ -17,24 +17,18 @@ for (const r of sRes.rows) {
 
 const externalId = 'HWTCF230BFB8';
 const api = axios.create({ baseURL: url, headers: { 'X-Token': key } });
-const det = await api.get('/onu/get_onu_details/' + externalId);
-const d = det.data.onu_details || det.data;
-console.log({
-  olt_name: d.olt_name,
-  mode: d.mode,
-  wan_mode: d.wan_mode,
-  vlan: d.vlan,
-  ip_address: d.ip_address,
-  subnet_mask: d.subnet_mask,
-  default_gateway: d.default_gateway,
-  dns1: d.dns1,
-  dns2: d.dns2,
-  mgmt_ip_mode: d.mgmt_ip_mode,
-  mgmt_ip_vlan: d.mgmt_ip_vlan,
-  tr069: d.tr069,
-  tr069_profile: d.tr069_profile,
-  applied_configuration_preset: d.applied_configuration_preset
-});
+try {
+  const p = await api.get('/system/get_tr069_profiles');
+  console.log('TR069 Profiles:', JSON.stringify(p.data, null, 2));
+} catch (e) {
+  console.log('Profiles Err:', e.response?.data || e.message);
+}
+try {
+  const w = await api.get('/onu/get_onu_wifi_details/' + externalId);
+  console.log('WiFi details:', JSON.stringify(w.data, null, 2));
+} catch (e) {
+  console.log('WiFi Err:', e.response?.data || e.message);
+}
 process.exit(0);
 `;
 

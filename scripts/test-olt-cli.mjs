@@ -17,16 +17,12 @@ conn.on('ready', () => {
     setTimeout(() => stream.write('enable\\r\\n'), 400);
     setTimeout(() => stream.write('terminal length 0\\r\\n'), 800);
     setTimeout(() => stream.write('config\\r\\n'), 1200);
-    setTimeout(() => stream.write('interface gpon 1/0/1\\r\\n'), 1600);
-    setTimeout(() => stream.write('ont iphost 1 1 static ip-address 172.19.52.10 mask 255.255.255.0 gateway 172.19.52.1 primary-dns 8.8.8.8 secondary-dns 8.8.4.4 vlan 400 priority 0\\r\\n'), 2000);
-    setTimeout(() => stream.write('ont iphost 1 1 action push\\r\\n'), 3500);
-    setTimeout(() => stream.write('ont cwmp 1 url http://10.200.0.1:7547\\r\\n'), 5000);
-    setTimeout(() => stream.write('ont cwmp 1 action push\\r\\n'), 6500);
+    setTimeout(() => stream.write('show ont info gpon 1/0/1 1\\r\\n'), 1600);
     setTimeout(() => {
       console.log(out);
       conn.end();
       process.exit(0);
-    }, 8500);
+    }, 4000);
   });
 }).connect({
   host: '172.19.60.2',
