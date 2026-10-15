@@ -661,8 +661,11 @@ export class TpLinkDeltaStreamDriver {
     const portNum = parseInt((params.gponPort || '1/0/1').split('/').pop() || '1', 10);
     const servicePortId = cleanOnuId === 0 ? (portNum * 128) : ((portNum - 1) * 128 + cleanOnuId);
 
-    const ipConfigCmd = params.ipAddress
-      ? ` ont ipconfig ${cleanOnuId} static ip-address ${params.ipAddress} mask ${params.subnetMask || '255.255.255.0'} ${params.gateway ? `gateway ${params.gateway}` : ''}`
+    const cleanGw = (params.gateway || (params.ipAddress ? params.ipAddress.replace(/\.\d+$/, '.254') : '')).trim();
+    const cleanMask = (params.subnetMask || '255.255.255.0').trim();
+
+    const ipHostCmd = params.ipAddress
+      ? ` ont iphost ${cleanOnuId} 1 static ip-address ${params.ipAddress} mask ${cleanMask} gateway ${cleanGw} primary-dns 8.8.8.8 secondary-dns 8.8.4.4 vlan ${params.vlanId} priority 0\n ont iphost ${cleanOnuId} 1 action push\n ont cwmp ${cleanOnuId} url http://10.200.0.1:7547\n ont cwmp ${cleanOnuId} action push`
       : '';
 
     const cliScript = `
@@ -670,7 +673,7 @@ enable
 configure
 interface gpon ${params.gponPort}
  ont add ${cleanOnuId} sn-auth ${params.serial} desc "${sanitizedName}" ont-lineprofile-id ${lineProf} ont-srvprofile-id ${srvProf} ont-srvport-profile-id ${srvPortProf}
-${ipConfigCmd}
+${ipHostCmd}
 exit
 service-port ${servicePortId} config gpon ${params.gponPort} ont ${cleanOnuId} gem-id 1 svlan ${params.vlanId} user-vlan ${params.vlanId} tag-action translate desc "${sanitizedName}"
 end
@@ -749,14 +752,16 @@ copy running-config startup-config
   }
 
   /**
-   * Configurar modo IP / WAN via OMCI (para OLTs que soportan ont ipconfig)
+   * Configurar modo IP / WAN via OMCI (para OLTs que soportan ont iphost)
    */
   public async configureOntWanOmci(gponPort: string, onuId: number, params: { mode: string; ip?: string; mask?: string; gateway?: string; vlanId?: number }): Promise<{ success: boolean; log: string }> {
+    const cleanGw = (params.gateway || (params.ip ? params.ip.replace(/\.\d+$/, '.254') : '')).trim();
+    const cleanMask = (params.mask || '255.255.255.0').trim();
     let cmd = `enable\nconfigure\ninterface gpon ${gponPort}\n`;
-    if (params.mode === 'Static' && params.ip && params.mask) {
-      cmd += ` ont ipconfig ${onuId} static ip-address ${params.ip} mask ${params.mask} ${params.gateway ? `gateway ${params.gateway}` : ''}\n`;
+    if (params.mode === 'Static' && params.ip) {
+      cmd += ` ont iphost ${onuId} 1 static ip-address ${params.ip} mask ${cleanMask} gateway ${cleanGw} primary-dns 8.8.8.8 secondary-dns 8.8.4.4 vlan ${params.vlanId || 400} priority 0\n ont iphost ${onuId} 1 action push\n`;
     } else if (params.mode === 'DHCP') {
-      cmd += ` ont ipconfig ${onuId} dhcp\n`;
+      cmd += ` ont iphost ${onuId} 1 dhcp\n ont iphost ${onuId} 1 action push\n`;
     }
     cmd += `exit\nend\ncopy running-config startup-config\n`;
     try {
@@ -797,8 +802,8 @@ copy running-config startup-config
   /**
    * Asociar Perfil TR-069 a la ONT vía OMCI a través de la OLT
    */
-  public async attachTr069Profile(gponPort: string, onuId: number, profileId: number = 1): Promise<{ success: boolean; log: string }> {
-    const cmd = `enable\nconfigure\ninterface gpon ${gponPort}\n ont tr069-server-profile ${onuId} profile-id ${profileId}\nexit\nend\ncopy running-config startup-config\n`;
+  public async attachTr069Profile(gponPort: string, onuId: number, acsUrl: string = 'http://10.200.0.1:7547'): Promise<{ success: boolean; log: string }> {
+    const cmd = `enable\nconfigure\ninterface gpon ${gponPort}\n ont cwmp ${onuId} url ${acsUrl}\n ont cwmp ${onuId} action push\nexit\nend\ncopy running-config startup-config\n`;
     try {
       const log = await this.executeCommand(cmd, 10000);
       const isFailed = /error|invalid|failed/i.test(log);
