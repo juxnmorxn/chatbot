@@ -2331,31 +2331,86 @@ app.post('/api/onus/:sn/set-tr069-web', async (req: Request, res: Response) => {
   }
 });
 
-// 11. Reiniciar módem remotamente por interfaz web
+// 11. Reiniciar módem remotamente (vía OLT o interfaz web)
 app.post('/api/onus/:sn/reboot-modem-web', async (req: Request, res: Response) => {
   try {
     const serial = req.params.sn;
-    const { ip } = req.body;
+    const { ip, oltId, gponPort, onuId } = req.body;
 
+    const db = getOltDb();
     let targetIp = ip;
-    if (!targetIp) {
-      const db = getOltDb();
+    let targetOltId = oltId;
+    let targetPort = gponPort;
+    let targetOnuId = onuId;
+
+    if (!targetIp || !targetOltId) {
       const row = await db.execute({
-        sql: 'SELECT ip_address FROM provisioned_onts WHERE serial = ?',
+        sql: 'SELECT * FROM provisioned_onts WHERE serial = ?',
         args: [serial]
       }).then(r => r.rows[0] as any).catch(() => null);
-      targetIp = row?.ip_address;
+
+      if (row) {
+        targetIp = targetIp || row.ip_address;
+        targetOltId = targetOltId || row.olt_id;
+        targetPort = targetPort || row.gpon_port;
+        targetOnuId = targetOnuId !== undefined ? targetOnuId : row.onu_id;
+      }
     }
 
-    if (!targetIp) {
-      return res.status(400).json({ success: false, error: 'IP del módem requerida' });
+    // Método 1: Por OLT GPON (deactivate/activate renegotiation)
+    if (targetOltId) {
+      const oltRow = await db.execute({ sql: 'SELECT * FROM olts WHERE id = ?', args: [targetOltId] });
+      const olt = oltRow.rows[0] as unknown as OltDevice;
+      if (olt && targetPort && targetOnuId !== undefined) {
+        const oltDriver = new TpLinkDeltaStreamDriver(olt);
+        const oltRes = await oltDriver.rebootOnt(targetPort, parseInt(targetOnuId, 10));
+        return res.json({ success: true, method: 'OLT_GPON', message: 'Reinicio GPON enviado exitosamente por la OLT', detail: oltRes.message });
+      }
     }
 
-    const driver = new HuaweiOntDriver(targetIp, 'Epadmin', 'adminEp');
-    const result = await driver.reboot();
-    res.json(result);
+    // Método 2: Por interfaz web de la ONT
+    if (targetIp) {
+      const driver = new HuaweiOntDriver(targetIp, 'Epadmin', 'adminEp');
+      const result = await driver.reboot();
+      return res.json(result);
+    }
+
+    return res.status(400).json({ success: false, error: 'Se requiere OLT ID o IP del módem' });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 12. Reverse Proxy para acceder al portal Web del módem desde cualquier lugar sin estar en el MikroTik
+app.all('/modem-proxy/:ip/*', async (req: Request, res: Response) => {
+  try {
+    const targetIp = req.params.ip;
+    const subpath = req.params[0] || '';
+    const query = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
+    const targetUrl = `https://${targetIp}:80/${subpath}${query}`;
+
+    const headers: any = { ...req.headers };
+    delete headers['host'];
+    headers['referer'] = `https://${targetIp}:80/`;
+
+    const httpsAgent = new https.Agent({ rejectUnauthorized: false });
+    const axiosRes = await axios({
+      method: req.method as any,
+      url: targetUrl,
+      data: req.method !== 'GET' && req.method !== 'HEAD' ? req.body : undefined,
+      headers,
+      httpsAgent,
+      validateStatus: () => true,
+      responseType: 'arraybuffer'
+    });
+
+    // Reenviar encabezados clave
+    if (axiosRes.headers['content-type']) res.setHeader('content-type', axiosRes.headers['content-type']);
+    if (axiosRes.headers['set-cookie']) res.setHeader('set-cookie', axiosRes.headers['set-cookie']);
+
+    res.status(axiosRes.status).send(Buffer.from(axiosRes.data));
+  } catch (err: any) {
+    res.status(502).send(`Error conectando al módem vía túnel: ${err.message}`);
   }
 });
 

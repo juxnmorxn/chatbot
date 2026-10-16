@@ -1998,11 +1998,11 @@ function actionViewOnuWebLogin() {
     return;
   }
   const cleanIp = ip.split(':')[0].trim();
-  const url = `https://${cleanIp}:80`;
+  const url = `/modem-proxy/${cleanIp}/`;
   window.open(url, '_blank');
   showToast(
-    'Abriendo Portal del Módem',
-    `URL: ${url} | Usuario: Epadmin | Clave: adminEp (Acepta el certificado SSL)`,
+    'Abriendo Portal del Módem (vía Proxy)',
+    `Conexión segura por servidor | Usuario: Epadmin | Clave: adminEp`,
     'info',
     8000
   );

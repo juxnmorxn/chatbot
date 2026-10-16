@@ -630,7 +630,10 @@ export class TpLinkDeltaStreamDriver {
    */
   public async rebootOnt(gponPort: string = '1/0/1', onuId: number): Promise<{ success: boolean; message: string }> {
     try {
-      const output = await this.executeCommand(`enable\nterminal length 0\nont reset gpon ${gponPort} ${onuId}\n`, 5000);
+      const output = await this.executeCommand(
+        `enable\nconfigure\ninterface gpon ${gponPort}\n ont deactivate ${onuId}\n ont activate ${onuId}\nexit\nend\n`,
+        8000
+      );
       return { success: true, message: output };
     } catch (err: any) {
       return { success: false, message: err.message };
