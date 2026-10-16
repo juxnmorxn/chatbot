@@ -2,6 +2,8 @@ import express, { Request, Response } from 'express';
 import cors from 'cors';
 import path from 'path';
 import fs from 'fs';
+import https from 'https';
+import axios from 'axios';
 import { fileURLToPath } from 'url';
 import { TpLinkDeltaStreamDriver, OltDevice } from './drivers/tplink-deltastream.js';
 import { getOltDb, initOltDatabase } from './db.js';
