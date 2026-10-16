@@ -1155,9 +1155,13 @@ function renderOnusTable(list) {
           <span class="px-2 py-0.5 rounded bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 text-[10px] font-mono">VLAN ${o.vlan || 400}</span>
         </td>
         <td class="py-3 px-4 text-right space-x-1.5 whitespace-nowrap">
-          <button onclick="viewOnuDetail('${o.oltId}', '${o.gponPort}', ${o.onuId}, '${o.sn}', '${escapedName}', ${o.vlan || 400})" title="Ver detalles y gestionar TR-069" class="px-2.5 py-1.5 bg-sky-600/20 hover:bg-sky-600/30 border border-sky-500/30 text-sky-300 rounded-lg text-xs font-semibold inline-flex items-center gap-1 transition">
+          <button onclick="viewOnuDetail('${o.oltId}', '${o.gponPort}', ${o.onuId}, '${o.sn}', '${escapedName}', ${o.vlan || 400})" title="Ver detalles, telemetría y web del módem" class="px-2.5 py-1.5 bg-sky-600/20 hover:bg-sky-600/30 border border-sky-500/30 text-sky-300 rounded-lg text-xs font-semibold inline-flex items-center gap-1 transition">
             <i class="fa-solid fa-eye"></i> View
           </button>
+          ${o.ip ? `
+          <button onclick="window.open('https://${o.ip}:80', '_blank'); showToast('Acceso Web Módem', 'URL: https://${o.ip}:80 | Usuario: Epadmin | Clave: adminEp', 'info', 7000)" title="Abrir portal web directo del módem (Epadmin)" class="px-2.5 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 text-emerald-300 rounded-lg text-xs font-semibold inline-flex items-center gap-1 transition">
+            <i class="fa-solid fa-globe"></i> Web
+          </button>` : ''}
           <button onclick="promptRebootOnt('${o.oltId}', '${o.gponPort}', ${o.onuId}, '${o.name}')" title="Reiniciar ONT remotamente" class="px-2.5 py-1.5 bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/30 text-rose-300 rounded-lg text-xs font-semibold inline-flex items-center gap-1 transition">
             <i class="fa-solid fa-power-off"></i> Reiniciar
           </button>
@@ -1311,7 +1315,98 @@ async function viewOnuDetail(oltId, gponPort, onuId, sn, encodedName, vlan) {
 
   document.getElementById('viewOnuModal').classList.remove('hidden');
 
-  // Consultar datos reales en tiempo real desde GenieACS TR-069
+  // Inicializar estado del portal web
+  const webDirectIpEl = document.getElementById('viewOnuWebDirectIp');
+  const webAuthEl = document.getElementById('viewOnuWebAuthStatus');
+  const webLivePill = document.getElementById('viewOnuWebLivePill');
+  const webStatusBadge = document.getElementById('viewOnuWebStatusBadge');
+
+  if (webDirectIpEl) webDirectIpEl.innerText = cached?.ip ? `${cached.ip}:80` : 'Consultando...';
+  if (webAuthEl) webAuthEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-sky-400"></i> Verificando Epadmin...';
+  if (webStatusBadge) {
+    webStatusBadge.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-[10px]"></i> Conectando...';
+    webStatusBadge.className = 'text-[11px] px-2.5 py-1 rounded-lg bg-gray-900 text-gray-300 border border-gray-700 flex items-center gap-1.5 font-mono';
+  }
+
+  // 1. Consultar telemetría en tiempo real DIRECTAMENTE del portal web del módem con Epadmin / adminEp
+  try {
+    const webRes = await fetch(`/api/onus/${encodeURIComponent(sn)}/live-web?oltId=${encodeURIComponent(oltId)}&ip=${encodeURIComponent(cached?.ip || '')}`);
+    const webData = await webRes.json();
+    if (webData.success && webData.telemetry) {
+      const t = webData.telemetry;
+      currentViewOnu.modemIp = t.ip;
+
+      if (webDirectIpEl) webDirectIpEl.innerText = `${t.ip}:80`;
+      if (webAuthEl) webAuthEl.innerHTML = '<i class="fa-solid fa-circle-check text-emerald-400 text-[10px]"></i> Verificado (Epadmin)';
+      if (webLivePill) {
+        webLivePill.innerText = 'ONLINE';
+        webLivePill.className = 'text-[9px] px-2 py-0.5 rounded-full font-bold bg-emerald-500/20 text-emerald-300';
+      }
+      if (webStatusBadge) {
+        webStatusBadge.innerHTML = '<i class="fa-solid fa-circle-check text-emerald-400 text-[10px]"></i> Web ONT: Conectado (Epadmin)';
+        webStatusBadge.className = 'text-[11px] px-2.5 py-1 rounded-lg bg-emerald-950/60 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5 font-mono';
+      }
+
+      if (t.device) {
+        if (t.device.model) document.getElementById('viewOnuModel').innerText = t.device.model;
+        if (hwSwEl) hwSwEl.innerText = `${t.device.hardwareVersion} • ${t.device.softwareVersion}`;
+      }
+
+      if (t.optical) {
+        if (t.optical.rxPower && t.optical.rxPower !== 'N/A') {
+          document.getElementById('viewOnuRxDbm').innerText = t.optical.rxPower;
+          const rxNum = parseFloat(t.optical.rxPower);
+          if (bar && !isNaN(rxNum)) {
+            if (rxNum >= -24.5 && rxNum <= -14) {
+              bar.className = 'bg-emerald-400 h-1.5 rounded-full';
+              bar.style.width = '85%';
+              if (rxStatus) { rxStatus.innerText = 'ÓPTIMA'; rxStatus.className = 'text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold'; }
+            } else if (rxNum >= -27.0) {
+              bar.className = 'bg-amber-400 h-1.5 rounded-full';
+              bar.style.width = '55%';
+              if (rxStatus) { rxStatus.innerText = 'REGULAR'; rxStatus.className = 'text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-bold'; }
+            } else {
+              bar.className = 'bg-rose-500 h-1.5 rounded-full';
+              bar.style.width = '25%';
+              if (rxStatus) { rxStatus.innerText = 'CRÍTICA'; rxStatus.className = 'text-[9px] px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 font-bold'; }
+            }
+          }
+        }
+        if (t.optical.txPower && t.optical.txPower !== 'N/A') document.getElementById('viewOnuTxDbm').innerText = t.optical.txPower;
+        if (telEl) telEl.innerText = `${t.optical.voltage} • ${t.optical.temperature} • ${t.optical.biasCurrent}`;
+      }
+
+      if (t.wan) {
+        if (t.wan.ip) document.getElementById('viewWanIp').innerText = t.wan.ip;
+        if (t.wan.mask) document.getElementById('viewWanMask').innerText = t.wan.mask;
+        if (t.wan.gateway) document.getElementById('viewWanGw').innerText = t.wan.gateway;
+        if (t.wan.mode) document.getElementById('viewWanSetupMode').innerText = `${t.wan.mode} (Web Epadmin)`;
+        if (t.wan.mac) {
+          document.getElementById('viewOnuSn').innerHTML = `${sn} <span class="ml-2 px-1.5 py-0.5 rounded bg-gray-800 text-[10px] text-sky-300 font-mono"><i class="fa-solid fa-ethernet text-[9px] mr-1"></i>${t.wan.mac}</span>`;
+        }
+      }
+
+      if (t.wifi) {
+        if (t.wifi.ssid2g) document.getElementById('viewWifiSsid').innerText = t.wifi.ssid2g;
+        if (t.wifi.ssid5g && el5gSsid) el5gSsid.innerText = t.wifi.ssid5g;
+      }
+
+      if (t.tr069) {
+        const infEl = document.getElementById('viewOnuInformStatus');
+        if (infEl) infEl.innerText = `Inform: ${t.tr069.interval}s`;
+      }
+    } else {
+      if (webAuthEl) webAuthEl.innerHTML = '<span class="text-rose-400 font-semibold"><i class="fa-solid fa-triangle-exclamation text-[10px]"></i> Sin respuesta web</span>';
+      if (webStatusBadge) {
+        webStatusBadge.innerHTML = '<i class="fa-solid fa-circle-exclamation text-amber-400 text-[10px]"></i> Web ONT: Desconectado';
+        webStatusBadge.className = 'text-[11px] px-2.5 py-1 rounded-lg bg-amber-950/60 text-amber-300 border border-amber-500/30 flex items-center gap-1.5 font-mono';
+      }
+    }
+  } catch (err) {
+    if (webAuthEl) webAuthEl.innerHTML = '<span class="text-rose-400 font-semibold"><i class="fa-solid fa-circle-xmark text-[10px]"></i> Error de conexión</span>';
+  }
+
+  // 2. Complementar con GenieACS TR-069
   try {
     const res = await fetch(`/api/tr069/devices/${encodeURIComponent(sn)}`);
     const data = await res.json();
@@ -1319,38 +1414,19 @@ async function viewOnuDetail(oltId, gponPort, onuId, sn, encodedName, vlan) {
       const dev = data.device;
       currentViewOnu.device = dev;
       if (dev.modelName) document.getElementById('viewOnuModel').innerText = dev.modelName;
-      if (dev.wanMode) document.getElementById('viewWanSetupMode').innerText = `${dev.wanMode} (TR-069)`;
-      if (dev.wanIp) document.getElementById('viewWanIp').innerText = dev.wanIp;
-      if (dev.wanMask) document.getElementById('viewWanMask').innerText = dev.wanMask;
-      if (dev.wanGateway) document.getElementById('viewWanGw').innerText = dev.wanGateway;
-      if (dev.ipv6Enabled) document.getElementById('viewWanProtocol').innerText = 'Dual stack IPv4/IPv6';
-
-      // 2.4 GHz
-      if (dev.wifiSsid) {
-        document.getElementById('viewWifiSsid').innerText = dev.wifiSsid;
+      if (dev.wanIp && document.getElementById('viewWanIp').innerText === 'Sin asignar') {
+        document.getElementById('viewWanIp').innerText = dev.wanIp;
       }
       if (dev.wifiPassword) {
         currentViewOnu.realWifiPass = dev.wifiPassword;
-        if (currentViewOnu.wifiVisible) {
-          document.getElementById('viewWifiPass').innerText = dev.wifiPassword;
-        }
-      }
-
-      // 5 GHz
-      if (dev.wifi5gSsid && el5gSsid) {
-        el5gSsid.innerText = dev.wifi5gSsid;
+        if (currentViewOnu.wifiVisible) document.getElementById('viewWifiPass').innerText = dev.wifiPassword;
       }
       if (dev.wifi5gPassword) {
         currentViewOnu.realWifi5gPass = dev.wifi5gPassword;
-        if (currentViewOnu.wifi5gVisible) {
-          const el5gPass = document.getElementById('viewWifi5gPass');
-          if (el5gPass) el5gPass.innerText = dev.wifi5gPassword;
-        }
+        if (currentViewOnu.wifi5gVisible && el5gPass) el5gPass.innerText = dev.wifi5gPassword;
       }
     }
-  } catch (err) {
-    // Mantener los datos locales
-  }
+  } catch (err) {}
 }
 
 function closeViewOnuModal() {
@@ -1914,6 +1990,59 @@ async function promptRebootOnt(oltId, gponPort, onuId, clientName) {
   }
 }
 
+function actionViewOnuWebLogin() {
+  if (!currentViewOnu) return;
+  const ip = currentViewOnu.modemIp || currentViewOnu.cached?.ip || document.getElementById('viewWanIp')?.innerText;
+  if (!ip || ip.includes('Consultando') || ip.includes('Sin asignar')) {
+    showToast('Aviso', 'Aún no se ha detectado la IP del módem en la red', 'warning');
+    return;
+  }
+  const cleanIp = ip.split(':')[0].trim();
+  const url = `https://${cleanIp}:80`;
+  window.open(url, '_blank');
+  showToast(
+    'Abriendo Portal del Módem',
+    `URL: ${url} | Usuario: Epadmin | Clave: adminEp (Acepta el certificado SSL)`,
+    'info',
+    8000
+  );
+}
+
+async function actionViewOnuRebootWeb() {
+  if (!currentViewOnu) return;
+  const ip = currentViewOnu.modemIp || currentViewOnu.cached?.ip || document.getElementById('viewWanIp')?.innerText;
+  if (!ip || ip.includes('Consultando') || ip.includes('Sin asignar')) {
+    showToast('Aviso', 'Se requiere la IP del módem para enviar el comando web', 'warning');
+    return;
+  }
+  const cleanIp = ip.split(':')[0].trim();
+
+  const ok = await showConfirmModal(
+    '¿Reiniciar ONT vía Web?',
+    `Se enviará comando de reinicio directo al portal web de la ONT (${cleanIp}) con las credenciales de administración Epadmin.`,
+    'Reiniciar Módem',
+    'rose'
+  );
+  if (!ok) return;
+
+  showToast('Reiniciando módem...', `Enviando comando a https://${cleanIp}:80/set.cgi`, 'info', 4000);
+  try {
+    const res = await fetch(`/api/onus/${encodeURIComponent(currentViewOnu.sn)}/reboot-modem-web`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ip: cleanIp })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast('¡Módem Reiniciado!', 'El módem recibió la instrucción y se está reiniciando', 'success', 6000);
+    } else {
+      showToast('Error', data.message || 'No se pudo reiniciar el módem vía web', 'error');
+    }
+  } catch {
+    showToast('Error de Conexión', 'Fallo al comunicar con el servidor', 'error');
+  }
+}
+
 // ==========================================
 // EXPONER GLOBALMENTE EN WINDOW
 // ==========================================
@@ -1946,7 +2075,7 @@ window.loadOnus = loadOnus;
 window.filterOnusTable = filterOnusTable;
 window.promptRebootOnt = promptRebootOnt;
 
-// Funciones SmartOLT / TR-069
+// Funciones SmartOLT / TR-069 / Web Login Módem
 window.viewOnuDetail = viewOnuDetail;
 window.closeViewOnuModal = closeViewOnuModal;
 window.renameCurrentOnu = renameCurrentOnu;
@@ -1965,6 +2094,8 @@ window.submitChangeWifi = submitChangeWifi;
 window.openChangePasswordModal = openChangePasswordModal;
 window.closeChangeWebPassModal = closeChangeWebPassModal;
 window.submitChangeWebPass = submitChangeWebPass;
+window.actionViewOnuWebLogin = actionViewOnuWebLogin;
+window.actionViewOnuRebootWeb = actionViewOnuRebootWeb;
 window.actionViewOnuReboot = actionViewOnuReboot;
 window.actionViewOnuLinkTr069 = actionViewOnuLinkTr069;
 window.actionViewOnuResync = actionViewOnuResync;

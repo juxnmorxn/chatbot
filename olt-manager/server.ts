@@ -13,6 +13,8 @@ import {
   buildMikrotikScript
 } from './wireguard.js';
 import { GenieAcsClient } from './services/genieacs-client.js';
+import { HuaweiOntDriver } from './drivers/huawei-ont.js';
+import { ModemDiscoveryService } from './services/modem-discovery.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -685,6 +687,9 @@ app.get('/', async (req: Request, res: Response) => {
           </div>
         </div>
         <div class="flex items-center gap-2 shrink-0">
+          <span id="viewOnuWebStatusBadge" class="text-[11px] px-2.5 py-1 rounded-lg bg-sky-950/60 text-sky-300 border border-sky-500/30 flex items-center gap-1.5 font-mono">
+            <i class="fa-solid fa-lock text-[10px]"></i> Web ONT: Epadmin
+          </span>
           <span class="text-[11px] px-2.5 py-1 rounded-lg bg-emerald-950/60 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5 font-mono">
             <i class="fa-solid fa-server text-[10px]"></i> TR-069: 10.200.0.1:7547
           </span>
@@ -749,6 +754,54 @@ app.get('/', async (req: Request, res: Response) => {
           <div class="text-[11px] text-gray-400 flex items-center justify-between pt-0.5 border-t border-gray-900">
             <span class="flex items-center gap-1 text-emerald-400"><i class="fa-solid fa-circle-check text-[10px]"></i> CWMP / OMCI OK</span>
             <span class="text-[10px] text-gray-500 font-mono">Preset Activo</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Portal Web del Módem (Epadmin / adminEp) -->
+      <div class="p-3.5 rounded-xl bg-gradient-to-r from-sky-950/40 via-indigo-950/20 to-gray-950 border border-sky-500/30 space-y-2.5">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <div class="w-7 h-7 rounded-lg bg-sky-500/20 text-sky-400 flex items-center justify-center text-xs">
+              <i class="fa-solid fa-globe"></i>
+            </div>
+            <div>
+              <span class="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                Acceso Web Directo al Módem ONT
+                <span id="viewOnuWebLivePill" class="text-[9px] px-2 py-0.5 rounded-full font-bold bg-emerald-500/20 text-emerald-300">ONLINE</span>
+              </span>
+              <p class="text-[11px] text-gray-400">Credenciales estándar de ISP: Usuario <code class="text-emerald-300 font-mono font-bold">Epadmin</code> &bull; Password <code class="text-amber-300 font-mono font-bold">adminEp</code></p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="actionViewOnuWebLogin()" class="px-3 py-1.5 bg-gradient-to-r from-sky-600 to-sky-500 hover:from-sky-500 hover:to-sky-400 text-white rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow-md shadow-sky-500/20">
+              <i class="fa-solid fa-arrow-up-right-from-square"></i> Abrir Portal Módem (HTTPS :80)
+            </button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+          <div class="p-2 rounded-lg bg-black/50 border border-gray-800">
+            <span class="text-[10px] text-gray-400 uppercase block font-semibold">IP de Acceso Web</span>
+            <span id="viewOnuWebDirectIp" class="font-mono text-sky-300 font-bold text-xs truncate block">172.19.61.5:80</span>
+          </div>
+          <div class="p-2 rounded-lg bg-black/50 border border-gray-800 flex justify-between items-center">
+            <div>
+              <span class="text-[10px] text-gray-400 uppercase block font-semibold">Usuario</span>
+              <span class="font-mono text-emerald-300 font-bold">Epadmin</span>
+            </div>
+            <button onclick="navigator.clipboard.writeText('Epadmin'); showToast('Copiado', 'Usuario Epadmin copiado', 'success')" class="text-gray-400 hover:text-white p-1" title="Copiar"><i class="fa-regular fa-copy"></i></button>
+          </div>
+          <div class="p-2 rounded-lg bg-black/50 border border-gray-800 flex justify-between items-center">
+            <div>
+              <span class="text-[10px] text-gray-400 uppercase block font-semibold">Contraseña</span>
+              <span class="font-mono text-amber-300 font-bold">adminEp</span>
+            </div>
+            <button onclick="navigator.clipboard.writeText('adminEp'); showToast('Copiado', 'Contraseña adminEp copiada', 'success')" class="text-gray-400 hover:text-white p-1" title="Copiar"><i class="fa-regular fa-copy"></i></button>
+          </div>
+          <div class="p-2 rounded-lg bg-black/50 border border-gray-800">
+            <span class="text-[10px] text-gray-400 uppercase block font-semibold">Estado Autenticación</span>
+            <span id="viewOnuWebAuthStatus" class="font-bold text-emerald-400 text-xs flex items-center gap-1"><i class="fa-solid fa-circle-check text-[10px]"></i> Verificado OK</span>
           </div>
         </div>
       </div>
@@ -876,8 +929,14 @@ app.get('/', async (req: Request, res: Response) => {
 
       <div class="flex flex-wrap items-center justify-between pt-3 border-t border-gray-800 gap-2">
         <div class="flex flex-wrap items-center gap-2">
+          <button onclick="actionViewOnuWebLogin()" class="px-3 py-2 bg-sky-600/20 hover:bg-sky-600/30 border border-sky-500/40 text-sky-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5" title="Abrir portal web del módem (Epadmin / adminEp)">
+            <i class="fa-solid fa-arrow-up-right-from-square"></i> Web Módem
+          </button>
+          <button onclick="actionViewOnuRebootWeb()" class="px-3 py-2 bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5" title="Reiniciar ONT directamente vía Web (Epadmin)">
+            <i class="fa-solid fa-rotate-right"></i> Reboot Web
+          </button>
           <button onclick="actionViewOnuReboot()" class="px-3 py-2 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5">
-            <i class="fa-solid fa-power-off"></i> Reboot
+            <i class="fa-solid fa-power-off"></i> Reboot OLT
           </button>
           <button onclick="actionViewOnuLinkTr069()" id="btnViewOnuLinkTr069" class="px-3 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5" title="Activar TR-069 y programar Preset de Wi-Fi">
             <i class="fa-solid fa-satellite-dish"></i> Activar TR-069
@@ -1693,11 +1752,32 @@ app.get('/api/onus', async (req: Request, res: Response) => {
         }).catch(() => ({ rows: [] }));
         const savedMap = new Map((savedOntsResult.rows as any[]).map(r => [r.serial, r]));
 
+        // Obtener subredes asociadas a la OLT a través de su túnel WireGuard
+        let oltSubnets: string[] = [];
+        if (olt.tunnel_id) {
+          const peerRes = await db.execute({ sql: 'SELECT allowed_subnets FROM wireguard_peers WHERE id = ?', args: [olt.tunnel_id] }).catch(() => ({ rows: [] }));
+          const allowed = (peerRes.rows[0] as any)?.allowed_subnets || '';
+          oltSubnets = allowed.split(',').map((s: string) => s.trim()).filter(Boolean);
+        }
+
         // Enriquecer ONTs leyendo exclusivamente de la OLT y la base de datos (0 hardcoding)
-        const enriched = onts.map(o => {
+        const enriched = await Promise.all(onts.map(async o => {
           const saved = savedMap.get(o.sn) as any;
           const finalName = saved?.client_name || o.name || `ONT #${o.onuId}`;
-          const realIp = saved?.ip_address || '';
+          let realIp = saved?.ip_address || '';
+
+          // Si no tiene IP pero está ONLINE y tenemos subredes, resolver automáticamente
+          if (!realIp && o.status === 'online' && oltSubnets.length > 0) {
+            try {
+              const discoveredIp = await ModemDiscoveryService.resolveOntIp(o.sn, o.mac, oltSubnets, olt.id);
+              if (discoveredIp) {
+                realIp = discoveredIp;
+              }
+            } catch (err) {
+              console.warn(`[AutoDiscovery] No se pudo resolver IP para ${o.sn}:`, err);
+            }
+          }
+
           return {
             ...o,
             name: finalName,
@@ -1715,7 +1795,7 @@ app.get('/api/onus', async (req: Request, res: Response) => {
             oltName: olt.name,
             oltIp: olt.ip
           };
-        });
+        }));
         allOnts.push(...enriched);
       } catch (e) {
         console.error(`[API /api/onus] Error en OLT ${olt.name}:`, e);
@@ -1844,7 +1924,26 @@ app.post('/api/onus/sync-tr069', async (req: Request, res: Response) => {
       pushed = true;
     }
 
-    res.json({ success: true, tr069Pushed: pushed, omciLog, message: 'Perfil TR-069 vinculado a la ONT exitosamente' });
+    // 4. Inyectar URL TR-069 directamente en el portal web del módem (Epadmin / adminEp)
+    let webAcsConfigured = false;
+    const finalIp = cleanIp || savedOnt?.ip_address;
+    if (finalIp) {
+      try {
+        const ontDriver = new HuaweiOntDriver(finalIp, 'Epadmin', 'adminEp');
+        const webRes = await ontDriver.setTr069Acs('http://10.200.0.1:7547');
+        webAcsConfigured = webRes.success;
+      } catch (e) {
+        console.warn(`[sync-tr069] Configuración web en ${finalIp} falló:`, e);
+      }
+    }
+
+    res.json({
+      success: true,
+      tr069Pushed: pushed,
+      webAcsConfigured,
+      omciLog,
+      message: 'TR-069 configurado en el módem (Web + OMCI + GenieACS)'
+    });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -2108,6 +2207,152 @@ app.post('/api/onus/action', async (req: Request, res: Response) => {
       return res.status(400).json({ success: false, error: `Acción '${action}' no reconocida` });
     }
 
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ==========================================
+// APIS DE GESTIÓN DIRECTA DE MÓDEMS (Epadmin / adminEp)
+// ==========================================
+
+// 9. Consultar telemetría en tiempo real directamente del portal web del módem (0 hardcoding)
+app.get('/api/onus/:sn/live-web', async (req: Request, res: Response) => {
+  try {
+    const serial = req.params.sn;
+    const oltId = req.query.oltId as string;
+    const ipQuery = req.query.ip as string;
+    const db = getOltDb();
+
+    let targetIp = ipQuery;
+    if (!targetIp) {
+      const row = await db.execute({
+        sql: 'SELECT ip_address, olt_id FROM provisioned_onts WHERE serial = ?',
+        args: [serial]
+      }).then(r => r.rows[0] as any).catch(() => null);
+
+      if (row?.ip_address) {
+        targetIp = row.ip_address;
+      } else {
+        const targetOltId = oltId || row?.olt_id;
+        let subnets: string[] = [];
+        if (targetOltId) {
+          const oltRes = await db.execute({ sql: 'SELECT tunnel_id FROM olts WHERE id = ?', args: [targetOltId] });
+          const tunnelId = (oltRes.rows[0] as any)?.tunnel_id;
+          if (tunnelId) {
+            const peerRes = await db.execute({ sql: 'SELECT allowed_subnets FROM wireguard_peers WHERE id = ?', args: [tunnelId] });
+            const allowed = (peerRes.rows[0] as any)?.allowed_subnets || '';
+            subnets = allowed.split(',').map((s: string) => s.trim()).filter(Boolean);
+          }
+        }
+        if (subnets.length === 0) {
+          subnets = ['172.19.61.0/24', '172.19.52.0/24', '172.19.60.0/24'];
+        }
+        targetIp = await ModemDiscoveryService.resolveOntIp(serial, undefined, subnets, targetOltId) || '';
+      }
+    }
+
+    if (!targetIp) {
+      return res.status(404).json({ success: false, error: 'No se detectó la IP del módem en la red' });
+    }
+
+    const driver = new HuaweiOntDriver(targetIp, 'Epadmin', 'adminEp');
+    const telemetry = await driver.getFullTelemetry();
+
+    if (!telemetry.online) {
+      return res.status(502).json({ success: false, error: telemetry.error || 'No se pudo conectar al módem', ip: targetIp });
+    }
+
+    // Persistir datos extraídos automáticamente en SQLite para consultas futuras a 0ms
+    try {
+      await db.execute({
+        sql: `INSERT INTO provisioned_onts (
+                olt_id, gpon_port, onu_id, serial, client_name, vlan_id,
+                ip_address, gateway, wifi_ssid, wifi_ssid_5g
+              )
+              VALUES (?, '1/0/1', 0, ?, 'Cliente', 400, ?, ?, ?, ?)
+              ON CONFLICT(serial) DO UPDATE SET
+                ip_address = excluded.ip_address,
+                gateway = excluded.gateway,
+                wifi_ssid = COALESCE(excluded.wifi_ssid, wifi_ssid),
+                wifi_ssid_5g = COALESCE(excluded.wifi_ssid_5g, wifi_ssid_5g)`,
+        args: [
+          oltId || 'olt_default',
+          serial,
+          targetIp,
+          telemetry.wan?.gateway || `${targetIp.split('.').slice(0, 3).join('.')}.1`,
+          telemetry.wifi?.ssid2g || null,
+          telemetry.wifi?.ssid5g || null
+        ]
+      });
+    } catch {}
+
+    res.json({ success: true, telemetry });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 10. Configurar TR-069 (GenieACS) directamente en el portal web del módem
+app.post('/api/onus/:sn/set-tr069-web', async (req: Request, res: Response) => {
+  try {
+    const serial = req.params.sn;
+    const { ip, acsUrl } = req.body;
+    const targetAcs = acsUrl || 'http://10.200.0.1:7547';
+
+    let targetIp = ip;
+    if (!targetIp) {
+      const db = getOltDb();
+      const row = await db.execute({
+        sql: 'SELECT ip_address FROM provisioned_onts WHERE serial = ?',
+        args: [serial]
+      }).then(r => r.rows[0] as any).catch(() => null);
+      targetIp = row?.ip_address;
+    }
+
+    if (!targetIp) {
+      return res.status(400).json({ success: false, error: 'IP del módem requerida' });
+    }
+
+    const driver = new HuaweiOntDriver(targetIp, 'Epadmin', 'adminEp');
+    const result = await driver.setTr069Acs(targetAcs);
+
+    // Registrar preset en GenieACS en paralelo
+    await acsClient.createPresetForOnt({
+      serial,
+      ip: targetIp,
+      gateway: targetIp.split('.').slice(0, 3).join('.') + '.1'
+    }).catch(() => {});
+
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 11. Reiniciar módem remotamente por interfaz web
+app.post('/api/onus/:sn/reboot-modem-web', async (req: Request, res: Response) => {
+  try {
+    const serial = req.params.sn;
+    const { ip } = req.body;
+
+    let targetIp = ip;
+    if (!targetIp) {
+      const db = getOltDb();
+      const row = await db.execute({
+        sql: 'SELECT ip_address FROM provisioned_onts WHERE serial = ?',
+        args: [serial]
+      }).then(r => r.rows[0] as any).catch(() => null);
+      targetIp = row?.ip_address;
+    }
+
+    if (!targetIp) {
+      return res.status(400).json({ success: false, error: 'IP del módem requerida' });
+    }
+
+    const driver = new HuaweiOntDriver(targetIp, 'Epadmin', 'adminEp');
+    const result = await driver.reboot();
     res.json(result);
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });

@@ -1,0 +1,118 @@
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+function generateSphereSvg({ size = 512, withBg = false, isDark = true } = {}) {
+  const bg = withBg ? (isDark ? '#090d16' : '#ffffff') : 'none';
+  const textColor = isDark ? '#ffffff' : '#0f172a';
+  const sloganColor = isDark ? '#94a3b8' : '#475569';
+  const mxColor = isDark ? '#38bdf8' : '#0284c7';
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="${size}" height="${size}">
+  <defs>
+    <linearGradient id="cwSphereGrad" x1="15%" y1="10%" x2="85%" y2="90%">
+      <stop offset="0%" stop-color="#00a8ff" />
+      <stop offset="25%" stop-color="#0284c7" />
+      <stop offset="50%" stop-color="#3b82f6" />
+      <stop offset="75%" stop-color="#7c3aed" />
+      <stop offset="100%" stop-color="#581c87" />
+    </linearGradient>
+    <linearGradient id="cwSphereGrad2" x1="85%" y1="15%" x2="15%" y2="85%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="40%" stop-color="#6366f1" />
+      <stop offset="85%" stop-color="#9333ea" />
+      <stop offset="100%" stop-color="#4c1d95" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+  ${withBg ? `<rect width="512" height="512" rx="110" fill="${bg}"/>` : ''}
+  <g transform="translate(256, 256)">
+    <!-- Outer Rim -->
+    <circle r="180" fill="none" stroke="url(#cwSphereGrad)" stroke-width="12" stroke-dasharray="1130" stroke-dashoffset="0" opacity="0.95"/>
+    
+    <!-- Outer Diagonal Orbit -->
+    <ellipse rx="180" ry="85" fill="none" stroke="url(#cwSphereGrad)" stroke-width="14" transform="rotate(-30)" opacity="0.95"/>
+    <ellipse rx="180" ry="135" fill="none" stroke="url(#cwSphereGrad2)" stroke-width="12" transform="rotate(-30)" opacity="0.9"/>
+    
+    <!-- Latitude Curves (horizontal slices of sphere) -->
+    <ellipse rx="165" ry="60" fill="none" stroke="url(#cwSphereGrad)" stroke-width="13" transform="translate(0, -60) rotate(-15)"/>
+    <ellipse rx="178" ry="70" fill="none" stroke="url(#cwSphereGrad2)" stroke-width="15" transform="translate(0, 0) rotate(-15)"/>
+    <ellipse rx="160" ry="60" fill="none" stroke="url(#cwSphereGrad)" stroke-width="14" transform="translate(0, 60) rotate(-15)"/>
+    <ellipse rx="125" ry="45" fill="none" stroke="url(#cwSphereGrad2)" stroke-width="12" transform="translate(0, 110) rotate(-15)"/>
+    <ellipse rx="125" ry="45" fill="none" stroke="url(#cwSphereGrad)" stroke-width="12" transform="translate(0, -110) rotate(-15)"/>
+    
+    <!-- Longitude Arcs (vertical curved segments) -->
+    <ellipse rx="75" ry="178" fill="none" stroke="url(#cwSphereGrad2)" stroke-width="14" transform="rotate(25)" opacity="0.85"/>
+    <ellipse rx="125" ry="176" fill="none" stroke="url(#cwSphereGrad)" stroke-width="13" transform="rotate(25)" opacity="0.9"/>
+    <ellipse rx="155" ry="172" fill="none" stroke="url(#cwSphereGrad2)" stroke-width="12" transform="rotate(25)" opacity="0.75"/>
+    
+    <!-- Intersecting Ribbon Accent Curves -->
+    <path d="M -160,-70 Q 0,40 160,70" fill="none" stroke="url(#cwSphereGrad)" stroke-width="16" stroke-linecap="round"/>
+    <path d="M -170,0 Q 0,110 170,0" fill="none" stroke="url(#cwSphereGrad2)" stroke-width="15" stroke-linecap="round"/>
+    <path d="M -140,70 Q 0,165 140,70" fill="none" stroke="url(#cwSphereGrad)" stroke-width="14" stroke-linecap="round"/>
+  </g>
+</svg>`;
+}
+
+function generateFullLogoSvg({ width = 600, height = 300, isDark = true } = {}) {
+  const textColor = isDark ? '#ffffff' : '#0f172a';
+  const sloganColor = isDark ? '#94a3b8' : '#475569';
+  const mxColor = isDark ? '#38bdf8' : '#0284c7';
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 320" width="${width}" height="${height}">
+  <defs>
+    <linearGradient id="cwSphereGradFull" x1="15%" y1="10%" x2="85%" y2="90%">
+      <stop offset="0%" stop-color="#00a8ff" />
+      <stop offset="25%" stop-color="#0284c7" />
+      <stop offset="50%" stop-color="#3b82f6" />
+      <stop offset="75%" stop-color="#7c3aed" />
+      <stop offset="100%" stop-color="#581c87" />
+    </linearGradient>
+    <linearGradient id="cwSphereGradFull2" x1="85%" y1="15%" x2="15%" y2="85%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="40%" stop-color="#6366f1" />
+      <stop offset="85%" stop-color="#9333ea" />
+      <stop offset="100%" stop-color="#4c1d95" />
+    </linearGradient>
+  </defs>
+  <!-- Sphere Emblem -->
+  <g transform="translate(300, 85) scale(0.38)">
+    <circle r="180" fill="none" stroke="url(#cwSphereGradFull)" stroke-width="12" opacity="0.95"/>
+    <ellipse rx="180" ry="85" fill="none" stroke="url(#cwSphereGradFull)" stroke-width="14" transform="rotate(-30)" opacity="0.95"/>
+    <ellipse rx="180" ry="135" fill="none" stroke="url(#cwSphereGradFull2)" stroke-width="12" transform="rotate(-30)" opacity="0.9"/>
+    <ellipse rx="165" ry="60" fill="none" stroke="url(#cwSphereGradFull)" stroke-width="13" transform="translate(0, -60) rotate(-15)"/>
+    <ellipse rx="178" ry="70" fill="none" stroke="url(#cwSphereGradFull2)" stroke-width="15" transform="translate(0, 0) rotate(-15)"/>
+    <ellipse rx="160" ry="60" fill="none" stroke="url(#cwSphereGradFull)" stroke-width="14" transform="translate(0, 60) rotate(-15)"/>
+    <ellipse rx="125" ry="45" fill="none" stroke="url(#cwSphereGradFull2)" stroke-width="12" transform="translate(0, 110) rotate(-15)"/>
+    <ellipse rx="125" ry="45" fill="none" stroke="url(#cwSphereGradFull)" stroke-width="12" transform="translate(0, -110) rotate(-15)"/>
+    <ellipse rx="75" ry="178" fill="none" stroke="url(#cwSphereGradFull2)" stroke-width="14" transform="rotate(25)" opacity="0.85"/>
+    <ellipse rx="125" ry="176" fill="none" stroke="url(#cwSphereGradFull)" stroke-width="13" transform="rotate(25)" opacity="0.9"/>
+    <ellipse rx="155" ry="172" fill="none" stroke="url(#cwSphereGradFull2)" stroke-width="12" transform="rotate(25)" opacity="0.75"/>
+    <path d="M -160,-70 Q 0,40 160,70" fill="none" stroke="url(#cwSphereGradFull)" stroke-width="16" stroke-linecap="round"/>
+    <path d="M -170,0 Q 0,110 170,0" fill="none" stroke="url(#cwSphereGradFull2)" stroke-width="15" stroke-linecap="round"/>
+    <path d="M -140,70 Q 0,165 140,70" fill="none" stroke="url(#cwSphereGradFull)" stroke-width="14" stroke-linecap="round"/>
+  </g>
+  
+  <!-- CloudWare MX Typography -->
+  <text x="300" y="215" text-anchor="middle" font-family="'Outfit', 'Plus Jakarta Sans', system-ui, sans-serif" font-size="52" font-weight="800" fill="${textColor}" letter-spacing="-1">
+    CloudWare<tspan font-size="28" font-weight="900" dx="6" dy="-20" fill="${mxColor}">MX</tspan>
+  </text>
+  
+  <!-- Slogan -->
+  <text x="300" y="260" text-anchor="middle" font-family="'Plus Jakarta Sans', system-ui, sans-serif" font-size="24" font-weight="600" fill="${sloganColor}" letter-spacing="0.5">
+    Cada segundo cuenta
+  </text>
+</svg>`;
+}
+
+fs.writeFileSync(path.join(__dirname, 'test-sphere-dark.svg'), generateSphereSvg({ isDark: true, withBg: true }));
+fs.writeFileSync(path.join(__dirname, 'test-sphere-light.svg'), generateSphereSvg({ isDark: false, withBg: true }));
+fs.writeFileSync(path.join(__dirname, 'test-full-dark.svg'), generateFullLogoSvg({ isDark: true }));
+fs.writeFileSync(path.join(__dirname, 'test-full-light.svg'), generateFullLogoSvg({ isDark: false }));
+console.log('SVGs generated successfully!');
