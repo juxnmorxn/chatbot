@@ -2259,8 +2259,30 @@ app.get('/api/onus/:sn/live-web', async (req: Request, res: Response) => {
       return res.status(404).json({ success: false, error: 'No se detectó la IP del módem en la red' });
     }
 
-    const driver = new HuaweiOntDriver(targetIp, 'Epadmin', 'adminEp');
-    const telemetry = await driver.getFullTelemetry();
+    let driver = new HuaweiOntDriver(targetIp, 'Epadmin', 'adminEp');
+    let telemetry = await driver.getFullTelemetry();
+
+    // Si la IP objetivo guardada no responde (por ejemplo si cambió o está en otra IP de la subred), escanear y reintentar
+    if (!telemetry.online) {
+      const targetOltId = oltId;
+      let subnets = ['172.19.61.0/24', '172.19.52.0/24', '172.19.60.0/24'];
+      if (targetOltId) {
+        const oltRes = await db.execute({ sql: 'SELECT tunnel_id FROM olts WHERE id = ?', args: [targetOltId] }).catch(() => null);
+        const tunnelId = (oltRes?.rows[0] as any)?.tunnel_id;
+        if (tunnelId) {
+          const peerRes = await db.execute({ sql: 'SELECT allowed_subnets FROM wireguard_peers WHERE id = ?', args: [tunnelId] }).catch(() => null);
+          const allowed = (peerRes?.rows[0] as any)?.allowed_subnets || '';
+          const s = allowed.split(',').map((x: string) => x.trim()).filter(Boolean);
+          if (s.length > 0) subnets = s;
+        }
+      }
+      const discovered = await ModemDiscoveryService.resolveOntIp(serial, undefined, subnets, targetOltId);
+      if (discovered && discovered !== targetIp) {
+        targetIp = discovered;
+        driver = new HuaweiOntDriver(targetIp, 'Epadmin', 'adminEp');
+        telemetry = await driver.getFullTelemetry();
+      }
+    }
 
     if (!telemetry.online) {
       return res.status(502).json({ success: false, error: telemetry.error || 'No se pudo conectar al módem', ip: targetIp });
@@ -2407,8 +2429,17 @@ app.all('/modem-proxy/:ip/*', async (req: Request, res: Response) => {
     });
 
     // Reenviar encabezados clave
-    if (axiosRes.headers['content-type']) res.setHeader('content-type', axiosRes.headers['content-type']);
+    const contentType = axiosRes.headers['content-type'] || '';
+    if (contentType) res.setHeader('content-type', contentType);
     if (axiosRes.headers['set-cookie']) res.setHeader('set-cookie', axiosRes.headers['set-cookie']);
+
+    if (contentType.includes('text/html')) {
+      let htmlStr = Buffer.from(axiosRes.data).toString('utf-8');
+      if (!htmlStr.includes('<base')) {
+        htmlStr = htmlStr.replace(/<head>/i, `<head>\n  <base href="/modem-proxy/${targetIp}/">`);
+      }
+      return res.status(axiosRes.status).send(htmlStr);
+    }
 
     res.status(axiosRes.status).send(Buffer.from(axiosRes.data));
   } catch (err: any) {

@@ -1208,14 +1208,15 @@ async function viewOnuDetail(oltId, gponPort, onuId, sn, encodedName, vlan) {
     isActive: true
   };
 
-  // Buscar datos en cache
-  const cached = configuredOnus.find(o => o.sn === sn || (o.gponPort === gponPort && o.onuId === onuId));
+  // Buscar datos en cache filtrando estrictamente por OLT y número de serie
+  const cached = configuredOnus.find(o => o.sn === sn && (!oltId || o.oltId === oltId)) 
+              || configuredOnus.find(o => o.sn === sn);
   currentViewOnu.cached = cached;
 
   // Poblar UI inicial
   document.getElementById('viewOnuTitleName').innerText = clientName;
   document.getElementById('viewOnuSubtitle').innerText = `gpon-onu_${gponPort}:${onuId} • ${sn}`;
-  document.getElementById('viewOnuOltName').innerText = cached?.oltName || 'fray';
+  document.getElementById('viewOnuOltName').innerText = cached?.oltName || (olts.find(x => x.id === oltId)?.name || 'plomosas');
   document.getElementById('viewOnuPort').innerText = `${gponPort}:${onuId}`;
   document.getElementById('viewOnuSn').innerHTML = `${sn} ${cached?.mac ? `<span class="ml-2 px-1.5 py-0.5 rounded bg-gray-800 text-[10px] text-sky-300 font-mono"><i class="fa-solid fa-ethernet text-[9px] mr-1"></i>${cached.mac}</span>` : ''}`;
   document.getElementById('viewOnuModel').innerText = cached?.model || 'Huawei EG8041V5';
@@ -1423,7 +1424,8 @@ async function viewOnuDetail(oltId, gponPort, onuId, sn, encodedName, vlan) {
       }
       if (dev.wifi5gPassword) {
         currentViewOnu.realWifi5gPass = dev.wifi5gPassword;
-        if (currentViewOnu.wifi5gVisible && el5gPass) el5gPass.innerText = dev.wifi5gPassword;
+        const pass5gEl = document.getElementById('viewWifi5gPass');
+        if (currentViewOnu.wifi5gVisible && pass5gEl) pass5gEl.innerText = dev.wifi5gPassword;
       }
     }
   } catch (err) {}
