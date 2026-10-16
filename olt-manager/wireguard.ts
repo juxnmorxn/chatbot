@@ -165,6 +165,13 @@ export function buildMikrotikScript(tunnelName: string, clientIp: string, client
 /ip firewall filter remove [find where comment~"CloudOLT"]
 /ip firewall filter add chain=input in-interface=wg-cloudolt action=accept comment="CloudOLT Input y Ping"
 /ip firewall filter add chain=forward in-interface=wg-cloudolt action=accept comment="CloudOLT Traffic to OLT"
+/ip firewall filter add chain=forward out-interface=wg-cloudolt action=accept comment="CloudOLT ONTs to VPS"
+
+# 5. Enrutamiento y NAT de Retorno hacia el VPS
+/ip route remove [find where comment~"CloudOLT"]
+/ip route add dst-address=${SERVER_PUBLIC_IP}/32 gateway=wg-cloudolt comment="CloudOLT Direct Route" disabled=no distance=1
+/ip firewall nat remove [find where comment~"CloudOLT"]
+/ip firewall nat add chain=srcnat out-interface=wg-cloudolt action=masquerade comment="CloudOLT TR069 Masquerade" place-before=0
 `;
 }
 
