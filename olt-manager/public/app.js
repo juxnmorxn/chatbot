@@ -1269,18 +1269,10 @@ async function viewOnuDetail(oltId, gponPort, onuId, sn, encodedName, vlan) {
     }
   }
 
-  // Valores de WAN según base de datos y MikroTik
-  const realIp = cached?.ip || (
-    onuId === 0 ? '172.19.52.3' :
-    onuId === 1 ? '172.19.52.10' :
-    onuId === 2 ? '172.19.52.2' :
-    onuId === 3 ? '172.19.52.4' :
-    onuId === 4 ? '172.19.52.5' :
-    'Sin asignar'
-  );
-
-  const realGw = cached?.gateway || '172.19.52.1';
-  const realMask = cached?.mask || '255.255.255.0';
+  // Valores de WAN reales de la ONT (0 hardcoding)
+  const realIp = cached?.ip || 'Sin asignar';
+  const realGw = cached?.gateway || (cached?.ip ? `${cached.ip.split('.').slice(0, 3).join('.')}.1` : 'Sin asignar');
+  const realMask = cached?.mask || (cached?.ip ? '255.255.255.0' : 'Sin asignar');
 
   document.getElementById('viewWanOnuMode').innerText = 'Routing';
   document.getElementById('viewWanSetupMode').innerText = 'Static IP (OMCI/TR069)';
@@ -1427,14 +1419,14 @@ function openUpdateWanModal() {
   document.getElementById('wanModalVlan').value = currentViewOnu.vlan || 400;
 
   const currentIp = document.getElementById('viewWanIp')?.innerText;
-  if (currentIp && currentIp !== 'Consultando...' && currentIp !== 'Sin asignar (OFFLINE)') {
+  if (currentIp && currentIp !== 'Consultando...' && currentIp !== 'Sin asignar (OFFLINE)' && currentIp !== 'Sin asignar') {
     document.getElementById('wanModalIp').value = currentIp;
   } else {
-    document.getElementById('wanModalIp').value = '172.19.52.3';
+    document.getElementById('wanModalIp').value = '';
   }
 
   const currentGw = document.getElementById('viewWanGw')?.innerText;
-  document.getElementById('wanModalGw').value = currentGw || '172.19.52.1';
+  document.getElementById('wanModalGw').value = (currentGw && currentGw !== 'Sin asignar') ? currentGw : '';
   document.getElementById('wanModalMask').value = '255.255.255.0';
   document.getElementById('wanModalDns1').value = '8.8.8.8';
   document.getElementById('wanModalDns2').value = '8.8.4.4';
