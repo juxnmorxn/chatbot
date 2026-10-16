@@ -1693,46 +1693,17 @@ app.get('/api/onus', async (req: Request, res: Response) => {
         }).catch(() => ({ rows: [] }));
         const savedMap = new Map((savedOntsResult.rows as any[]).map(r => [r.serial, r]));
 
-        // Mapeo 100% verificado según WinBox (Simple Queues) y WispHub (Router RB-XIDEJE-FRAY / VLAN 400)
-        const modemRealIpMap: Record<number, string> = {
-          0: '172.19.52.3',  // 3007-Angelica Orta Lugo
-          1: '172.19.52.10', // 2925-Gustavo Adolfo Meza Paredes
-          2: '172.19.52.2',  // 3020-Marcos Paredes Hernandez
-          3: '172.19.52.4',  // 3000-Cruz Manuel Barrera Perez
-          4: '172.19.52.5'   // 3033-Daniel Larios Godinez
-        };
-
-        const wisphubNames: Record<number, string> = {
-          0: '3007 - Angelica Orta Lugo',
-          1: '2925 - Gustavo Adolfo Meza Paredes',
-          2: '3020 - Marcos Paredes Hernandez',
-          3: '3000 - Cruz Manuel Barrera Perez',
-          4: '3033 - Daniel Larios Godinez'
-        };
-
-        const wisphubPlans: Record<number, string> = {
-          0: 'Pakete Basic 40M',
-          1: 'Pakete Esencial 60M',
-          2: 'Pakete Basic 40M',
-          3: 'Pakete Elite 200M',
-          4: 'Pakete Basic 40M'
-        };
-
+        // Enriquecer ONTs leyendo exclusivamente de la OLT y la base de datos (0 hardcoding)
         const enriched = onts.map(o => {
           const saved = savedMap.get(o.sn) as any;
-          // Nombre verificado con WispHub, OLT y base de datos
-          const finalName = (saved?.client_name && saved.client_name !== 'Cliente')
-            ? saved.client_name
-            : (wisphubNames[o.onuId] || o.name);
-
-          // IP estática real verificada en MikroTik y WispHub
-          const realIp = saved?.ip_address || modemRealIpMap[o.onuId] || '';
+          const finalName = saved?.client_name || o.name || `ONT #${o.onuId}`;
+          const realIp = saved?.ip_address || '';
           return {
             ...o,
             name: finalName,
             ip: realIp,
-            plan: saved?.plan_speed || wisphubPlans[o.onuId] || 'Plan Fibra',
-            gateway: saved?.gateway || (realIp ? '172.19.52.1' : ''),
+            plan: saved?.plan_speed || 'Plan Fibra',
+            gateway: saved?.gateway || (realIp ? `${realIp.split('.').slice(0, 3).join('.')}.1` : ''),
             mask: realIp ? '255.255.255.0' : '',
             dns1: realIp ? '8.8.8.8' : '',
             dns2: realIp ? '8.8.4.4' : '',
