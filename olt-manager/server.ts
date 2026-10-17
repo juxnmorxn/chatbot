@@ -1508,25 +1508,59 @@ app.post('/api/olts/test-raw', async (req: Request, res: Response) => {
 app.get('/api/autofind', async (req: Request, res: Response) => {
   const oltId = req.query.oltId as string;
   const port = (req.query.port as string) || '1/0/1';
-  if (!oltId) return res.json({ onts: [], nextFreeOnuId: 0 });
-
   const db = getOltDb();
-  const result = await db.execute({ sql: 'SELECT * FROM olts WHERE id = ?', args: [oltId] });
-  const olt = result.rows[0] as unknown as OltDevice;
 
-  if (!olt) return res.status(404).json({ error: 'OLT no encontrada' });
+  let oltRows: any[] = [];
+  if (oltId && oltId !== 'all') {
+    const result = await db.execute({ sql: 'SELECT * FROM olts WHERE id = ?', args: [oltId] });
+    oltRows = result.rows;
+  } else {
+    const result = await db.execute('SELECT * FROM olts ORDER BY created_at ASC');
+    oltRows = result.rows;
+  }
 
-  const driver = new TpLinkDeltaStreamDriver(olt);
-  const onts = await driver.getAutofindOnts(port);
-  const nextFreeOnuId = await driver.getNextFreeOnuId(port);
+  if (oltRows.length === 0) return res.json({ onts: [], nextFreeOnuId: 0, usedIps: [] });
 
-  // Consultar IPs ya asignadas en esta OLT para sugerir la siguiente IP libre
-  const usedIpsResult = await db.execute({
-    sql: 'SELECT ip_address FROM provisioned_onts WHERE olt_id = ? AND ip_address IS NOT NULL',
-    args: [olt.id]
-  }).catch(() => ({ rows: [] }));
+  const allAutofindOnts: any[] = [];
+  let firstNextFreeOnuId = 0;
+  const allUsedIps: string[] = [];
 
-  res.json({ oltId: olt.id, port, onts, nextFreeOnuId, usedIps: usedIpsResult.rows.map((r: any) => r.ip_address) });
+  for (const row of oltRows) {
+    const olt = row as unknown as OltDevice;
+    try {
+      const driver = new TpLinkDeltaStreamDriver(olt);
+      const onts = await driver.getAutofindOnts(port);
+      const nextFree = await driver.getNextFreeOnuId(port);
+      if (!firstNextFreeOnuId) firstNextFreeOnuId = nextFree;
+
+      const usedIpsResult = await db.execute({
+        sql: 'SELECT ip_address FROM provisioned_onts WHERE olt_id = ? AND ip_address IS NOT NULL',
+        args: [olt.id]
+      }).catch(() => ({ rows: [] }));
+
+      const usedIps = usedIpsResult.rows.map((r: any) => r.ip_address);
+      allUsedIps.push(...usedIps);
+
+      for (const o of onts) {
+        allAutofindOnts.push({
+          ...o,
+          oltId: olt.id,
+          oltName: olt.name,
+          oltIp: olt.ip
+        });
+      }
+    } catch (e: any) {
+      console.error(`[Autofind Error OLT ${olt.name}]:`, e.message);
+    }
+  }
+
+  res.json({
+    oltId: oltId || 'all',
+    port,
+    onts: allAutofindOnts,
+    nextFreeOnuId: firstNextFreeOnuId,
+    usedIps: allUsedIps
+  });
 });
 
 app.post('/api/provision', async (req: Request, res: Response) => {

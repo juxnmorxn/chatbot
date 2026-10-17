@@ -790,11 +790,11 @@ async function refreshAutofind(force = false) {
   }
 
   // Llenar selector
-  select.innerHTML = olts.map(o => `<option value="${o.id}">${o.name} (${o.ip})</option>`).join('');
-  if (activeOltId && olts.find(o => o.id === activeOltId)) {
+  select.innerHTML = '<option value="all">-- Todas las OLTs --</option>' + olts.map(o => `<option value="${o.id}">${o.name} (${o.ip})</option>`).join('');
+  if (activeOltId && (activeOltId === 'all' || olts.find(o => o.id === activeOltId))) {
     select.value = activeOltId;
   } else {
-    activeOltId = select.value;
+    activeOltId = select.value || 'all';
   }
 
   // Si no tenemos nada en caché y no hay tarjetas previas, mostrar cargando
@@ -803,7 +803,8 @@ async function refreshAutofind(force = false) {
   }
 
   try {
-    const res = await fetch('/api/autofind?oltId=' + activeOltId);
+    const filter = (activeOltId && activeOltId !== 'all') ? ('?oltId=' + activeOltId) : '';
+    const res = await fetch('/api/autofind' + filter);
     const data = await res.json();
     const countBadge = document.getElementById('unconfiguredBadge');
     const onts = data.onts || [];
@@ -828,10 +829,11 @@ async function refreshAutofind(force = false) {
               <div class="flex items-center gap-2">
                 <span class="text-xs font-mono font-bold text-white">${ont.sn}</span>
                 <span class="text-[10px] px-2 py-0.5 rounded bg-gray-800 text-gray-300 font-semibold">${ont.vendor}</span>
+                ${ont.oltName ? `<span class="text-[10px] px-1.5 py-0.5 rounded bg-indigo-950/60 text-indigo-300 border border-indigo-800/40 font-mono">${ont.oltName}</span>` : ''}
               </div>
               <p class="text-[11px] text-gray-400 mt-1">Puerto GPON: <span class="font-mono text-gray-200">${ont.gponPort}</span></p>
             </div>
-            <button onclick="openProvisionModal('${ont.sn}', '${ont.gponPort}')" class="px-3.5 py-2 bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-gray-950 font-bold rounded-xl text-xs flex items-center gap-1.5 transition shadow-lg shadow-amber-500/20">
+            <button onclick="openProvisionModal('${ont.sn}', '${ont.gponPort}', '${ont.oltId || activeOltId || ''}')" class="px-3.5 py-2 bg-gradient-to-r from-amber-500 to-amber-400 hover:from-amber-400 hover:to-amber-300 text-gray-950 font-bold rounded-xl text-xs flex items-center gap-1.5 transition shadow-lg shadow-amber-500/20">
               <i class="fa-solid fa-bolt"></i> Activar
             </button>
           </div>
@@ -858,8 +860,10 @@ function autoFill5gSsid() {
   }
 }
 
-function openProvisionModal(sn, port) {
-  const olt = olts.find(o => o.id === activeOltId);
+function openProvisionModal(sn, port, targetOltId) {
+  const chosenOltId = targetOltId || (activeOltId !== 'all' ? activeOltId : olts[0]?.id);
+  const olt = olts.find(o => o.id === chosenOltId);
+  if (chosenOltId) activeOltId = chosenOltId;
   document.getElementById('modalSn').value = sn;
   document.getElementById('modalPort').value = port || '1/0/1';
   const portDisplay = document.getElementById('modalPortDisplay');
