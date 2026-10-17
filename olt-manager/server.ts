@@ -1763,6 +1763,7 @@ app.get('/favicon.ico', (req: Request, res: Response) => {
 app.get('/api/onus', async (req: Request, res: Response) => {
   try {
     const oltId = req.query.oltId as string;
+    const force = req.query.force === 'true' || req.query.force === '1';
     const db = getOltDb();
 
     let oltRows: any[] = [];
@@ -1783,14 +1784,32 @@ app.get('/api/onus', async (req: Request, res: Response) => {
       const olt = row as unknown as OltDevice;
       try {
         const driver = new TpLinkDeltaStreamDriver(olt);
-        const onts = await driver.getConfiguredOnts('1/0/1');
+        const onts = await driver.getConfiguredOnts('1/0/1', force);
+
+        // Si se leyó exitosamente la OLT, conciliar con provisioned_onts:
+        // Si una ONT ya no existe en la OLT TP-Link (fue borrada manual o desautorizada),
+        // eliminarla de provisioned_onts para que no quede como fantasma.
+        const currentSnSet = new Set(onts.map(o => o.sn));
 
         // Consultar datos guardados en la base de datos (IPs fijas, Wi-Fi guardado, nombres)
         const savedOntsResult = await db.execute({
           sql: 'SELECT serial, onu_id, client_name, ip_address, gateway, wifi_ssid, wifi_password, wifi_ssid_5g, wifi_password_5g FROM provisioned_onts WHERE olt_id = ?',
           args: [olt.id]
         }).catch(() => ({ rows: [] }));
-        const savedMap = new Map((savedOntsResult.rows as any[]).map(r => [r.serial, r]));
+        
+        // Limpieza de fantasmas si la lectura óptica o de config fue válida
+        if (onts.length > 0) {
+          for (const sRow of (savedOntsResult.rows as any[])) {
+            if (!currentSnSet.has(sRow.serial)) {
+              await db.execute({
+                sql: 'DELETE FROM provisioned_onts WHERE olt_id = ? AND serial = ?',
+                args: [olt.id, sRow.serial]
+              }).catch(() => {});
+            }
+          }
+        }
+
+        const savedMap = new Map((savedOntsResult.rows as any[]).filter(r => currentSnSet.has(r.serial)).map(r => [r.serial, r]));
 
         // Obtener subredes asociadas a la OLT a través de su túnel WireGuard
         let oltSubnets: string[] = [];

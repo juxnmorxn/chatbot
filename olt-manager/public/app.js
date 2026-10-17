@@ -773,10 +773,16 @@ function viewOlt(id) {
 // ==========================================
 // UNCONFIGURED / AUTOFIND
 // ==========================================
-async function refreshAutofind() {
+let cachedAutofind = [];
+
+async function refreshAutofind(force = false) {
   const container = document.getElementById('autofindContainer');
   const select = document.getElementById('autofindOltSelect');
   if (!container) return;
+
+  if (olts.length === 0) {
+    await loadOlts();
+  }
 
   if (olts.length === 0) {
     container.innerHTML = '<div class="text-center py-12 text-gray-500 text-xs">No hay OLTs registradas. Da de alta una OLT primero.</div>';
@@ -791,15 +797,20 @@ async function refreshAutofind() {
     activeOltId = select.value;
   }
 
-  container.innerHTML = '<div class="text-center py-12 text-gray-400 text-xs"><i class="fa-solid fa-spinner fa-spin text-xl text-indigo-400 mb-2 block"></i>Consultando ONTs por SSH en OLT...</div>';
+  // Si no tenemos nada en caché y no hay tarjetas previas, mostrar cargando
+  if (!container.children.length || container.innerHTML.includes('No hay OLTs registradas')) {
+    container.innerHTML = '<div class="text-center py-12 text-gray-400 text-xs"><i class="fa-solid fa-spinner fa-spin text-xl text-indigo-400 mb-2 block"></i>Consultando ONTs por SSH en OLT...</div>';
+  }
 
   try {
     const res = await fetch('/api/autofind?oltId=' + activeOltId);
     const data = await res.json();
     const countBadge = document.getElementById('unconfiguredBadge');
-    if (countBadge) countBadge.innerText = data.onts ? data.onts.length : 0;
+    const onts = data.onts || [];
+    cachedAutofind = onts;
+    if (countBadge) countBadge.innerText = onts.length;
 
-    if (!data.onts || data.onts.length === 0) {
+    if (onts.length === 0) {
       container.innerHTML = `
         <div class="text-center py-12 text-gray-500 text-xs">
           <i class="fa-solid fa-check-circle text-3xl text-emerald-500/50 mb-2 block"></i>
@@ -811,7 +822,7 @@ async function refreshAutofind() {
 
     container.innerHTML = `
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-        ${data.onts.map(ont => `
+        ${onts.map(ont => `
           <div class="p-4 rounded-xl bg-gray-900/60 border border-gray-800 flex items-center justify-between">
             <div>
               <div class="flex items-center gap-2">
@@ -828,7 +839,9 @@ async function refreshAutofind() {
       </div>
     `;
   } catch (err) {
-    container.innerHTML = '<div class="text-center py-10 text-rose-400 text-xs">Error conectando con la OLT. Verifica el túnel VPN en MikroTik o credenciales SSH.</div>';
+    if (!container.children.length) {
+      container.innerHTML = '<div class="text-center py-10 text-rose-400 text-xs">Error conectando con la OLT. Verifica el túnel VPN en MikroTik o credenciales SSH.</div>';
+    }
   }
 }
 
@@ -991,6 +1004,10 @@ async function loadOnus(force = false) {
 
   if (refreshIcon) refreshIcon.classList.add('fa-spin');
 
+  if (olts.length === 0) {
+    await loadOlts();
+  }
+
   // Llenar selector de OLTs si no se ha inicializado
   if (select && olts.length > 0 && select.options.length <= 1) {
     const currentVal = select.value || activeOltId;
@@ -1015,15 +1032,16 @@ async function loadOnus(force = false) {
 
   try {
     const filterId = select ? select.value : activeOltId;
-    const oltFilter = filterId ? `?oltId=${filterId}` : '';
-    const res = await fetch('/api/onus' + oltFilter);
+    const params = new URLSearchParams();
+    if (filterId) params.append('oltId', filterId);
+    if (force) params.append('force', 'true');
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    const res = await fetch('/api/onus' + qs);
     const data = await res.json();
     
-    // Si la OLT respondió con ONTs, actualizar lista. Si respondió vacío por timeout transitorio, preservar las ONTs en memoria
-    if (data.onts && data.onts.length > 0) {
+    // Si la OLT respondió con ONTs, actualizar lista. Si respondió vacío pero la petición fue exitosa, actualizar
+    if (data.onts) {
       configuredOnus = data.onts;
-    } else if (!configuredOnus || configuredOnus.length === 0) {
-      configuredOnus = data.onts || [];
     }
 
     // Actualizar Badges
@@ -2156,9 +2174,31 @@ function getInitialTab() {
   return 'onus'; // Tab de mayor utilidad por defecto
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+async function updateUnconfiguredBadge() {
+  if (olts.length === 0) return;
+  const targetId = activeOltId || olts[0]?.id;
+  if (!targetId) return;
+  try {
+    const res = await fetch('/api/autofind?oltId=' + targetId);
+    const data = await res.json();
+    const countBadge = document.getElementById('unconfiguredBadge');
+    if (countBadge && data.onts) {
+      countBadge.innerText = data.onts.length;
+    }
+  } catch {}
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
   const initialTab = getInitialTab();
+
+  // 1. Cargar OLTs primero como base de todo el sistema
+  await loadOlts();
+
+  // 2. Ejecutar la pestaña inicial sin que falle por falta de OLTs
   switchTab(initialTab, true);
+
+  // 3. Actualizar badge de no configurados en segundo plano
+  updateUnconfiguredBadge();
 
   // Escuchar cambios de hash por navegación directa o botones
   window.addEventListener('hashchange', () => {
@@ -2176,4 +2216,7 @@ document.addEventListener('DOMContentLoaded', () => {
       loadOlts();
     }
   }, 4000);
+
+  // Actualizar badge de autofind cada 15 segundos
+  setInterval(updateUnconfiguredBadge, 15000);
 });

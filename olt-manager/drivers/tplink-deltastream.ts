@@ -63,6 +63,18 @@ export class TpLinkDeltaStreamDriver {
   private static ontsCache = new Map<string, { timestamp: number; onts: ConfiguredOnt[] }>();
   private static ontsQueryPromise = new Map<string, Promise<ConfiguredOnt[]>>();
 
+  public static clearCache(oltIdOrIp?: string): void {
+    if (oltIdOrIp) {
+      for (const key of TpLinkDeltaStreamDriver.ontsCache.keys()) {
+        if (key.startsWith(oltIdOrIp)) {
+          TpLinkDeltaStreamDriver.ontsCache.delete(key);
+        }
+      }
+    } else {
+      TpLinkDeltaStreamDriver.ontsCache.clear();
+    }
+  }
+
   constructor(config: OltDevice) {
     this.config = config;
   }
@@ -427,13 +439,13 @@ export class TpLinkDeltaStreamDriver {
   /**
    * Consulta todas las ONTs ya configuradas y autorizadas en la OLT con sus potencias ópticas y nombres de cliente
    */
-  public async getConfiguredOnts(gponPort: string = '1/0/1'): Promise<ConfiguredOnt[]> {
+  public async getConfiguredOnts(gponPort: string = '1/0/1', forceRefresh: boolean = false): Promise<ConfiguredOnt[]> {
     const cacheKey = `${this.config.id || this.config.ip}_${gponPort}`;
     const cached = TpLinkDeltaStreamDriver.ontsCache.get(cacheKey);
     const now = Date.now();
 
-    // 1. Si tenemos cache fresco (< 45 segundos), responder de inmediato en 0ms
-    if (cached && (now - cached.timestamp < 45000)) {
+    // 1. Si tenemos cache fresco (< 10 segundos) y no se forzó refresco, responder de inmediato en 0ms
+    if (!forceRefresh && cached && (now - cached.timestamp < 10000)) {
       return cached.onts;
     }
 
@@ -457,13 +469,8 @@ export class TpLinkDeltaStreamDriver {
         const configPart = combinedOutput.split(/show running-config/i)[1] || combinedOutput;
 
         const onts = this.parseConfiguredOnts(opticalPart, configPart, gponPort, versionPart, macPart);
-        if (onts && onts.length > 0) {
-          TpLinkDeltaStreamDriver.ontsCache.set(cacheKey, { timestamp: Date.now(), onts });
-          return onts;
-        } else if (cached && cached.onts.length > 0) {
-          // Si la OLT respondió vacío temporalmente por retardo de CLI, preservar cache previo
-          return cached.onts;
-        }
+        // Siempre guardar la lectura real obtenida de la OLT
+        TpLinkDeltaStreamDriver.ontsCache.set(cacheKey, { timestamp: Date.now(), onts });
         return onts;
       } catch (err) {
         console.error(`[OLT ${this.config.name}] Error leyendo ONTs configuradas:`, err);
@@ -702,6 +709,7 @@ copy running-config startup-config
     try {
       const log = await this.executeCommand(cliScript, 22000);
       const isFailed = /error|invalid|failed/i.test(log);
+      TpLinkDeltaStreamDriver.clearCache(this.config.id || this.config.ip);
       // Si la salida no confirma el guardado, asegurar persistencia con saveConfiguration
       if (!log.includes('Saving user config OK!')) {
         await this.saveConfiguration().catch(() => {});
@@ -731,6 +739,7 @@ copy running-config startup-config
 `;
     try {
       const log = await this.executeCommand(cliScript, 10000);
+      TpLinkDeltaStreamDriver.clearCache(this.config.id || this.config.ip);
       return { success: true, log };
     } catch (err: any) {
       return { success: false, log: err.message || String(err) };
