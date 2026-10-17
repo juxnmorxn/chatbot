@@ -2,19 +2,27 @@ import { Client } from 'ssh2';
 
 const conn = new Client();
 conn.on('ready', () => {
-  console.log('Conectado al VPS. Iniciando despliegue...');
-  const cmd = 'cd /root/chatbot && git pull origin main && docker compose build chatbot_app && docker compose up -d chatbot_app';
+  console.log('[Hostinger VPS] Conexión SSH establecida con éxito.');
+  const cmd = `
+    cd /root/chatbot || cd /app || cd /home/chatbot || pwd
+    git pull origin main
+    docker compose build chatbot_app
+    docker compose up -d chatbot_app
+    sleep 3
+    docker logs --tail 25 chatbot_app
+  `;
   conn.exec(cmd, (err, stream) => {
     if (err) {
-      console.error('Error al ejecutar comando:', err);
-      process.exit(1);
-    }
-    stream.on('data', (d) => process.stdout.write(d));
-    stream.stderr.on('data', (d) => process.stderr.write(d));
-    stream.on('close', (code) => {
-      console.log('\nDespliegue finalizado con código:', code);
+      console.error('[Hostinger VPS] Error ejecutando comando:', err);
       conn.end();
-      process.exit(code || 0);
+      return;
+    }
+    let out = '';
+    stream.on('data', d => out += d);
+    stream.stderr.on('data', d => out += d);
+    stream.on('close', (code) => {
+      console.log(`[Hostinger VPS] Finalizado con código ${code}:\n`, out);
+      conn.end();
     });
   });
 }).connect({
