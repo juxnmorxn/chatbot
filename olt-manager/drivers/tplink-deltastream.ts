@@ -1,4 +1,5 @@
 import { Client } from 'ssh2';
+import net from 'net';
 
 export interface OltDevice {
   id: string;
@@ -62,6 +63,10 @@ export class TpLinkDeltaStreamDriver {
   private config: OltDevice;
   private static ontsCache = new Map<string, { timestamp: number; onts: ConfiguredOnt[] }>();
   private static ontsQueryPromise = new Map<string, Promise<ConfiguredOnt[]>>();
+  private static autofindCache = new Map<string, { timestamp: number; onts: AutofindOnt[] }>();
+  private static autofindQueryPromise = new Map<string, Promise<AutofindOnt[]>>();
+  private static preferredProtocol = new Map<string, 'telnet' | 'ssh'>();
+  private static connectionLocks = new Map<string, Promise<any>>();
 
   public static clearCache(oltIdOrIp?: string): void {
     if (oltIdOrIp) {
@@ -70,8 +75,14 @@ export class TpLinkDeltaStreamDriver {
           TpLinkDeltaStreamDriver.ontsCache.delete(key);
         }
       }
+      for (const key of TpLinkDeltaStreamDriver.autofindCache.keys()) {
+        if (key.startsWith(oltIdOrIp)) {
+          TpLinkDeltaStreamDriver.autofindCache.delete(key);
+        }
+      }
     } else {
       TpLinkDeltaStreamDriver.ontsCache.clear();
+      TpLinkDeltaStreamDriver.autofindCache.clear();
     }
   }
 
@@ -82,7 +93,7 @@ export class TpLinkDeltaStreamDriver {
   /**
    * Ejecuta comandos en la OLT vía SSH con timeout configurable
    */
-  public async executeCommand(command: string, timeoutMs: number = 8000): Promise<string> {
+  public async executeCommandViaSsh(command: string, timeoutMs: number = 8000): Promise<string> {
     return new Promise((resolve, reject) => {
       const conn = new Client();
       let output = '';
@@ -346,17 +357,171 @@ export class TpLinkDeltaStreamDriver {
   }
 
   /**
-   * Consulta ONTs descubiertas automáticamente pendientes de autorizar (Autofind)
+   * Ejecuta comandos en la OLT vía Telnet (Puerto 23 - Ultra rápido y 100% estable en TP-Link)
    */
-  public async getAutofindOnts(port: string = '1/0/1'): Promise<AutofindOnt[]> {
-    try {
-      // En TP-Link DeltaStream 'show ont autofind' REQUIERE modo privilegiado (enable)
-      const raw = await this.executeCommand(`enable\nterminal length 0\nshow ont autofind gpon ${port}\n`, 8000);
-      return this.parseAutofind(raw, port);
-    } catch (error) {
-      console.error(`[OLT ${this.config.name}] Error leyendo autofind:`, error);
-      return [];
+  public executeCommandViaTelnet(command: string, timeoutMs: number = 10000): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const client = new net.Socket();
+      let output = '';
+      let buffer = '';
+      let stage = 'init';
+      let timer: NodeJS.Timeout;
+
+      const cleanup = () => {
+        clearTimeout(timer);
+        try { client.destroy(); } catch {}
+      };
+
+      timer = setTimeout(() => {
+        cleanup();
+        if (output.trim()) resolve(output);
+        else reject(new Error(`Timeout Telnet (${timeoutMs}ms) conectando a OLT ${this.config.ip}:23`));
+      }, timeoutMs);
+
+      client.connect(23, this.config.ip, () => {});
+
+      client.on('data', (data) => {
+        const chunk = data.toString('latin1');
+        buffer += chunk;
+        output += chunk;
+
+        if (stage === 'init' && buffer.includes('User:')) {
+          stage = 'pass_wait';
+          client.write(this.config.username + '\r\n');
+          buffer = '';
+        } else if (stage === 'pass_wait' && buffer.includes('Password:')) {
+          stage = 'login_wait';
+          client.write((this.config.password || '') + '\r\n');
+          buffer = '';
+        } else if (stage === 'login_wait' && (buffer.includes('>') || buffer.includes('#'))) {
+          if (buffer.includes('>')) {
+            stage = 'enable_sent';
+            client.write('enable\r\n');
+            buffer = '';
+          } else {
+            stage = 'exec';
+            runCommands();
+          }
+        } else if (stage === 'enable_sent' && buffer.includes('#')) {
+          stage = 'exec';
+          runCommands();
+        } else if (stage === 'exec') {
+          if (/--More--|-- More --/i.test(chunk)) {
+            client.write(' ');
+          }
+        }
+      });
+
+      const runCommands = () => {
+        const cmds = ['terminal length 0', ...command.trim().split('\n').map(c => c.trim()).filter(Boolean)];
+        let delay = 100;
+        for (let i = 0; i < cmds.length; i++) {
+          const cmd = cmds[i];
+          setTimeout(() => {
+            try { client.write(cmd + '\r\n'); } catch {}
+            if (i === cmds.length - 1) {
+              setTimeout(() => {
+                try { client.write('exit\r\n'); } catch {}
+                setTimeout(() => {
+                  cleanup();
+                  resolve(output);
+                }, 800);
+              }, 1200);
+            }
+          }, delay);
+          delay += 350;
+        }
+      };
+
+      client.on('error', (err) => {
+        cleanup();
+        reject(err);
+      });
+    });
+  }
+
+  /**
+   * Ejecuta comandos en la OLT con selector inteligente y cola de mutex por IP
+   */
+  public async executeCommand(command: string, timeoutMs: number = 10000): Promise<string> {
+    const ip = this.config.ip;
+    const prevLock = TpLinkDeltaStreamDriver.connectionLocks.get(ip) || Promise.resolve();
+
+    const currentLock = (async () => {
+      try {
+        await prevLock;
+      } catch {}
+
+      const pref = TpLinkDeltaStreamDriver.preferredProtocol.get(ip);
+
+      // Si la OLT está en puerto 23 o ya validamos que prefiere Telnet
+      if (this.config.port === 23 || pref === 'telnet') {
+        try {
+          const res = await this.executeCommandViaTelnet(command, timeoutMs);
+          TpLinkDeltaStreamDriver.preferredProtocol.set(ip, 'telnet');
+          return res;
+        } catch (err: any) {
+          console.warn(`[OLT ${this.config.name}] Falló Telnet (${err.message}), intentando fallback SSH...`);
+        }
+      }
+
+      // En TP-Link DeltaStream, Telnet conecta en 50ms sin deadlocks criptográficos
+      try {
+        const res = await this.executeCommandViaTelnet(command, 6000);
+        TpLinkDeltaStreamDriver.preferredProtocol.set(ip, 'telnet');
+        return res;
+      } catch (telnetErr: any) {
+        // Fallback a SSH
+        try {
+          const res = await this.executeCommandViaSsh(command, timeoutMs);
+          TpLinkDeltaStreamDriver.preferredProtocol.set(ip, 'ssh');
+          return res;
+        } catch (sshErr: any) {
+          throw new Error(`Error conectando a OLT ${ip} vía Telnet y SSH: ${sshErr.message || telnetErr.message}`);
+        }
+      }
+    })();
+
+    TpLinkDeltaStreamDriver.connectionLocks.set(ip, currentLock);
+    return currentLock;
+  }
+
+  /**
+   * Consulta ONTs descubiertas automáticamente pendientes de autorizar (Autofind con caché y mutex)
+   */
+  public async getAutofindOnts(port: string = '1/0/1', forceRefresh: boolean = false): Promise<AutofindOnt[]> {
+    const cacheKey = `${this.config.id || this.config.ip}_${port}`;
+    const cached = TpLinkDeltaStreamDriver.autofindCache.get(cacheKey);
+    const now = Date.now();
+
+    // 1. Si tenemos caché fresco (< 15 segundos) y no se forzó refresco, devolver de inmediato (0ms)
+    if (!forceRefresh && cached && (now - cached.timestamp < 15000)) {
+      return cached.onts;
     }
+
+    // 2. Si ya hay una consulta en curso a la OLT para este puerto, compartir la misma promesa
+    if (TpLinkDeltaStreamDriver.autofindQueryPromise.has(cacheKey)) {
+      return TpLinkDeltaStreamDriver.autofindQueryPromise.get(cacheKey)!;
+    }
+
+    const queryPromise = (async () => {
+      try {
+        // En TP-Link DeltaStream 'show ont autofind' REQUIERE modo privilegiado (enable)
+        const raw = await this.executeCommand(`enable\nterminal length 0\nshow ont autofind gpon ${port}\n`, 8000);
+        const onts = this.parseAutofind(raw, port);
+        TpLinkDeltaStreamDriver.autofindCache.set(cacheKey, { timestamp: Date.now(), onts });
+        return onts;
+      } catch (error) {
+        console.error(`[OLT ${this.config.name}] Error leyendo autofind:`, error);
+        if (cached && cached.onts.length > 0) return cached.onts;
+        return [];
+      } finally {
+        TpLinkDeltaStreamDriver.autofindQueryPromise.delete(cacheKey);
+      }
+    })();
+
+    TpLinkDeltaStreamDriver.autofindQueryPromise.set(cacheKey, queryPromise);
+    return queryPromise;
   }
 
   /**

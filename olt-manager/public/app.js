@@ -477,12 +477,16 @@ async function loadOlts(force = false) {
   try {
     const res = await fetch('/api/olts');
     const data = await res.json();
+    if (Array.isArray(data)) {
+      olts = data;
+    }
+    const navBadge = document.getElementById('oltsNavCountBadge');
+    if (navBadge) navBadge.innerText = olts.length;
     const str = JSON.stringify(data);
     if (!force && str === lastOltsJson) {
       return; // Sin cambios, no parpadear
     }
     lastOltsJson = str;
-    olts = data;
     renderOltsTable();
     populateTunnelDropdown();
   } catch (err) {
@@ -2179,11 +2183,9 @@ function getInitialTab() {
 }
 
 async function updateUnconfiguredBadge() {
-  if (olts.length === 0) return;
-  const targetId = activeOltId || olts[0]?.id;
-  if (!targetId) return;
   try {
-    const res = await fetch('/api/autofind?oltId=' + targetId);
+    const filter = (activeOltId && activeOltId !== 'all') ? ('?oltId=' + activeOltId) : '';
+    const res = await fetch('/api/autofind' + filter);
     const data = await res.json();
     const countBadge = document.getElementById('unconfiguredBadge');
     if (countBadge && data.onts) {

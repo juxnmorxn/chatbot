@@ -2575,8 +2575,8 @@ async function runBackgroundOltSync() {
           }
         }
 
-        // 3. Sincronizar autofind en fondo
-        await driver.getAutofindOnts('1/0/1');
+        // 3. Sincronizar autofind en fondo forzando actualización de caché
+        await driver.getAutofindOnts('1/0/1', true);
       } catch (err: any) {
         // Log silencioso para no ensuciar stdout
       }
@@ -2594,7 +2594,7 @@ app.listen(PORT, async () => {
     console.warn('[GenieACS Warning] No se pudo inicializar provisions al arrancar:', err.message);
   }
 
-  // Ejecutar primer barrido a los 2 segundos y luego cada 10 segundos 24/7
-  setTimeout(runBackgroundOltSync, 2000);
-  setInterval(runBackgroundOltSync, 10000);
+  // Ejecutar primer barrido a los 1.5 segundos y luego cada 15 segundos 24/7
+  setTimeout(runBackgroundOltSync, 1500);
+  setInterval(runBackgroundOltSync, 15000);
 });
