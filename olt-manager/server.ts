@@ -1688,6 +1688,36 @@ app.post('/api/provision', async (req: Request, res: Response) => {
       tr069Error = acsErr.message;
     }
 
+    // 5. Inyección Directa Automática de WAN y TR-069 en el módem Huawei
+    let modemWanInjected = false;
+    let modemWanError: string | null = null;
+    try {
+      // Intentar inyección a la IP estática asignada (accesible por Wireguard) o la IP de gestión local
+      const modemIpsToTry = [cleanIp, '192.168.18.1'];
+      for (const mIp of modemIpsToTry) {
+        try {
+          const ontDriver = new HuaweiOntDriver(mIp, 'Epadmin', 'adminEp');
+          const wanRes = await ontDriver.createStaticWan({
+            ip: cleanIp,
+            mask: cleanMask,
+            gateway: cleanGw,
+            dns: `${cleanDns1},${cleanDns2}`,
+            vlan: targetVlan
+          });
+          if (wanRes.success) {
+            modemWanInjected = true;
+            // Configurar también la URL del servidor TR-069
+            await ontDriver.setTr069Acs('http://10.200.0.1:7547').catch(() => {});
+            break;
+          }
+        } catch (mErr: any) {
+          modemWanError = mErr.message;
+        }
+      }
+    } catch (e: any) {
+      modemWanError = e.message;
+    }
+
     res.json({
       success: true,
       onuId: targetOnuId,
@@ -1695,8 +1725,10 @@ app.post('/api/provision', async (req: Request, res: Response) => {
       gponPort: targetPort,
       tr069Pushed,
       tr069Error,
+      modemWanInjected,
+      modemWanError,
       log: provResult.log,
-      message: `ONT activada en GPON ${targetPort} ONU ID #${targetOnuId} con IP Estática ${cleanIp}`
+      message: `ONT activada en GPON ${targetPort} ONU ID #${targetOnuId} con IP Estática ${cleanIp}${modemWanInjected ? ' y WAN inyectada en el módem' : ''}`
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });

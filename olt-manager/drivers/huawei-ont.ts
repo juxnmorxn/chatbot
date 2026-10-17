@@ -398,4 +398,98 @@ export class HuaweiOntDriver {
       return { success: false, message: err.message };
     }
   }
+
+  /**
+   * Crea e inyecta la conexión WAN enrutada (Route WAN, Static IP, VLAN, NAT, Port Binding) directamente en el módem Huawei
+   */
+  public async createStaticWan(params: {
+    ip: string;
+    mask?: string;
+    gateway?: string;
+    dns?: string;
+    vlan: number;
+  }): Promise<{ success: boolean; message?: string }> {
+    try {
+      const cleanMask = (params.mask || '255.255.255.0').trim();
+      const cleanGw = (params.gateway || params.ip.replace(/\.\d+$/, '.1')).trim();
+      const cleanDns = (params.dns || '8.8.8.8,8.8.4.4').trim();
+
+      // 1. Obtener token del formulario wan.asp
+      const wanHtml = await this.fetchPage('/html/bbsp/wan/wan.asp');
+      const tokenMatch = wanHtml.match(/id="hwonttoken"\s+value="([^"]+)"/) ||
+                         wanHtml.match(/name="onttoken"[^>]+value="([^"]+)"/);
+      const onttoken = tokenMatch ? tokenMatch[1] : '';
+
+      // 2. Parámetros para addcfg.cgi
+      const urlPath = `${this.baseUrl}/addcfg.cgi?GROUP_a_x=InternetGatewayDevice.WANDevice.1.WANConnectionDevice&GROUP_a_y=GROUP_a_x.WANIPConnection&RequestFile=html/bbsp/wan/confirmwancfginfo.html`;
+
+      const bodyParams = new URLSearchParams();
+      // Form fields
+      bodyParams.append('y.Enable', '1');
+      bodyParams.append('d.RadioWanPSEnable', '0');
+      bodyParams.append('d.AccessType', 'Ethernet');
+      bodyParams.append('d.ProtocolType', 'IPv4');
+      bodyParams.append('d.Mode', 'IP_Routed');
+      bodyParams.append('d.ServiceList', 'INTERNET');
+      bodyParams.append('d.EnableVlan', '1');
+      bodyParams.append('d.VlanId', String(params.vlan));
+      bodyParams.append('d.PriorityPolicy', 'Specified');
+      bodyParams.append('d.DefaultPriority', '0');
+      bodyParams.append('d.Priority', '0');
+      bodyParams.append('d.IPv4MXU', '1500');
+      bodyParams.append('d.IPv4NATEnable', '1');
+      bodyParams.append('d.NatType', '1');
+      bodyParams.append('d.IPv4IPAddress', params.ip);
+      bodyParams.append('d.IPv4SubnetMask', cleanMask);
+      bodyParams.append('d.IPv4Gateway', cleanGw);
+      bodyParams.append('d.IPv4DNSOverrideSwitch', '1');
+      bodyParams.append('d.IPv4PrimaryDNS', cleanDns.split(',')[0] || '8.8.8.8');
+      bodyParams.append('d.IPv4SecondaryDNS', cleanDns.split(',')[1] || '8.8.4.4');
+      bodyParams.append('d.IPv4EnableMulticast', '0');
+      bodyParams.append('d.IPv4AddressMode', 'Static');
+
+      // SpecWanCfgParaList parameters
+      bodyParams.append('GROUP_a_y.Enable', '1');
+      bodyParams.append('GROUP_a_y.X_HW_IPv4Enable', '1');
+      bodyParams.append('GROUP_a_y.X_HW_IPv6Enable', '0');
+      bodyParams.append('GROUP_a_y.X_HW_IPv6MultiCastVLAN', '-1');
+      bodyParams.append('GROUP_a_y.X_HW_SERVICELIST', 'INTERNET');
+      bodyParams.append('GROUP_a_y.X_HW_ExServiceList', 'INTERNET');
+      bodyParams.append('GROUP_a_y.X_HW_VLAN', String(params.vlan));
+      bodyParams.append('GROUP_a_y.X_HW_PRI', '0');
+      bodyParams.append('GROUP_a_y.X_HW_PriPolicy', 'Specified');
+      bodyParams.append('GROUP_a_y.X_HW_DefaultPri', '0');
+      bodyParams.append('GROUP_a_y.ConnectionType', 'IP_Routed');
+      bodyParams.append('GROUP_a_y.X_HW_LanDhcpEnable', '1');
+      bodyParams.append('GROUP_a_y.X_HW_MultiCastVLAN', '4294967295');
+      bodyParams.append('GROUP_a_y.NATEnabled', '1');
+      bodyParams.append('GROUP_a_y.X_HW_NatType', '1');
+      bodyParams.append('GROUP_a_y.AddressingType', 'Static');
+      bodyParams.append('GROUP_a_y.ExternalIPAddress', params.ip);
+      bodyParams.append('GROUP_a_y.SubnetMask', cleanMask);
+      bodyParams.append('GROUP_a_y.DefaultGateway', cleanGw);
+      bodyParams.append('GROUP_a_y.DNSEnabled', '1');
+      bodyParams.append('GROUP_a_y.DNSOverrideAllowed', '1');
+      bodyParams.append('GROUP_a_y.DNSServers', cleanDns);
+      bodyParams.append('GROUP_a_y.MaxMTUSize', '1500');
+      bodyParams.append('GROUP_a_y.X_HW_BindPhyPortInfo', 'Lan1,Lan2,Lan3,Lan4,SSID1');
+      bodyParams.append('x.X_HW_Token', onttoken);
+
+      const res = await this.client.post(urlPath, bodyParams.toString(), {
+        headers: {
+          'Cookie': this.sessionCookie!,
+          'Referer': `${this.baseUrl}/html/bbsp/wan/wan.asp`,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        timeout: 8000
+      });
+
+      return {
+        success: res.status === 200,
+        message: res.status === 200 ? 'WAN creada exitosamente en el módem' : `Status inesperado: ${res.status}`
+      };
+    } catch (err: any) {
+      return { success: false, message: err.message };
+    }
+  }
 }

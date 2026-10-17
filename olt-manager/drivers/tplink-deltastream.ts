@@ -136,10 +136,13 @@ export class TpLinkDeltaStreamDriver {
               }
             } else if (allLinesSent) {
               clearTimeout(idleTimer);
-              if (/[>#$]\s*$/.test(output.trim())) {
-                idleTimer = setTimeout(finish, 600);
+              // Si incluye copy running-config, esperar confirmación 'Saving user config OK!' o prompt
+              if (output.includes('Saving user config OK!') || output.includes('Error:')) {
+                idleTimer = setTimeout(finish, 800);
+              } else if (/[>#$]\s*$/.test(output.trim())) {
+                idleTimer = setTimeout(finish, 1500);
               } else {
-                idleTimer = setTimeout(finish, 1200);
+                idleTimer = setTimeout(finish, 2500);
               }
             }
           });
@@ -609,14 +612,27 @@ export class TpLinkDeltaStreamDriver {
   }
 
   /**
+   * Guarda de forma persistente la configuración de la OLT en memoria no volátil
+   */
+  public async saveConfiguration(): Promise<{ success: boolean; log: string }> {
+    try {
+      const log = await this.executeCommand('enable\ncopy running-config startup-config\n', 15000);
+      const isSuccess = log.includes('Saving user config OK!') || (!/error/i.test(log) && log.includes('Next Startup Config'));
+      return { success: isSuccess, log };
+    } catch (err: any) {
+      return { success: false, log: err.message || String(err) };
+    }
+  }
+
+  /**
    * Modifica la descripción / nombre de cliente de la ONT en la OLT TP-Link
    */
   public async setOntDescription(gponPort: string, onuId: number, desc: string): Promise<{ success: boolean; error?: string }> {
     try {
       const cleanDesc = desc.replace(/["\r\n]/g, '').trim();
       await this.executeCommand(
-        `enable\nconfig\ninterface gpon ${gponPort}\nont modify ${onuId} desc "${cleanDesc}"\nexit\nwrite\n`,
-        6000
+        `enable\nconfig\ninterface gpon ${gponPort}\nont modify ${onuId} desc "${cleanDesc}"\nexit\nend\ncopy running-config startup-config\n`,
+        12000
       );
       TpLinkDeltaStreamDriver.ontsCache.clear();
       return { success: true };
@@ -684,8 +700,12 @@ copy running-config startup-config
 `;
 
     try {
-      const log = await this.executeCommand(cliScript, 15000);
+      const log = await this.executeCommand(cliScript, 22000);
       const isFailed = /error|invalid|failed/i.test(log);
+      // Si la salida no confirma el guardado, asegurar persistencia con saveConfiguration
+      if (!log.includes('Saving user config OK!')) {
+        await this.saveConfiguration().catch(() => {});
+      }
       return { success: !isFailed, log };
     } catch (err: any) {
       return { success: false, log: err.message || String(err) };
