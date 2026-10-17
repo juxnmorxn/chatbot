@@ -1580,6 +1580,12 @@ app.post('/api/provision', async (req: Request, res: Response) => {
     const cleanPass5g = (wifiPassword5g || cleanPass).trim();
 
     // 2. Aprovisionamiento por CLI/OMCI en la OLT TP-Link DeltaStream
+    // Adaptar dinámicamente perfiles según OLT (Plomosas usa profile 1 para VLAN 300; Fray usa line 4, srv 10 para VLAN 400)
+    const isPlomosas = olt.id === 'olt-1792179789855' || olt.name?.toLowerCase().includes('plomosas') || targetVlan === 300;
+    const lineProf = isPlomosas ? 1 : 4;
+    const srvProf = isPlomosas ? 1 : 10;
+    const srvPortProf = isPlomosas ? 1 : 4;
+
     const provResult = await driver.provisionOnt({
       gponPort: targetPort,
       onuId: targetOnuId,
@@ -1589,9 +1595,9 @@ app.post('/api/provision', async (req: Request, res: Response) => {
       ipAddress: cleanIp,
       subnetMask: cleanMask,
       gateway: cleanGw,
-      lineProfileId: 4,
-      srvProfileId: 10,
-      srvPortProfileId: 4
+      lineProfileId: lineProf,
+      srvProfileId: srvProf,
+      srvPortProfileId: srvPortProf
     });
 
     if (!provResult.success) {

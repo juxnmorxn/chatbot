@@ -1431,6 +1431,38 @@ async function viewOnuDetail(oltId, gponPort, onuId, sn, encodedName, vlan) {
   } catch (err) {}
 }
 
+async function renameCurrentOnu() {
+  if (!currentViewOnu) return;
+  const currentName = currentViewOnu.name || document.getElementById('viewOnuTitleName')?.innerText || 'Cliente';
+  const newName = prompt('Ingrese el nuevo nombre para este abonado / contrato:', currentName);
+  if (!newName || newName.trim() === '' || newName.trim() === currentName) return;
+
+  try {
+    const res = await fetch('/api/onus/rename', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        oltId: currentViewOnu.oltId,
+        gponPort: currentViewOnu.gponPort,
+        onuId: currentViewOnu.onuId,
+        serial: currentViewOnu.sn,
+        name: newName.trim()
+      })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast('Nombre Actualizado', `Abonado renombrado a "${data.name}"`, 'success');
+      currentViewOnu.name = data.name;
+      document.getElementById('viewOnuTitleName').innerText = data.name;
+      if (typeof loadOnus === 'function') loadOnus();
+    } else {
+      showToast('Error', data.error || 'No se pudo actualizar el nombre', 'error');
+    }
+  } catch (err) {
+    showToast('Error', 'Fallo de conexión al renombrar', 'error');
+  }
+}
+
 function closeViewOnuModal() {
   document.getElementById('viewOnuModal')?.classList.add('hidden');
 }
