@@ -2504,6 +2504,54 @@ app.all('/modem-proxy/:ip/*', async (req: Request, res: Response) => {
   }
 });
 
+// ==========================================
+// BACKGROUND SYNC WORKER (SmartOLT Architecture)
+// Mantiene telemetría óptica, ONUs y No Configurados sincronizados 24/7 en memoria
+// ==========================================
+let isBgSyncRunning = false;
+
+async function runBackgroundOltSync() {
+  if (isBgSyncRunning) return;
+  isBgSyncRunning = true;
+  try {
+    const db = getOltDb();
+    const oltsRes = await db.execute('SELECT * FROM olts').catch(() => ({ rows: [] }));
+    for (const row of oltsRes.rows) {
+      const olt = row as unknown as OltDevice;
+      try {
+        const driver = new TpLinkDeltaStreamDriver(olt);
+        // 1. Sincronizar ONUs configuradas en fondo
+        const onts = await driver.getConfiguredOnts('1/0/1', true);
+        const currentSnSet = new Set(onts.map(o => o.sn));
+
+        // 2. Limpieza de huérfanos / eliminados en la OLT
+        if (onts.length > 0) {
+          const savedRes = await db.execute({
+            sql: 'SELECT serial FROM provisioned_onts WHERE olt_id = ?',
+            args: [olt.id]
+          }).catch(() => ({ rows: [] }));
+
+          for (const sRow of (savedRes.rows as any[])) {
+            if (!currentSnSet.has(sRow.serial)) {
+              await db.execute({
+                sql: 'DELETE FROM provisioned_onts WHERE olt_id = ? AND serial = ?',
+                args: [olt.id, sRow.serial]
+              }).catch(() => {});
+            }
+          }
+        }
+
+        // 3. Sincronizar autofind en fondo
+        await driver.getAutofindOnts('1/0/1');
+      } catch (err: any) {
+        // Log silencioso para no ensuciar stdout
+      }
+    }
+  } catch {} finally {
+    isBgSyncRunning = false;
+  }
+}
+
 app.listen(PORT, async () => {
   console.log(`🚀 CloudOLT Core corriendo en http://localhost:${PORT}`);
   try {
@@ -2511,4 +2559,8 @@ app.listen(PORT, async () => {
   } catch (err: any) {
     console.warn('[GenieACS Warning] No se pudo inicializar provisions al arrancar:', err.message);
   }
+
+  // Ejecutar primer barrido a los 2 segundos y luego cada 10 segundos 24/7
+  setTimeout(runBackgroundOltSync, 2000);
+  setInterval(runBackgroundOltSync, 10000);
 });
