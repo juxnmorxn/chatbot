@@ -2520,7 +2520,7 @@ app.all('/modem-proxy/:ip/*', async (req: Request, res: Response) => {
     });
 
     // Reenviar encabezados clave
-    const contentType = axiosRes.headers['content-type'] || '';
+    const contentType = String(axiosRes.headers['content-type'] || '');
     if (contentType) res.setHeader('content-type', contentType);
     if (axiosRes.headers['set-cookie']) res.setHeader('set-cookie', axiosRes.headers['set-cookie']);
 

@@ -740,7 +740,11 @@ export class BotOrchestrator {
     const esComandoCambioModem = /^(?:realizar|hacer|ejecutar|solicitar)?\s*(?:un\s+)?(?:cambio|reemplazar|reemplazo|cambiar|swap)(?:\s+(?:de|del))?\s*(?:m[oó]dems?|m[oó]dens?|odems?|modns?|onus?|equipos?|routers?|cpe)\b/i.test(lowerMsg) ||
       /^(?:cambio|reemplazo|swap)\s+(?:m[oó]dems?|m[oó]dens?|odems?|modns?|onus?|equipos?|routers?|cpe)\b/i.test(lowerMsg);
 
+    const esComandoReaprovisionar = /^(?:realizar|hacer|ejecutar|solicitar)?\s*(?:un\s+)?(?:reaprovisionar|re-aprovisionar|reaprovisionamiento|re-aprovisionamiento|reset\s+onu|resetear\s+onu|reiniciar\s+onu|reactivar\s+onu|re-activar\s+onu|reactivar|reautorizar\s+onu)\b/i.test(lowerMsg);
+
     const esComandoConsultaUbicacion = /^(?:consultar\s+)?(?:ubicaci[oó]n|donde\s+est[aá]|donde\s+queda|como\s+llegar|gps|ubicar|localizar|mapa|guardar\s+ubicaci[oó]n|cargar\s+ubicaci[oó]n|subir\s+ubicaci[oó]n)\b/i.test(lowerMsg);
+
+    const esComandoCambioNombre = /^(?:cambiar\s+nombre|cambio\s+de\s+nombre|actualizar\s+nombre|renombrar\s+onu|renombrar\s+cliente|renombrar)\b/i.test(lowerMsg);
 
     const esComandoCambioWifi = /^(?:cambiar\s+wifi|cambio\s+de\s+wifi|cambiar\s+contrase[ñn]a\s+wifi|cambiar\s+password|nueva\s+contrase[ñn]a\s+wifi|actualizar\s+wifi)\b/i.test(lowerMsg);
 
@@ -761,9 +765,13 @@ export class BotOrchestrator {
       session?.step === 'PENDIENTE_SELECCION_IP_CAMBIO_MODEM' ||
       session?.step === 'PENDIENTE_SN_CAMBIO_MODEM' ||
       session?.step === 'PENDIENTE_CONFIRMACION_CAMBIO_MODEM' ||
+      session?.step === 'PENDIENTE_CLIENTE_REAPROVISIONAR' ||
+      session?.step === 'PENDIENTE_SELECCION_IP_REAPROVISIONAR' ||
+      session?.step === 'PENDIENTE_CONFIRMACION_REAPROVISIONAR' ||
+      session?.step === 'PENDIENTE_POLLING_REAPROVISION' ||
       session?.step === 'TECNICO_ESPERANDO_CLIENTE_GPS';
 
-    const esComandoTecnicoExplicito = esComandoActivacion || esComandoCambioPaquete || esComandoCambioModem || esComandoCambioDomicilio || esComandoConsultaUbicacion || esComandoCambioWifi;
+    const esComandoTecnicoExplicito = esComandoActivacion || esComandoCambioPaquete || esComandoCambioModem || esComandoCambioDomicilio || esComandoConsultaUbicacion || esComandoCambioWifi || esComandoReaprovisionar || esComandoCambioNombre;
     const esTecnicoAutorizado = Boolean(await DbService.isAuthorizedTechnician(phone).catch(() => null));
     const esAccionTecnica = esComandoTecnicoExplicito || esPasoTecnicoEnCurso || esTecnicoAutorizado;
 
@@ -946,9 +954,9 @@ export class BotOrchestrator {
     // C. Confirmación de activación pendiente (SÍ / NO / Modificaciones / Botones / Dígitos SN)
     if (session?.step === 'PENDIENTE_CONFIRMACION_ACTIVACION_ONU' || session?.step === 'PENDIENTE_SN_ACTIVACION') {
       const esConfirmacion = buttonId === 'BTN_CONFIRMAR_ACTIVACION' ||
-        /^(si|sí|confirmar|confirmo|adelante|autorizar|dale|ok|1|activar)\b/i.test(lowerMsg);
+        /^(s[ií1]|s|al|sip|sep|simon|simón|ok|dale|adelante|afirmativo|proceder|ejecutar|yes|y|claro|va|activar|confirmo|confirmar)\b/i.test(lowerMsg);
       const esCancelacion = buttonId === 'BTN_CANCELAR_ACTIVACION' ||
-        /^(no|cancelar|cancelo|rechazar|abortar|0)\b/i.test(lowerMsg);
+        /^(n[o0]|n|nop|nel|cancelar|cancelo|abortar|rechazar|negativo|detener)\b/i.test(lowerMsg);
 
       if (esConfirmacion) {
         await this.procesarConfirmacionActivacionOnu(phone, session, targetJid, true);
@@ -982,9 +990,21 @@ export class BotOrchestrator {
       return;
     }
 
+    // D.1.3 Solicitud de cliente o folio para Reaprovisionamiento de ONU
+    if (session?.step === 'PENDIENTE_CLIENTE_REAPROVISIONAR') {
+      await this.procesarIdentificacionClienteReaprovisionar(phone, rawText, session, targetJid);
+      return;
+    }
+
     // D.2 Selección de IP / Servicio en Cambio de Módem / Domicilio cuando hay múltiples servicios
     if (session?.step === 'PENDIENTE_SELECCION_IP_CAMBIO_MODEM') {
       await this.procesarSeleccionIpCambioModem(phone, rawText, session, targetJid);
+      return;
+    }
+
+    // D.2.1 Selección de IP / Servicio en Reaprovisionamiento cuando hay múltiples servicios
+    if (session?.step === 'PENDIENTE_SELECCION_IP_REAPROVISIONAR') {
+      await this.procesarSeleccionIpReaprovisionar(phone, rawText, session, targetJid);
       return;
     }
 
@@ -997,9 +1017,9 @@ export class BotOrchestrator {
     // D.4 Confirmación de cambio de módem / domicilio pendiente (SÍ / NO)
     if (session?.step === 'PENDIENTE_CONFIRMACION_CAMBIO_MODEM') {
       const esConfirmacion = buttonId === 'BTN_CONFIRMAR_CAMBIO_MODEM' ||
-        /^(si|sí|confirmar|confirmo|adelante|autorizar|dale|ok|1|cambiar|ejecutar|reemplazar|reubicar|mover)\b/i.test(lowerMsg);
+        /^(s[ií1]|s|al|sip|sep|simon|simón|ok|dale|adelante|afirmativo|proceder|ejecutar|yes|y|claro|va|confirmo|confirmar|cambiar|reemplazar|reubicar|mover)\b/i.test(lowerMsg);
       const esCancelacion = buttonId === 'BTN_CANCELAR_CAMBIO_MODEM' ||
-        /^(no|cancelar|cancelo|rechazar|abortar|0)\b/i.test(lowerMsg);
+        /^(n[o0]|n|nop|nel|cancelar|cancelo|abortar|rechazar|negativo|detener)\b/i.test(lowerMsg);
 
       if (esConfirmacion) {
         await this.procesarConfirmacionCambioModemTecnico(phone, session, targetJid, true);
@@ -1010,8 +1030,83 @@ export class BotOrchestrator {
         return;
       }
 
-      // Si envía un nuevo SN mientras está en confirmación
-      await this.procesarSnNuevoCambioModem(phone, rawText, session, targetJid);
+      // Comprobar si parece un intento de serie hex (mínimo 4 caracteres hex) o modificación en caliente
+      const pareceModificacion = /(?:plan|paquete|megas|mb|zona|estancia|actopan|arenal)/i.test(rawText);
+      const matchHex = rawText.trim().match(/^(?:(?:es\s+(?:el\s+)?|el\s+)?(?:HWTC|ZTEG|48575443|5A544547)?|HWTC|ZTEG|48575443|5A544547)?([A-Fa-f0-9]{4,16})$/i);
+
+      if (pareceModificacion || (matchHex && !/^(?:si|no|ok)$/i.test(rawText.trim()))) {
+        await this.procesarSnNuevoCambioModem(phone, rawText, session, targetJid);
+        return;
+      }
+
+      // Si escribió otra cosa que no sea SÍ/NO ni una serie válida, recordarle amablemente confirmar
+      await this.enviarYLoguear(
+        phone,
+        `⚠️ *Confirmación requerida*\n\n¿Deseas aplicar el cambio de módem?\n• Responde *SÍ* para proceder\n• Responde *NO* para cancelar\n\n_(O escribe los dígitos de otro módem si deseas cambiarlo)_`,
+        'ACTIVACION_TECNICO',
+        'CONFIRMACION_PENDIENTE',
+        targetJid
+      );
+      return;
+    }
+
+    // D.5 Confirmación de reaprovisionamiento pendiente (SÍ / NO)
+    if (session?.step === 'PENDIENTE_CONFIRMACION_REAPROVISIONAR') {
+      const esConfirmacion = buttonId === 'BTN_CONFIRMAR_REAPROVISION' ||
+        /^(s[ií1]|s|al|sip|sep|simon|simón|ok|dale|adelante|afirmativo|proceder|ejecutar|yes|y|claro|va|confirmo|confirmar|reaprovisionar|resetear|reactivar)\b/i.test(lowerMsg);
+      const esCancelacion = buttonId === 'BTN_CANCELAR_REAPROVISION' ||
+        /^(n[o0]|n|nop|nel|cancelar|cancelo|abortar|rechazar|negativo|detener)\b/i.test(lowerMsg);
+
+      if (esConfirmacion) {
+        await this.procesarConfirmacionReaprovisionarTecnico(phone, session, targetJid, true);
+        return;
+      }
+      if (esCancelacion) {
+        await this.procesarConfirmacionReaprovisionarTecnico(phone, session, targetJid, false);
+        return;
+      }
+
+      await this.enviarYLoguear(
+        phone,
+        `⚠️ *Confirmación requerida*\n\n¿Deseas ejecutar el reaprovisionamiento para este equipo?\n• Responde *SÍ* para proceder\n• Responde *NO* para cancelar.`,
+        'ACTIVACION_TECNICO',
+        'CONFIRMACION_REAPROVISION_PENDIENTE',
+        targetJid
+      );
+      return;
+    }
+
+    // D.6 Espera activa en background de reaprovisionamiento (hasta 10 min de margen)
+    if (session?.step === 'PENDIENTE_POLLING_REAPROVISION') {
+      const esCancelacion = buttonId === 'BTN_CANCELAR_REAPROVISION' ||
+        /^(n[o0]|n|nop|nel|cancelar|cancelo|abortar|rechazar|negativo|detener)\b/i.test(lowerMsg);
+
+      if (esCancelacion) {
+        this.cancelarPollingOnu(phone);
+        let metaObj: any = {};
+        try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
+        metaObj.pendingReprovisionService = null;
+        metaObj.targetReprovisionSn = null;
+        await DbService.upsertSession({
+          phone,
+          step: 'CONVERSACIONAL',
+          metadata: JSON.stringify(metaObj),
+        });
+        await this.enviarYLoguear(phone, `*Búsqueda de reaprovisionamiento cancelada.* Sesión restablecida.`, 'ACTIVACION_TECNICO', 'REAPROVISION_CANCELADO', targetJid);
+        return;
+      }
+
+      let metaObj: any = {};
+      try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
+      const reproData = metaObj.pendingReprovisionService;
+      const snStr = reproData?.sn ? ` (\`${reproData.sn}\`)` : '';
+      await this.enviarYLoguear(
+        phone,
+        `⏳ *Búsqueda activa (10 min de margen):* Esperando a que el módem${snStr} termine de reiniciar y sincronice en la OLT.\n\nEn cuanto detecte señal óptica, se reautorizará automáticamente con sus datos originales.\n\n_Escribe *cancelar* si deseas detener la espera._`,
+        'ACTIVACION_TECNICO',
+        'ESTADO_POLLING_REAPROVISION',
+        targetJid
+      );
       return;
     }
 
@@ -1078,9 +1173,21 @@ export class BotOrchestrator {
         return;
       }
 
+      // Caso 4.0: El técnico envía comando de reaprovisionamiento / reset de ONU
+      if (esComandoReaprovisionar) {
+        await this.procesarSolicitudReaprovisionarTecnico(phone, rawText, session, targetJid);
+        return;
+      }
+
       // Caso 4.1: El técnico envía comando de cambio de domicilio / reubicación
       if (esComandoCambioDomicilio) {
         await this.procesarSolicitudCambioDomicilioTecnico(phone, rawText, session, targetJid);
+        return;
+      }
+
+      // Caso 4.15: El técnico envía comando de cambio de nombre / titular
+      if (esComandoCambioNombre) {
+        await this.procesarCambioNombreTecnico(phone, rawText, session, targetJid);
         return;
       }
 
@@ -1143,7 +1250,7 @@ export class BotOrchestrator {
         const nombreTec = authTecnico.tech?.name ? ` *${authTecnico.tech.name}*` : '';
         await this.enviarYLoguear(
           phone,
-          `*Panel Operativo de Técnicos*\n\nHola${nombreTec}, no reconocí ese comando.\n\nEscribe *menu tecnico* para ver las opciones disponibles o ejecuta directamente:\n\n• \`revisar folios [Folio 1, Folio 2, ...]\` (o envía números de folio)\n• \`info [Folio o Nombre]\` (ficha técnica con señal óptica en dBm)\n• \`activar cliente [SN] [Folio-Nombre] [Plan] [Zona]\`\n• \`cambio de domicilio [Folio o Nombre]\`\n• \`cambio de modem [Folio o Nombre]\`\n• \`ubicacion [Folio o Nombre]\`\n• \`cambiar plan [Folio] a [Megas]\`\n• \`cambiar wifi [SN] [NuevoSSID] [NuevaClave]\``,
+          `*Panel Operativo de Técnicos*\n\nHola${nombreTec}, no reconocí ese comando.\n\nEscribe *menu tecnico* para ver las opciones disponibles o ejecuta directamente:\n\n• \`activar cliente [SN] [Folio-Nombre] [Plan] [Zona]\`\n• \`cambio de modem [Folio o Nombre]\`\n• \`cambio de domicilio [Folio o Nombre]\`\n• \`reaprovisionar [Folio o Nombre]\`\n• \`revisar folios [Folio 1, Folio 2, ...]\` (o envía números de folio)\n• \`info [Folio o Nombre]\` (ficha técnica con señal óptica en dBm)\n• \`cambiar plan [Folio] a [Megas]\`\n• \`cambiar nombre [Folio] a [Nuevo Nombre]\`\n• \`ubicacion [Folio o Nombre]\`\n• \`cambiar wifi [SN] [NuevoSSID] [NuevaClave]\``,
           'ACTIVACION_TECNICO',
           'AYUDA_COMANDO_TECNICO',
           targetJid
@@ -6873,6 +6980,101 @@ ${techInfo}───────────────────────
   }
 
   /**
+   * Procesa la solicitud para cambiar el nombre/titular de un cliente u ONU en SmartOLT
+   */
+  private static async procesarCambioNombreTecnico(
+    phone: string,
+    rawText: string,
+    session: Session | null,
+    targetJid?: string
+  ): Promise<void> {
+    const auth = await this.verificarAutorizacionTecnico(phone, rawText);
+    if (!auth.autorizado) {
+      await this.enviarYLoguear(
+        phone,
+        `⚠️ *Acceso Restringido - Área Técnica*\n\nTu número (*${phone}*) no está registrado como técnico autorizado.`,
+        'ACTIVACION_TECNICO',
+        'NO_AUTORIZADO',
+        targetJid
+      );
+      return;
+    }
+
+    const clean = rawText
+      .replace(/^(?:cambiar\s+nombre|cambio\s+de\s+nombre|actualizar\s+nombre|renombrar\s+onu|renombrar\s+cliente|renombrar)(?:\s+(?:de|del|a|al))?[:\s]*/i, '')
+      .trim();
+
+    const matchSeparator = clean.match(/^(.+?)\s+(?:a|por|->|=>)\s+(.+)$/i);
+    let target = '';
+    let newName = '';
+
+    if (matchSeparator) {
+      target = matchSeparator[1].trim();
+      newName = matchSeparator[2].trim();
+    } else {
+      const parts = clean.split(/\s+/);
+      if (parts.length >= 2 && (/^\d{3,6}$/.test(parts[0]) || /^[A-Fa-f0-9]{4,16}$/.test(parts[0]) || /^172\./.test(parts[0]))) {
+        target = parts[0];
+        newName = parts.slice(1).join(' ').trim();
+      }
+    }
+
+    if (!target || !newName) {
+      await this.enviarYLoguear(
+        phone,
+        `🏷️ *Cambio de Nombre de Cliente en SmartOLT*\n\nPara modificar el nombre o titular, envía:\n\n👉 *cambiar nombre [Folio, Nombre o SN] a [Nuevo Nombre]*\n\n_Ejemplos:_\n• \`cambiar nombre 1265 a Juan Perez\`\n• \`cambiar nombre 474B4484 a Maria Gomez (Local 2)\`\n• \`cambiar nombre Marina a Marina Escamilla Rodriguez\``,
+        'ACTIVACION_TECNICO',
+        'AYUDA_CAMBIO_NOMBRE',
+        targetJid
+      );
+      return;
+    }
+
+    let onuRecord = await DbService.getOnuById(target);
+    if (!onuRecord) {
+      const folioMatch = target.match(/^(\d{1,6})/);
+      if (folioMatch) {
+        const client = await DbService.getWisphubClientByAny({ id: folioMatch[1] });
+        if (client && client.sn_onu) {
+          onuRecord = await DbService.getOnuById(client.sn_onu);
+        }
+      }
+    }
+    if (!onuRecord) {
+      const fuzzy = await DbService.searchOnusFuzzy(target, 1);
+      if (fuzzy.length > 0 && fuzzy[0].matchScore >= 45) {
+        onuRecord = fuzzy[0];
+      }
+    }
+
+    const queryTarget = onuRecord?.unique_external_id || onuRecord?.sn || target;
+    const result = await SmartOLTService.updateOnuName(queryTarget, newName);
+
+    if (result.success) {
+      const onu = result.onuRecord || onuRecord;
+      const ipStr = onu?.ip_address ? `\n• *IP:* \`${onu.ip_address}\`` : '';
+      const snStr = onu?.sn ? `\n• *Módem:* \`${onu.sn}\`` : '';
+      const zoneStr = onu?.zone || onu?.zone_name ? `\n• *Zona:* ${onu.zone || onu.zone_name}` : '';
+
+      await this.enviarYLoguear(
+        phone,
+        `✅ *Nombre de cliente actualizado exitosamente*\n• *Anterior:* *${result.oldName || 'Desconocido'}*\n• *Nuevo:* *${result.newName}*${snStr}${ipStr}${zoneStr}`,
+        'ACTIVACION_TECNICO',
+        'CAMBIO_NOMBRE_EXITOSO',
+        targetJid
+      );
+    } else {
+      await this.enviarYLoguear(
+        phone,
+        `❌ *No se pudo actualizar el nombre en SmartOLT:*\n\n${result.message}\n\nVerifica que el folio, serie o cliente correspondan a una ONU activa.`,
+        'ACTIVACION_TECNICO',
+        'CAMBIO_NOMBRE_ERROR',
+        targetJid
+      );
+    }
+  }
+
+  /**
    * Ejecuta el cambio automático de contraseña Wi-Fi para un cliente residencial
    * Genera clave de 10 caracteres [A-Za-z0-9] y actualiza Wireless LAN 1 (2.4G) y Wireless LAN 5 (5G) en SmartOLT
    */
@@ -7030,34 +7232,39 @@ Por favor reconecta tus dispositivos ingresando esta nueva clave.
     const rolTec = tech?.role ? ` (${tech.role})` : '';
     const menu = `*Panel Operativo de Técnicos - ${this.getIspName()}*\n` +
       `Bienvenido${nombreTec}${rolTec}.\n\n` +
-      `*Comandos directos en campo:*\n\n` +
+      `*OPERACIONES DE MÓDEM Y FIBRA:*\n\n` +
       `1. *Activar Módem / Cliente:*\n` +
       `\`activar cliente [SN] [Folio-Nombre] [Plan] [Zona]\`\n` +
       `_Ej: \`activar cliente 4317B5 3456-Juan Perez 40M Actopan\`_\n\n` +
-      `2. *Revisión de Folios (Disponibilidad en vivo):*\n` +
-      `\`revisar folios [Folio 1, Folio 2, ...]\` o pega tu lista.\n` +
-      `_Ej: \`revisar folios 1265, 2046, 1269\` (o reenvía números uno por uno)_\n\n` +
-      `3. *Ficha Técnica / Info de Cliente:*\n` +
-      `\`info [Folio, Nombre o SN]\`\n` +
-      `_Ej: \`info 1265\` (WispHub + SmartOLT + Señal óptica dBm + GPS)_\n\n` +
-      `4. *Cambio de Domicilio / Reubicación:*\n` +
-      `\`cambio de domicilio [Folio, Nombre o IP]\`\n` +
-      `_Ej: \`cambio de domicilio 3456\`_\n\n` +
-      `5. *Cambio de Módem (Swap):*\n` +
+      `2. *Cambio de Módem (Swap):*\n` +
       `\`cambio de modem [Folio, Nombre o IP]\`\n` +
       `_Ej: \`cambio de modem 3456\`_\n\n` +
-      `6. *Consultar / Cargar Ubicación GPS:*\n` +
-      `\`ubicacion [Folio, Nombre o IP]\`\n` +
-      `_Ej: \`ubicacion 3017\` o envía un PIN de ubicación para asignarlo_\n\n` +
+      `3. *Cambio de Domicilio / Reubicación:*\n` +
+      `\`cambio de domicilio [Folio, Nombre o IP]\`\n` +
+      `_Ej: \`cambio de domicilio 3456\`_\n\n` +
+      `4. *Reaprovisionar / Resetear ONU:*\n` +
+      `\`reaprovisionar [Folio, Nombre o IP]\`\n` +
+      `_Ej: \`reaprovisionar 3456\` (Elimina y re-alta el mismo equipo con sus datos)_\n\n` +
+      `*HERRAMIENTAS Y CONSULTAS EN CAMPO:*\n\n` +
+      `5. *Revisión de Folios (Disponibilidad en vivo):*\n` +
+      `\`revisar folios [Folio 1, Folio 2, ...]\` (o reenvía números sueltos)\n` +
+      `_Ej: \`revisar folios 1265, 2046, 1269\`_\n\n` +
+      `6. *Ficha Técnica / Info de Cliente:*\n` +
+      `\`info [Folio, Nombre o SN]\`\n` +
+      `_Ej: \`info 1265\` (WispHub + SmartOLT + Señal óptica dBm + GPS)_\n\n` +
       `7. *Cambiar Paquete / Velocidad:*\n` +
       `\`cambiar plan [Folio/Nombre/SN] a [Velocidad]\`\n` +
       `_Ej: \`cambiar plan 3456 a 60 megas\`_\n\n` +
-      `8. *Cambiar Contraseña Wi-Fi:*\n` +
+      `8. *Cambiar Nombre / Titular:*\n` +
+      `\`cambiar nombre [Folio o SN] a [Nuevo Nombre]\`\n` +
+      `_Ej: \`cambiar nombre 3456 a Juan Perez Gonzalez\`_\n\n` +
+      `9. *Consultar / Cargar Ubicación GPS:*\n` +
+      `\`ubicacion [Folio, Nombre o IP]\` (o envía un PIN de Google Maps)\n` +
+      `_Ej: \`ubicacion 3017\`_\n\n` +
+      `10. *Cambiar Contraseña Wi-Fi:*\n` +
       `\`cambiar wifi [SN] [NuevoSSID] [NuevaClave]\`\n` +
       `_Ej: \`cambiar wifi 4317B5 MiRed2.4G Clave2026*\`_\n\n` +
-      `9. *Guía Didáctica TR-069 & OLT:*\n` +
-      `Escribe: \`guia tr069\`\n\n` +
-      `_Puedes escribir cualquier comando directamente en este chat._`;
+      `_💡 Puedes escribir cualquier comando directamente en este chat o pedir ayuda con \`guia tr069\`._`;
 
     await this.enviarYLoguear(phone, menu, 'ACTIVACION_TECNICO', 'PANEL_TECNICO_ENVIADO', targetJid);
   }
@@ -8943,8 +9150,8 @@ _(O indica un cambio, ej: cambiar paquete 60 megas)_`;
       });
 
       const waitMsg = metaObj.isRelocation
-        ? `*Buscando módem \`${cleanSuffix}\` en SmartOLT...*\n• *Cliente:* *${oldService.clientName}*\n• *Zona:* ${oldService.zone || 'Actopan'}\n• *IP:* \`${oldService.ip}\`\nAún no detecta señal óptica en el nuevo puerto. Búsqueda activa durante *10 min* mientras conectas la fibra.`
-        : `*Buscando nuevo módem \`${cleanSuffix}\` en SmartOLT...*\n• *Cliente:* *${oldService.clientName}*\n• *Zona:* ${oldService.zone || 'Actopan'}\n• *IP:* \`${oldService.ip}\`\nAún no sincroniza en la central. Búsqueda activa durante *10 min* mientras conectas la fibra.`;
+        ? `🔍 *Buscando módem \`${cleanSuffix}\` en SmartOLT...*\n• *Cliente:* *${oldService.clientName}*\nAún no detecta señal óptica en el nuevo puerto. Búsqueda activa durante *10 min* mientras conectas la fibra.`
+        : `🔍 *Buscando nuevo módem \`${cleanSuffix}\` en SmartOLT...*\n• *Cliente:* *${oldService.clientName}*\nAún no sincroniza en la central. Te aviso en cuanto conectes la fibra (búsqueda activa durante *10 min*).`;
 
       await this.enviarYLoguear(
         phone,
@@ -9116,14 +9323,6 @@ _(O indica un cambio, ej: cambiar paquete 60 megas)_`;
       return;
     }
 
-    await this.enviarYLoguear(
-      phone,
-      '*Aplicando cambio en SmartOLT, un momento...*',
-      'ACTIVACION_TECNICO',
-      'EJECUTANDO_SWAP',
-      targetJid
-    );
-
     const result = await SmartOLTService.executeModemSwap({
       oldOnuIdOrSn: swapData.oldOnuId || swapData.oldSn,
       newSn: swapData.newSn,
@@ -9175,6 +9374,576 @@ _(O indica un cambio, ej: cambiar paquete 60 megas)_`;
         `*Atención durante el proceso:*\n\n${result.message}`,
         'ACTIVACION_TECNICO',
         'SWAP_ERROR',
+        targetJid
+      );
+    }
+  }
+
+  /**
+   * =========================================================================
+   * REAPROVISIONAMIENTO DE ONUS EN SMARTOLT (RESET Y RE-ALTA DEL MISMO MÓDEM)
+   * =========================================================================
+   */
+
+  /**
+   * Procesa la solicitud inicial de reaprovisionamiento enviada por un técnico
+   */
+  private static async procesarSolicitudReaprovisionarTecnico(
+    phone: string,
+    rawText: string,
+    session: Session | null,
+    targetJid?: string
+  ): Promise<void> {
+    const auth = await this.verificarAutorizacionTecnico(phone, rawText);
+    if (!auth.autorizado) {
+      await this.enviarYLoguear(
+        phone,
+        `*Acceso Restringido - Área Técnica*\n\nTu número (*${phone}*) no está registrado como técnico autorizado para reaprovisionar equipos en SmartOLT.\n\nSolicita tu alta al administrador en el panel de control.`,
+        'ACTIVACION_TECNICO',
+        'NO_AUTORIZADO',
+        targetJid
+      );
+      return;
+    }
+
+    const cleanParams = rawText
+      .replace(/^(?:realizar|hacer|ejecutar|solicitar)?\s*(?:un\s+)?(?:reaprovisionar|re-aprovisionar|reaprovisionamiento|re-aprovisionamiento|reset\s+onu|resetear\s+onu|reiniciar\s+onu|reactivar\s+onu|re-activar\s+onu|reactivar|reautorizar\s+onu)(?:\s+(?:a|al|del?|cliente|onu|modem|módem))?[:\s]*/i, '')
+      .trim();
+
+    if (!cleanParams) {
+      await DbService.upsertSession({
+        phone,
+        step: 'PENDIENTE_CLIENTE_REAPROVISIONAR',
+      });
+
+      await this.enviarYLoguear(
+        phone,
+        `🔄 *Reaprovisionamiento de Módem*\n\nPor favor escribe el *folio, nombre, IP o serie* de la ONU que deseas restablecer en la OLT:\n_(Ej: 713 o Marina Escamilla)_`,
+        'ACTIVACION_TECNICO',
+        'SOLICITUD_CLIENTE_REAPROVISIONAR',
+        targetJid
+      );
+      return;
+    }
+
+    await this.buscarYProcesarServicioParaReaprovisionar(phone, cleanParams, session, targetJid);
+  }
+
+  /**
+   * Atiende la respuesta con el nombre o folio del cliente para Reaprovisionamiento
+   */
+  private static async procesarIdentificacionClienteReaprovisionar(
+    phone: string,
+    rawText: string,
+    session: Session | null,
+    targetJid?: string
+  ): Promise<void> {
+    const lower = rawText.trim().toLowerCase();
+    if (/^(no|cancelar|cancelo|abortar|0)\b/i.test(lower)) {
+      await DbService.upsertSession({ phone, step: 'CONVERSACIONAL' });
+      await this.enviarYLoguear(phone, `*Reaprovisionamiento cancelado.*`, 'ACTIVACION_TECNICO', 'REAPROVISION_CANCELADO', targetJid);
+      return;
+    }
+
+    await this.buscarYProcesarServicioParaReaprovisionar(phone, rawText.trim(), session, targetJid);
+  }
+
+  /**
+   * Busca el cliente/servicio para reaprovisionar y gestiona selección multiservicio o confirmación directa
+   */
+  private static async buscarYProcesarServicioParaReaprovisionar(
+    phone: string,
+    query: string,
+    session: Session | null,
+    targetJid?: string
+  ): Promise<void> {
+    const isIp = /^172\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(query) || /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(query);
+    const isFullSn = /^[A-Z0-9]{12,16}$/i.test(query.trim()) && !/\s/.test(query.trim());
+
+    let oldOnu: any = null;
+
+    if (isIp || isFullSn) {
+      oldOnu = await SmartOLTService.getOnuDetails(query);
+    } else {
+      const matches = await DbService.searchOnusFuzzy(query, 8);
+
+      const distinctMatches: typeof matches = [];
+      const seenKeys = new Set<string>();
+      for (const m of matches) {
+        const key = `${m.unique_external_id || ''}-${m.ip_address || ''}-${m.sn || ''}`;
+        if (!seenKeys.has(key)) {
+          seenKeys.add(key);
+          distinctMatches.push(m);
+        }
+      }
+
+      const extractedQ = extractFolioAndCleanName(query);
+      if (distinctMatches.length > 1 && (extractedQ.folio || extractedQ.serviceSuffix)) {
+        const folioFiltered = distinctMatches.filter(m => {
+          const matchesF = extractedQ.folio ? (candidateMatchesFolio(m.name, extractedQ.folio) || candidateMatchesFolio(m.unique_external_id || '', extractedQ.folio)) : true;
+          const matchesS = extractedQ.serviceSuffix ? candidateMatchesServiceSuffix(m.name, extractedQ.serviceSuffix) : true;
+          const matchesN = extractedQ.cleanName ? (computeNameMatchScore(extractedQ.cleanName, m.name) >= 45) : true;
+          return matchesF && matchesS && matchesN;
+        });
+        if (folioFiltered.length === 1) {
+          distinctMatches.length = 0;
+          distinctMatches.push(folioFiltered[0]);
+        }
+      }
+
+      if (distinctMatches.length > 1) {
+        await Promise.all(
+          distinctMatches.map(async (m) => {
+            try {
+              const details = await SmartOLTService.getOnuDetails(m.unique_external_id || m.sn);
+              if (details) {
+                if (details.download_speed_profile_name || details.speed_profile) {
+                  m.speed_profile = details.download_speed_profile_name || details.speed_profile;
+                }
+                if (details.zone || details.zone_name) {
+                  m.zone_name = details.zone || details.zone_name;
+                }
+                if (details.name) {
+                  m.name = details.name;
+                }
+                if (details.ip_address) {
+                  m.ip_address = details.ip_address;
+                }
+              }
+            } catch {}
+          })
+        );
+
+        let msg = `🔍 *Se encontraron ${distinctMatches.length} servicios para "${query}"*\n\nSelecciona a cuál se le realizará el reaprovisionamiento:\n\n`;
+        distinctMatches.forEach((m, idx) => {
+          const plan = (m.speed_profile || '40MB').replace(/MB-DOWN|MB/i, ' Megas');
+          const zonaStr = m.zone_name ? ` • ${m.zone_name}` : '';
+          msg += `*${idx + 1}.* *${m.name}*\n`;
+          msg += `   • *IP:* \`${m.ip_address || 'Sin IP'}\` (${plan})\n`;
+          msg += `   • *Módem:* \`${m.sn}\`${zonaStr}\n\n`;
+        });
+        msg += `Responde con el *número* (ej: *1* o *2*), el *folio* o la *IP*.\n_O escribe *cancelar* para salir._`;
+
+        let metaObj: any = {};
+        try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
+        metaObj.pendingReprovisionChoice = { candidates: distinctMatches };
+
+        await DbService.upsertSession({
+          phone,
+          step: 'PENDIENTE_SELECCION_IP_REAPROVISIONAR',
+          metadata: JSON.stringify(metaObj),
+        });
+
+        await this.enviarYLoguear(phone, msg, 'ACTIVACION_TECNICO', 'SELECCION_IP_MULTISERVICIO_REAPROVISION', targetJid);
+        return;
+      } else if (distinctMatches.length === 1) {
+        const cand = distinctMatches[0];
+        oldOnu = await SmartOLTService.getOnuDetails(cand.unique_external_id || cand.sn);
+        if (!oldOnu) {
+          const candSubnet = cand.ip_address ? IpamService.getSubnetConfigFromIp(cand.ip_address) : null;
+          oldOnu = {
+            unique_external_id: cand.unique_external_id,
+            sn: cand.sn,
+            name: cand.name,
+            ip_address: cand.ip_address,
+            vlan: (cand as any).vlan || candSubnet?.vlan || IpamService.getVlanFromIp(cand.ip_address),
+            zone: cand.zone_name || (candSubnet?.oltId === '2' ? 'San Agustin Tlaxiaca' : 'Actopan'),
+            download_speed_profile_name: cand.speed_profile || '40MB-DOWN',
+            olt_id: candSubnet?.oltId || (cand.zone_name?.toLowerCase().includes('san agustin') ? '2' : '3'),
+            board: '0',
+            port: '0',
+            onu_type: 'EG8041V5',
+          };
+        }
+      } else {
+        oldOnu = await SmartOLTService.getOnuDetails(query);
+        if (!oldOnu) {
+          try {
+            const whMatches = await DbService.searchWisphubClientsFuzzy(query, 3);
+            if (whMatches.length > 0) {
+              const firstWh = whMatches[0];
+              if (firstWh.ip || firstWh.sn_onu) {
+                oldOnu = await SmartOLTService.getOnuDetails(firstWh.ip || firstWh.sn_onu || String(firstWh.id_servicio));
+              }
+              if (!oldOnu && firstWh.ip) {
+                const candSubnet = IpamService.getSubnetConfigFromIp(firstWh.ip);
+                const speedInfo = getSmartOltSpeedProfiles(firstWh.plan_internet || firstWh.servicio || '40 Megas');
+                oldOnu = {
+                  unique_external_id: firstWh.sn_onu || `WH-${firstWh.id_servicio}`,
+                  sn: firstWh.sn_onu || 'N/A',
+                  name: firstWh.nombre,
+                  ip_address: firstWh.ip,
+                  vlan: candSubnet?.vlan || IpamService.getVlanFromIp(firstWh.ip) || '510',
+                  zone: candSubnet?.oltId === '2' ? 'San Agustin Tlaxiaca' : 'Actopan',
+                  download_speed_profile_name: speedInfo.down,
+                  upload_speed_profile_name: speedInfo.up,
+                  olt_id: candSubnet?.oltId || '3',
+                  board: '0',
+                  port: '0',
+                  onu_type: 'EG8041V5',
+                };
+              }
+            }
+          } catch (whErr: any) {
+            logger.warn('Error en búsqueda WispHub para reaprovisionar:', whErr?.message);
+          }
+        }
+      }
+    }
+
+    if (!oldOnu) {
+      await this.enviarYLoguear(
+        phone,
+        `*Servicio no encontrado*\n\nNo se localizó ningún servicio activo con el identificador o cliente: *"${query}"* en SmartOLT ni en la base de datos.\n\nPor favor verifica el folio, nombre, IP o serie y reintenta.`,
+        'ACTIVACION_TECNICO',
+        'ONU_NO_ENCONTRADA_REAPROVISION',
+        targetJid
+      );
+      return;
+    }
+
+    let metaObj: any = {};
+    try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
+    await this.construirYEnviarConfirmacionReaprovisionar(phone, oldOnu, metaObj, targetJid);
+  }
+
+  /**
+   * Procesa la selección de servicio en caso de clientes multiservicio para reaprovisionamiento
+   */
+  private static async procesarSeleccionIpReaprovisionar(
+    phone: string,
+    rawText: string,
+    session: Session | null,
+    targetJid?: string
+  ): Promise<void> {
+    const lower = rawText.trim().toLowerCase();
+    let metaObj: any = {};
+    try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
+    const choiceData = metaObj.pendingReprovisionChoice;
+
+    if (!choiceData || !Array.isArray(choiceData.candidates) || choiceData.candidates.length === 0) {
+      await DbService.upsertSession({ phone, step: 'CONVERSACIONAL' });
+      await this.enviarYLoguear(phone, 'No hay ninguna selección de reaprovisionamiento pendiente. Inicia con `reaprovisionar [Cliente]`.', 'ACTIVACION_TECNICO', 'ERROR_SESION', targetJid);
+      return;
+    }
+
+    if (/^(no|cancelar|cancelo|abortar|0)\b/i.test(lower)) {
+      metaObj.pendingReprovisionChoice = null;
+      await DbService.upsertSession({
+        phone,
+        step: 'CONVERSACIONAL',
+        metadata: JSON.stringify(metaObj),
+      });
+      await this.enviarYLoguear(phone, '*Operación cancelada.*', 'ACTIVACION_TECNICO', 'REAPROVISION_CANCELADO', targetJid);
+      return;
+    }
+
+    const candidates: any[] = choiceData.candidates;
+    let selectedCandidate: any = null;
+
+    const numMatch = lower.match(/^(?:opci[oó]n|servicio|el|num|número)?\s*(\d+)(?:[.)]|\s|$)/i);
+    if (numMatch) {
+      const idx = parseInt(numMatch[1], 10) - 1;
+      if (idx >= 0 && idx < candidates.length) {
+        selectedCandidate = candidates[idx];
+      }
+    }
+
+    if (!selectedCandidate && numMatch) {
+      const folioInput = numMatch[1];
+      selectedCandidate = candidates.find(c =>
+        candidateMatchesFolio(c.name || '', folioInput) ||
+        candidateMatchesFolio(String(c.unique_external_id || ''), folioInput)
+      );
+    }
+
+    if (!selectedCandidate) {
+      const ipInText = rawText.match(/\b(?:\d{1,3}\.){3}\d{1,3}\b/);
+      if (ipInText) {
+        const foundByIp = candidates.find(c => (c.ip_address || '').trim() === ipInText[0].trim());
+        if (foundByIp) selectedCandidate = foundByIp;
+      }
+    }
+
+    if (!selectedCandidate) {
+      const cleanUpper = rawText.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (cleanUpper.length >= 4) {
+        const foundBySn = candidates.find(c => {
+          const cSn = (c.sn || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+          return cSn.includes(cleanUpper) || cSn.endsWith(cleanUpper);
+        });
+        if (foundBySn) selectedCandidate = foundBySn;
+      }
+    }
+
+    if (!selectedCandidate) {
+      let retryMsg = `No logré identificar el servicio.\n\nPor favor selecciona una opción:\n\n`;
+      candidates.forEach((m: any, idx: number) => {
+        const plan = (m.speed_profile || '').replace(/MB-DOWN|MB/i, ' Megas');
+        const planStr = plan ? ` (${plan})` : '';
+        retryMsg += `*${idx + 1}.* *${m.name}*\n   • IP: \`${m.ip_address || 'Sin IP'}\`${planStr} | Módem: \`${m.sn}\`\n\n`;
+      });
+      retryMsg += `Responde con el *número*, el *folio* o la *IP*.\n_O escribe *cancelar* para salir._`;
+      await this.enviarYLoguear(phone, retryMsg, 'ACTIVACION_TECNICO', 'REINTENTO_SELECCION_IP_REAPROVISION', targetJid);
+      return;
+    }
+
+    const oldOnu = await SmartOLTService.getOnuDetails(selectedCandidate.unique_external_id || selectedCandidate.sn);
+    if (!oldOnu) {
+      await this.enviarYLoguear(phone, `Error al consultar los detalles de la ONU seleccionada (${selectedCandidate.sn}). Por favor intenta nuevamente.`, 'ACTIVACION_TECNICO', 'ERROR_DETALLES_ONU', targetJid);
+      return;
+    }
+
+    metaObj.pendingReprovisionChoice = null;
+    await this.construirYEnviarConfirmacionReaprovisionar(phone, oldOnu, metaObj, targetJid);
+  }
+
+  /**
+   * Envía la tarjeta de confirmación clara con los datos del módem que se conservarán para reaprovisionar
+   */
+  private static async construirYEnviarConfirmacionReaprovisionar(
+    phone: string,
+    onu: any,
+    metaObj: any,
+    targetJid?: string
+  ): Promise<void> {
+    const onuModel = SmartOLTService.normalizeOnuType(onu.onu_type || onu.onu_type_name, onu.sn);
+    const finalVlan = IpamService.getVlanFromIp(onu.ip_address) || onu.vlan || '510';
+    const planDisplay = (onu.download_speed_profile_name || onu.speed_profile || '40MB').replace(/MB-DOWN|MB/i, ' Megas');
+    const signalText = onu.onu_signal_1490 || onu.onu_signal || onu.signal || 'Detectado';
+
+    metaObj.pendingReprovisionChoice = null;
+    metaObj.pendingReprovisionService = {
+      onuId: onu.unique_external_id || onu.sn,
+      sn: onu.sn,
+      name: onu.name,
+      ip: onu.ip_address,
+      vlan: finalVlan,
+      zone: onu.zone || 'Actopan',
+      speedProfile: onu.download_speed_profile_name || onu.speed_profile,
+      oltId: onu.olt_id || 3,
+      board: onu.board ?? 0,
+      port: onu.port ?? 0,
+      model: onuModel,
+    };
+
+    await DbService.upsertSession({
+      phone,
+      step: 'PENDIENTE_CONFIRMACION_REAPROVISIONAR',
+      metadata: JSON.stringify(metaObj),
+    });
+
+    const cardMsg = `🔄 *Confirmar Reaprovisionamiento*\n` +
+      `• *Cliente:* *${onu.name}*\n` +
+      `• *Zona:* ${onu.zone || 'Actopan'}\n` +
+      `• *Módem:* \`${onu.sn}\` (${onuModel})\n` +
+      `• *IP / Plan:* \`${onu.ip_address}\` (${planDisplay})\n` +
+      `• *Posición:* OLT ${onu.olt_id || 3} (B:${onu.board ?? 0} P:${onu.port ?? 0})\n` +
+      `• *Nivel óptico:* ${signalText}\n\n` +
+      `⚠️ *Acción:* Se eliminará temporalmente de la OLT y se volverá a autorizar con sus mismos datos para restaurar su configuración de fábrica y enlace.\n\n` +
+      `¿Proceder con el reaprovisionamiento? Responde *SÍ* o *NO*.`;
+
+    await this.enviarYLoguear(
+      phone,
+      cardMsg,
+      'ACTIVACION_TECNICO',
+      'ESPERANDO_CONFIRMACION_REAPROVISION',
+      targetJid
+    );
+  }
+
+  /**
+   * Ejecuta o cancela el reaprovisionamiento tras confirmación explícita del técnico
+   */
+  private static async procesarConfirmacionReaprovisionarTecnico(
+    phone: string,
+    session: Session | null,
+    targetJid: string | undefined,
+    confirmar: boolean = true
+  ): Promise<void> {
+    let metaObj: any = {};
+    try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
+    const reproData = metaObj.pendingReprovisionService;
+
+    if (!confirmar || !reproData) {
+      metaObj.pendingReprovisionService = null;
+      metaObj.pendingReprovisionChoice = null;
+      await DbService.upsertSession({
+        phone,
+        step: 'CONVERSACIONAL',
+        metadata: JSON.stringify(metaObj),
+      });
+
+      await this.enviarYLoguear(
+        phone,
+        `*Reaprovisionamiento cancelado.* No se realizó ninguna modificación en la OLT.`,
+        'ACTIVACION_TECNICO',
+        'REAPROVISION_CANCELADO',
+        targetJid
+      );
+      return;
+    }
+
+    // 1. Eliminar ONU previa en SmartOLT
+    logger.info(`[Reaprovisionamiento] Desvinculando ONU previa (${reproData.onuId || reproData.sn}) en SmartOLT...`);
+    const deleteRes = await SmartOLTService.deleteOnu(reproData.onuId || reproData.sn);
+    if (!deleteRes.success) {
+      logger.warn(`[Reaprovisionamiento] Advertencia al eliminar: ${deleteRes.message}. Continuando con el proceso de espera.`);
+    }
+
+    // 2. Establecer sesión en polling con 10 minutos de margen
+    metaObj.targetReprovisionSn = reproData.sn;
+    await DbService.upsertSession({
+      phone,
+      step: 'PENDIENTE_POLLING_REAPROVISION',
+      metadata: JSON.stringify(metaObj),
+    });
+
+    await this.enviarYLoguear(
+      phone,
+      `⏳ *Reaprovisionamiento en curso...*\n\n• *Cliente:* *${reproData.name}*\n• *Módem:* \`${reproData.sn}\`\n\nSe desvinculó de la OLT. Esperando a que el módem reinicie y vuelva a sincronizar en la central (búsqueda activa durante *10 minutos* mientras conecta la fibra).\n\n💡 _En cuanto detecte la señal óptica, se reautorizará automáticamente con sus datos originales._`,
+      'ACTIVACION_TECNICO',
+      'INICIANDO_POLLING_REAPROVISION',
+      targetJid
+    );
+
+    this.iniciarPollingReaprovisionarSmartOlt(phone, reproData.sn, targetJid);
+  }
+
+  /**
+   * Polling en background para detectar la ONU desvinculada en SmartOLT y reautorizarla automáticamente (hasta 10 minutos de margen)
+   */
+  private static iniciarPollingReaprovisionarSmartOlt(phone: string, cleanSn: string, targetJid?: string): void {
+    this.cancelarPollingOnu(phone);
+    const startTime = Date.now();
+    const MAX_POLL_MS = 10 * 60 * 1000; // 10 minutos de margen como en activaciones
+    const INTERVAL_MS = 12 * 1000; // cada 12 segundos
+
+    const poll = async () => {
+      try {
+        const curSession = await DbService.getSession(phone);
+        let curMeta: any = {};
+        try { curMeta = JSON.parse(curSession?.metadata || '{}'); } catch {}
+
+        const reproData = curMeta.pendingReprovisionService;
+        if (!reproData || curMeta.targetReprovisionSn !== cleanSn) {
+          this.activeOnuPolling.delete(phone);
+          return;
+        }
+
+        if (Date.now() - startTime >= MAX_POLL_MS) {
+          this.activeOnuPolling.delete(phone);
+          await this.enviarYLoguear(
+            phone,
+            `⚠️ *TIEMPO DE ESPERA AGOTADO (10 MINUTOS)*\n\nEl módem *${cleanSn}* de *${reproData.name}* no volvió a sincronizar en SmartOLT tras 10 minutos.\n\nPor favor verifica:\n1. Que el módem esté encendido.\n2. Que el cable de fibra óptica esté conectado y con buena potencia (LED PON en verde fijo).\n\nPuedes escribir \`reaprovisionar ${reproData.sn}\` para reintentar la autorización sin perder los datos del cliente.`,
+            'ACTIVACION_TECNICO',
+            'REAPROVISION_POLLING_TIMEOUT',
+            targetJid
+          );
+          return;
+        }
+
+        const unconf = await SmartOLTService.findUnconfiguredOnuBySnSuffix(cleanSn);
+        if (unconf) {
+          this.activeOnuPolling.delete(phone);
+          await this.ejecutarReautorizacionReaprovisionamiento(phone, unconf, reproData, curMeta, targetJid);
+          return;
+        }
+
+        const handle = setTimeout(poll, INTERVAL_MS);
+        this.activeOnuPolling.set(phone, { timeoutHandle: handle, targetSn: cleanSn, startTime });
+      } catch (err: any) {
+        logger.error(`Error en polling de reaprovisionamiento para ${phone}:`, err?.message || err);
+      }
+    };
+
+    // Primera verificación tras 8 segundos para dar tiempo al desregistro en la OLT
+    const handle = setTimeout(poll, 8000);
+    this.activeOnuPolling.set(phone, { timeoutHandle: handle, targetSn: cleanSn, startTime });
+  }
+
+  /**
+   * Ejecuta la reautorización en SmartOLT una vez detectada la ONU en unconfigured_onus
+   */
+  private static async ejecutarReautorizacionReaprovisionamiento(
+    phone: string,
+    unconfigured: any,
+    reproData: any,
+    metaObj: any,
+    targetJid?: string
+  ): Promise<void> {
+    const onuModel = SmartOLTService.normalizeOnuType(unconfigured.onu_type_name || unconfigured.onu_type || reproData.model, reproData.sn);
+    const dynamicSubnet = IpamService.getSubnetConfigFromIp(reproData.ip);
+    const targetVlan = String(reproData.vlan && reproData.vlan !== '510' ? reproData.vlan : (dynamicSubnet.vlan || reproData.vlan || '510'));
+    const targetGateway = reproData.gateway || dynamicSubnet.gateway || '172.19.2.254';
+
+    let dlProfile = reproData.speedProfile || '40MB-DOWN';
+    if (!dlProfile.toUpperCase().includes('-DOWN')) {
+      const mb = dlProfile.match(/(\d+)\s*(?:MB|MEGAS?|M)?/i);
+      if (mb) dlProfile = `${mb[1]}MB-DOWN`;
+    }
+    let ulProfile = reproData.upload_speed_profile_name || (dlProfile ? dlProfile.replace(/-DOWN$/i, '-UP') : '40MB-UP');
+
+    const payload: AuthorizeOnuPayload = {
+      olt_id: unconfigured.olt_id || reproData.oltId || 3,
+      pon_type: unconfigured.pon_type || 'gpon',
+      board: unconfigured.board ?? reproData.board ?? 0,
+      port: unconfigured.port ?? reproData.port ?? 0,
+      sn: reproData.sn,
+      onu_type: onuModel,
+      name: reproData.name,
+      onu_mode: 'Routing',
+      vlan: targetVlan,
+      ip_address: reproData.ip,
+      netmask: dynamicSubnet.netmask || '255.255.255.0',
+      gateway: targetGateway,
+      line_profile: 'VLAN mapping',
+      download_speed_profile_name: dlProfile,
+      upload_speed_profile_name: ulProfile,
+      zone: reproData.zone || 'Actopan',
+      address: reproData.address,
+      comment: `Reaprovisionamiento de equipo (${reproData.sn})`,
+    };
+
+    const authResult = await SmartOLTService.authorizeOnu(payload);
+
+    metaObj.pendingReprovisionService = null;
+    metaObj.targetReprovisionSn = null;
+    await DbService.upsertSession({
+      phone,
+      step: 'CONVERSACIONAL',
+      metadata: JSON.stringify(metaObj),
+    });
+
+    if (authResult.success) {
+      const newOnuId = authResult.onu_id || reproData.sn;
+      await DbService.updateClientOnuReferences(reproData.sn, reproData.sn, newOnuId);
+
+      // Notificar al grupo de WhatsApp si está configurado
+      try {
+        const { EvolutionService } = await import('../services/evolution.service');
+        const groupMsg = `${payload.name}\n${payload.ip_address}\n${payload.zone || 'Actopan'}\nREAPROVISIONAMIENTO`;
+        let configuredGroupJid = (await DbService.getActivationsGroupJid()).trim();
+        if (configuredGroupJid && configuredGroupJid.endsWith('@g.us')) {
+          await EvolutionService.enviarTexto(configuredGroupJid, groupMsg, { instant: true });
+        }
+      } catch {}
+
+      const planDisplay = (reproData.speedProfile || '40MB').replace(/MB-DOWN|MB/i, ' Megas');
+      const successMsg = `✅ *¡Reaprovisionamiento exitoso!*\n` +
+        `• *Cliente:* *${reproData.name}*\n` +
+        `• *Zona:* ${reproData.zone || 'Actopan'}\n` +
+        `• *Módem:* \`${reproData.sn}\` (${onuModel}) reautorizado y en línea.\n` +
+        `• *IP:* \`${reproData.ip}\` (${planDisplay}) en OLT ${payload.olt_id} (B:${payload.board} P:${payload.port}).\n` +
+        `Notificado al grupo de Activaciones.`;
+
+      await this.enviarYLoguear(phone, successMsg, 'ACTIVACION_TECNICO', 'REAPROVISION_EXITOSO', targetJid);
+    } else {
+      await this.enviarYLoguear(
+        phone,
+        `*Atención durante el reaprovisionamiento:*\n\n${authResult.message}`,
+        'ACTIVACION_TECNICO',
+        'REAPROVISION_ERROR',
         targetJid
       );
     }

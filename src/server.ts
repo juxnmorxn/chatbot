@@ -75,7 +75,14 @@ async function startServer() {
           logger.info('Inventario de SmartOLT vacío en Base de Datos Local. Intentando sincronización inicial...');
           await SmartOLTService.syncAllOnusToLocalDb(false);
         } else {
-          logger.info(`Inventario SmartOLT listo en Base de Datos Local: ${stats.count} ONUs (Última sync: ${stats.lastSync || 'Previa'})`);
+          
+        // Purgado de mantenimiento preventivo cada 24 horas (Logs > 60 días)
+        DbService.purgeOldLogs(60).catch(() => {});
+        setInterval(() => {
+          DbService.purgeOldLogs(60).catch(() => {});
+        }, 24 * 60 * 60 * 1000);
+
+        logger.info(`Inventario SmartOLT listo en Base de Datos Local: ${stats.count} ONUs (Última sync: ${stats.lastSync || 'Previa'})`);
         }
 
         // Verificación e importación inicial de WispHub

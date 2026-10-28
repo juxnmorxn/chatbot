@@ -12,6 +12,7 @@ export interface OltDevice {
   total_gpon_ports?: number;
   default_vlan: number;
   community: string;
+  tunnel_id?: number | string | null;
   mikrotik_ip?: string;
   mikrotik_name?: string;
   status?: string;

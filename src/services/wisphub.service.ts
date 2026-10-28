@@ -1338,6 +1338,7 @@ export class WispHubService {
         const clienteTel = f.cliente?.telefono ? String(f.cliente.telefono) : '';
         const total = Number(f.total || 0);
         const subTotal = Number(f.sub_total || total);
+        const descuento = Number(f.descuento || f.descuentos || 0);
         let estado = String(f.estado || 'Pendiente de Pago');
         if (estado === '1') estado = 'Pendiente de Pago';
         if (estado === '2') estado = 'Pagada';

@@ -107,6 +107,7 @@ export interface AuditIpItem {
 }
 
 export interface Session {
+  router?: string | null;
   phone: string;
   step: string;
   client_id: string | null;
@@ -2501,6 +2502,54 @@ export class DbService {
   /**
    * Busca un cliente en WispHub por cualquier identificador disponible (Alias findWisphubClient)
    */
+  
+  /**
+   * Helper: Obtiene cliente de WispHub por ID de servicio
+   */
+  static async getWisphubClient(id: string | number): Promise<WisphubClientRecord | null> {
+    return this.getWisphubClientByAny({ id });
+  }
+
+  /**
+   * Helper: Obtiene cliente de WispHub por teléfono
+   */
+  static async getClientByPhone(phone: string): Promise<WisphubClientRecord | null> {
+    return this.getWisphubClientByAny({ phone });
+  }
+
+  /**
+   * Helper: Guarda un cliente individual de WispHub en la base de datos local
+   */
+  static async saveWisphubClient(client: WisphubClientRecord): Promise<number> {
+    return this.saveWisphubClients([client]);
+  }
+
+  /**
+   * Mantenimiento: Purgado de logs antiguos (> 60 días) para evitar crecimiento infinito de la BD
+   */
+  static async purgeOldLogs(daysToKeep = 60): Promise<{ deletedLogs: number; deletedMessages: number }> {
+    try {
+      const client = getDbClient();
+      const cutoffDate = new Date(Date.now() - daysToKeep * 24 * 60 * 60 * 1000).toISOString();
+      const resLogs = await client.execute({
+        sql: 'DELETE FROM bot_logs WHERE created_at < ?',
+        args: [cutoffDate],
+      });
+      const resMsgs = await client.execute({
+        sql: 'DELETE FROM messages WHERE timestamp < ?',
+        args: [cutoffDate],
+      });
+      logger.info(`[Mantenimiento BD] Purgados ${resLogs.rowsAffected || 0} bot_logs y ${resMsgs.rowsAffected || 0} messages de más de ${daysToKeep} días.`);
+      return {
+        deletedLogs: Number(resLogs.rowsAffected || 0),
+        deletedMessages: Number(resMsgs.rowsAffected || 0),
+      };
+    } catch (err: any) {
+      logger.warn('Error purgando logs antiguos:', err?.message || err);
+      return { deletedLogs: 0, deletedMessages: 0 };
+    }
+  }
+
   static async findWisphubClient(params: {
     id?: string | number | null;
     phone?: string | null;
@@ -4811,7 +4860,7 @@ export interface ModemSwapRecord {
   old_data_json?: string | null;
   technician_phone?: string | null;
   technician_name?: string | null;
-  status?: 'COMPLETADO' | 'ERROR' | 'EN_PROCESO';
+  status?: 'COMPLETADO' | 'ERROR' | 'EN_PROCESO' | 'REAPROVISIONADO';
   error_message?: string | null;
   created_at?: string;
 }

@@ -180,8 +180,6 @@ export class SettingsService {
       soporteHumanoPhone: this.get('SOPORTE_HUMANO_PHONE', 'SOPORTE_HUMANO_PHONE', ''),
       activationsGroupJid: this.get('ACTIVATIONS_GROUP_JID', 'ACTIVATIONS_GROUP_JID', this.get('GRUPO_ACTIVACIONES', 'GRUPO_ACTIVACIONES', '')),
       paymentWorkMode: (this.get('PAYMENT_WORK_MODE', 'PAYMENT_WORK_MODE', 'portal') as 'portal' | 'traditional') || 'portal',
-      PAYMENT_WORK_MODE: (this.get('PAYMENT_WORK_MODE', 'PAYMENT_WORK_MODE', 'portal') as 'portal' | 'traditional') || 'portal',
-      paymentBank: this.get('PAYMENT_BANK', 'PAYMENT_BANK', 'BBVA'),
       paymentAccount: this.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', '012290004848824666'),
       paymentConvenio: this.get('PAYMENT_CONVENIO', 'PAYMENT_CONVENIO', ''),
       paymentBeneficiary: this.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', 'Osbaldo Tovar Campero'),

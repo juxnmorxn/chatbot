@@ -94,6 +94,21 @@ export interface ModemSwapResult {
   whatsappNotified?: boolean;
 }
 
+export interface ReprovisionOnuParams {
+  onuIdOrSn: string;
+  technicianName?: string;
+  technicianPhone?: string;
+  notifyGroup?: boolean;
+  maxWaitSeconds?: number;
+}
+
+export interface ReprovisionOnuResult {
+  success: boolean;
+  message: string;
+  oldOnu?: any;
+  authorizationResult?: AuthorizeOnuResult;
+}
+
 export interface SpeedProfileItem {
   id: string;
   name: string;
@@ -289,6 +304,14 @@ export class SmartOLTService {
   /**
    * Consulta el estado físico y óptico de la ONU en la OLT con caché de 3 minutos
    */
+  
+  /**
+   * Diagnostica el estado óptico de una ONU por ID o Serie (Alias para obtenerEstadoONU)
+   */
+  static async diagnosticarEstadoOptico(onuIdOrSn: string): Promise<SmartOltStatusResult> {
+    return this.obtenerEstadoONU(onuIdOrSn);
+  }
+
   static async obtenerEstadoONU(onuId: string): Promise<SmartOltStatusResult> {
     const cleanId = onuId.trim();
     const now = Date.now();
@@ -1522,6 +1545,68 @@ export class SmartOLTService {
   }
 
   /**
+   * Actualiza el nombre / titular de una ONU en SmartOLT y en la base de datos local
+   */
+  static async updateOnuName(
+    onuIdOrSn: string,
+    newName: string
+  ): Promise<{ success: boolean; message: string; oldName?: string; newName?: string; onuRecord?: any }> {
+    const cleanId = String(onuIdOrSn || '').trim();
+    const cleanName = this.normalizeSmartOltString(newName);
+
+    if (!cleanId || !cleanName) {
+      return { success: false, message: 'Se requiere el identificador de la ONU y el nuevo nombre.' };
+    }
+
+    const onuRecord = await this.getOnuDetails(cleanId);
+    const externalId = onuRecord?.unique_external_id || cleanId;
+    const oldName = onuRecord?.name || 'Desconocido';
+
+    logger.info(`[SmartOLT] Actualizando nombre de ONU ${externalId}: "${oldName}" -> "${cleanName}"`);
+
+    const apiKey = this.getApiKey();
+    if (!apiKey || apiKey.includes('tu_token')) {
+      logger.info('Modo DEV: Actualización de nombre simulada.');
+      if (onuRecord) {
+        DbService.saveSmartOltOnus([{ ...onuRecord, name: cleanName, updated_at: new Date().toISOString() }]).catch(() => {});
+      }
+      return { success: true, message: `Nombre actualizado exitosamente a "${cleanName}" (simulación).`, oldName, newName: cleanName, onuRecord };
+    }
+
+    try {
+      const api = this.getApi();
+      const form = new FormData();
+      form.append('name', cleanName);
+
+      let response;
+      try {
+        response = await api.post(`/onu/set_onu_name/${encodeURIComponent(externalId)}`, form);
+      } catch (err: any) {
+        const fallbackForm = new FormData();
+        fallbackForm.append('onu_external_id', externalId);
+        fallbackForm.append('name', cleanName);
+        response = await api.post('/onu/set_onu_name', fallbackForm);
+      }
+
+      const resData = response.data;
+      logger.info('Respuesta actualización de nombre SmartOLT:', JSON.stringify(resData));
+
+      if (resData?.status === true || response.status === 200 || resData?.response_code === 'success' || resData?.response === 'success') {
+        if (onuRecord) {
+          DbService.saveSmartOltOnus([{ ...onuRecord, name: cleanName, updated_at: new Date().toISOString() }]).catch(() => {});
+        }
+        return { success: true, message: `Nombre actualizado exitosamente a "${cleanName}".`, oldName, newName: cleanName, onuRecord };
+      } else {
+        return { success: false, message: resData?.message || resData?.error || 'SmartOLT no pudo actualizar el nombre.', oldName, newName: cleanName, onuRecord };
+      }
+    } catch (error: any) {
+      logger.error('Error al actualizar nombre en SmartOLT:', error?.response?.data || error?.message || error);
+      const errMsg = error?.response?.data?.message || error?.response?.data?.error || error?.message || 'Fallo de comunicación con SmartOLT';
+      return { success: false, message: `Error en SmartOLT: ${errMsg}`, oldName, newName: cleanName, onuRecord };
+    }
+  }
+
+  /**
    * Elimina una ONU de SmartOLT y la purga inmediatamente de Base de Datos Local para liberar su IP
    */
   static async deleteOnu(onuExternalId: string): Promise<{ success: boolean; message: string }> {
@@ -2046,6 +2131,195 @@ export class SmartOLTService {
       newOnu: { ...payload, onu_id: newOnuId },
       authorizationResult: authResult,
       whatsappNotified: waNotified,
+    };
+  }
+
+  /**
+   * Reaprovisiona (reset/re-alta) una ONU existente en SmartOLT:
+   * 1. Respalda la configuración completa actual (VLAN, IP, Perfil, Zona, Board, Port, OLT).
+   * 2. Elimina la ONU de SmartOLT (deleteOnu).
+   * 3. Espera brevemente para que la OLT libere el puerto y detecte la ONU en frío.
+   * 4. Vuelve a autorizarla con EXACTAMENTE los mismos datos de red y cliente.
+   * 5. Actualiza referencias en BD y opcionalmente notifica al grupo de WhatsApp.
+   */
+  static async reprovisionOnu(params: ReprovisionOnuParams): Promise<ReprovisionOnuResult> {
+    const cleanIdOrSn = String(params.onuIdOrSn || '').trim();
+    if (!cleanIdOrSn) {
+      return { success: false, message: 'Se requiere el identificador o SN de la ONU a reaprovisionar.' };
+    }
+
+    logger.info(`[Reaprovisionamiento] Iniciando proceso para ONU/SN: "${cleanIdOrSn}"...`);
+
+    // 1. Obtener datos de la ONU actual
+    const oldOnu = await this.getOnuDetails(cleanIdOrSn);
+    if (!oldOnu) {
+      return { success: false, message: `No se encontraron datos de la ONU (${cleanIdOrSn}) en SmartOLT ni en la base de datos.` };
+    }
+
+    const cleanSn = String(oldOnu.sn || cleanIdOrSn).trim().toUpperCase();
+    logger.info(`[Reaprovisionamiento] Datos respaldados: Cliente="${oldOnu.name}", SN="${cleanSn}", IP="${oldOnu.ip_address}", VLAN="${oldOnu.vlan}", OLT=${oldOnu.olt_id}, B:${oldOnu.board} P:${oldOnu.port}`);
+
+    // 2. Respaldar en BD Local
+    const swapId = await DbService.saveModemSwap({
+      client_name: oldOnu.name,
+      old_sn: cleanSn,
+      new_sn: cleanSn,
+      old_onu_id: oldOnu.unique_external_id,
+      ip_address: oldOnu.ip_address,
+      vlan: String(oldOnu.vlan),
+      zone: oldOnu.zone,
+      speed_profile: oldOnu.download_speed_profile_name,
+      old_data_json: JSON.stringify(oldOnu),
+      technician_name: params.technicianName || 'Tecnico WhatsApp',
+      technician_phone: params.technicianPhone || null,
+      status: 'EN_PROCESO',
+    });
+
+    const targetOltId = oldOnu.olt_id || 3;
+    const targetBoard = oldOnu.board ?? 0;
+    const targetPort = oldOnu.port ?? 0;
+    const targetPonType = oldOnu.pon_type || 'gpon';
+    const targetOnuType = this.normalizeOnuType(oldOnu.onu_type, cleanSn);
+
+    const dynamicSubnet = IpamService.getSubnetConfigFromIp(oldOnu.ip_address);
+    const targetVlan = String(oldOnu.vlan && oldOnu.vlan !== '510' ? oldOnu.vlan : (dynamicSubnet.vlan || oldOnu.vlan || '510'));
+    const targetGateway = oldOnu.gateway || dynamicSubnet.gateway || '172.19.2.254';
+
+    let dlProfile = oldOnu.download_speed_profile_name || '40MB-DOWN';
+    if (!dlProfile.toUpperCase().includes('-DOWN')) {
+      const mb = dlProfile.match(/(\d+)\s*(?:MB|MEGAS?|M)?/i);
+      if (mb) dlProfile = `${mb[1]}MB-DOWN`;
+    }
+    let ulProfile = oldOnu.upload_speed_profile_name || (dlProfile ? dlProfile.replace(/-DOWN$/i, '-UP') : '40MB-UP');
+
+    // 3. Eliminar de SmartOLT
+    logger.info(`[Reaprovisionamiento] Eliminando ONU previa (${oldOnu.unique_external_id || cleanSn}) de SmartOLT...`);
+    const deleteRes = await this.deleteOnu(oldOnu.unique_external_id || cleanSn);
+    if (!deleteRes.success) {
+      logger.warn(`[Reaprovisionamiento] Advertencia al eliminar: ${deleteRes.message}. Procediendo con la reautorización.`);
+    }
+
+    // 4. Esperar a que la ONT vuelva a sincronizar en la OLT y aparezca en unconfigured_onus
+    // Las ONUs suelen tardar de 15 a 60 segundos en resetear su enlace PON y ser detectadas en frío por la OLT.
+    logger.info(`[Reaprovisionamiento] Esperando a que el módem ${cleanSn} vuelva a salir en unconfigured_onus...`);
+    const apiKey = this.getApiKey();
+    const isDev = !apiKey || apiKey.includes('tu_token');
+
+    let actualBoard = targetBoard;
+    let actualPort = targetPort;
+    let actualOltId = targetOltId;
+    let actualPonType = targetPonType;
+    let targetOnuTypeFinal = targetOnuType;
+
+    if (!isDev) {
+      const maxWaitMs = (params.maxWaitSeconds || 90) * 1000;
+      const intervalMs = 5000;
+      const startTime = Date.now();
+      let unconf: UnconfiguredOnu | null = null;
+
+      // Espera inicial de 8 segundos para que la OLT procese el desregistro físico
+      await new Promise(r => setTimeout(r, 8000));
+
+      while (Date.now() - startTime < maxWaitMs) {
+        try {
+          unconf = await this.findUnconfiguredOnuBySnSuffix(cleanSn);
+          if (unconf) {
+            logger.info(`[Reaprovisionamiento] ¡ONU ${cleanSn} detectada en unconfigured tras ${Math.round((Date.now() - startTime) / 1000)}s! OLT: ${unconf.olt_id}, B:${unconf.board} P:${unconf.port}`);
+            break;
+          }
+        } catch (err: any) {
+          logger.warn(`[Reaprovisionamiento] Error al consultar unconfigured_onus:`, err?.message);
+        }
+        logger.info(`[Reaprovisionamiento] ONU ${cleanSn} aún no sincroniza en la OLT (${Math.round((Date.now() - startTime) / 1000)}s transcurridos). Reintentando en 5s...`);
+        await new Promise(r => setTimeout(r, intervalMs));
+      }
+
+      if (unconf) {
+        if (unconf.olt_id) actualOltId = unconf.olt_id;
+        if (unconf.board !== undefined) actualBoard = unconf.board;
+        if (unconf.port !== undefined) actualPort = unconf.port;
+        if (unconf.pon_type) actualPonType = unconf.pon_type;
+        if (unconf.onu_type_name || unconf.onu_type) {
+          targetOnuTypeFinal = this.normalizeOnuType(unconf.onu_type_name || unconf.onu_type, cleanSn);
+        }
+      } else {
+        logger.warn(`[Reaprovisionamiento] Tiempo de espera agotado (${Math.round(maxWaitMs / 1000)}s). La ONU ${cleanSn} no apareció en unconfigured_onus aún. Se intentará autorizar con los datos respaldados.`);
+      }
+    } else {
+      // Modo DEV / Simulación
+      await new Promise(r => setTimeout(r, 1500));
+    }
+
+    const payload: AuthorizeOnuPayload = {
+      olt_id: actualOltId,
+      pon_type: actualPonType,
+      board: actualBoard,
+      port: actualPort,
+      sn: cleanSn,
+      onu_type: targetOnuTypeFinal,
+      name: oldOnu.name,
+      onu_mode: oldOnu.onu_mode || 'Routing',
+      vlan: targetVlan,
+      ip_address: oldOnu.ip_address,
+      netmask: oldOnu.netmask || dynamicSubnet.netmask || '255.255.255.0',
+      gateway: targetGateway,
+      line_profile: 'VLAN mapping',
+      download_speed_profile_name: dlProfile,
+      upload_speed_profile_name: ulProfile,
+      zone: oldOnu.zone || 'Actopan',
+      address: oldOnu.address,
+      comment: `Reaprovisionamiento de equipo (${cleanSn})`,
+    };
+
+    logger.info(`[Reaprovisionamiento] Reautorizando ${cleanSn} en OLT ${actualOltId} (B:${actualBoard} P:${actualPort}) con IP ${payload.ip_address}...`);
+    const authResult = await this.authorizeOnu(payload);
+
+    if (!authResult.success) {
+      logger.error(`[Reaprovisionamiento] Falló la reautorización: ${authResult.message}`);
+      if (swapId > 0) {
+        await DbService.updateModemSwap(swapId, {
+          status: 'ERROR',
+          error_message: authResult.message,
+        });
+      }
+      return {
+        success: false,
+        message: `Se desvinculó la ONU anterior, pero falló la reautorización: ${authResult.message}`,
+        oldOnu,
+        authorizationResult: authResult,
+      };
+    }
+
+    const newOnuId = authResult.onu_id || cleanSn;
+    if (swapId > 0) {
+      await DbService.updateModemSwap(swapId, {
+        status: 'COMPLETADO',
+        new_onu_id: newOnuId,
+      });
+    }
+    await DbService.updateClientOnuReferences(oldOnu.sn, cleanSn, newOnuId);
+
+    // 6. Notificar al grupo de WhatsApp si está configurado
+    if (params.notifyGroup !== false) {
+      try {
+        const { EvolutionService } = await import('./evolution.service');
+        const groupMsg = `${payload.name}\n${payload.ip_address}\n${payload.zone || 'Actopan'}\nREAPROVISIONAMIENTO`;
+
+        let configuredGroupJid = (await DbService.getActivationsGroupJid()).trim();
+        if (configuredGroupJid && configuredGroupJid.endsWith('@g.us')) {
+          await EvolutionService.enviarTexto(configuredGroupJid, groupMsg, { instant: true });
+          logger.info(`[Reaprovisionamiento] Notificación enviada al grupo WhatsApp (${configuredGroupJid}): "${groupMsg.replace(/\n/g, ' ')}"`);
+        }
+      } catch (waErr: any) {
+        logger.warn('[Reaprovisionamiento] No se pudo enviar notificación a WhatsApp:', waErr?.message || waErr);
+      }
+    }
+
+    return {
+      success: true,
+      message: `ONU reaprovisionada con éxito en SmartOLT (${cleanSn}).`,
+      oldOnu,
+      authorizationResult: authResult,
     };
   }
 }

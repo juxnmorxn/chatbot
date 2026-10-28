@@ -201,7 +201,8 @@ export class WebhookController {
           } catch {}
         } else {
           // Pausamos el bot con ventana adaptativa inteligente de 4 horas (o hasta 10 AM siguiente día)
-          BotOrchestrator.activarPausaOperador(phone, 240, 'Operador respondió desde WhatsApp Web/Móvil').catch(() => {});
+          const pauseMins = Number(SettingsService.get('OPERATOR_PAUSE_MINUTES', 'OPERATOR_PAUSE_MINUTES', '60')) || 60;
+          BotOrchestrator.activarPausaOperador(phone, pauseMins, 'Operador respondió desde WhatsApp Web/Móvil').catch(() => {});
           try {
             const { AdminController } = require('./admin.controller');
             AdminController.broadcastSSE('chat:status', { phone, is_paused: true, status: 'OPERATOR_ACTIVE' });

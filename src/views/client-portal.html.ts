@@ -1261,9 +1261,96 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
     }
 
     .hidden { display: none !important; }
+  
+    /* Banner In-App Browser (WhatsApp / Instagram / Facebook) */
+    .in-app-banner {
+      background: linear-gradient(90deg, #16a34a, #0d9488);
+      color: #ffffff;
+      padding: 9px 14px;
+      font-size: 12px;
+      line-height: 1.4;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      position: sticky;
+      top: 0;
+      z-index: 999;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+    }
+
+    /* Pestañas de la guía de instalación PWA */
+    .pwa-tabs {
+      display: flex;
+      gap: 6px;
+      background: rgba(0, 0, 0, 0.25);
+      padding: 4px;
+      border-radius: 10px;
+      margin-bottom: 14px;
+      border: 1px solid var(--border-card);
+    }
+    .pwa-tab-btn {
+      flex: 1;
+      padding: 8px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      border-radius: 7px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      transition: all 0.2s ease;
+    }
+    .pwa-tab-btn.active {
+      background: #0284c7;
+      color: #ffffff;
+      box-shadow: 0 2px 8px rgba(2, 132, 199, 0.35);
+    }
+    .pwa-step-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-card);
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+    }
+    .pwa-step-num {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: rgba(2, 132, 199, 0.2);
+      color: #38bdf8;
+      font-weight: 700;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .pwa-step-text {
+      font-size: 12.5px;
+      color: var(--text-main);
+      line-height: 1.45;
+    }
+
   </style>
 </head>
 <body>
+  <!-- Banner informativo si se abre dentro del navegador de WhatsApp -->
+  <div id="bannerInAppBrowser" class="in-app-banner hidden">
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <i class="fa-brands fa-whatsapp" style="font-size: 16px; color: #ffffff;"></i>
+      <span>Estás en WhatsApp. Para instalar la App, toca <strong>⋮</strong> arriba y elige <strong>"Abrir en Chrome"</strong></span>
+    </div>
+    <button type="button" onclick="document.getElementById('bannerInAppBrowser').classList.add('hidden')" style="background: none; border: none; color: #fff; opacity: 0.8; font-size: 16px; cursor: pointer; padding: 0 4px;">✕</button>
+  </div>
+
 
   <div class="app-screen">
 
@@ -1288,7 +1375,7 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
         <button id="btnChangePassword" class="btn-header-action hidden" onclick="openCreatePasswordModal(currentPhone, true)" title="Cambiar mi contraseña de acceso">
           <i class="fa-solid fa-key"></i>
         </button>
-        <button id="btnPwa" class="btn-header-action hidden"><i class="fa-solid fa-download"></i> App</button>
+        <button id="btnPwa" class="btn-header-action" onclick="handlePwaInstallClick()" title="Instalar App en tu pantalla"><i class="fa-solid fa-download" style="color: #38bdf8;"></i> App</button>
         <button id="btnLogout" class="btn-header-action hidden" onclick="logoutClient()" title="Cerrar sesión"><i class="fa-solid fa-right-from-bracket"></i></button>
       </div>
     </header>
@@ -1362,22 +1449,67 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
       </div>
     </div>
 
-    <!-- 2. VISTA CREAR CONTRASEÑA -->
+    <!-- 2. VISTA ACTIVAR CUENTA CON OTP WHATSAPP -->
     <div id="viewRegister" class="auth-box hidden">
       <div style="margin-bottom: 8px;">
         ${getCloudWareFullLogoHtml(true)}
       </div>
-      <div class="auth-title" style="font-size: 18px;">Activar mi Contraseña</div>
-      <p class="auth-sub">Crea una contraseña segura para entrar a tu cuenta cuando quieras.</p>
+      <div class="auth-title" style="font-size: 18px;">Activar mi Acceso</div>
+      <p class="auth-sub" id="regSubDesc">Por tu seguridad, verificaremos tu número con un código por WhatsApp.</p>
 
-      <form onsubmit="handleRegister(event)" style="display: flex; flex-direction: column; gap: 12px;">
-        <input type="tel" id="regPhone" class="form-input" placeholder="Número celular (10 dígitos)" maxlength="10" required>
-        <input type="password" id="regPass" class="form-input" placeholder="Crea tu contraseña (mínimo 6 letras o números)" minlength="6" required>
-        <button type="submit" class="btn-main"><i class="fa-solid fa-key"></i> Guardar y Entrar</button>
-      </form>
+      <!-- PASO 1: Ingresar teléfono y solicitar código -->
+      <div id="regStep1">
+        <form onsubmit="handleSendRegisterOtp(event)" style="display: flex; flex-direction: column; gap: 12px;">
+          <div>
+            <label style="font-size: 11.5px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; margin-bottom: 4px; display: block;">
+              <i class="fa-solid fa-mobile-screen" style="color: #0284c7;"></i> Número Celular Registrado (10 dígitos)
+            </label>
+            <input type="tel" id="regPhone" class="form-input" placeholder="Ej. 7721284398" maxlength="10" required>
+          </div>
+          <button type="submit" id="btnSendRegOtp" class="btn-main">
+            <i class="fa-brands fa-whatsapp"></i> Enviar Código a mi WhatsApp
+          </button>
+        </form>
+      </div>
 
-      <div style="text-align: center; margin-top: 4px;">
-        <span style="color: #0284c7; font-size: 13px; cursor: pointer; font-weight: 600;" onclick="showLogin()">Ya tengo contraseña · Entrar</span>
+      <!-- PASO 2: Ingresar código de WhatsApp y definir contraseña -->
+      <div id="regStep2" class="hidden">
+        <div style="background: rgba(2, 132, 199, 0.1); border: 1px solid rgba(2, 132, 199, 0.25); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; font-size: 12.5px; color: var(--text-main); display: flex; align-items: center; gap: 8px;">
+          <i class="fa-solid fa-circle-check" style="color: #38bdf8; font-size: 16px;"></i>
+          <span>Código enviado por WhatsApp a <strong id="regPhoneNotice" style="color: #38bdf8;"></strong></span>
+        </div>
+
+        <form onsubmit="handleRegister(event)" style="display: flex; flex-direction: column; gap: 12px;">
+          <div>
+            <label style="font-size: 11.5px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; margin-bottom: 4px; display: block;">
+              <i class="fa-solid fa-shield-halved" style="color: #0284c7;"></i> Código de 6 dígitos recibido
+            </label>
+            <input type="text" id="regOtp" class="form-input" placeholder="123456" maxlength="6" inputmode="numeric" required style="letter-spacing: 4px; font-size: 16px; font-weight: bold; text-align: center;">
+          </div>
+          <div>
+            <label style="font-size: 11.5px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; margin-bottom: 4px; display: block;">
+              <i class="fa-solid fa-lock" style="color: #0284c7;"></i> Crea tu Contraseña (mínimo 6 caracteres)
+            </label>
+            <div style="position: relative;">
+              <input type="password" id="regPass" class="form-input" placeholder="Mínimo 6 letras o números" minlength="6" required style="padding-right: 42px;">
+              <button type="button" onclick="toggleModalPassVisibility('regPass', 'eyeRegPass')" style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 15px;">
+                <i id="eyeRegPass" class="fa-solid fa-eye"></i>
+              </button>
+            </div>
+          </div>
+          <button type="submit" id="btnSubmitReg" class="btn-main">
+            <i class="fa-solid fa-key"></i> Guardar y Entrar al Portal
+          </button>
+        </form>
+
+        <div style="display: flex; justify-content: space-between; font-size: 12.5px; margin-top: 10px;">
+          <span style="color: #0284c7; cursor: pointer; font-weight: 600;" onclick="resetRegisterFlow()">Cambiar número</span>
+          <span style="color: var(--text-muted); cursor: pointer;" onclick="resendRegisterOtp()"><i class="fa-solid fa-rotate"></i> Reenviar código</span>
+        </div>
+      </div>
+
+      <div style="text-align: center; margin-top: 10px; border-top: 1px solid var(--border-color); padding-top: 10px;">
+        <span style="color: var(--text-muted); font-size: 13px; cursor: pointer;" onclick="showLogin()">Ya tengo contraseña · Iniciar sesión</span>
       </div>
     </div>
 
@@ -2422,9 +2554,76 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
       document.getElementById('notFoundPhoneLabel').innerText = phone || currentPhone;
     }
 
-    function showRegister() {
+    function showRegister(phone) {
       hideAllViews();
+      resetRegisterFlow();
+      if (phone) {
+        document.getElementById('regPhone').value = phone;
+      }
       document.getElementById('viewRegister').classList.remove('hidden');
+    }
+
+    function resetRegisterFlow() {
+      const step1 = document.getElementById('regStep1');
+      const step2 = document.getElementById('regStep2');
+      if (step1) step1.classList.remove('hidden');
+      if (step2) step2.classList.add('hidden');
+      const otpInp = document.getElementById('regOtp');
+      if (otpInp) otpInp.value = '';
+    }
+
+    async function handleSendRegisterOtp(e) {
+      if (e) e.preventDefault();
+      const phone = document.getElementById('regPhone').value.trim();
+      if (!phone || phone.length < 10) {
+        showToast('Ingresa un número de celular de 10 dígitos.');
+        return;
+      }
+
+      const btn = document.getElementById('btnSendRegOtp');
+      const origText = btn ? btn.innerHTML : '';
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Enviando código...';
+      }
+
+      try {
+        const res = await fetch('/api/portal/auth/send-register-otp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast(data.message || 'Código enviado por WhatsApp.');
+          document.getElementById('regStep1').classList.add('hidden');
+          document.getElementById('regStep2').classList.remove('hidden');
+          const notice = document.getElementById('regPhoneNotice');
+          if (notice) notice.innerText = phone;
+          const otpInp = document.getElementById('regOtp');
+          if (otpInp) otpInp.focus();
+        } else {
+          showToast(data.message || 'Error al enviar código');
+          if (data.hasAccount) {
+            setTimeout(() => {
+              showLogin();
+              const lPhone = document.getElementById('loginPhone');
+              if (lPhone) lPhone.value = phone;
+            }, 1800);
+          }
+        }
+      } catch {
+        showToast('Error de conexión');
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = origText;
+        }
+      }
+    }
+
+    function resendRegisterOtp() {
+      handleSendRegisterOtp(null);
     }
 
     function showForgot() {
@@ -2548,12 +2747,20 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
       e.preventDefault();
       const phone = document.getElementById('regPhone').value.trim();
       const password = document.getElementById('regPass').value;
+      const code = document.getElementById('regOtp') ? document.getElementById('regOtp').value.trim() : '';
+
+      const btn = document.getElementById('btnSubmitReg');
+      const origText = btn ? btn.innerHTML : '';
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando...';
+      }
 
       try {
         const res = await fetch('/api/portal/auth/register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phone, password })
+          body: JSON.stringify({ phone, password, code })
         });
         const data = await res.json();
         if (data.success && data.token) {
@@ -2561,13 +2768,25 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
           localStorage.setItem('cp_phone', phone);
           currentToken = data.token;
           currentPhone = phone;
-          showToast('¡Cuenta activada!');
+          showToast('¡Cuenta activada con éxito!');
           loadDashboard();
         } else {
           showToast(data.message || 'Error al crear cuenta');
+          if (data.hasAccount) {
+            setTimeout(() => {
+              showLogin();
+              const lPhone = document.getElementById('loginPhone');
+              if (lPhone) lPhone.value = phone;
+            }, 1800);
+          }
         }
       } catch {
         showToast('Error de conexión');
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = origText;
+        }
       }
     }
 
@@ -4195,6 +4414,177 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
       }
     }
   </script>
+
+  <!-- MODAL: ASISTENTE INTELIGENTE DE INSTALACIÓN PWA -->
+  <div id="modalPwaInstallGuide" class="modal-overlay" style="z-index: 300;">
+    <div class="modal-sheet" style="max-width: 440px;">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <i class="fa-solid fa-download" style="color: #38bdf8; font-size: 18px;"></i>
+          <h3 style="margin: 0; font-size: 16px; font-weight: 700;">Instalar App en tu Pantalla</h3>
+        </div>
+        <button class="modal-close" onclick="closeModal('modalPwaInstallGuide')">✕</button>
+      </div>
+      <div class="modal-body" style="padding-top: 10px;">
+        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px; line-height: 1.4;">
+          Ten acceso instantáneo a tu servicio, contraseña Wi-Fi y pagos con icono propio sin abrir el navegador:
+        </p>
+
+        <!-- Selector de Sistema / Navegador -->
+        <div class="pwa-tabs">
+          <button type="button" id="pwaTab_android" class="pwa-tab-btn active" onclick="switchPwaInstallTab('android')">
+            <i class="fa-brands fa-android"></i> Android
+          </button>
+          <button type="button" id="pwaTab_ios" class="pwa-tab-btn" onclick="switchPwaInstallTab('ios')">
+            <i class="fa-brands fa-apple"></i> iPhone
+          </button>
+          <button type="button" id="pwaTab_wa" class="pwa-tab-btn" onclick="switchPwaInstallTab('wa')">
+            <i class="fa-brands fa-whatsapp"></i> WhatsApp
+          </button>
+        </div>
+
+        <!-- CONTENIDO ANDROID -->
+        <div id="pwaContent_android">
+          <div class="pwa-step-card">
+            <div class="pwa-step-num">1</div>
+            <div class="pwa-step-text">
+              Toca el menú de <strong>tres puntos ⋮</strong> en la esquina superior derecha de Google Chrome.
+            </div>
+          </div>
+          <div class="pwa-step-card">
+            <div class="pwa-step-num">2</div>
+            <div class="pwa-step-text">
+              Selecciona <strong>"Instalar aplicación"</strong> (o <em>"Agregar a la pantalla principal"</em>).
+            </div>
+          </div>
+          <div class="pwa-step-card">
+            <div class="pwa-step-num">3</div>
+            <div class="pwa-step-text">
+              Confirma tocando <strong>"Instalar"</strong>. ¡Listo! La app aparecerá en tus aplicaciones.
+            </div>
+          </div>
+        </div>
+
+        <!-- CONTENIDO IPHONE / IOS -->
+        <div id="pwaContent_ios" class="hidden">
+          <div class="pwa-step-card">
+            <div class="pwa-step-num">1</div>
+            <div class="pwa-step-text">
+              Toca el botón <strong>Compartir ⎋</strong> (el cuadro con la flecha hacia arriba) en la barra inferior de Safari.
+            </div>
+          </div>
+          <div class="pwa-step-card">
+            <div class="pwa-step-num">2</div>
+            <div class="pwa-step-text">
+              Desliza las opciones hacia abajo y toca <strong>"Agregar a inicio" ➕</strong>.
+            </div>
+          </div>
+          <div class="pwa-step-card">
+            <div class="pwa-step-num">3</div>
+            <div class="pwa-step-text">
+              Toca <strong>"Agregar"</strong> en la esquina superior derecha. La app quedará en tu pantalla de inicio.
+            </div>
+          </div>
+        </div>
+
+        <!-- CONTENIDO WHATSAPP -->
+        <div id="pwaContent_wa" class="hidden">
+          <div style="background: rgba(34, 197, 94, 0.12); border: 1px solid rgba(34, 197, 94, 0.3); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; font-size: 12px; color: var(--text-main);">
+            <i class="fa-solid fa-circle-info" style="color: #22c55e;"></i>
+            WhatsApp bloquea la instalación directa dentro de su visor. Sigue estos 2 pasos:
+          </div>
+          <div class="pwa-step-card">
+            <div class="pwa-step-num">1</div>
+            <div class="pwa-step-text">
+              Toca los <strong>tres puntos ⋮</strong> arriba a la derecha en la barra de WhatsApp.
+            </div>
+          </div>
+          <div class="pwa-step-card">
+            <div class="pwa-step-num">2</div>
+            <div class="pwa-step-text">
+              Toca <strong>"Abrir en Chrome"</strong> (o Safari en iPhone).
+            </div>
+          </div>
+          <div class="pwa-step-card">
+            <div class="pwa-step-num">3</div>
+            <div class="pwa-step-text">
+              Una vez en Chrome o Safari, podrás instalar la App en 1 clic desde el menú.
+            </div>
+          </div>
+        </div>
+
+        <button type="button" class="btn-main" onclick="closeModal('modalPwaInstallGuide')" style="margin-top: 8px;">
+          <i class="fa-solid fa-check"></i> Entendido
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: SOLICITUD DE CONTRATACIÓN (NUEVOS CLIENTES) -->
+  <div id="modalNewCustomer" class="modal-overlay" style="z-index: 300;">
+    <div class="modal-sheet" style="max-width: 440px;">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <i class="fa-solid fa-satellite-dish" style="color: #38bdf8; font-size: 18px;"></i>
+          <h3 style="margin: 0; font-size: 16px; font-weight: 700;">Contratar Internet</h3>
+        </div>
+        <button class="modal-close" onclick="closeModal('modalNewCustomer')">✕</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px; line-height: 1.4;">
+          ¡Bienvenido a <strong>${ispName}</strong>! Solicita tu instalación hoy mismo. Puedes contactar a nuestro equipo de atención por WhatsApp o enviarnos tus datos:
+        </p>
+
+        <!-- Opción 1: WhatsApp Directo -->
+        <a id="btnSalesWhatsAppLink" href="https://wa.me/521${officePhone}?text=Hola%20${encodeURIComponent(ispName)}%2C%20quisiera%20solicitar%20la%20contrataci%C3%B3n%20de%20internet%20para%20mi%20domicilio." target="_blank" class="btn-main" style="background: #16a34a; color: #fff; text-decoration: none; display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 14px; font-weight: 700; padding: 11px 16px;">
+          <i class="fa-brands fa-whatsapp" style="font-size: 18px;"></i> Solicitar por WhatsApp (${officePhone})
+        </a>
+
+        <div style="display: flex; align-items: center; gap: 10px; margin: 12px 0;">
+          <div style="flex: 1; height: 1px; background: var(--border-card);"></div>
+          <span style="font-size: 11px; color: var(--text-muted); text-transform: uppercase;">O déjanos tus datos</span>
+          <div style="flex: 1; height: 1px; background: var(--border-card);"></div>
+        </div>
+
+        <!-- Opción 2: Formulario de Prospecto -->
+        <form onsubmit="handleNewCustomerLead(event)" style="display: flex; flex-direction: column; gap: 10px;">
+          <div>
+            <label style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; display: block; margin-bottom: 3px;">
+              Tu Nombre Completo
+            </label>
+            <input type="text" id="leadName" class="form-input" placeholder="Ej. Juan Pérez Martínez" required>
+          </div>
+          <div>
+            <label style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; display: block; margin-bottom: 3px;">
+              Teléfono de Contacto (WhatsApp - 10 dígitos)
+            </label>
+            <input type="tel" id="leadPhone" class="form-input" placeholder="Ej. 7721284398" maxlength="10" required>
+          </div>
+          <div>
+            <label style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; display: block; margin-bottom: 3px;">
+              Dirección o Localidad / Comunidad
+            </label>
+            <input type="text" id="leadAddress" class="form-input" placeholder="Ej. Barrio Centro, Calle Morelos #12" required>
+          </div>
+          <div>
+            <label style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; display: block; margin-bottom: 3px;">
+              Paquete de Interés
+            </label>
+            <select id="leadPlan" class="form-input">
+              <option value="Fibra Óptica Residencial (30 a 50 Megas)">Fibra Óptica Residencial (30 a 50 Megas)</option>
+              <option value="Fibra Óptica Familiar (100 Megas)">Fibra Óptica Familiar (100 Megas)</option>
+              <option value="Comercial / Negocio">Comercial / Negocio</option>
+              <option value="Antena Inalámbrica">Antena Inalámbrica (Zona rural)</option>
+            </select>
+          </div>
+          <button type="submit" id="btnSubmitLead" class="btn-main" style="margin-top: 4px;">
+            <i class="fa-solid fa-paper-plane"></i> Enviar Solicitud de Contratación
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
 </body>
 </html>
 `;
