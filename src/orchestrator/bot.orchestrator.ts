@@ -1413,46 +1413,117 @@ export class BotOrchestrator {
       metaObj = JSON.parse(session?.metadata || '{}');
     }
     const consultaTerminada = metaObj.consultaFinalizada === true || session?.step === 'CONSULTA_FINALIZADA';
-    const serviciosRegistrados = Array.isArray(metaObj.registeredServices) && metaObj.registeredServices.length > 1
-      ? metaObj.registeredServices
-      : [];
 
-    // Si el cliente tiene 2 o más servicios registrados y su consulta previa ya finalizó o pasaron más de 30 min sin actividad:
-    if (serviciosRegistrados.length > 1 && (minutosInactividad >= 30 || consultaTerminada)) {
-      logger.info(`Cliente multi-servicio ${phone} inicia nueva consulta tras ${Math.round(minutosInactividad)}m de inactividad o consulta previa cerrada.`);
+    // -------------------------------------------------------------------------
+    // AUTO-RESOLUCIÓN Y VINCULACIÓN INTELIGENTE DE SERVICIOS POR TELÉFONO
+    // Si el cliente ya está dado de alta o vinculado en el sistema (WispHub/Portal):
+    // - Si tiene 1 servicio: auto-identificar de inmediato SIN pedir el nombre jamás.
+    // - Si tiene 2 o más servicios: preguntar cuál de sus servicios desea consultar.
+    // -------------------------------------------------------------------------
+    const esPasoInicialOIdentificacion = !session?.client_id || !session?.client_name || session?.step === 'ESPERANDO_IDENTIFICACION' || session?.step === 'INICIO';
+    const esNuevaConsultaOInactividad = consultaTerminada || minutosInactividad >= 30;
 
-      let textoOpciones = `¡Hola de nuevo, *${session?.client_name || 'Cliente'}*! 👋 Detectamos que cuentas con *${serviciosRegistrados.length} servicios* registrados a tu nombre:\n\n`;
-      serviciosRegistrados.forEach((c: any, idx: number) => {
-        const ubicacion = c.address || c.zone_name ? `\n📍 *Ubicación / Zona:* ${c.address || c.zone_name}` : '';
-        const plan = c.speed_profile ? `\n📦 *Plan:* ${c.speed_profile}` : '';
-        const sn = c.sn ? `\n🆔 *SN:* ${c.sn}` : '';
-        textoOpciones += `*${idx + 1}️⃣ Opción ${idx + 1}:*${ubicacion}${plan}${sn}\n\n`;
-      });
-      textoOpciones += `Para tu consulta de hoy, ¿con cuál de tus servicios necesitas apoyo?\n👉 *Por favor responde con el número de la opción (ejemplo: 1 ó 2).*`;
+    if (esPasoInicialOIdentificacion || esNuevaConsultaOInactividad) {
+      const serviciosDetectados = await this.resolverServiciosPorTelefono(phone);
 
-      await DbService.upsertSession({
-        phone,
-        step: 'ESPERANDO_SELECCION_SERVICIO',
-        metadata: JSON.stringify({
-          ...metaObj,
-          pendingServices: serviciosRegistrados,
-          initialQuery: rawText,
-          consultaFinalizada: false,
-        }),
-      });
+      if (serviciosDetectados.length === 1) {
+        // EXACTAMENTE 1 SERVICIO: Auto-identificación silenciosa e inmediata
+        const srv = serviciosDetectados[0];
+        const titular = srv.nombre;
+        const yaIdentificadoMismo = session?.client_id && (session.service_id === String(srv.id_servicio) || session.client_name === titular);
 
-      await this.enviarYLoguear(phone, textoOpciones, 'IDENTIFICAR_CLIENTE', 'NUEVA_CONSULTA_SELECCION_SERVICIO', targetJid);
-      return;
+        if (!yaIdentificadoMismo || esPasoInicialOIdentificacion) {
+          logger.info(`[Auto-Identificación] Teléfono ${phone} auto-vinculado con éxito a "${titular}" (Folio #${srv.id_servicio || srv.servicio}).`);
+          metaObj = {
+            ...metaObj,
+            wisphub_id: srv.id_servicio,
+            speed_profile: srv.plan_internet || metaObj.speed_profile,
+            zone: srv.router || metaObj.zone,
+            address: srv.direccion || metaObj.address,
+            sn: srv.sn_onu || metaObj.sn,
+            ip: srv.ip || metaObj.ip,
+            registeredServices: [srv],
+            pendingServices: [],
+            consultaFinalizada: false,
+          };
+
+          session = await DbService.upsertSession({
+            phone,
+            client_id: srv.sn_onu || `WH-${srv.id_servicio}`,
+            service_id: String(srv.id_servicio),
+            client_name: titular,
+            onu_id: srv.sn_onu || `ONU-${srv.id_servicio}`,
+            step: session?.step === 'ESPERANDO_IDENTIFICACION' ? 'CONVERSACIONAL' : (session?.step || 'CONVERSACIONAL'),
+            metadata: JSON.stringify(metaObj),
+          });
+
+          await DbService.linkClientPhoneInLocalDb(phone, titular, srv.id_servicio).catch(() => {});
+        }
+      } else if (serviciosDetectados.length > 1) {
+        // MULTI-SERVICIO: 2 o más servicios vinculados a este número
+        // Si el cliente ya tenía un servicio seleccionado activamente en esta misma conversación, continuar con él:
+        const idActual = String(session?.service_id || metaObj?.wisphub_id || '');
+        const servicioActivoValido = idActual && serviciosDetectados.some((s: any) => String(s.id_servicio) === idActual || (s.sn_onu && s.sn_onu === idActual));
+
+        if (!servicioActivoValido || esNuevaConsultaOInactividad) {
+          logger.info(`[Multi-Servicio] Teléfono ${phone} tiene ${serviciosDetectados.length} servicios registrados. Solicitando desambiguación.`);
+
+          const primerNombre = formatDisplayName(serviciosDetectados[0].nombre, true) || 'Cliente';
+          let textoOpciones = `¡Hola, *${primerNombre}*! 👋 Detectamos que cuentas con *${serviciosDetectados.length} servicios* registrados con este número:\n\n`;
+
+          serviciosDetectados.forEach((c: any, idx: number) => {
+            const idFolio = c.id_servicio ? `Folio #${c.id_servicio}` : (c.servicio || `Opción ${idx + 1}`);
+            const ubicacion = c.direccion || c.router ? `\n📍 *Ubicación / Zona:* ${c.direccion || c.router}` : '';
+            const plan = c.plan_internet ? `\n📦 *Plan:* ${c.plan_internet}` : '';
+            const sn = c.sn_onu ? `\n🆔 *SN:* ${c.sn_onu}` : '';
+            textoOpciones += `*${idx + 1}️⃣ ${idFolio}:*${ubicacion}${plan}${sn}\n\n`;
+          });
+          textoOpciones += `Para tu consulta de hoy, ¿con cuál de tus servicios necesitas apoyo?\n👉 *Por favor responde con el número de la opción (ejemplo: 1 ó 2).*`;
+
+          await DbService.upsertSession({
+            phone,
+            client_name: serviciosDetectados[0].nombre,
+            step: 'ESPERANDO_SELECCION_SERVICIO',
+            metadata: JSON.stringify({
+              ...metaObj,
+              registeredServices: serviciosDetectados.map((c: any) => ({
+                unique_external_id: c.sn_onu || `WH-${c.id_servicio}`,
+                sn: c.sn_onu || String(c.id_servicio),
+                name: c.nombre,
+                speed_profile: c.plan_internet || '',
+                zone_name: c.router || '',
+                address: c.direccion || '',
+                id_servicio: c.id_servicio,
+                ip: c.ip || '',
+              })),
+              pendingServices: serviciosDetectados.map((c: any) => ({
+                unique_external_id: c.sn_onu || `WH-${c.id_servicio}`,
+                sn: c.sn_onu || String(c.id_servicio),
+                name: c.nombre,
+                speed_profile: c.plan_internet || '',
+                zone_name: c.router || '',
+                address: c.direccion || '',
+                id_servicio: c.id_servicio,
+                ip: c.ip || '',
+              })),
+              initialQuery: rawText,
+              consultaFinalizada: false,
+            }),
+          });
+
+          await this.enviarYLoguear(phone, textoOpciones, 'IDENTIFICAR_CLIENTE', 'NUEVA_CONSULTA_SELECCION_SERVICIO', targetJid);
+          return;
+        }
+      }
     }
 
-    // Si el cliente está en espera de identificarse
+    // Si el cliente está en espera de identificarse manualmente (porque su número aún no está registrado)
     if (session?.step === 'ESPERANDO_IDENTIFICACION') {
       await this.procesarIdentificacion(phone, rawText, session, targetJid);
       return;
     }
 
-    // Si el cliente NO está identificado en absoluto (ni por SmartOLT ni por nombre en Base de Datos Local)
-    // REGLA FUNDAMENTAL: NO vincular a ciegas por teléfono. Solo se vincula tras identificar explícitamente al cliente 1 a 1.
+    // Si el cliente NO está identificado en absoluto (número no registrado ni en SmartOLT ni en WispHub)
     if (!session?.onu_id && !session?.client_name) {
       // 1. Clasificamos el mensaje con Groq para detectar nombre, folio, queja o saludo
       const clasif = await GroqService.clasificarMensaje(rawText, {
@@ -5152,15 +5223,59 @@ export class BotOrchestrator {
    */
   private static async flujoConsultarSaldo(phone: string, session: Session | null, targetJid?: string): Promise<void> {
     if (!session?.client_id && !session?.client_name) {
-      await this.enviarYLoguear(
-        phone,
-        `Para consultar tu estado de cuenta con exactitud, por favor escribe el *Nombre completo del titular* (con apellidos) registrado en el servicio:`,
-        'CONSULTAR_SALDO',
-        'SOLICITAR_CONTRATO_SALDO',
-        targetJid
-      );
-      await DbService.updateStep(phone, 'ESPERANDO_IDENTIFICACION');
-      return;
+      const autoMatches = await this.resolverServiciosPorTelefono(phone);
+      if (autoMatches.length === 1) {
+        const srv = autoMatches[0];
+        let metaObjSaldo: any = {};
+        try { metaObjSaldo = JSON.parse(session?.metadata || '{}'); } catch {}
+        session = await DbService.upsertSession({
+          phone,
+          client_id: srv.sn_onu || `WH-${srv.id_servicio}`,
+          service_id: String(srv.id_servicio),
+          client_name: srv.nombre,
+          onu_id: srv.sn_onu || `ONU-${srv.id_servicio}`,
+          metadata: JSON.stringify({
+            ...metaObjSaldo,
+            wisphub_id: srv.id_servicio,
+            speed_profile: srv.plan_internet,
+            address: srv.direccion,
+            sn: srv.sn_onu,
+            ip: srv.ip,
+          }),
+        });
+      } else if (autoMatches.length > 1) {
+        const primerNombre = formatDisplayName(autoMatches[0].nombre, true) || 'Cliente';
+        let textoOpciones = `¡Hola, *${primerNombre}*! 👋 Detectamos que cuentas con *${autoMatches.length} servicios* registrados:\n\n`;
+        autoMatches.forEach((c: any, idx: number) => {
+          const idFolio = c.id_servicio ? `Folio #${c.id_servicio}` : (c.servicio || `Opción ${idx + 1}`);
+          const ubicacion = c.direccion || c.router ? `\n📍 *Ubicación / Zona:* ${c.direccion || c.router}` : '';
+          const plan = c.plan_internet ? `\n📦 *Plan:* ${c.plan_internet}` : '';
+          textoOpciones += `*${idx + 1}️⃣ ${idFolio}:*${ubicacion}${plan}\n\n`;
+        });
+        textoOpciones += `¿De cuál de tus servicios deseas consultar el saldo?\n👉 *Por favor responde con el número de la opción (ejemplo: 1 ó 2).*`;
+        await DbService.upsertSession({
+          phone,
+          client_name: autoMatches[0].nombre,
+          step: 'ESPERANDO_SELECCION_SERVICIO',
+          metadata: JSON.stringify({
+            pendingServices: autoMatches,
+            registeredServices: autoMatches,
+            initialQuery: 'CONSULTAR_SALDO',
+          }),
+        });
+        await this.enviarYLoguear(phone, textoOpciones, 'CONSULTAR_SALDO', 'SELECCIONAR_SERVICIO_SALDO', targetJid);
+        return;
+      } else {
+        await this.enviarYLoguear(
+          phone,
+          `Para consultar tu estado de cuenta con exactitud, por favor escribe el *Nombre completo del titular* (con apellidos) registrado en el servicio:`,
+          'CONSULTAR_SALDO',
+          'SOLICITAR_CONTRATO_SALDO',
+          targetJid
+        );
+        await DbService.updateStep(phone, 'ESPERANDO_IDENTIFICACION');
+        return;
+      }
     }
 
     let meta: any = {};
@@ -5263,15 +5378,59 @@ export class BotOrchestrator {
    */
   private static async flujoConsultarPlan(phone: string, session: Session | null, targetJid?: string): Promise<void> {
     if (!session?.client_id && !session?.client_name) {
-      await this.enviarYLoguear(
-        phone,
-        `Para consultar los datos de tu paquete y velocidad contratada, por favor indícame tu *Nombre completo* (con apellidos) del titular del servicio:`,
-        'CONSULTAR_PLAN',
-        'SOLICITAR_IDENTIFICACION_PLAN',
-        targetJid
-      );
-      await DbService.updateStep(phone, 'ESPERANDO_IDENTIFICACION');
-      return;
+      const autoMatches = await this.resolverServiciosPorTelefono(phone);
+      if (autoMatches.length === 1) {
+        const srv = autoMatches[0];
+        let metaObjPlan: any = {};
+        try { metaObjPlan = JSON.parse(session?.metadata || '{}'); } catch {}
+        session = await DbService.upsertSession({
+          phone,
+          client_id: srv.sn_onu || `WH-${srv.id_servicio}`,
+          service_id: String(srv.id_servicio),
+          client_name: srv.nombre,
+          onu_id: srv.sn_onu || `ONU-${srv.id_servicio}`,
+          metadata: JSON.stringify({
+            ...metaObjPlan,
+            wisphub_id: srv.id_servicio,
+            speed_profile: srv.plan_internet,
+            address: srv.direccion,
+            sn: srv.sn_onu,
+            ip: srv.ip,
+          }),
+        });
+      } else if (autoMatches.length > 1) {
+        const primerNombre = formatDisplayName(autoMatches[0].nombre, true) || 'Cliente';
+        let textoOpciones = `¡Hola, *${primerNombre}*! 👋 Detectamos que cuentas con *${autoMatches.length} servicios* registrados:\n\n`;
+        autoMatches.forEach((c: any, idx: number) => {
+          const idFolio = c.id_servicio ? `Folio #${c.id_servicio}` : (c.servicio || `Opción ${idx + 1}`);
+          const ubicacion = c.direccion || c.router ? `\n📍 *Ubicación / Zona:* ${c.direccion || c.router}` : '';
+          const plan = c.plan_internet ? `\n📦 *Plan:* ${c.plan_internet}` : '';
+          textoOpciones += `*${idx + 1}️⃣ ${idFolio}:*${ubicacion}${plan}\n\n`;
+        });
+        textoOpciones += `¿De cuál de tus servicios deseas consultar el plan contratado?\n👉 *Por favor responde con el número de la opción (ejemplo: 1 ó 2).*`;
+        await DbService.upsertSession({
+          phone,
+          client_name: autoMatches[0].nombre,
+          step: 'ESPERANDO_SELECCION_SERVICIO',
+          metadata: JSON.stringify({
+            pendingServices: autoMatches,
+            registeredServices: autoMatches,
+            initialQuery: 'CONSULTAR_PLAN',
+          }),
+        });
+        await this.enviarYLoguear(phone, textoOpciones, 'CONSULTAR_PLAN', 'SELECCIONAR_SERVICIO_PLAN', targetJid);
+        return;
+      } else {
+        await this.enviarYLoguear(
+          phone,
+          `Para consultar los datos de tu paquete y velocidad contratada, por favor indícame tu *Nombre completo* (con apellidos) del titular del servicio:`,
+          'CONSULTAR_PLAN',
+          'SOLICITAR_IDENTIFICACION_PLAN',
+          targetJid
+        );
+        await DbService.updateStep(phone, 'ESPERANDO_IDENTIFICACION');
+        return;
+      }
     }
 
     const clienteCtx = await this.obtenerContextoClienteCompleto(phone, session);
@@ -5406,6 +5565,65 @@ export class BotOrchestrator {
     }
 
     await this.marcarConsultaFinalizada(phone, session);
+  }
+
+  /**
+   * Intenta resolver automáticamente los servicios vinculados a un número de WhatsApp
+   * cruzando Base de Datos Local (wisphub_clients por teléfono/adicionales, client_portal_accounts, smartolt_onus)
+   * y con fallback a la API en tiempo real de WispHub si acaba de ser registrado.
+   */
+  public static async resolverServiciosPorTelefono(phone: string): Promise<any[]> {
+    const cleanDigits = (phone || '').replace(/\D/g, '');
+    const phone10 = cleanDigits.length >= 10 ? cleanDigits.slice(-10) : cleanDigits;
+    if (!phone10 || phone10.length < 10) return [];
+
+    try {
+      // 1. Buscar en BD local (wisphub_clients, telefonos_adicionales, client_portal_accounts)
+      const { ClientPortalController } = await import('../controllers/client-portal.controller');
+      let matches = await ClientPortalController.findClientsByIdentifier(phone10);
+
+      // 2. Si no se encontró en la BD local, consultar en tiempo real en WispHub API (por si se dio de alta hace minutos)
+      if (!matches || matches.length === 0) {
+        try {
+          const apiMatch = await WispHubService.buscarClientePorTelefono(phone10);
+          if (apiMatch && apiMatch.nombre) {
+            logger.info(`[Auto-Identificación] Cliente encontrado en API WispHub en tiempo real: ${apiMatch.nombre} (ID: ${apiMatch.id})`);
+            // Guardar/sincronizar en BD local para futuras consultas instantáneas
+            await DbService.saveWisphubClient({
+              id_servicio: apiMatch.id,
+              nombre: apiMatch.nombre,
+              telefono: apiMatch.telefono || phone10,
+              direccion: apiMatch.direccion || '',
+              ip: apiMatch.ip || '',
+              plan_internet: apiMatch.precio_plan ? String(apiMatch.precio_plan) : '',
+              sn_onu: apiMatch.onu_id || '',
+              estado: apiMatch.estado || 'activo',
+              saldo: apiMatch.saldo || 0,
+            }).catch(() => {});
+            await DbService.linkClientPhoneInLocalDb(phone10, apiMatch.nombre, apiMatch.id).catch(() => {});
+            matches = await ClientPortalController.findClientsByIdentifier(phone10);
+            if (!matches || matches.length === 0) {
+              matches = [{
+                id_servicio: apiMatch.id,
+                nombre: apiMatch.nombre,
+                telefono: apiMatch.telefono || phone10,
+                direccion: apiMatch.direccion || '',
+                ip: apiMatch.ip || '',
+                plan_internet: apiMatch.precio_plan ? String(apiMatch.precio_plan) : '',
+                sn_onu: apiMatch.onu_id || '',
+              }];
+            }
+          }
+        } catch (apiErr) {
+          logger.warn(`[Auto-Identificación] Fallback a WispHub API falló:`, apiErr);
+        }
+      }
+
+      return matches || [];
+    } catch (err) {
+      logger.error(`[Auto-Identificación] Error al buscar servicios para teléfono ${phone}:`, err);
+      return [];
+    }
   }
 
   /**
@@ -6090,14 +6308,16 @@ export class BotOrchestrator {
       zone: elegido.zone_name,
       address: elegido.address,
       sn: elegido.sn,
+      wisphub_id: elegido.id_servicio || meta.wisphub_id,
+      ip: elegido.ip || meta.ip,
     };
 
     const sessionActualizada = await DbService.upsertSession({
       phone,
-      client_id: elegido.unique_external_id,
-      service_id: elegido.sn,
+      client_id: elegido.unique_external_id || (elegido.id_servicio ? `WH-${elegido.id_servicio}` : elegido.sn),
+      service_id: String(elegido.id_servicio || elegido.sn || ''),
       client_name: elegido.name,
-      onu_id: elegido.unique_external_id,
+      onu_id: elegido.unique_external_id || elegido.sn,
       metadata: JSON.stringify(nuevoMeta),
       step: 'IDENTIFICADO',
     });
