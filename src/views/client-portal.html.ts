@@ -226,32 +226,36 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
         grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
         gap: 20px;
         align-items: stretch !important;
+        margin-bottom: 22px !important;
       }
 
       .dashboard-bottom-grid {
         display: grid !important;
-        grid-template-columns: 1.85fr 1.15fr !important;
+        grid-template-columns: 1.75fr 1.25fr !important;
         gap: 20px;
         align-items: stretch !important;
         width: 100%;
+        margin-top: 0 !important;
       }
 
       .card-plan-box, .card-wifi-box, .card-billing-box, .card-history-box, .support-banner-card {
         display: flex !important;
         flex-direction: column !important;
-        height: 100% !important;
+        min-height: 100%;
+        box-sizing: border-box;
       }
 
       .invoices-scroll-grid {
         display: grid !important;
         grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
         gap: 10px !important;
-        max-height: 310px !important;
+        max-height: 250px !important;
         overflow-y: auto !important;
+        padding-right: 4px;
       }
 
       .app-card {
-        padding: 22px;
+        padding: 20px;
       }
     }
 
@@ -408,6 +412,7 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
       flex-direction: column;
       gap: 16px;
       width: 100%;
+      margin-bottom: 20px;
     }
 
     /* Cuadrícula Adaptativa del Dashboard (Fila Inferior 2 Columnas) */
@@ -416,6 +421,7 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
       flex-direction: column;
       gap: 16px;
       width: 100%;
+      margin-top: 4px;
     }
 
     /* Lista de bandas Wi-Fi 2.4G y 5G (Siempre contenida sin desbordamiento) */
@@ -1593,13 +1599,27 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
             </button>
           </div>
 
-          <!-- Cuadro de Referencia Rápida SPEI -->
-          <div style="background: var(--bg-surface); border: 1px solid var(--border-card); border-radius: var(--radius-md); padding: 9px 12px; margin-top: auto; display: flex; justify-content: space-between; align-items: center;">
-            <div style="min-width: 0;">
-              <span style="font-size: 10px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; display: block;">Referencia SPEI / Banco:</span>
-              <span id="bankRefText" class="mono" style="font-size: 13.5px; font-weight: 800; color: #38bdf8;">SRV-696</span>
+          <!-- Cuadro de CLABE Interbancaria Personalizada (Openpay SPEI Automático) -->
+          <div style="background: var(--bg-surface); border: 1.5px solid rgba(56, 189, 248, 0.35); border-radius: var(--radius-md); padding: 9px 12px; margin-top: auto; display: flex; flex-direction: column; gap: 4px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-size: 10px; font-weight: 800; color: #38bdf8; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 5px;">
+                <i class="fa-solid fa-bolt" style="color: #f59e0b;"></i> Tu CLABE Única SPEI:
+              </span>
+              <span style="font-size: 9px; background: rgba(16, 185, 129, 0.15); color: #10b981; padding: 1px 7px; border-radius: 999px; font-weight: 700; border: 1px solid rgba(16, 185, 129, 0.3);">
+                Auto 24/7
+              </span>
             </div>
-            <button class="btn-action-icon" style="width: 30px; height: 30px; font-size: 12px;" onclick="copyBankRef()" title="Copiar referencia"><i class="fa-solid fa-copy"></i></button>
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+              <span id="heroClabeText" class="mono" style="font-size: 13.5px; font-weight: 800; color: var(--text-title); letter-spacing: 0.5px; word-break: break-all;">
+                ${bankClabe}
+              </span>
+              <button class="btn-action-icon" style="width: 28px; height: 28px; font-size: 11px; flex-shrink: 0;" onclick="copyHeroClabe()" title="Copiar CLABE interbancaria">
+                <i class="fa-solid fa-copy"></i>
+              </button>
+            </div>
+            <div style="font-size: 9.5px; color: var(--text-muted); line-height: 1.2;">
+              Acreditación automática por Openpay sin enviar comprobante.
+            </div>
           </div>
         </div>
 
@@ -1623,7 +1643,7 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
         </div>
 
         <!-- TARJETA: CENTRO DE ASISTENCIA Y SOPORTE DIRECTO -->
-        <div class="app-card support-banner-card" style="display: flex; flex-direction: column; justify-content: space-between; gap: 14px;">
+        <div class="app-card support-banner-card" style="display: flex; flex-direction: column; justify-content: space-between; gap: 12px;">
           <div style="display: flex; align-items: flex-start; gap: 14px;">
             <div class="support-icon-circle" style="flex-shrink: 0;">
               <i class="fa-brands fa-whatsapp"></i>
@@ -1635,12 +1655,12 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
             </div>
           </div>
 
-          <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: var(--radius-sm); padding: 8px 12px; font-size: 11.5px; color: var(--text-muted); display: flex; justify-content: space-between; align-items: center;">
-            <span><i class="fa-solid fa-headset" style="color: #10b981;"></i> Soporte Técnico</span>
-            <span style="color: #10b981; font-weight: 700;">Lun - Sáb 9am a 7pm</span>
+          <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: var(--radius-sm); padding: 8px 12px; font-size: 11.5px; color: var(--text-muted); display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: auto;">
+            <span style="display: flex; align-items: center; gap: 6px;"><i class="fa-solid fa-headset" style="color: #10b981;"></i> Soporte Técnico</span>
+            <span style="color: #10b981; font-weight: 700; white-space: nowrap;">Lun - Sáb · 9am a 7pm</span>
           </div>
 
-          <a id="btnSupportWa" href="https://wa.me/${supportPhone}?text=Hola,%20necesito%20apoyo%20con%20mi%20servicio" target="_blank" class="btn-whatsapp" style="width: 100%; padding: 11px 18px; font-size: 13.5px; text-align: center; justify-content: center;">
+          <a id="btnSupportWa" href="https://wa.me/${supportPhone}?text=Hola,%20necesito%20apoyo%20con%20mi%20servicio" target="_blank" class="btn-whatsapp" style="width: 100%; padding: 11px 18px; font-size: 13.5px; text-align: center; justify-content: center; box-sizing: border-box;">
             <i class="fa-brands fa-whatsapp"></i> Chatear con Soporte Técnico
           </a>
         </div>
@@ -2898,13 +2918,15 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
         }
       }
 
-      document.getElementById('bankRefText').innerText = 'SRV-' + (c.folio || c.id_servicio);
+      const bRefEl = document.getElementById('bankRefText');
+      if (bRefEl) bRefEl.innerText = 'SRV-' + (c.folio || c.id_servicio);
       if (data.bankDetails) {
         cachedBankDetails = data.bankDetails;
         applyBankDetails(data.bankDetails, c.nombre || data.bankDetails.titular, c.id_servicio);
       }
 
       loadInvoicesHistory();
+      fetchFreshBankDetails();
     }
 
     function onSwitchService(serviceId) {
@@ -3066,6 +3088,8 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
       if (b.clabe) {
         const el = document.getElementById('bankClabeText');
         if (el) el.innerText = b.clabe;
+        const heroEl = document.getElementById('heroClabeText');
+        if (heroEl) heroEl.innerText = b.clabe;
       }
       if (b.account) {
         const el = document.getElementById('bankAccountText');
@@ -3084,7 +3108,7 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
 
     function updateOfficePaymentLink(rawPhone, titularName, contractId) {
       if (!rawPhone) return;
-      let digits = String(rawPhone).replace(/\\D/g, '');
+      let digits = String(rawPhone).replace(/\D/g, '');
       if (digits.startsWith('521') && digits.length === 13) {
         digits = '52' + digits.slice(3);
       } else if (digits.length === 10) {
@@ -3092,13 +3116,13 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
       }
       const titular = titularName || document.getElementById('bankConceptText')?.innerText || document.getElementById('titularHeroName')?.innerText || 'Cliente';
       const folio = contractId || currentContractId || '';
-      const textMsg = 'Hola, envío comprobante de pago de mi servicio.\\nTitular: ' + titular + (folio ? ('\\nContrato: #' + folio) : '');
+      const textMsg = 'Hola, envío comprobante de pago de mi servicio.\nTitular: ' + titular + (folio ? ('\nContrato: #' + folio) : '');
       const waUrl = 'https://wa.me/' + digits + '?text=' + encodeURIComponent(textMsg);
       
       const btn = document.getElementById('btnOfficePaymentWa');
       if (btn) btn.href = waUrl;
 
-      const formatted = rawPhone.replace(/\\D/g, '').slice(-10);
+      const formatted = rawPhone.replace(/\D/g, '').slice(-10);
       const displayTxt = formatted ? ('+52 ' + formatted) : rawPhone;
 
       const display = document.getElementById('bankOfficePhoneDisplay');
@@ -3136,14 +3160,22 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
       showToast('Nombre de red 5 GHz copiado');
     }
 
+    function copyHeroClabe() {
+      const val = (document.getElementById('heroClabeText')?.innerText || document.getElementById('bankClabeText')?.innerText || '').replace(/\s+/g, '');
+      if (val) {
+        navigator.clipboard.writeText(val);
+        showToast('CLABE SPEI copiada: ' + val);
+      }
+    }
+
     function copyClabe() {
-      const val = (document.getElementById('bankClabeText')?.innerText || '').replace(/\\s+/g, '');
+      const val = (document.getElementById('bankClabeText')?.innerText || '').replace(/\s+/g, '');
       navigator.clipboard.writeText(val);
       showToast('CLABE copiada: ' + val);
     }
 
     function copyBankAccount() {
-      const val = (document.getElementById('bankAccountText')?.innerText || '').replace(/\\s+/g, '');
+      const val = (document.getElementById('bankAccountText')?.innerText || '').replace(/\s+/g, '');
       navigator.clipboard.writeText(val);
       showToast('Número de cuenta copiado: ' + val);
     }
@@ -3373,11 +3405,17 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
         fetch('/api/portal/openpay/spei?serviceId=' + encodeURIComponent(cId))
           .then(r => r.json())
           .then(speiData => {
-            if (speiData && speiData.success && speiData.spei?.clabe) {
-              const clabeVal = String(speiData.spei.clabe).trim();
+            if (speiData && speiData.success && speiData.spei) {
+              const clabeVal = String(speiData.spei.clabe || '').trim();
               if (clabeVal.length === 18 && clabeVal !== '000000000000000001') {
                 const clabeEl = document.getElementById('bankClabeText');
                 if (clabeEl) clabeEl.innerText = clabeVal;
+                const heroClabeEl = document.getElementById('heroClabeText');
+                if (heroClabeEl) heroClabeEl.innerText = clabeVal;
+              }
+              if (speiData.spei.bank) {
+                const bEl = document.getElementById('bankNameDisplay');
+                if (bEl) bEl.innerText = speiData.spei.bank;
               }
               if (speiData.spei.agreement) {
                 const box = document.getElementById('speiConvenioBox');
