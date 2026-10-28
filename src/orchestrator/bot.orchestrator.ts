@@ -7,6 +7,7 @@ import { IpamService } from '../services/ipam.service';
 import { EvolutionService, BotButton } from '../services/evolution.service';
 import { config } from '../config/env';
 import { SettingsService } from '../services/settings.service';
+import { OpenpayService } from '../services/openpay.service';
 import { Logger } from '../utils/logger';
 import { parseSpintax } from '../utils/spintax';
 import { cleanPersonName, computeNameMatchScore, normalizeText, extractFolioAndCleanName, candidateMatchesFolio, candidateMatchesServiceSuffix } from '../utils/fuzzy-matcher';
@@ -481,6 +482,40 @@ export class BotOrchestrator {
   }
 
   private static async getFichaBancaria(session: Session | null): Promise<string> {
+    const mode = SettingsService.getPaymentWorkMode();
+    const portalUrl = this.getClientPortalLink(session?.phone || undefined, session?.client_name || undefined);
+    const clientName = this.formatDisplayName(session?.client_name) || 'Cliente';
+
+    if (mode === 'portal') {
+      let uniqueClabe = '';
+      const sId = session?.client_id || (session as any)?.service_id;
+      if (sId && !String(sId).startsWith('HWTC') && !String(sId).startsWith('ONU-') && !String(sId).startsWith('ZTEG')) {
+        try {
+          const speiDetails = await OpenpayService.getClientSpeiDetails({
+            id_servicio: sId,
+            nombre: session?.client_name || 'Cliente',
+            telefono: session?.phone,
+            saldo: 0,
+          });
+          if (speiDetails?.clabe && speiDetails.clabe.length === 18 && speiDetails.clabe !== '000000000000000001') {
+            uniqueClabe = speiDetails.clabe;
+          }
+        } catch (_) {}
+      }
+
+      const clabeToShow = uniqueClabe || SettingsService.get('PAYMENT_BANK_CLABE', 'PAYMENT_BANK_CLABE', SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', '012290004848824666'));
+
+      return `\n💳 *OPCIONES DE PAGO RÁPIDO*\n\n` +
+        `Hola *${clientName}*, puedes pagar en segundos desde tu celular:\n\n` +
+        `🌐 *1. En tu Portal (Tarjeta o SPEI):*\n` +
+        `👉 ${portalUrl}\n\n` +
+        `⚡ *2. Tu CLABE Única SPEI:*\n` +
+        `• CLABE: \`${clabeToShow}\`\n` +
+        `• Banco receptor: *STP / Openpay*\n` +
+        `• Acreditación: *Automática 24/7 (Sin enviar comprobante)*\n`;
+    }
+
+    // Modo Tradicional
     const bank = SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK', 'BBVA');
     const account = SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', '012290004848824666');
     const beneficiary = SettingsService.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', 'Osbaldo Tovar Campero');
@@ -489,23 +524,16 @@ export class BotOrchestrator {
     const officeFormatted = officeClean.length === 10
       ? `${officeClean.slice(0, 3)} ${officeClean.slice(3, 6)} ${officeClean.slice(6)}`
       : officeClean;
-    const officeWeekday = SettingsService.get('OFFICE_HOURS_WEEKDAY', 'OFFICE_HOURS_WEEKDAY', '9:00 a 18:00 hrs');
-    const officeSaturday = SettingsService.get('OFFICE_HOURS_SATURDAY', 'OFFICE_HOURS_SATURDAY', '9:00 a 15:00 hrs');
-    const officeAddress = SettingsService.get('OFFICE_ADDRESS', 'OFFICE_ADDRESS', '').trim();
-    const clientName = this.formatDisplayName(session?.client_name) || 'tu nombre completo';
 
-    let txt = `\n🏦 *DATOS DE PAGO (${bank})*\n\n` +
+    return `\n🏦 *DATOS PARA TRANSFERENCIA BANCARIA*\n\n` +
       `• *Banco:* ${bank}\n` +
       `• *CLABE / Cuenta:* \`${account}\`\n` +
       `• *Titular:* ${beneficiary}\n` +
       `• *Concepto:* *${session?.client_name || clientName}*\n\n` +
-      (officeAddress ? `🏢 *Pago en Ventanilla / Oficina Física:*\n• *Horario:* Lun-Vie ${officeWeekday}, Sáb ${officeSaturday}\n• *Dirección:* ${officeAddress}\n\n` : '') +
-      `📲 *ENVÍA TU COMPROBANTE AL ÁREA ADMINISTRATIVA:*\n` +
-      `👉 *WhatsApp:* *${officeFormatted}* (https://wa.me/52${officeClean})\n\n` +
-      `⚠️ *Nota:* En esta línea te atendemos para Soporte Técnico. Por favor envía tu foto o comprobante al WhatsApp administrativo arriba indicado para validar tu pago y mantener activo tu servicio sin demoras.\n\n` +
-      `💡 _*Tip:* También puedes consultar tus fechas de pago y saldo en tu Portal Web: ${this.getClientPortalLink(session?.phone || undefined, session?.client_name || undefined)}_`;
-
-    return txt;
+      `📸 *Envía tu captura de pago a:*\n` +
+      `👉 WhatsApp: *${officeFormatted}* ( https://wa.me/52${officeClean} )\n\n` +
+      `💡 *Portal de Autoservicio:* Registra o consulta tus servicios aquí:\n` +
+      `👉 ${portalUrl}\n`;
   }
 
   /**
@@ -1534,21 +1562,13 @@ export class BotOrchestrator {
             });
           }
 
-          const bank = SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK', 'BBVA Bancomer');
-          const account = SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', '012 180 0152433212 90');
-          const beneficiary = SettingsService.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', this.getIspName());
-
           const nombreCliente = formatDisplayName(session.client_name, true) || 'Cliente';
+          const ficha = await this.getFichaBancaria(session);
           const mensajeMoroso =
             `¡Hola, *${nombreCliente}*! 👋\n\n` +
             `Revisé tu cuenta en nuestro sistema y detectamos que tu servicio figura suspendido con un saldo/recibo pendiente por *$${estadoFinanciero.totalDeuda.toFixed(2)} MXN*.\n` +
             `${detalleFacturas}\n` +
-            `🏦 *Pago por Transferencia Bancaria (BBVA):*\n` +
-            `• Banco: *${bank}*\n` +
-            `• CLABE / Cuenta: \`${account}\`\n` +
-            `• Beneficiario: *${beneficiary}*\n` +
-            `• Concepto / Motivo: *${session.client_name || phone}*\n\n` +
-            `📸 En cuanto realices tu transferencia, por favor envía la *foto o captura de tu comprobante* y escribe tu *Nombre completo* por este chat para reactivarte de inmediato.`;
+            ficha;
 
           await this.enviarYLoguear(phone, mensajeMoroso, 'CONSULTAR_SALDO', 'AVISO_SUSPENSION_SALUDO', targetJid);
           await DbService.updateStep(phone, 'ESPERANDO_COMPROBANTE');
@@ -1618,6 +1638,10 @@ export class BotOrchestrator {
       portalUrl,
       paymentOfficePhone: officeFormatted,
       diaCorte: (session as any)?.dia_corte || clienteCtx.clientWh?.dia_corte || null,
+      paymentWorkMode: SettingsService.getPaymentWorkMode(),
+      paymentBank: SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK', 'BBVA'),
+      paymentAccount: SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', '012290004848824666'),
+      paymentBeneficiary: SettingsService.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', 'Osbaldo Tovar Campero'),
     });
 
     await this.enviarYLoguear(
@@ -1911,10 +1935,24 @@ export class BotOrchestrator {
     }
 
     if (event?.isMedia) {
-      const msj =
-        `¡Buen día! Te comunicas al área de Soporte Técnico de ${this.getIspName()}.\n\n` +
-        `Para brindarte una mejor atención con la validación de tu servicio, te pedimos reportar tus comprobantes de pago directamente con nuestra *Área Administrativa* al número *${officeFormatted}* ( https://wa.me/52${officeClean} ).\n\n` +
-        `Ellos con gusto te atenderán a la brevedad para corroborar tu pago y mantener activo tu servicio. ¡Quedamos a tus órdenes!`;
+      const mode = SettingsService.getPaymentWorkMode();
+      const portalUrl = this.getClientPortalLink(phone, session?.client_name || undefined);
+      let msj = '';
+
+      if (mode === 'portal') {
+        msj =
+          `¡Comprobante recibido! 👍\n\n` +
+          `Recuerda que con tu *CLABE Única* o pagando directo en tu portal:\n` +
+          `👉 ${portalUrl}\n\n` +
+          `Tu pago se acredita automáticamente 24/7 sin necesidad de enviar capturas. De igual manera, registramos tu comprobante en el sistema. ¡Gracias!`;
+      } else {
+        msj =
+          `¡Comprobante recibido! 👍\n\n` +
+          `Para validar y registrar tu pago a la brevedad, por favor envíalo a nuestra *Área Administrativa*:\n` +
+          `👉 *WhatsApp:* *${officeFormatted}* ( https://wa.me/52${officeClean} )\n\n` +
+          `💡 *Portal:* También puedes consultar tu estatus aquí:\n` +
+          `👉 ${portalUrl}`;
+      }
 
       await this.enviarYLoguear(
         phone,

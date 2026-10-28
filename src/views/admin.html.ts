@@ -4542,6 +4542,50 @@ export function getAdminDashboardHtml(): string {
             <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px;">
               Información dinámica que el bot entrega a los clientes al consultar saldo o métodos de pago.
             </p>
+
+            <!-- SELECTOR DE MODO DE TRABAJO DE COBRANZA / PAGOS EN WHATSAPP -->
+            <div style="background: rgba(14, 165, 233, 0.08); border: 1.5px solid rgba(14, 165, 233, 0.35); border-radius: 12px; padding: 14px; margin-bottom: 18px;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
+                <label class="form-label" style="font-weight: 800; color: var(--accent-cyan); margin-bottom: 0; display: flex; align-items: center; gap: 7px; font-size: 13px;">
+                  ⚡ Modo de Atención de Pagos en WhatsApp
+                </label>
+                <span id="badge-payment-mode" style="font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 999px; background: rgba(14, 165, 233, 0.18); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.4);">
+                  🚀 100% Portal / SPEI Automático
+                </span>
+              </div>
+              <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 14px; line-height: 1.4;">
+                Selecciona la modalidad con la que el bot atiende las solicitudes de pago y saldo de los clientes:
+              </p>
+              
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <!-- Opción 1: Modo Portal / Autoservicio (Recomendado) -->
+                <label id="card-payment-mode-portal" class="payment-mode-card" style="display: flex; flex-direction: column; gap: 6px; padding: 14px; border-radius: 12px; border: 1.5px solid var(--accent-cyan); background: rgba(14, 165, 233, 0.12); cursor: pointer; transition: all 0.2s ease;">
+                  <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 13px; color: #fff;">
+                      <input type="radio" name="setting-PAYMENT_WORK_MODE" value="portal" onchange="setPaymentWorkModeUI(this.value)" checked style="accent-color: #0284c7; transform: scale(1.2);">
+                      <span>🚀 100% Portal / Autoservicio</span>
+                    </div>
+                    <span style="font-size: 10px; font-weight: 700; color: #10b981; background: rgba(16, 185, 129, 0.15); padding: 2px 6px; border-radius: 999px;">Recomendado</span>
+                  </div>
+                  <span style="font-size: 11.5px; color: var(--text-muted); line-height: 1.35; margin-top: 2px;">
+                    Asigna <strong>CLABE única SPEI</strong> por cliente + enlace directo al portal. Acreditación automática 24/7 sin enviar capturas.
+                  </span>
+                </label>
+
+                <!-- Opción 2: Modo Tradicional -->
+                <label id="card-payment-mode-traditional" class="payment-mode-card" style="display: flex; flex-direction: column; gap: 6px; padding: 14px; border-radius: 12px; border: 1.5px solid rgba(255,255,255,0.1); background: rgba(15,23,42,0.6); cursor: pointer; transition: all 0.2s ease;">
+                  <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <div style="display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 13px; color: #fff;">
+                      <input type="radio" name="setting-PAYMENT_WORK_MODE" value="traditional" onchange="setPaymentWorkModeUI(this.value)" style="accent-color: #0284c7; transform: scale(1.2);">
+                      <span>🏛️ Modo Tradicional</span>
+                    </div>
+                  </div>
+                  <span style="font-size: 11.5px; color: var(--text-muted); line-height: 1.35; margin-top: 2px;">
+                    Envía <strong>cuenta general</strong> + solicita captura de comprobante al WhatsApp administrativo e invita al portal.
+                  </span>
+                </label>
+              </div>
+            </div>
             <div class="form-group">
               <label class="form-label">Banco</label>
               <input type="text" id="setting-PAYMENT_BANK" class="form-control" placeholder="BBVA" value="BBVA">
@@ -8278,6 +8322,10 @@ export function getAdminDashboardHtml(): string {
           const chkOpenpay = document.getElementById('setting-OPENPAY_ENABLED');
           if (chkOpenpay) chkOpenpay.checked = s.OPENPAY_ENABLED === 'true' || s.OPENPAY_ENABLED === true || s.OPENPAY_ENABLED === '1' || s.OPENPAY_ENABLED === undefined;
 
+          // Modo de atención de pagos en WhatsApp (Portal vs Tradicional)
+          const pMode = s.PAYMENT_WORK_MODE || s.paymentWorkMode || 'portal';
+          setPaymentWorkModeUI(pMode);
+
           // Actualizar display del Webhook URL
           const whDisplay = document.getElementById('openpay-webhook-url-display');
           if (whDisplay) {
@@ -8327,6 +8375,7 @@ export function getAdminDashboardHtml(): string {
         NOTIF_DIA_CORTE_ENABLED: document.getElementById('setting-NOTIF_DIA_CORTE_ENABLED')?.checked ? 'true' : 'false',
         NOTIF_SUSPENSION_ENABLED: document.getElementById('setting-NOTIF_SUSPENSION_ENABLED')?.checked ? 'true' : 'false',
         NOTIF_INSTANCE_NAME: document.getElementById('setting-NOTIF_INSTANCE_NAME')?.value || 'atencion',
+        PAYMENT_WORK_MODE: document.querySelector('input[name="setting-PAYMENT_WORK_MODE"]:checked')?.value || 'portal',
         PAYMENT_BANK: document.getElementById('setting-PAYMENT_BANK')?.value.trim() || 'BBVA',
         PAYMENT_ACCOUNT: document.getElementById('setting-PAYMENT_ACCOUNT')?.value.trim() || '012290004848824666',
         PAYMENT_BENEFICIARY: document.getElementById('setting-PAYMENT_BENEFICIARY')?.value.trim() || 'Osbaldo Tovar Campero',
@@ -8355,6 +8404,46 @@ export function getAdminDashboardHtml(): string {
         }
       } catch (err) {
         showToast('Error', err.message, 'error');
+      }
+    }
+
+    function setPaymentWorkModeUI(mode) {
+      const isPortal = mode === 'portal';
+      const rPortal = document.querySelector('input[name="setting-PAYMENT_WORK_MODE"][value="portal"]');
+      const rTrad = document.querySelector('input[name="setting-PAYMENT_WORK_MODE"][value="traditional"]');
+      if (rPortal && isPortal) rPortal.checked = true;
+      if (rTrad && !isPortal) rTrad.checked = true;
+
+      const cardPortal = document.getElementById('card-payment-mode-portal');
+      const cardTrad = document.getElementById('card-payment-mode-traditional');
+      const badge = document.getElementById('badge-payment-mode');
+
+      if (cardPortal && cardTrad) {
+        if (isPortal) {
+          cardPortal.style.borderColor = 'var(--accent-cyan)';
+          cardPortal.style.background = 'rgba(14, 165, 233, 0.12)';
+          cardTrad.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+          cardTrad.style.background = 'rgba(15, 23, 42, 0.6)';
+        } else {
+          cardTrad.style.borderColor = '#10b981';
+          cardTrad.style.background = 'rgba(16, 185, 129, 0.12)';
+          cardPortal.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+          cardPortal.style.background = 'rgba(15, 23, 42, 0.6)';
+        }
+      }
+
+      if (badge) {
+        if (isPortal) {
+          badge.textContent = '🚀 100% Portal / SPEI Automático';
+          badge.style.color = '#38bdf8';
+          badge.style.background = 'rgba(14, 165, 233, 0.18)';
+          badge.style.borderColor = 'rgba(56, 189, 248, 0.4)';
+        } else {
+          badge.textContent = '🏛️ Modo Tradicional / Capturas';
+          badge.style.color = '#f59e0b';
+          badge.style.background = 'rgba(245, 158, 11, 0.18)';
+          badge.style.borderColor = 'rgba(245, 158, 11, 0.4)';
+        }
       }
     }
 

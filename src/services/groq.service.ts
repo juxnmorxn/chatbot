@@ -340,11 +340,16 @@ Devuelve EXCLUSIVAMENTE un JSON válido con esta estructura:
       portalUrl?: string | null;
       paymentOfficePhone?: string | null;
       diaCorte?: string | null;
+      paymentWorkMode?: 'portal' | 'traditional';
+      paymentBank?: string | null;
+      paymentAccount?: string | null;
+      paymentBeneficiary?: string | null;
     }
   ): Promise<string> {
     try {
       const groq = this.getClient();
       const ispName = contexto?.ispName || 'CloudWareMx';
+      const isPortalMode = (contexto?.paymentWorkMode || 'portal') === 'portal';
       
       let clienteTexto = contexto?.clientName
         ? `El cliente se llama: ${contexto.clientName}.`
@@ -378,6 +383,14 @@ Devuelve EXCLUSIVAMENTE un JSON válido con esta estructura:
         clienteTexto += `\n- Enlace directo a su Portal Web (PWA): ${contexto.portalUrl}`;
       }
 
+      const reglaPagos = isPortalMode
+        ? `5. REGLA DE PAGOS Y CONSULTAS DE SALDO (MODO 100% PORTAL / AUTOSERVICIO ACTIVO):
+   - Si el cliente pregunta cómo pagar o pide opciones de pago, sé BREVE y directo: infórmale que puede pagar en segundos desde su celular en su Portal Web personal: ${contexto?.portalUrl || 'https://portal.cloudwaremx.com/portal'} (acepta tarjeta de débito/crédito o transferencia SPEI con acreditación automática 24/7).
+   - En este modo NO se requiere enviar capturas ni comprobantes porque la acreditación es inmediata. NUNCA le pidas que mande fotos de comprobantes ni le digas que esta línea es solo soporte técnico. Mantén el mensaje simple, positivo y directo.`
+        : `5. REGLA DE PAGOS Y CONSULTAS DE SALDO (MODO TRADICIONAL ACTIVO):
+   - Si el cliente solicita datos para realizar pagos o transferencias, dale los datos bancarios (${contexto?.paymentBank || 'BBVA'}, CLABE: ${contexto?.paymentAccount || ''}, Titular: ${contexto?.paymentBeneficiary || ''}, indicando que en Concepto escriba su nombre), e indícale de forma concisa que envíe su captura al WhatsApp Administrativo: ${contexto?.paymentOfficePhone || '772 129 2969'}.
+   - Sugiere también que puede consultar su portal web: ${contexto?.portalUrl || 'https://portal.cloudwaremx.com/portal'}.`;
+
       const systemPrompt = `
 Eres el asistente virtual inteligente de soporte técnico y atención a clientes de "${ispName}", una empresa proveedora de servicios de internet de fibra óptica de alta velocidad y telecomunicaciones.
 
@@ -394,13 +407,7 @@ Objetivo y comportamiento:
 4. Si el usuario reporta una falla de internet (ej. "no tengo internet", "está muy lento", "foco rojo", "parpadea LOS", "el módem no prende"):
    - Sé empático y dale pasos sencillos y claros de revisión rápida (ej. verificar que el módem esté conectado a la luz, que el cable de fibra amarillo no esté doblado, o reiniciar desconectando de la corriente por 30 segundos).
    - Indícale que si el problema persiste o si tiene foco rojo (corte de fibra), con gusto canalizamos el reporte técnico para que la cuadrilla lo revise.
-5. REGLA ESTRICTA DE PAGOS, COMPROBANTES Y OFICINA ADMINISTRATIVA:
-   - En este número de WhatsApp atendemos de forma técnica y operativa (no procesamos cobros ni validamos pagos directamente en esta línea).
-   - Si el cliente solicita datos para realizar pagos o transferencias, dale los datos bancarios (Banco: BBVA, Cuenta CLABE, Titular, indicando que en Concepto escriba su nombre completo), PERO indícale con toda claridad que DEBE enviar su comprobante de pago al WhatsApp del Área Administrativa al número: ${contexto?.paymentOfficePhone || '772 129 2969'}.
-   - Si el cliente indica que ya pagó, que ya mandó su comprobante pero "no le responden", que sigue suspendido o se queja de tardanza en la reactivación:
-     * Discúlpate cordialmente con empatía: explícale que en fechas de corte se procesan muchos pagos por registrar y pagos en ventanilla, por lo que el personal administrativo va corroborando y reactivando los servicios por turnos.
-     * Pídele paciencia a que el área administrativa verifique su pago.
-     * Recomiéndale que para evitar cortes en el servicio en futuros meses, procure realizar su pago con 3 a 4 días de anticipación de acuerdo a su fecha habitual de corte${contexto?.diaCorte ? ' (día ' + contexto.diaCorte + ' de cada mes)' : ''}.
+${reglaPagos}
 6. REGLA ESTRICTA DE PLANES, VELOCIDADES Y TEST DE VELOCIDAD:
    - Si el usuario pregunta cuál es su velocidad, qué plan tiene o reporta que siente el servicio lento, infórmale con EXACTITUD los datos de su registro oficial: "${contexto?.planInternet || 'tu plan contratado'}" (${contexto?.velocidadMegas ? contexto.velocidadMegas + ' Mbps' : 'velocidad contratada'}).
    - SIEMPRE que sugieras o hables de medir la velocidad o hacer un test, proporciona el enlace directo: https://www.speedtest.net recomendándole realizarlo cerca del módem.

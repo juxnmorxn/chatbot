@@ -26,6 +26,7 @@ export interface AppSettings {
   soporteHumanoPhone?: string;
   activationsGroupJid?: string;
   // Pagos y Cobranza (BBVA / Transferencias / Mercado Pago)
+  paymentWorkMode?: 'portal' | 'traditional';
   paymentBank?: string;
   paymentAccount?: string;
   paymentConvenio?: string;
@@ -178,6 +179,8 @@ export class SettingsService {
       ispName: this.get('ISP_NAME', 'ISP_NAME', 'CloudWareMx'),
       soporteHumanoPhone: this.get('SOPORTE_HUMANO_PHONE', 'SOPORTE_HUMANO_PHONE', ''),
       activationsGroupJid: this.get('ACTIVATIONS_GROUP_JID', 'ACTIVATIONS_GROUP_JID', this.get('GRUPO_ACTIVACIONES', 'GRUPO_ACTIVACIONES', '')),
+      paymentWorkMode: (this.get('PAYMENT_WORK_MODE', 'PAYMENT_WORK_MODE', 'portal') as 'portal' | 'traditional') || 'portal',
+      PAYMENT_WORK_MODE: (this.get('PAYMENT_WORK_MODE', 'PAYMENT_WORK_MODE', 'portal') as 'portal' | 'traditional') || 'portal',
       paymentBank: this.get('PAYMENT_BANK', 'PAYMENT_BANK', 'BBVA'),
       paymentAccount: this.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', '012290004848824666'),
       paymentConvenio: this.get('PAYMENT_CONVENIO', 'PAYMENT_CONVENIO', ''),
@@ -211,6 +214,16 @@ export class SettingsService {
   static generateEvolutionMasterKey(): string {
     const randomHex = crypto.randomBytes(24).toString('hex');
     return `EVO_MASTER_${randomHex}`;
+  }
+
+  /**
+   * Obtiene el modo de atención de pagos configurado:
+   * - 'portal': 100% Autoservicio / CLABE única Openpay sin capturas
+   * - 'traditional': CLABE general + envío de captura a oficina
+   */
+  static getPaymentWorkMode(): 'portal' | 'traditional' {
+    const val = (this.get('PAYMENT_WORK_MODE', 'PAYMENT_WORK_MODE', 'portal') || '').toLowerCase().trim();
+    return val === 'traditional' ? 'traditional' : 'portal';
   }
 
   /**
