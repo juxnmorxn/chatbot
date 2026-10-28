@@ -3108,7 +3108,7 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
 
     function updateOfficePaymentLink(rawPhone, titularName, contractId) {
       if (!rawPhone) return;
-      let digits = String(rawPhone).replace(/\D/g, '');
+      let digits = String(rawPhone).replace(/\\D/g, '');
       if (digits.startsWith('521') && digits.length === 13) {
         digits = '52' + digits.slice(3);
       } else if (digits.length === 10) {
@@ -3116,13 +3116,13 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
       }
       const titular = titularName || document.getElementById('bankConceptText')?.innerText || document.getElementById('titularHeroName')?.innerText || 'Cliente';
       const folio = contractId || currentContractId || '';
-      const textMsg = 'Hola, envío comprobante de pago de mi servicio.\nTitular: ' + titular + (folio ? ('\nContrato: #' + folio) : '');
+      const textMsg = 'Hola, envío comprobante de pago de mi servicio.\\nTitular: ' + titular + (folio ? ('\\nContrato: #' + folio) : '');
       const waUrl = 'https://wa.me/' + digits + '?text=' + encodeURIComponent(textMsg);
       
       const btn = document.getElementById('btnOfficePaymentWa');
       if (btn) btn.href = waUrl;
 
-      const formatted = rawPhone.replace(/\D/g, '').slice(-10);
+      const formatted = rawPhone.replace(/\\D/g, '').slice(-10);
       const displayTxt = formatted ? ('+52 ' + formatted) : rawPhone;
 
       const display = document.getElementById('bankOfficePhoneDisplay');
@@ -3161,7 +3161,7 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
     }
 
     function copyHeroClabe() {
-      const val = (document.getElementById('heroClabeText')?.innerText || document.getElementById('bankClabeText')?.innerText || '').replace(/\s+/g, '');
+      const val = (document.getElementById('heroClabeText')?.innerText || document.getElementById('bankClabeText')?.innerText || '').replace(/\\s+/g, '');
       if (val) {
         navigator.clipboard.writeText(val);
         showToast('CLABE SPEI copiada: ' + val);
@@ -3169,13 +3169,13 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
     }
 
     function copyClabe() {
-      const val = (document.getElementById('bankClabeText')?.innerText || '').replace(/\s+/g, '');
+      const val = (document.getElementById('bankClabeText')?.innerText || '').replace(/\\s+/g, '');
       navigator.clipboard.writeText(val);
       showToast('CLABE copiada: ' + val);
     }
 
     function copyBankAccount() {
-      const val = (document.getElementById('bankAccountText')?.innerText || '').replace(/\s+/g, '');
+      const val = (document.getElementById('bankAccountText')?.innerText || '').replace(/\\s+/g, '');
       navigator.clipboard.writeText(val);
       showToast('Número de cuenta copiado: ' + val);
     }
