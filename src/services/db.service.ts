@@ -1160,6 +1160,34 @@ export class DbService {
         }
       }
 
+      // 2.5 Si este teléfono estaba asignado a OTRO cliente distinto, desasociarlo de la cuenta anterior
+      if (targetServiceId) {
+        try {
+          // Si estaba como teléfono principal en otro cliente
+          await client.execute({
+            sql: `UPDATE wisphub_clients SET telefono = NULL, updated_at = ? WHERE (telefono = ? OR telefono LIKE ?) AND id_servicio != ?`,
+            args: [now, last10, `%${last10}`, targetServiceId],
+          });
+          // Si estaba en telefonos_adicionales de otro cliente
+          const otherExtras = await client.execute({
+            sql: `SELECT id_servicio, telefonos_adicionales FROM wisphub_clients WHERE telefonos_adicionales LIKE ? AND id_servicio != ?`,
+            args: [`%${last10}%`, targetServiceId],
+          });
+          for (const row of otherExtras.rows) {
+            let extras: string[] = [];
+            try { extras = JSON.parse(String(row.telefonos_adicionales || '[]')); } catch {
+              extras = String(row.telefonos_adicionales || '').split(',').map(s => s.trim().replace(/\D/g, '')).filter(Boolean);
+            }
+            const filtered = extras.filter(p => !p.endsWith(last10));
+            await client.execute({
+              sql: `UPDATE wisphub_clients SET telefonos_adicionales = ?, updated_at = ? WHERE id_servicio = ?`,
+              args: [filtered.length > 0 ? JSON.stringify(filtered) : null, now, row.id_servicio],
+            });
+            logger.info(`[Vínculo Local] Teléfono ${last10} desasociado del cliente previo #${row.id_servicio} para reasignarlo limpiamente.`);
+          }
+        } catch (_) {}
+      }
+
       // 3. Vincular el número en wisphub_clients (localmente)
       if (targetRow && targetServiceId) {
         const mainPhone = String(targetRow.telefono || '').replace(/\D/g, '');
@@ -3266,7 +3294,39 @@ export class DbService {
         `,
         args: [now, phone, cleanPhone, `%${phone10}`],
       });
-      logger.info(`Sesión de ${phone} desvinculada exitosamente.`);
+
+      // Limpiar también en wisphub_clients para que no quede asignado a un cliente viejo
+      if (phone10 && phone10.length >= 7) {
+        await client.execute({
+          sql: `UPDATE wisphub_clients SET telefono = NULL, updated_at = ? WHERE telefono = ? OR telefono LIKE ?`,
+          args: [now, phone10, `%${phone10}`],
+        }).catch(() => {});
+
+        const extraMatches = await client.execute({
+          sql: `SELECT id_servicio, telefonos_adicionales FROM wisphub_clients WHERE telefonos_adicionales LIKE ?`,
+          args: [`%${phone10}%`],
+        }).catch(() => ({ rows: [] }));
+
+        for (const row of extraMatches.rows) {
+          let extras: string[] = [];
+          try { extras = JSON.parse(String(row.telefonos_adicionales || '[]')); } catch {
+            extras = String(row.telefonos_adicionales || '').split(',').map(s => s.trim().replace(/\D/g, '')).filter(Boolean);
+          }
+          const filtered = extras.filter(p => !p.endsWith(phone10));
+          await client.execute({
+            sql: `UPDATE wisphub_clients SET telefonos_adicionales = ?, updated_at = ? WHERE id_servicio = ?`,
+            args: [filtered.length > 0 ? JSON.stringify(filtered) : null, now, row.id_servicio],
+          }).catch(() => {});
+        }
+
+        // Limpiar en client_portal_accounts
+        await client.execute({
+          sql: `DELETE FROM client_portal_accounts WHERE telefono = ? OR telefono LIKE ?`,
+          args: [phone10, `%${phone10}`],
+        }).catch(() => {});
+      }
+
+      logger.info(`Sesión y vínculos de ${phone} desvinculados exitosamente.`);
       return true;
     } catch (error: any) {
       logger.error(`Error al desvincular sesión de ${phone}:`, error?.message || error);
@@ -4597,7 +4657,30 @@ export class DbService {
       args: [cleanPhone, `%${cleanPhone}`],
     });
 
-    logger.info(`Teléfono ${cleanPhone} desvinculado y enlaces eliminados. Cuentas eliminadas: ${portalRes.rowsAffected || 0}, sesiones eliminadas: ${sessionRes.rowsAffected || 0}.`);
+    // 3. Limpiar el teléfono en wisphub_clients (principal y adicionales) para desvincular al cliente completamente
+    await client.execute({
+      sql: `UPDATE wisphub_clients SET telefono = NULL, updated_at = ? WHERE telefono = ? OR telefono LIKE ?`,
+      args: [now, cleanPhone, `%${cleanPhone}`],
+    }).catch(() => {});
+
+    const extraMatches = await client.execute({
+      sql: `SELECT id_servicio, telefonos_adicionales FROM wisphub_clients WHERE telefonos_adicionales LIKE ?`,
+      args: [`%${cleanPhone}%`],
+    }).catch(() => ({ rows: [] }));
+
+    for (const row of extraMatches.rows) {
+      let extras: string[] = [];
+      try { extras = JSON.parse(String(row.telefonos_adicionales || '[]')); } catch {
+        extras = String(row.telefonos_adicionales || '').split(',').map(s => s.trim().replace(/\D/g, '')).filter(Boolean);
+      }
+      const filtered = extras.filter(p => !p.endsWith(cleanPhone));
+      await client.execute({
+        sql: `UPDATE wisphub_clients SET telefonos_adicionales = ?, updated_at = ? WHERE id_servicio = ?`,
+        args: [filtered.length > 0 ? JSON.stringify(filtered) : null, now, row.id_servicio],
+      }).catch(() => {});
+    }
+
+    logger.info(`Teléfono ${cleanPhone} desvinculado de portal, sesiones y wisphub_clients. Cuentas eliminadas: ${portalRes.rowsAffected || 0}, sesiones eliminadas: ${sessionRes.rowsAffected || 0}.`);
 
     return {
       portalRows: portalRes.rowsAffected || 0,

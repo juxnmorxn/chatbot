@@ -1040,12 +1040,14 @@ self.addEventListener('fetch', (event) => {
             const wifiPromise = SmartOLTService.getOnuWifiDetails(targetOnuId);
             const wifiDetails = await Promise.race([wifiPromise, timeoutPromise]);
             if (wifiDetails && (wifiDetails.ssid24 || wifiDetails.ssid5g || wifiDetails.ssid)) {
+              const isUnified = wifiDetails.isUnified ?? (!wifiDetails.ssid5g || (wifiDetails.ssid24 && wifiDetails.ssid5g && wifiDetails.ssid24.trim().toLowerCase() === wifiDetails.ssid5g.trim().toLowerCase()));
               wifiInfo = {
                 ssid24: wifiDetails.ssid24 || wifiDetails.ssid || '',
                 password24: wifiDetails.password24 || wifiDetails.password || '',
-                ssid5g: wifiDetails.ssid5g || '',
+                ssid5g: (!isUnified && wifiDetails.ssid5g) ? wifiDetails.ssid5g : '',
                 password5g: wifiDetails.password5g || wifiDetails.password24 || '',
                 has5g: !!wifiDetails.has5g,
+                isUnified,
                 ssid: wifiDetails.ssid24 || wifiDetails.ssid || '',
                 password: wifiDetails.password24 || wifiDetails.password || '',
               };
@@ -1064,10 +1066,8 @@ self.addEventListener('fetch', (event) => {
         wifiInfo.password24 = onuRecord?.sn ? onuRecord.sn.slice(-8) : '12345678';
         wifiInfo.ssid = wifiInfo.ssid24;
         wifiInfo.password = wifiInfo.password24;
-      }
-      if (wifiInfo.has5g && !wifiInfo.ssid5g && wifiInfo.ssid24) {
-        wifiInfo.ssid5g = `${wifiInfo.ssid24}-5G`;
-        wifiInfo.password5g = wifiInfo.password24;
+        wifiInfo.isUnified = true;
+        wifiInfo.has5g = true;
       }
 
       const wifi = wifiInfo;
@@ -1748,13 +1748,23 @@ self.addEventListener('fetch', (event) => {
 
     // 🔄 CONSOLIDACIÓN DE MULTI-SERVICIO PARA EL TITULAR
     const servicesMap = new Map<string, any>();
-    initialMatches.forEach(m => servicesMap.set(String(m.id_servicio), m));
+    const primaryClient = initialMatches[0];
+    const primaryBase = cleanPersonName(ClientPortalController.extractBaseCustomerName(primaryClient.nombre));
 
-    for (const match of initialMatches) {
+    initialMatches.forEach(m => {
+      const candBase = cleanPersonName(ClientPortalController.extractBaseCustomerName(m.nombre));
+      const score = computeNameMatchScore(primaryBase, candBase);
+      // Solo asociar si el titular coincide (mismos apellidos/nombre) para evitar mezclar clientes diferentes
+      if (score >= 45 || candBase.includes(primaryBase) || primaryBase.includes(candBase)) {
+        servicesMap.set(String(m.id_servicio), m);
+      }
+    });
+
+    for (const match of Array.from(servicesMap.values())) {
       const matchPhone = (match.telefono || '').replace(/\D/g, '').slice(-10);
       const effectivePhone = matchPhone || last10;
 
-      // A. Contratos adicionales que comparten el mismo número de teléfono (100% seguros)
+      // A. Contratos adicionales que comparten el mismo número de teléfono del mismo titular
       if (effectivePhone && effectivePhone.length >= 7) {
         const phoneRes = await db.execute({
           sql: `SELECT * FROM wisphub_clients WHERE telefono LIKE ? OR telefonos_adicionales LIKE ? ORDER BY id_servicio ASC LIMIT 15`,
@@ -1762,7 +1772,11 @@ self.addEventListener('fetch', (event) => {
         });
         (phoneRes.rows as any[]).forEach(s => {
           if (!servicesMap.has(String(s.id_servicio))) {
-            servicesMap.set(String(s.id_servicio), s);
+            const candBase = cleanPersonName(ClientPortalController.extractBaseCustomerName(s.nombre));
+            const score = computeNameMatchScore(primaryBase, candBase);
+            if (score >= 45 || candBase.includes(primaryBase) || primaryBase.includes(candBase)) {
+              servicesMap.set(String(s.id_servicio), s);
+            }
           }
         });
       }

@@ -1073,24 +1073,29 @@ export class SmartOLTService {
           return null;
         }
 
+        const isUnified = !ssid5 || (ssid24 && ssid5 && ssid24.trim().toLowerCase() === ssid5.trim().toLowerCase());
+        const effectiveSsid = ssid24 || ssid5;
+        const effectivePassword = pass24 || pass5;
+
         return {
           has5g,
-          ssid24: ssid24 || (ssid5 ? ssid5.replace(/-5g$/i, '') : ''),
-          password24: pass24 || pass5,
-          ssid5g: ssid5 || (has5g && ssid24 ? `${ssid24}-5G` : ''),
-          password5g: pass5 || pass24,
-          ssid: ssid24 || ssid5,
-          password: pass24 || pass5,
+          isUnified,
+          ssid24: effectiveSsid,
+          password24: effectivePassword,
+          ssid5g: (!isUnified && ssid5) ? ssid5 : '',
+          password5g: pass5 || effectivePassword,
+          ssid: effectiveSsid,
+          password: effectivePassword,
           wlan1: {
-            ssid: ssid24,
-            password: pass24,
+            ssid: ssid24 || effectiveSsid,
+            password: pass24 || effectivePassword,
             admin_state: port24?.admin_state || 'Enabled',
             mode: port24?.mode || 'LAN',
             auth_mode: port24?.auth_mode || 'wpa2',
           },
           wlan5: has5g ? {
-            ssid: ssid5,
-            password: pass5,
+            ssid: ssid5 || effectiveSsid,
+            password: pass5 || effectivePassword,
             admin_state: port5?.admin_state || 'Enabled',
             mode: port5?.mode || 'LAN',
             auth_mode: port5?.auth_mode || 'wpa2',
@@ -1101,8 +1106,24 @@ export class SmartOLTService {
 
       // 1. Intentar consulta en vivo a SmartOLT
       const api = this.getApi();
-      const res = await api.get(`/onu/get_onu_details/${encodeURIComponent(externalId)}`);
-      const det = res.data?.onu_details || res.data?.response || res.data?.onu || res.data?.details || res.data;
+      let det: any = null;
+      try {
+        const res = await api.get(`/onu/get_onu_details/${encodeURIComponent(externalId)}`);
+        det = res.data?.onu_details || res.data?.response || res.data?.onu || res.data?.details || res.data;
+      } catch (err1) {
+        logger.warn(`Fallo al consultar /onu/get_onu_details/${externalId}:`, (err1 as any)?.message);
+      }
+
+      // Si no trajo datos de wifi o falló el endpoint por ID externo, consultar por SN directo
+      const targetSn = onuRecord?.sn || (cleanId.length >= 8 ? cleanId : '');
+      if ((!det || (!det.wifi_ports && !det.wifi)) && targetSn) {
+        try {
+          const snRes = await api.get(`/onu/get_onus_details_by_sn/${encodeURIComponent(targetSn)}`);
+          const snDet = snRes.data?.onu_details || snRes.data?.response || snRes.data?.onus || snRes.data;
+          det = Array.isArray(snDet) ? snDet[0] : (snDet || det);
+        } catch (_) {}
+      }
+
       const parsed = parseWifiFromObject(det);
 
       if (parsed) {

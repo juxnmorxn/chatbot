@@ -1585,20 +1585,20 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
 
           <!-- Nombres de Red (2.4 GHz y 5 GHz) -->
           <div class="wifi-networks-grid" style="margin: 8px 0;">
-            <!-- 2.4 GHz -->
-            <div class="wifi-item">
+            <!-- 2.4 GHz / Red Dual -->
+            <div id="boxWifi24" class="wifi-item">
               <div class="wifi-item-info">
                 <div style="display: flex; align-items: center; gap: 6px;">
-                  <span class="wifi-band-tag tag-24g" style="font-size: 10px; padding: 2px 7px;"><i class="fa-solid fa-tower-broadcast"></i> 2.4 GHz</span>
-                  <span style="font-size: 10.5px; color: var(--text-muted);">Mayor cobertura</span>
+                  <span id="wifiBandTag24" class="wifi-band-tag tag-5g" style="font-size: 10px; padding: 2px 7px;"><i class="fa-solid fa-wifi"></i> 2.4G & 5G</span>
+                  <span id="wifiBandSub24" style="font-size: 10.5px; color: var(--text-muted);">Red Dual Inteligente</span>
                 </div>
                 <span id="wifiSsid24Label" class="wifi-val" style="margin-top: 2px;">Cargando...</span>
               </div>
-              <button class="btn-action-icon" style="width: 32px; height: 32px; font-size: 13px;" onclick="copyWifiSsid24()" title="Copiar nombre de red 2.4G"><i class="fa-solid fa-copy"></i></button>
+              <button class="btn-action-icon" style="width: 32px; height: 32px; font-size: 13px;" onclick="copyWifiSsid24()" title="Copiar nombre de red"><i class="fa-solid fa-copy"></i></button>
             </div>
 
-            <!-- 5 GHz -->
-            <div id="boxWifi5g" class="wifi-item">
+            <!-- 5 GHz (Visible solo si maneja redes separadas) -->
+            <div id="boxWifi5g" class="wifi-item" style="display: none;">
               <div class="wifi-item-info">
                 <div style="display: flex; align-items: center; gap: 6px;">
                   <span class="wifi-band-tag tag-5g" style="font-size: 10px; padding: 2px 7px;"><i class="fa-solid fa-bolt"></i> 5 GHz</span>
@@ -2965,22 +2965,42 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
 
       // Wi-Fi Real Dual Band Simplificado (Una Sola Contraseña Compartida)
       const wifi = data.wifi || {};
+      const isUnified = wifi.isUnified !== false && (!wifi.ssid5g || (wifi.ssid24 && wifi.ssid5g && wifi.ssid24.trim().toLowerCase() === wifi.ssid5g.trim().toLowerCase()));
+
       realWifiSsid24 = wifi.ssid24 || ('CloudWare_' + c.id_servicio);
       realWifiPassword24 = wifi.password24 || wifi.password || '********';
-      realWifiSsid5g = wifi.ssid5g || (realWifiSsid24 + '-5G');
+      realWifiSsid5g = (!isUnified && wifi.ssid5g) ? wifi.ssid5g : '';
       realWifiPassword5g = wifi.password5g || realWifiPassword24;
 
-      document.getElementById('wifiSsid24Label').innerText = realWifiSsid24;
-
+      const tag24El = document.getElementById('wifiBandTag24');
+      const sub24El = document.getElementById('wifiBandSub24');
       const box5g = document.getElementById('boxWifi5g');
-      if (wifi.has5g !== false) {
-        if (box5g) box5g.style.display = 'flex';
-        document.getElementById('wifiSsid5gLabel').innerText = realWifiSsid5g;
-      } else {
+
+      if (isUnified) {
+        // Red Dual Unificada (2.4G & 5G bajo el mismo nombre)
+        if (tag24El) {
+          tag24El.className = 'wifi-band-tag tag-5g';
+          tag24El.innerHTML = '<i class="fa-solid fa-wifi"></i> 2.4G & 5G';
+        }
+        if (sub24El) sub24El.innerText = 'Red Dual Inteligente (Band Steering)';
         if (box5g) box5g.style.display = 'none';
+        document.getElementById('wifiSsid24Label').innerText = realWifiSsid24;
+      } else {
+        // Redes divididas con nombres distintos
+        if (tag24El) {
+          tag24El.className = 'wifi-band-tag tag-24g';
+          tag24El.innerHTML = '<i class="fa-solid fa-tower-broadcast"></i> 2.4 GHz';
+        }
+        if (sub24El) sub24El.innerText = 'Mayor cobertura';
+        document.getElementById('wifiSsid24Label').innerText = realWifiSsid24;
+
+        if (box5g) {
+          box5g.style.display = 'flex';
+          document.getElementById('wifiSsid5gLabel').innerText = realWifiSsid5g;
+        }
       }
 
-      const sharedPass = realWifiPassword5g || realWifiPassword24;
+      const sharedPass = realWifiPassword24 || realWifiPassword5g;
       document.getElementById('wifiPassSharedLabel').innerText = sharedPass;
 
       // Facturación y Saldo
@@ -3422,30 +3442,44 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
       }
     }
 
-    // QR Code por defecto conectando a 5 GHz (Ultra Velocidad)
+    // QR Code por defecto conectando a 5 GHz (Ultra Velocidad) o Red Dual Unificada
     function openQrModal(band = '5g') {
-      currentQrBand = (band === '24' || (!realWifiSsid5g && band !== '5g')) ? '24' : '5g';
+      const isUnified = !realWifiSsid5g || (realWifiSsid24 && realWifiSsid5g && realWifiSsid24.trim().toLowerCase() === realWifiSsid5g.trim().toLowerCase());
+      currentQrBand = isUnified ? 'dual' : ((band === '24' || (!realWifiSsid5g && band !== '5g')) ? '24' : '5g');
       const is5g = currentQrBand === '5g';
-      const ssid = is5g ? (realWifiSsid5g || (realWifiSsid24 + '-5G')) : (realWifiSsid24 || document.getElementById('wifiSsid24Label').innerText);
-      const pass = realWifiPassword5g || realWifiPassword24;
+      const ssid = isUnified ? realWifiSsid24 : (is5g ? (realWifiSsid5g || realWifiSsid24) : realWifiSsid24);
+      const pass = realWifiPassword24 || realWifiPassword5g;
 
       const titleEl = document.getElementById('qrModalTitle');
       if (titleEl) {
-        titleEl.innerHTML = is5g 
-          ? '<i class="fa-solid fa-bolt" style="color: #c084fc;"></i> Conectar por QR (Red 5 GHz)' 
-          : '<i class="fa-solid fa-tower-broadcast" style="color: #38bdf8;"></i> Conectar por QR (Red 2.4 GHz)';
+        if (isUnified) {
+          titleEl.innerHTML = '<i class="fa-solid fa-wifi" style="color: #38bdf8;"></i> Conectar por QR (Red Dual 2.4G & 5G)';
+        } else {
+          titleEl.innerHTML = is5g 
+            ? '<i class="fa-solid fa-bolt" style="color: #c084fc;"></i> Conectar por QR (Red 5 GHz)' 
+            : '<i class="fa-solid fa-tower-broadcast" style="color: #38bdf8;"></i> Conectar por QR (Red 2.4 GHz)';
+        }
       }
       
       const nameEl = document.getElementById('qrNetworkName');
       if (nameEl) {
-        nameEl.innerText = ssid + (is5g ? ' · Red 5 GHz (Ultra Velocidad)' : ' · Red 2.4 GHz (Mayor Alcance)');
+        if (isUnified) {
+          nameEl.innerText = ssid + ' · Red Wi-Fi Dual (2.4G / 5G)';
+        } else {
+          nameEl.innerText = ssid + (is5g ? ' · Red 5 GHz (Ultra Velocidad)' : ' · Red 2.4 GHz (Mayor Alcance)');
+        }
       }
 
       const altBtn = document.getElementById('qrAltBandBtn');
       if (altBtn) {
-        altBtn.innerHTML = is5g 
-          ? '<i class="fa-solid fa-tower-broadcast"></i> Cambiar a Red 2.4 GHz' 
-          : '<i class="fa-solid fa-bolt"></i> Cambiar a Red 5 GHz';
+        if (isUnified) {
+          altBtn.style.display = 'none';
+        } else {
+          altBtn.style.display = 'block';
+          altBtn.innerHTML = is5g 
+            ? '<i class="fa-solid fa-tower-broadcast"></i> Cambiar a Red 2.4 GHz' 
+            : '<i class="fa-solid fa-bolt"></i> Cambiar a Red 5 GHz';
+        }
       }
 
       const qrData = 'WIFI:T:WPA;S:' + ssid + ';P:' + pass + ';;';
