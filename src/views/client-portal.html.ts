@@ -172,7 +172,7 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
       display: flex;
       flex-direction: column;
       background: transparent;
-      padding: 16px 16px 80px 16px;
+      padding: 16px 16px 125px 16px;
       gap: 16px;
       position: relative;
       min-width: 0;
@@ -180,99 +180,124 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
       transition: max-width 0.25s ease;
     }
 
-    /* Breakpoint Tablets y Pantallas Medianas (768px - 1059px) */
-    @media (min-width: 768px) and (max-width: 1059px) {
+    @media (min-width: 768px) {
       .app-screen {
-        max-width: 980px;
-        width: 95%;
-        padding: 20px 24px 80px 24px;
-        gap: 18px;
-      }
-
-      .dashboard-grid {
-        display: grid !important;
-        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-        gap: 18px;
-        align-items: stretch !important;
-      }
-
-      .card-billing-box {
-        grid-column: 1 / -1;
-      }
-
-      .dashboard-bottom-grid {
-        display: flex !important;
-        flex-direction: column !important;
-        gap: 18px;
-        width: 100%;
-      }
-
-      .app-card {
-        padding: 20px;
+        max-width: 680px;
+        padding: 24px 24px 130px 24px;
+        gap: 20px;
       }
     }
 
-    /* Breakpoint Pantallas Grandes / Desktop (>= 1060px) */
-    @media (min-width: 1060px) {
-      .app-screen {
-        max-width: 1440px;
-        width: 95%;
-        padding: 24px 36px 90px 36px;
-        gap: 20px;
-      }
+    /* Cápsula Flotante / Isla Dinámica de Navegación */
+    .portal-dynamic-island {
+      position: fixed;
+      bottom: 22px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(15, 23, 42, 0.88);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 9999px;
+      padding: 6px 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      z-index: 95;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(14, 165, 233, 0.15);
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      max-width: 92%;
+    }
 
-      .dashboard-grid {
-        display: grid !important;
-        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-        gap: 20px;
-        align-items: stretch !important;
-        margin-bottom: 22px !important;
-      }
+    [data-theme="light"] .portal-dynamic-island {
+      background: rgba(255, 255, 255, 0.92);
+      border-color: rgba(0, 0, 0, 0.08);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(2, 132, 199, 0.15);
+    }
 
-      .dashboard-bottom-grid {
-        display: grid !important;
-        grid-template-columns: 1.75fr 1.25fr !important;
-        gap: 20px;
-        align-items: stretch !important;
-        width: 100%;
-        margin-top: 0 !important;
-      }
+    .island-tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      border-radius: 9999px;
+      padding: 9px 18px;
+      font-size: 13px;
+      font-weight: 600;
+      font-family: inherit;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      white-space: nowrap;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
 
-      .card-plan-box, .card-wifi-box, .card-billing-box, .card-history-box, .support-banner-card {
-        display: flex !important;
-        flex-direction: column !important;
-        min-height: 100%;
-        box-sizing: border-box;
-      }
+    .island-tab-btn i {
+      font-size: 15px;
+      transition: transform 0.2s ease;
+    }
 
-      .invoices-scroll-grid {
-        display: grid !important;
-        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-        gap: 10px !important;
-        max-height: 250px !important;
-        overflow-y: auto !important;
-        padding-right: 4px;
-      }
+    .island-tab-btn:hover {
+      color: var(--text-title);
+    }
 
-      .app-card {
-        padding: 20px;
+    .island-tab-btn.active {
+      background: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%);
+      color: #ffffff;
+      font-weight: 700;
+      box-shadow: 0 4px 16px rgba(14, 165, 233, 0.4);
+    }
+
+    .island-tab-btn.active i {
+      transform: scale(1.1);
+    }
+
+    @media (max-width: 480px) {
+      .portal-dynamic-island {
+        bottom: 16px;
+        padding: 5px 6px;
+        gap: 4px;
+        width: calc(100% - 32px);
+        max-width: 380px;
+        justify-content: space-around;
+      }
+      .island-tab-btn {
+        padding: 8px 12px;
+        font-size: 12px;
+        gap: 6px;
+        flex: 1;
+        justify-content: center;
+      }
+      .island-tab-btn i {
+        font-size: 14px;
       }
     }
 
-    /* Breakpoint Pantallas Extra Grandes / Monitores Ultra-Wide (>= 1440px) */
-    @media (min-width: 1440px) {
-      .app-screen {
-        max-width: 1560px;
-        width: 95%;
-        padding: 28px 48px 100px 48px;
-        gap: 24px;
+    .portal-tab-content {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      width: 100%;
+      animation: fadeInTab 0.22s ease-out;
+    }
+
+    @keyframes fadeInTab {
+      from {
+        opacity: 0;
+        transform: translateY(8px);
       }
-      .dashboard-grid {
-        gap: 24px;
+      to {
+        opacity: 1;
+        transform: translateY(0);
       }
-      .dashboard-bottom-grid {
-        gap: 24px;
-      }
+    }
+
+    .payment-choice-card:hover {
+      border-color: #38bdf8 !important;
+      background: rgba(14, 165, 233, 0.1) !important;
+      transform: translateY(-2px);
     }
 
     /* Tarjeta Perfil Ejecutivo del Titular */
@@ -1445,17 +1470,57 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
             </div>
           </div>
         </div>
-        <div class="titular-profile-right">
-          <button class="btn-outline" onclick="openModalBank()" style="padding: 10px 16px; font-size: 13px; border-color: rgba(2, 132, 199, 0.35); background: rgba(2, 132, 199, 0.1); color: var(--primary); font-weight: 700;">
-            <i class="fa-solid fa-building-columns"></i> Datos de Pago SPEI
-          </button>
-        </div>
       </div>
 
-      <!-- Fila Superior: 3 Tarjetas de Servicio Equilibradas y de Misma Altura -->
-      <div class="dashboard-grid">
+      <!-- PESTAÑA 1: INICIO (PAGOS Y ESTADO DEL SERVICIO) -->
+      <div id="tabContent-home" class="portal-tab-content">
+        <!-- TARJETA DE SALDO Y PAGO -->
+        <div class="app-card card-billing-box" style="display: flex; flex-direction: column;">
+          <div class="card-head" style="margin-bottom: 4px;">
+            <div class="card-head-title" style="color: #0284c7; font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px;">
+              <i class="fa-solid fa-wallet"></i> Tu Saldo y Pago
+            </div>
+            <span id="billingBadge" class="badge-status paid">Al Corriente</span>
+          </div>
 
-        <!-- TARJETA 1: TU PAQUETE CONTRATADO Y MÓDEM -->
+          <div class="billing-hero" style="padding: 12px 14px; margin: 4px 0 12px 0;">
+            <div class="billing-hero-left">
+              <span style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">Total a Pagar</span>
+              <div id="billingAmountLabel" class="billing-hero-amount" style="font-size: 28px;">$0.00</div>
+              <div id="billingDueLabel" class="billing-hero-date" style="font-size: 11.5px;">Día 11 de cada mes</div>
+            </div>
+          </div>
+
+          <!-- Botón único y destacado de Pago -->
+          <button class="btn-main" onclick="openPaymentChoiceModal()" style="width: 100%; padding: 13px 16px; font-size: 14.5px; font-weight: 700; border-radius: var(--radius-md); background: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%); box-shadow: 0 4px 16px rgba(14, 165, 233, 0.4); display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 12px; cursor: pointer;">
+            <i class="fa-solid fa-credit-card"></i> Pagar Servicio
+          </button>
+
+          <!-- Cuadro de CLABE Interbancaria Personalizada (Openpay SPEI Automático) -->
+          <div style="background: var(--bg-surface); border: 1.5px solid rgba(56, 189, 248, 0.35); border-radius: var(--radius-md); padding: 10px 14px; display: flex; flex-direction: column; gap: 4px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-size: 10.5px; font-weight: 800; color: #38bdf8; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 5px;">
+                <i class="fa-solid fa-bolt" style="color: #f59e0b;"></i> Tu CLABE Única SPEI:
+              </span>
+              <span style="font-size: 9.5px; background: rgba(16, 185, 129, 0.15); color: #10b981; padding: 2px 8px; border-radius: 999px; font-weight: 700; border: 1px solid rgba(16, 185, 129, 0.3);">
+                Auto 24/7
+              </span>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+              <span id="heroClabeText" class="mono" style="font-size: 14px; font-weight: 800; color: var(--text-title); letter-spacing: 0.6px; word-break: break-all;">
+                ${bankClabe}
+              </span>
+              <button class="btn-action-icon" style="width: 32px; height: 32px; font-size: 12px; flex-shrink: 0;" onclick="copyHeroClabe()" title="Copiar CLABE interbancaria">
+                <i class="fa-solid fa-copy"></i>
+              </button>
+            </div>
+            <div style="font-size: 10px; color: var(--text-muted); line-height: 1.3;">
+              Acreditación automática por Openpay sin enviar comprobante.
+            </div>
+          </div>
+        </div>
+
+        <!-- TARJETA DE PAQUETE CONTRATADO -->
         <div class="app-card card-plan-box" style="background: var(--plan-card-bg); border: 1px solid var(--border-highlight); box-shadow: var(--card-shadow); display: flex; flex-direction: column;">
           <div class="card-head" style="margin-bottom: 4px;">
             <div class="card-head-title" style="color: #0284c7; font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px;">
@@ -1483,8 +1548,8 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
             </div>
           </div>
 
-          <!-- Estado del Módem y Conexión en Vivo -->
-          <div style="background: var(--bg-surface); border: 1px solid var(--border-card); border-radius: var(--radius-md); padding: 10px 12px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 6px;">
+          <!-- Estado de la Conexión -->
+          <div style="background: var(--bg-surface); border: 1px solid var(--border-card); border-radius: var(--radius-md); padding: 10px 12px; display: flex; flex-direction: column; gap: 6px;">
             <div style="display: flex; align-items: center; justify-content: space-between;">
               <div style="display: flex; align-items: center; gap: 8px;">
                 <span id="statusPulseDot" class="status-pulse-circle"></span>
@@ -1494,21 +1559,22 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
             </div>
             <div style="font-size: 11px; color: var(--text-muted); display: flex; justify-content: space-between; align-items: center;">
               <span><i class="fa-solid fa-microchip"></i> <span id="onuSnLabel">ONU: --</span></span>
-              <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 55%;"><i class="fa-solid fa-location-dot"></i> <span id="clientAddressLabel">Francisco Villa S/N</span></span>
+              <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 55%;"><i class="fa-solid fa-location-dot"></i> <span id="clientAddressLabel">Domicilio registrado</span></span>
             </div>
+            <div id="statusFriendlySub" style="display: none;"></div>
           </div>
 
-          <!-- Pie de tarjeta: Folio y Botón de Reinicio -->
-          <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11.5px; color: var(--text-muted); margin-top: auto; padding-top: 8px; border-top: 1px solid var(--border-card);">
+          <!-- Pie: Folio del Contrato -->
+          <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11.5px; color: var(--text-muted); margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border-card);">
             <span>Folio Contrato: <strong id="contractFolio" style="color: #0284c7;">#-</strong></span>
-            <button class="btn-outline" onclick="handleRebootModem()" style="width: auto; padding: 4px 10px; font-size: 11px; border-color: rgba(56, 189, 248, 0.35); color: #38bdf8;">
-              <i class="fa-solid fa-rotate-right"></i> Reiniciar Módem
-            </button>
+            <span style="color: var(--success); font-weight: 600;"><i class="fa-solid fa-circle-check"></i> Servicio Activo</span>
             <span id="titularName" style="display: none;">-</span>
           </div>
         </div>
+      </div>
 
-        <!-- TARJETA 2: TU RED WI-FI (DOBLE BANDA - UNA SOLA CONTRASEÑA) -->
+      <!-- PESTAÑA 2: MI WI-FI -->
+      <div id="tabContent-wifi" class="portal-tab-content hidden">
         <div class="app-card card-wifi-box" style="display: flex; flex-direction: column;">
           <div class="card-head" style="margin-bottom: 4px;">
             <div class="card-head-title" style="color: #0284c7; font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px;">
@@ -1518,7 +1584,7 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
           </div>
 
           <!-- Nombres de Red (2.4 GHz y 5 GHz) -->
-          <div class="wifi-networks-grid">
+          <div class="wifi-networks-grid" style="margin: 8px 0;">
             <!-- 2.4 GHz -->
             <div class="wifi-item">
               <div class="wifi-item-info">
@@ -1545,90 +1611,37 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
           </div>
 
           <!-- Contraseña Wi-Fi ÚNICA y Compartida -->
-          <div style="background: var(--bg-surface); border: 1px solid var(--border-highlight); border-radius: var(--radius-md); padding: 10px 12px; margin-top: auto; display: flex; flex-direction: column; gap: 7px;">
+          <div style="background: var(--bg-surface); border: 1px solid var(--border-highlight); border-radius: var(--radius-md); padding: 12px 14px; margin-top: 4px; display: flex; flex-direction: column; gap: 8px;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
               <span class="wifi-label" style="color: #0284c7; font-size: 11px; display: flex; align-items: center; gap: 5px;">
-                <i class="fa-solid fa-key"></i> Contraseña Única Wi-Fi
+                <i class="fa-solid fa-key"></i> Contraseña Wi-Fi
               </span>
-              <span style="font-size: 10px; color: var(--text-muted);">Misma clave 2.4G/5G</span>
+              <span style="font-size: 10px; color: var(--text-muted);">Misma clave 2.4G / 5G</span>
             </div>
 
-            <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--bg-card); padding: 7px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-card);">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--bg-card); padding: 9px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-card);">
               <span id="wifiPassSharedLabel" class="wifi-val mono" style="font-size: 15px; letter-spacing: 1px;">Cargando...</span>
               <div class="wifi-actions">
                 <button class="btn-action-icon" style="width: 30px; height: 30px; font-size: 12px;" onclick="copyWifiPassShared()" title="Copiar contraseña"><i class="fa-solid fa-copy"></i></button>
               </div>
             </div>
 
-            <!-- Acciones Rápidas: QR 5 GHz Directo y Cambiar Clave -->
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 2px;">
-              <button class="btn-outline" onclick="openQrModal('5g')" style="padding: 7px 10px; font-size: 11.5px; border-color: rgba(168, 85, 247, 0.4); background: rgba(168, 85, 247, 0.12); color: #a855f7; font-weight: 700;">
+            <!-- Acciones Rápidas: QR Directo y Cambiar Clave -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 4px;">
+              <button class="btn-outline" onclick="openQrModal('5g')" style="padding: 10px 12px; font-size: 12px; border-color: rgba(168, 85, 247, 0.4); background: rgba(168, 85, 247, 0.12); color: #a855f7; font-weight: 700;">
                 <i class="fa-solid fa-qrcode"></i> Conectar QR
               </button>
-              <button class="btn-main" onclick="openModalWifi()" style="padding: 7px 10px; font-size: 11.5px;">
+              <button class="btn-main" onclick="openModalWifi()" style="padding: 10px 12px; font-size: 12px;">
                 <i class="fa-solid fa-pen"></i> Cambiar Clave
               </button>
             </div>
           </div>
         </div>
-
-        <!-- TARJETA 3: TU SALDO Y PAGOS INMEDIATOS -->
-        <div class="app-card card-billing-box" style="display: flex; flex-direction: column;">
-          <div class="card-head" style="margin-bottom: 4px;">
-            <div class="card-head-title" style="color: #0284c7; font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px;">
-              <i class="fa-solid fa-wallet"></i> Tu Saldo y Pagos
-            </div>
-            <span id="billingBadge" class="badge-status paid">Al Corriente</span>
-          </div>
-
-          <div class="billing-hero" style="padding: 10px 14px; margin: 4px 0 10px 0;">
-            <div class="billing-hero-left">
-              <span style="font-size: 10.5px; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">Saldo a Pagar</span>
-              <div id="billingAmountLabel" class="billing-hero-amount" style="font-size: 26px;">$0.00</div>
-              <div id="billingDueLabel" class="billing-hero-date" style="font-size: 11px;">Día 11 de cada mes</div>
-            </div>
-          </div>
-
-          <!-- Acciones de Pago Inmediatas -->
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px;">
-            <button class="btn-main" style="padding: 9px 10px; font-size: 12px; background: linear-gradient(135deg, #0284c7 0%, #1d4ed8 100%); font-weight: 700;" onclick="openModalCardPayment()">
-              <i class="fa-solid fa-credit-card"></i> Pagar Tarjeta
-            </button>
-            <button class="btn-outline" style="padding: 9px 10px; font-size: 12px; border-color: rgba(2, 132, 199, 0.4); color: var(--primary); font-weight: 700;" onclick="openModalBank()">
-              <i class="fa-solid fa-building-columns"></i> SPEI / Banco
-            </button>
-          </div>
-
-          <!-- Cuadro de CLABE Interbancaria Personalizada (Openpay SPEI Automático) -->
-          <div style="background: var(--bg-surface); border: 1.5px solid rgba(56, 189, 248, 0.35); border-radius: var(--radius-md); padding: 9px 12px; margin-top: auto; display: flex; flex-direction: column; gap: 4px;">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <span style="font-size: 10px; font-weight: 800; color: #38bdf8; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 5px;">
-                <i class="fa-solid fa-bolt" style="color: #f59e0b;"></i> Tu CLABE Única SPEI:
-              </span>
-              <span style="font-size: 9px; background: rgba(16, 185, 129, 0.15); color: #10b981; padding: 1px 7px; border-radius: 999px; font-weight: 700; border: 1px solid rgba(16, 185, 129, 0.3);">
-                Auto 24/7
-              </span>
-            </div>
-            <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
-              <span id="heroClabeText" class="mono" style="font-size: 13.5px; font-weight: 800; color: var(--text-title); letter-spacing: 0.5px; word-break: break-all;">
-                ${bankClabe}
-              </span>
-              <button class="btn-action-icon" style="width: 28px; height: 28px; font-size: 11px; flex-shrink: 0;" onclick="copyHeroClabe()" title="Copiar CLABE interbancaria">
-                <i class="fa-solid fa-copy"></i>
-              </button>
-            </div>
-            <div style="font-size: 9.5px; color: var(--text-muted); line-height: 1.2;">
-              Acreditación automática por Openpay sin enviar comprobante.
-            </div>
-          </div>
-        </div>
-
       </div>
 
-      <!-- SEGUNDA FILA: HISTORIAL DE RECIBOS Y CENTRO DE SOPORTE -->
-      <div class="dashboard-bottom-grid">
-
-        <!-- TARJETA: HISTORIAL DE RECIBOS Y FACTURAS (AMPLIO Y ORGANIZADO) -->
+      <!-- PESTAÑA 3: AYUDA Y FACTURAS -->
+      <div id="tabContent-help" class="portal-tab-content hidden">
+        <!-- TARJETA: HISTORIAL DE RECIBOS Y FACTURAS -->
         <div class="app-card card-history-box" style="display: flex; flex-direction: column;">
           <div class="card-head" style="margin-bottom: 8px;">
             <div class="card-head-title" style="color: #0284c7; font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.6px;">
@@ -1655,7 +1668,7 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
             </div>
           </div>
 
-          <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: var(--radius-sm); padding: 8px 12px; font-size: 11.5px; color: var(--text-muted); display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: auto;">
+          <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: var(--radius-sm); padding: 8px 12px; font-size: 11.5px; color: var(--text-muted); display: flex; justify-content: space-between; align-items: center; gap: 10px;">
             <span style="display: flex; align-items: center; gap: 6px;"><i class="fa-solid fa-headset" style="color: #10b981;"></i> Soporte Técnico</span>
             <span style="color: #10b981; font-weight: 700; white-space: nowrap;">Lun - Sáb · 9am a 7pm</span>
           </div>
@@ -1664,7 +1677,6 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
             <i class="fa-brands fa-whatsapp"></i> Chatear con Soporte Técnico
           </a>
         </div>
-
       </div>
 
       <!-- Footer de Marca Oficial CloudWare -->
@@ -1680,6 +1692,74 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
 
     </div>
 
+    <!-- BARRA FLOTANTE DE NAVEGACIÓN ESTILO ISLA DINÁMICA DE IPHONE -->
+    <nav id="portalDynamicNav" class="portal-dynamic-island hidden" aria-label="Navegación principal">
+      <button id="btnTabHome" class="island-tab-btn active" onclick="switchPortalTab('home')">
+        <i class="fa-solid fa-house"></i>
+        <span>Inicio</span>
+      </button>
+      <button id="btnTabWifi" class="island-tab-btn" onclick="switchPortalTab('wifi')">
+        <i class="fa-solid fa-wifi"></i>
+        <span>Mi Wi-Fi</span>
+      </button>
+      <button id="btnTabHelp" class="island-tab-btn" onclick="switchPortalTab('help')">
+        <i class="fa-solid fa-circle-question"></i>
+        <span>Ayuda</span>
+      </button>
+    </nav>
+
+  </div>
+
+  <!-- MODAL: SELECCIÓN DE MÉTODO DE PAGO AMIGABLE -->
+  <div id="modalPaymentChoice" class="modal-overlay">
+    <div class="modal-sheet" style="max-width: 440px;">
+      <div class="modal-sheet-header">
+        <div class="modal-sheet-title" style="display: flex; align-items: center; gap: 8px;">
+          <i class="fa-solid fa-wallet" style="color: #38bdf8;"></i> ¿Cómo deseas pagar?
+        </div>
+        <button class="btn-close-modal" onclick="closeModal('modalPaymentChoice')">&times;</button>
+      </div>
+
+      <p style="font-size: 13px; color: var(--text-body); margin: 0 0 16px 0; line-height: 1.4;">
+        Selecciona tu forma de pago preferida para tu mensualidad:
+      </p>
+
+      <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 8px;">
+        <!-- Opción 1: Tarjeta Inmediata -->
+        <div class="payment-choice-card" onclick="choosePaymentOption('card')" style="background: var(--bg-card); border: 1.5px solid var(--border-card); border-radius: var(--radius-md); padding: 14px 16px; display: flex; align-items: center; gap: 14px; cursor: pointer; transition: all 0.2s ease;">
+          <div style="width: 44px; height: 44px; border-radius: 12px; background: rgba(14, 165, 233, 0.15); color: #0284c7; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0;">
+            <i class="fa-solid fa-credit-card"></i>
+          </div>
+          <div style="flex: 1; min-width: 0;">
+            <div style="font-size: 14.5px; font-weight: 700; color: var(--text-title); display: flex; align-items: center; gap: 6px;">
+              Tarjeta Débito / Crédito
+              <span style="font-size: 10px; background: rgba(16, 185, 129, 0.15); color: #10b981; padding: 2px 7px; border-radius: 999px; font-weight: 700;">Inmediato</span>
+            </div>
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+              Paga en línea seguro con Visa, Mastercard o Carnet vía Openpay.
+            </div>
+          </div>
+          <i class="fa-solid fa-chevron-right" style="color: var(--text-muted); font-size: 13px;"></i>
+        </div>
+
+        <!-- Opción 2: Transferencia SPEI -->
+        <div class="payment-choice-card" onclick="choosePaymentOption('spei')" style="background: var(--bg-card); border: 1.5px solid var(--border-card); border-radius: var(--radius-md); padding: 14px 16px; display: flex; align-items: center; gap: 14px; cursor: pointer; transition: all 0.2s ease;">
+          <div style="width: 44px; height: 44px; border-radius: 12px; background: rgba(16, 185, 129, 0.15); color: #10b981; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0;">
+            <i class="fa-solid fa-building-columns"></i>
+          </div>
+          <div style="flex: 1; min-width: 0;">
+            <div style="font-size: 14.5px; font-weight: 700; color: var(--text-title); display: flex; align-items: center; gap: 6px;">
+              Transferencia SPEI
+              <span style="font-size: 10px; background: rgba(56, 189, 248, 0.15); color: #38bdf8; padding: 2px 7px; border-radius: 999px; font-weight: 700;">CLABE Única</span>
+            </div>
+            <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+              Transfiere desde cualquier banco con tu CLABE asignada 24/7.
+            </div>
+          </div>
+          <i class="fa-solid fa-chevron-right" style="color: var(--text-muted); font-size: 13px;"></i>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- MODAL: CAMBIAR CONTRASEÑA WI-FI -->
@@ -2305,6 +2385,8 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
       document.getElementById('viewRegister').classList.add('hidden');
       document.getElementById('viewForgot').classList.add('hidden');
       document.getElementById('viewDashboard').classList.add('hidden');
+      const dynamicNav = document.getElementById('portalDynamicNav');
+      if (dynamicNav) dynamicNav.classList.add('hidden');
     }
 
     function showLoading() {
@@ -2628,6 +2710,8 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
 
         hideAllViews();
         document.getElementById('viewDashboard').classList.remove('hidden');
+        const dynamicNav1 = document.getElementById('portalDynamicNav');
+        if (dynamicNav1) dynamicNav1.classList.remove('hidden');
         document.getElementById('btnLogout').classList.remove('hidden');
         const btnChangePass1 = document.getElementById('btnChangePassword');
         if (btnChangePass1) btnChangePass1.classList.remove('hidden');
@@ -2649,6 +2733,8 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
             }
             hideAllViews();
             document.getElementById('viewDashboard').classList.remove('hidden');
+            const dynamicNav2 = document.getElementById('portalDynamicNav');
+            if (dynamicNav2) dynamicNav2.classList.remove('hidden');
             document.getElementById('btnLogout').classList.remove('hidden');
             const btnChangePass2 = document.getElementById('btnChangePassword');
             if (btnChangePass2) btnChangePass2.classList.remove('hidden');
@@ -3378,6 +3464,44 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
 
     function toggleQrBand() {
       openQrModal(currentQrBand === '5g' ? '24' : '5g');
+    }
+
+    function switchPortalTab(tabName) {
+      const tabs = ['home', 'wifi', 'help'];
+      tabs.forEach(t => {
+        const content = document.getElementById('tabContent-' + t);
+        const btn = document.getElementById('btnTab' + t.charAt(0).toUpperCase() + t.slice(1));
+        if (content) {
+          if (t === tabName) {
+            content.classList.remove('hidden');
+          } else {
+            content.classList.add('hidden');
+          }
+        }
+        if (btn) {
+          if (t === tabName) {
+            btn.classList.add('active');
+          } else {
+            btn.classList.remove('active');
+          }
+        }
+      });
+      try {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } catch {}
+    }
+
+    function openPaymentChoiceModal() {
+      openModalWithState('modalPaymentChoice');
+    }
+
+    function choosePaymentOption(type) {
+      closeModal('modalPaymentChoice');
+      if (type === 'card') {
+        openModalCardPayment();
+      } else if (type === 'spei') {
+        openModalBank();
+      }
     }
 
     function openModalBank() {
