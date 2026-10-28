@@ -1575,7 +1575,8 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
 
       <!-- PESTAÑA 2: MI WI-FI -->
       <div id="tabContent-wifi" class="portal-tab-content hidden">
-        <div class="app-card card-wifi-box" style="display: flex; flex-direction: column;">
+        <!-- ESTADO 1: Wi-Fi Activo y Verificado -->
+        <div id="boxWifiActive" class="app-card card-wifi-box" style="display: flex; flex-direction: column;">
           <div class="card-head" style="margin-bottom: 4px;">
             <div class="card-head-title" style="color: #0284c7; font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px;">
               <i class="fa-solid fa-wifi"></i> Tu Red Wi-Fi
@@ -1636,6 +1637,20 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
               </button>
             </div>
           </div>
+        </div>
+
+        <!-- ESTADO 2: Pendiente de Sincronizar (No se inventa información falsa) -->
+        <div id="boxWifiPending" class="app-card card-wifi-box" style="display: none; flex-direction: column; text-align: center; padding: 26px 20px; align-items: center; gap: 12px;">
+          <div style="width: 52px; height: 52px; border-radius: 50%; background: rgba(56, 189, 248, 0.12); color: #38bdf8; display: flex; align-items: center; justify-content: center; font-size: 22px;">
+            <i class="fa-solid fa-satellite-dish"></i>
+          </div>
+          <div style="font-weight: 700; font-size: 15px; color: var(--text-heading);">Red Wi-Fi en Proceso de Registro</div>
+          <div style="font-size: 12.5px; color: var(--text-muted); max-width: 340px; line-height: 1.45;">
+            Tu servicio de fibra óptica está activo. Los datos de acceso inalámbrico aún no están sincronizados en el portal. Puedes configurar tu nombre y contraseña aquí o consultar a soporte.
+          </div>
+          <button class="btn-main" onclick="openModalWifi()" style="padding: 11px 20px; font-size: 13px; margin-top: 4px;">
+            <i class="fa-solid fa-pen"></i> Configurar Nombre y Clave Wi-Fi
+          </button>
         </div>
       </div>
 
@@ -2965,43 +2980,59 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
 
       // Wi-Fi Real Dual Band Simplificado (Una Sola Contraseña Compartida)
       const wifi = data.wifi || {};
-      const isUnified = wifi.isUnified !== false && (!wifi.ssid5g || (wifi.ssid24 && wifi.ssid5g && wifi.ssid24.trim().toLowerCase() === wifi.ssid5g.trim().toLowerCase()));
+      const hasRealWifi = (wifi.hasWifiInfo !== false) && !!(wifi.ssid24 || wifi.ssid || wifi.ssid5g);
+      const boxActive = document.getElementById('boxWifiActive');
+      const boxPending = document.getElementById('boxWifiPending');
 
-      realWifiSsid24 = wifi.ssid24 || ('CloudWare_' + c.id_servicio);
-      realWifiPassword24 = wifi.password24 || wifi.password || '********';
-      realWifiSsid5g = (!isUnified && wifi.ssid5g) ? wifi.ssid5g : '';
-      realWifiPassword5g = wifi.password5g || realWifiPassword24;
-
-      const tag24El = document.getElementById('wifiBandTag24');
-      const sub24El = document.getElementById('wifiBandSub24');
-      const box5g = document.getElementById('boxWifi5g');
-
-      if (isUnified) {
-        // Red Dual Unificada (2.4G & 5G bajo el mismo nombre)
-        if (tag24El) {
-          tag24El.className = 'wifi-band-tag tag-5g';
-          tag24El.innerHTML = '<i class="fa-solid fa-wifi"></i> 2.4G & 5G';
-        }
-        if (sub24El) sub24El.innerText = 'Red Dual Inteligente (Band Steering)';
-        if (box5g) box5g.style.display = 'none';
-        document.getElementById('wifiSsid24Label').innerText = realWifiSsid24;
+      if (!hasRealWifi) {
+        if (boxActive) boxActive.style.display = 'none';
+        if (boxPending) boxPending.style.display = 'flex';
+        realWifiSsid24 = '';
+        realWifiPassword24 = '';
+        realWifiSsid5g = '';
+        realWifiPassword5g = '';
       } else {
-        // Redes divididas con nombres distintos
-        if (tag24El) {
-          tag24El.className = 'wifi-band-tag tag-24g';
-          tag24El.innerHTML = '<i class="fa-solid fa-tower-broadcast"></i> 2.4 GHz';
-        }
-        if (sub24El) sub24El.innerText = 'Mayor cobertura';
-        document.getElementById('wifiSsid24Label').innerText = realWifiSsid24;
+        if (boxPending) boxPending.style.display = 'none';
+        if (boxActive) boxActive.style.display = 'flex';
 
-        if (box5g) {
-          box5g.style.display = 'flex';
-          document.getElementById('wifiSsid5gLabel').innerText = realWifiSsid5g;
+        const isUnified = wifi.isUnified !== false && (!wifi.ssid5g || (wifi.ssid24 && wifi.ssid5g && wifi.ssid24.trim().toLowerCase() === wifi.ssid5g.trim().toLowerCase()));
+
+        realWifiSsid24 = wifi.ssid24 || wifi.ssid || '';
+        realWifiPassword24 = wifi.password24 || wifi.password || '';
+        realWifiSsid5g = (!isUnified && wifi.ssid5g) ? wifi.ssid5g : '';
+        realWifiPassword5g = wifi.password5g || realWifiPassword24;
+
+        const tag24El = document.getElementById('wifiBandTag24');
+        const sub24El = document.getElementById('wifiBandSub24');
+        const box5g = document.getElementById('boxWifi5g');
+
+        if (isUnified) {
+          // Red Dual Unificada (2.4G & 5G bajo el mismo nombre)
+          if (tag24El) {
+            tag24El.className = 'wifi-band-tag tag-5g';
+            tag24El.innerHTML = '<i class="fa-solid fa-wifi"></i> 2.4G & 5G';
+          }
+          if (sub24El) sub24El.innerText = 'Red Dual Inteligente (Band Steering)';
+          if (box5g) box5g.style.display = 'none';
+          document.getElementById('wifiSsid24Label').innerText = realWifiSsid24;
+        } else {
+          // Redes divididas con nombres distintos
+          if (tag24El) {
+            tag24El.className = 'wifi-band-tag tag-24g';
+            tag24El.innerHTML = '<i class="fa-solid fa-tower-broadcast"></i> 2.4 GHz';
+          }
+          if (sub24El) sub24El.innerText = 'Mayor cobertura';
+          document.getElementById('wifiSsid24Label').innerText = realWifiSsid24;
+
+          if (box5g) {
+            box5g.style.display = 'flex';
+            document.getElementById('wifiSsid5gLabel').innerText = realWifiSsid5g;
+          }
         }
+
+        const sharedPass = realWifiPassword24 || realWifiPassword5g || 'No registrada';
+        document.getElementById('wifiPassSharedLabel').innerText = sharedPass;
       }
-
-      const sharedPass = realWifiPassword24 || realWifiPassword5g;
-      document.getElementById('wifiPassSharedLabel').innerText = sharedPass;
 
       // Facturación y Saldo
       currentClientPlanPrice = Number(c.precio_plan || 250);
@@ -3321,7 +3352,7 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
     }
 
     function openModalWifi() {
-      document.getElementById('modalSsid24Display').innerText = realWifiSsid24;
+      document.getElementById('modalSsid24Display').innerText = realWifiSsid24 || 'Pendiente de sincronizar';
       const m5Row = document.getElementById('modalSsid5gRow');
       const m5Display = document.getElementById('modalSsid5gDisplay');
       if (realWifiSsid5g) {

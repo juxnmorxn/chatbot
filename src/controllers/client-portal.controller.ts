@@ -1059,15 +1059,16 @@ self.addEventListener('fetch', (event) => {
         }
       }
 
-      // Si la OLT no traía SSIDs configurados todavía, fallback con marca de servicio
-      const ispName = SettingsService.get('ISP_NAME', 'ISP_NAME', config.isp.name || 'CloudWareMx');
-      if (!wifiInfo.ssid24 && !wifiInfo.ssid5g) {
-        wifiInfo.ssid24 = `${ispName}-${client.id_servicio}`;
-        wifiInfo.password24 = onuRecord?.sn ? onuRecord.sn.slice(-8) : '12345678';
-        wifiInfo.ssid = wifiInfo.ssid24;
-        wifiInfo.password = wifiInfo.password24;
-        wifiInfo.isUnified = true;
-        wifiInfo.has5g = true;
+      // Validar si SmartOLT o la base de datos realmente tienen información Wi-Fi verificada
+      const hasRealWifi = !!(wifiInfo.ssid24 || wifiInfo.ssid5g || wifiInfo.ssid);
+      wifiInfo.hasWifiInfo = hasRealWifi;
+      if (!hasRealWifi) {
+        wifiInfo.ssid24 = '';
+        wifiInfo.password24 = '';
+        wifiInfo.ssid5g = '';
+        wifiInfo.password5g = '';
+        wifiInfo.ssid = '';
+        wifiInfo.password = '';
       }
 
       const wifi = wifiInfo;
