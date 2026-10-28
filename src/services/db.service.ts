@@ -1,6 +1,6 @@
 import { getDbClient } from '../database/db';
 import { Logger } from '../utils/logger';
-import { normalizeText, computeNameMatchScore, cleanPersonName, generateSearchFragments, phoneticNormalize } from '../utils/fuzzy-matcher';
+import { normalizeText, computeNameMatchScore, cleanPersonName, generateSearchFragments, phoneticNormalize, extractFolioAndCleanName, candidateMatchesFolio, candidateMatchesServiceSuffix } from '../utils/fuzzy-matcher';
 
 const logger = new Logger('DbService');
 
@@ -44,6 +44,45 @@ export interface WisphubClientRecord {
   fecha_corte?: string | null;
   raw_data?: string;
   updated_at?: string;
+}
+
+/**
+ * Extrae de forma limpia el Folio de Servicio del cliente (ej: de "1311-Roberto Carlos", extrae "1311").
+ * En este sistema, el folio es siempre el número operativo visible para técnicos y usuarios,
+ * NO el id_servicio autoincrementable interno de WispHub.
+ */
+export function extractFolioServicio(item: {
+  servicio?: string | null;
+  nombre?: string | null;
+  name?: string | null;
+  id_servicio?: number | string | null;
+  unique_external_id?: string | null;
+} | null | undefined): string {
+  if (!item) return '';
+  // 1. Extraer del campo 'servicio' de WispHub (ej: "1311-Roberto Carlos", "59-Sta-Maria...")
+  if (item.servicio) {
+    const m = String(item.servicio).trim().match(/^0*(\d+)/);
+    if (m && m[1]) return m[1];
+  }
+  // 2. Extraer del campo 'name' de SmartOLT (ej: "1311-Roberto Carlos")
+  if (item.name) {
+    const m = String(item.name).trim().match(/^0*(\d+)/);
+    if (m && m[1]) return m[1];
+  }
+  // 3. Extraer del campo 'nombre' si tiene prefijo numérico
+  if (item.nombre) {
+    const m = String(item.nombre).trim().match(/^0*(\d+)/);
+    if (m && m[1]) return m[1];
+  }
+  // 4. Si tiene unique_external_id numérico
+  if (item.unique_external_id && /^\d+$/.test(String(item.unique_external_id).trim())) {
+    return String(item.unique_external_id).trim();
+  }
+  // 5. Fallback a id_servicio si no tiene prefijo de folio
+  if (item.id_servicio) {
+    return String(item.id_servicio);
+  }
+  return '';
 }
 
 export interface AuditIpItem {
@@ -626,6 +665,9 @@ export class DbService {
 
     try {
       const client = getDbClient();
+      const isNum = /^\d+$/.test(cleanId);
+      const padded = isNum ? cleanId.padStart(4, '0') : cleanId;
+
       const res = await client.execute({
         sql: `
           SELECT * FROM smartolt_onus 
@@ -634,9 +676,13 @@ export class DbService {
              OR sn = ? 
              OR sn LIKE ?
              OR ip_address = ?
+             ${isNum ? `OR name LIKE ? OR name LIKE ? OR name LIKE ? OR name LIKE ?` : ''}
           LIMIT 1
         `,
-        args: [cleanId, cleanSn, cleanId.toUpperCase(), `%${cleanSn.slice(-8)}%`, cleanId],
+        args: isNum ? [
+          cleanId, cleanSn, cleanId.toUpperCase(), `%${cleanSn.slice(-8)}%`, cleanId,
+          `${cleanId}-%`, `${cleanId} - %`, `${padded}-%`, `${padded} - %`,
+        ] : [cleanId, cleanSn, cleanId.toUpperCase(), `%${cleanSn.slice(-8)}%`, cleanId],
       });
 
       if (res.rows.length === 0) return null;
@@ -1039,13 +1085,33 @@ export class DbService {
         const rawId = String(serviceId).replace(/\D/g, '');
         const numericId = rawId ? Number(rawId) : NaN;
         if (!isNaN(numericId) && numericId > 0) {
-          const res = await client.execute({
-            sql: `SELECT id_servicio, telefono, telefonos_adicionales FROM wisphub_clients WHERE id_servicio = ? LIMIT 1`,
-            args: [numericId],
+          const padded = String(numericId).padStart(4, '0');
+          // Prioridad 1: Buscar por Folio de Servicio (prefijo en 'servicio' o 'nombre')
+          const folioRes = await client.execute({
+            sql: `SELECT id_servicio, telefono, telefonos_adicionales FROM wisphub_clients 
+                  WHERE servicio LIKE ? OR servicio LIKE ? 
+                     OR nombre LIKE ? OR nombre LIKE ? 
+                     OR servicio LIKE ? OR nombre LIKE ? 
+                  LIMIT 1`,
+            args: [
+              `${numericId}-%`, `${numericId} - %`,
+              `${numericId}-%`, `${numericId} - %`,
+              `${padded}-%`, `${padded}-%`,
+            ],
           });
-          if (res.rows.length > 0) {
-            targetRow = res.rows[0];
-            targetServiceId = numericId;
+          if (folioRes.rows.length > 0) {
+            targetRow = folioRes.rows[0];
+            targetServiceId = Number(folioRes.rows[0].id_servicio);
+          } else {
+            // Fallback: Buscar por id_servicio directo si no existió como folio
+            const res = await client.execute({
+              sql: `SELECT id_servicio, telefono, telefonos_adicionales FROM wisphub_clients WHERE id_servicio = ? LIMIT 1`,
+              args: [numericId],
+            });
+            if (res.rows.length > 0) {
+              targetRow = res.rows[0];
+              targetServiceId = numericId;
+            }
           }
         }
       }
@@ -1909,64 +1975,148 @@ export class DbService {
     const rawQuery = (query || '').trim();
     if (!rawQuery) return [];
 
-    const cleanedQuery = cleanPersonName(rawQuery);
+    const extracted = extractFolioAndCleanName(rawQuery);
+    const cleanedQuery = extracted.cleanName;
+    const queryFolio = extracted.folio;
+    const queryServiceSuffix = extracted.serviceSuffix;
     const normQuery = normalizeText(cleanedQuery || rawQuery);
-    if (!normQuery) return [];
+    if (!normQuery && !queryFolio) return [];
 
     try {
       const client = getDbClient();
+
+      // Si se proporcionó un folio numérico en la consulta (ej: "942", "942-Alberto", "970-Alberto")
+      let folioSqlClause = '';
+      const folioArgs: string[] = [];
+      if (queryFolio) {
+        folioSqlClause = ' OR name LIKE ? OR name LIKE ? OR unique_external_id = ? OR unique_external_id LIKE ?';
+        folioArgs.push(`%${queryFolio}%`, `${queryFolio}-%`, queryFolio, `%${queryFolio}`);
+      }
 
       // 1. Búsqueda directa por nombre, folio, número de serie, IP o teléfono en SmartOLT
       const directMatch = await client.execute({
         sql: `
           SELECT * FROM smartolt_onus 
-          WHERE sn LIKE ? OR phone LIKE ? OR unique_external_id = ? OR name LIKE ? OR name_normalized LIKE ? OR ip_address LIKE ?
-          LIMIT 8
+          WHERE sn LIKE ? OR phone LIKE ? OR unique_external_id = ? OR name LIKE ? OR name_normalized LIKE ? OR ip_address LIKE ?${folioSqlClause}
+          LIMIT 12
         `,
-        args: [`%${normQuery}%`, `%${normQuery}%`, rawQuery, `%${rawQuery}%`, `%${normQuery}%`, `%${rawQuery}%`],
+        args: [`%${normQuery}%`, `%${normQuery}%`, rawQuery, `%${rawQuery}%`, `%${normQuery}%`, `%${rawQuery}%`, ...folioArgs],
       });
 
       if (directMatch.rows.length > 0) {
-        return directMatch.rows.map((row: any) => ({
-          unique_external_id: String(row.unique_external_id),
-          sn: String(row.sn || ''),
-          name: String(row.name || ''),
-          name_normalized: String(row.name_normalized || ''),
-          phone: String(row.phone || ''),
-          address: String(row.address || ''),
-          zone_name: String(row.zone_name || ''),
-          speed_profile: String(row.speed_profile || ''),
-          olt_name: String(row.olt_name || ''),
-          ip_address: String(row.ip_address || row.ip || ''),
-          matchScore: 100,
-        }));
+        const scoredDirect = directMatch.rows.map((row: any) => {
+          let score = 100;
+          const rName = String(row.name || '');
+          const rUid = String(row.unique_external_id || '');
+
+          if (cleanedQuery) {
+            const nameScore = computeNameMatchScore(cleanedQuery, rName);
+            if (nameScore < 40) {
+              score -= 60; // Penalizar fuertemente si el nombre del cliente no coincide
+            } else {
+              score += Math.round(nameScore * 0.25);
+            }
+          }
+
+          if (queryFolio) {
+            const matchesFolio = candidateMatchesFolio(rName, queryFolio) || candidateMatchesFolio(rUid, queryFolio);
+            if (matchesFolio) {
+              score += 30; // Bonificación alta para coincidencia de folio exacto
+            } else if (cleanedQuery) {
+              score -= 30; // Mismo titular pero OTRO servicio/folio
+            }
+          }
+
+          if (queryServiceSuffix) {
+            const matchesSuffix = candidateMatchesServiceSuffix(rName, queryServiceSuffix);
+            if (matchesSuffix) score += 15;
+            else score -= 25;
+          }
+
+          return {
+            unique_external_id: String(row.unique_external_id),
+            sn: String(row.sn || ''),
+            name: rName,
+            name_normalized: String(row.name_normalized || ''),
+            phone: String(row.phone || ''),
+            address: String(row.address || ''),
+            zone_name: String(row.zone_name || ''),
+            speed_profile: String(row.speed_profile || ''),
+            olt_name: String(row.olt_name || ''),
+            ip_address: String(row.ip_address || row.ip || ''),
+            matchScore: score,
+          };
+        });
+
+        // Filtrar candidatos irrelevantes cuyo nombre o folio no coinciden
+        const validDirect = scoredDirect.filter(r => r.matchScore >= 50);
+        validDirect.sort((a, b) => b.matchScore - a.matchScore);
+
+        // Si se especificó folio y hay servicios que coincidieron exactamente con ese folio (score >= 120),
+        // devolver únicamente los que coinciden con el folio para no mezclar servicios del mismo cliente
+        if (queryFolio && validDirect.some(r => r.matchScore >= 120)) {
+          return validDirect.filter(r => r.matchScore >= 120).slice(0, limit);
+        }
+
+        return validDirect.slice(0, limit);
       }
 
-      // 1.1 Búsqueda directa en WispHub por nombre, folio (id_servicio), serie o IP
+
+      // 1.1 Búsqueda directa en WispHub por nombre, folio (id_servicio), serie, servicio o IP
       const whDirectMatch = await client.execute({
         sql: `
           SELECT * FROM wisphub_clients 
-          WHERE nombre LIKE ? OR nombre_normalized LIKE ? OR sn_onu LIKE ? OR ip LIKE ? OR CAST(id_servicio AS TEXT) LIKE ? OR telefono LIKE ?
-          LIMIT 8
+          WHERE nombre LIKE ? OR nombre_normalized LIKE ? OR sn_onu LIKE ? OR ip LIKE ? OR CAST(id_servicio AS TEXT) LIKE ? OR telefono LIKE ? OR servicio LIKE ?
+          LIMIT 12
         `,
-        args: [`%${rawQuery}%`, `%${normQuery}%`, `%${rawQuery}%`, `%${rawQuery}%`, `%${rawQuery}%`, `%${rawQuery}%`],
+        args: [`%${rawQuery}%`, `%${normQuery}%`, `%${rawQuery}%`, `%${rawQuery}%`, `%${rawQuery}%`, `%${rawQuery}%`, `%${queryFolio || rawQuery}%`],
       });
 
       if (whDirectMatch.rows.length > 0) {
-        return whDirectMatch.rows.map((r: any) => ({
-          unique_external_id: String(r.id_servicio),
-          sn: String(r.sn_onu || ''),
-          name: String(r.nombre || ''),
-          name_normalized: String(r.nombre_normalized || ''),
-          phone: String(r.telefono || ''),
-          address: String(r.direccion || ''),
-          zone_name: String(r.servicio || ''),
-          speed_profile: String(r.plan_internet || ''),
-          olt_name: 'WispHub',
-          ip_address: String(r.ip || ''),
-          matchScore: 95,
-        }));
+        const whScored = whDirectMatch.rows.map((r: any) => {
+          let score = 95;
+          const sText = String(r.servicio || r.nombre || '');
+          const sId = String(r.id_servicio || '');
+
+          if (queryFolio) {
+            const matchesFolio = candidateMatchesFolio(sText, queryFolio) || candidateMatchesFolio(sId, queryFolio);
+            if (matchesFolio) {
+              score += 25;
+            } else if (normQuery) {
+              score -= 30;
+            }
+          }
+
+          if (queryServiceSuffix) {
+            const matchesSuffix = candidateMatchesServiceSuffix(sText, queryServiceSuffix);
+            if (matchesSuffix) score += 15;
+            else score -= 25;
+          }
+
+          return {
+            unique_external_id: String(r.id_servicio),
+            sn: String(r.sn_onu || ''),
+            name: String(r.nombre || ''),
+            name_normalized: String(r.nombre_normalized || ''),
+            phone: String(r.telefono || ''),
+            address: String(r.direccion || ''),
+            zone_name: String(r.servicio || ''),
+            speed_profile: String(r.plan_internet || ''),
+            olt_name: 'WispHub',
+            ip_address: String(r.ip || ''),
+            matchScore: score,
+          };
+        });
+
+        whScored.sort((a, b) => b.matchScore - a.matchScore);
+
+        if (queryFolio && whScored.some(r => r.matchScore > 100)) {
+          return whScored.filter(r => r.matchScore > 100).slice(0, limit);
+        }
+
+        return whScored.slice(0, limit);
       }
+
 
       // 1.1 Si la consulta es un teléfono (10 o más dígitos), buscar también en WispHub (teléfono principal o adicionales)
       const digits = rawQuery.replace(/\D/g, '');
@@ -2095,21 +2245,88 @@ export class DbService {
     const rawQuery = (query || '').trim();
     if (!rawQuery) return [];
 
-    const cleanedQuery = cleanPersonName(rawQuery);
+    const extracted = extractFolioAndCleanName(rawQuery);
+    const cleanedQuery = extracted.cleanName;
+    const queryFolio = extracted.folio;
+    const queryServiceSuffix = extracted.serviceSuffix;
     const normQuery = normalizeText(cleanedQuery || rawQuery);
-    if (!normQuery) return [];
+    if (!normQuery && !queryFolio) return [];
 
     try {
       const client = getDbClient();
 
-      // 1. Búsqueda directa por ID de servicio, teléfono, SN o IP
+      // 1. Prioridad: Si se especificó un Folio en la consulta (ej: "1311", "942", "942-Alberto", "970-Alberto")
+      if (queryFolio) {
+        const idNum = queryFolio;
+        const padded = idNum.padStart(4, '0');
+        const folioRes = await client.execute({
+          sql: `
+            SELECT * FROM wisphub_clients 
+            WHERE servicio LIKE ? OR servicio LIKE ? 
+               OR servicio LIKE ? OR servicio LIKE ? 
+               OR servicio LIKE ? OR servicio LIKE ?
+               OR nombre LIKE ? OR nombre LIKE ? 
+               OR nombre LIKE ? OR nombre LIKE ?
+               OR CAST(id_servicio AS TEXT) = ?
+            LIMIT 8
+          `,
+          args: [
+            `${idNum}-%`, `${idNum} - %`, `%${idNum}%`,
+            `${padded}-%`, `${padded} - %`, `%${padded}%`,
+            `${idNum}-%`, `${idNum} - %`,
+            `${padded}-%`, `${padded} - %`,
+            idNum,
+          ],
+        });
+
+        if (folioRes.rows.length > 0) {
+          const scoredFolio = folioRes.rows.map((row: any) => {
+            let score = 100;
+            const sText = String(row.servicio || row.nombre || '');
+            if (candidateMatchesFolio(sText, queryFolio) || String(row.id_servicio) === queryFolio) {
+              score += 25;
+            }
+            if (queryServiceSuffix) {
+              if (candidateMatchesServiceSuffix(sText, queryServiceSuffix)) score += 15;
+              else score -= 25;
+            }
+            if (cleanedQuery) {
+              const nameScore = computeNameMatchScore(cleanedQuery, String(row.nombre || ''));
+              score += Math.round(nameScore * 0.2);
+            }
+            return {
+              id_servicio: Number(row.id_servicio),
+              nombre: String(row.nombre || ''),
+              nombre_normalized: String(row.nombre_normalized || ''),
+              servicio: String(row.servicio || ''),
+              ip: String(row.ip || ''),
+              estado: String(row.estado || 'Activo'),
+              estado_facturas: String(row.estado_facturas || 'Pagadas'),
+              precio_plan: String(row.precio_plan || '0'),
+              saldo: String(row.saldo || '0'),
+              plan_internet: String(row.plan_internet || ''),
+              router: String(row.router || ''),
+              sn_onu: String(row.sn_onu || ''),
+              telefono: String(row.telefono || ''),
+              direccion: String(row.direccion || ''),
+              updated_at: String(row.updated_at || ''),
+              matchScore: score,
+            };
+          });
+
+          scoredFolio.sort((a, b) => b.matchScore - a.matchScore);
+          return scoredFolio.slice(0, limit);
+        }
+      }
+
+      // 1b. Búsqueda directa por teléfono, SN, IP o ID interno (como fallback)
       const directMatch = await client.execute({
         sql: `
           SELECT * FROM wisphub_clients 
-          WHERE id_servicio = ? OR telefono LIKE ? OR sn_onu LIKE ? OR ip = ?
-          LIMIT 3
+          WHERE telefono LIKE ? OR sn_onu LIKE ? OR ip = ? OR id_servicio = ?
+          LIMIT 8
         `,
-        args: [rawQuery, `%${normQuery}%`, `%${normQuery}%`, rawQuery],
+        args: [`%${normQuery}%`, `%${normQuery}%`, rawQuery, /^\d+$/.test(rawQuery) ? Number(rawQuery) : -1],
       });
 
       if (directMatch.rows.length > 0) {
@@ -2132,6 +2349,7 @@ export class DbService {
           matchScore: 100,
         }));
       }
+
 
       // 2. Extraer palabras clave de búsqueda
       const STOP_QUERY = new Set(['de', 'del', 'la', 'las', 'el', 'los', 'y', 'en', 'casa', 'soy', 'yo', 'me', 'llamo', 'mi', 'nombre', 'es', 'hola']);
@@ -2257,29 +2475,42 @@ export class DbService {
         if (res.rows.length > 0) return res.rows[0] as any;
       }
 
-      // 2. Si tenemos número de contrato / ID numérico (estrictamente numérico o con prefijo)
+      // 2. Si tenemos número de contrato / Folio numérico (estrictamente numérico o con prefijo)
       if (id && !String(id).startsWith('HWTC') && !String(id).startsWith('ONU-') && !String(id).startsWith('ZTEG')) {
         const idStr = String(id).trim();
         // Solo extraer si es numérico
         if (/^\d+$/.test(idStr)) {
+          const idNum = idStr;
+          const padded = idNum.padStart(4, '0');
+
+          // PRIORIDAD 1: Buscar por Folio de Servicio (prefijo en 'servicio' o 'nombre')
+          const prefixRes = await client.execute({
+            sql: `SELECT * FROM wisphub_clients 
+                  WHERE servicio LIKE ? OR servicio LIKE ? 
+                     OR nombre LIKE ? OR nombre LIKE ? 
+                     OR servicio LIKE ? OR servicio LIKE ?
+                     OR nombre LIKE ? OR nombre LIKE ?
+                  LIMIT 10`,
+            args: [
+              `${idNum}-%`, `${idNum} - %`,
+              `${idNum}-%`, `${idNum} - %`,
+              `${padded}-%`, `${padded} - %`,
+              `${padded}-%`, `${padded} - %`,
+            ],
+          });
+          for (const row of prefixRes.rows) {
+            if (!name || computeNameMatchScore(name, String(row.nombre || '')) >= 40) {
+              return row as any;
+            }
+          }
+
+          // PRIORIDAD 2 (Fallback): Buscar por id_servicio directo sólo si no coincidió por folio
           const res = await client.execute({
             sql: `SELECT * FROM wisphub_clients WHERE id_servicio = ? LIMIT 1`,
             args: [Number(idStr)],
           });
           if (res.rows.length > 0) {
             const row = res.rows[0];
-            if (!name || computeNameMatchScore(name, String(row.nombre || '')) >= 40) {
-              return row as any;
-            }
-          }
-
-          // Si no coincidió por id_servicio directo, buscar por prefijo de contrato en el nombre/servicio (ej: "0696" o "696")
-          const padded = idStr.padStart(4, '0');
-          const prefixRes = await client.execute({
-            sql: `SELECT * FROM wisphub_clients WHERE nombre LIKE ? OR nombre LIKE ? OR servicio LIKE ? LIMIT 10`,
-            args: [`%${idStr}%`, `%${padded}%`, `%${idStr}%`],
-          });
-          for (const row of prefixRes.rows) {
             if (!name || computeNameMatchScore(name, String(row.nombre || '')) >= 40) {
               return row as any;
             }

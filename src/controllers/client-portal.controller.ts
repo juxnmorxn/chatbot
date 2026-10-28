@@ -9,8 +9,9 @@ import { config } from '../config/env';
 import { Logger } from '../utils/logger';
 import { hashPassword, verifyPassword, generateClientPortalToken, verifyClientPortalToken } from '../utils/auth';
 import { cleanPersonName, normalizeText, computeNameMatchScore } from '../utils/fuzzy-matcher';
-import { DbService } from '../services/db.service';
+import { DbService, extractFolioServicio } from '../services/db.service';
 import { getCloudWareSphereSvg } from '../views/brand';
+import { OpenpayService } from '../services/openpay.service';
 
 const logger = new Logger('ClientPortalController');
 
@@ -766,6 +767,7 @@ self.addEventListener('fetch', (event) => {
       const requestedId = (req.query.id || req.query.phone || req.query.p || '') as string;
 
       let services: any[] = [];
+      const db = getDbClient();
 
       // 1. Obtener los servicios legítimos del titular autenticado
       if (verifiedPhone) {
@@ -773,7 +775,16 @@ self.addEventListener('fetch', (event) => {
       } else if (requestedId) {
         services = await ClientPortalController.findClientsByIdentifier(requestedId);
       } else if (requestedServiceId) {
-        services = await ClientPortalController.findClientsByIdentifier(requestedServiceId);
+        if (/^\d+$/.test(requestedServiceId)) {
+          const byId = await db.execute({
+            sql: `SELECT * FROM wisphub_clients WHERE id_servicio = ? LIMIT 1`,
+            args: [Number(requestedServiceId)],
+          });
+          if (byId.rows.length > 0) services = byId.rows as any[];
+        }
+        if (services.length === 0) {
+          services = await ClientPortalController.findClientsByIdentifier(requestedServiceId);
+        }
       }
 
       // Si no se encontraron contratos directamente por teléfono, buscar por nombre del token/cuenta
@@ -800,12 +811,19 @@ self.addEventListener('fetch', (event) => {
         if (exact) {
           client = exact;
         } else if (!verifiedPhone) {
-          const directMatch = await ClientPortalController.findClientsByIdentifier(requestedServiceId);
-          if (directMatch && directMatch.length > 0) client = directMatch[0];
+          if (/^\d+$/.test(requestedServiceId)) {
+            const byId = await db.execute({
+              sql: `SELECT * FROM wisphub_clients WHERE id_servicio = ? LIMIT 1`,
+              args: [Number(requestedServiceId)],
+            });
+            if (byId.rows.length > 0) client = byId.rows[0];
+          }
+          if (!client) {
+            const directMatch = await ClientPortalController.findClientsByIdentifier(requestedServiceId);
+            if (directMatch && directMatch.length > 0) client = directMatch[0];
+          }
         }
       }
-
-      const db = getDbClient();
 
       // Obtener lista completa de ONUs en SmartOLT para asociar nombres reales a cada servicio
       const allOnusRes = await db.execute('SELECT unique_external_id, sn, name, ip_address, zone_name, speed_profile FROM smartolt_onus');
@@ -869,6 +887,7 @@ self.addEventListener('fetch', (event) => {
 
         return {
           id_servicio: s.id_servicio,
+          folio: extractFolioServicio(s) || extractFolioServicio(matchedOnu) || String(s.id_servicio),
           nombre: s.nombre,
           smartolt_name: matchedOnu?.name || s.nombre,
           sn_onu: matchedOnu?.sn || s.sn_onu || '',
@@ -1074,12 +1093,28 @@ self.addEventListener('fetch', (event) => {
       const serviceIds = services.map((s: any) => s.id_servicio);
       const sessionToken = generateClientPortalToken(targetPhone10, client.nombre, serviceIds, tokenVer);
 
+      // Calcular saldo efectivo y verificar si hay facturas pendientes en la base local
+      let pendingTotal = 0;
+      let hasPendingInvoices = false;
+      try {
+        const pInvRes = await db.execute({
+          sql: `SELECT total FROM wisphub_invoices WHERE id_servicio = ? AND LOWER(estado) NOT LIKE '%pagad%'`,
+          args: [client.id_servicio],
+        });
+        if (pInvRes.rows.length > 0) {
+          hasPendingInvoices = true;
+          pendingTotal = pInvRes.rows.reduce((sum, r: any) => sum + Number(r.total || 0), 0);
+        }
+      } catch (_) {}
+      const effectiveClientBalance = Math.max(Number(client.saldo || 0), pendingTotal);
+
       res.json({
         success: true,
         token: sessionToken,
         hasPassword,
         client: {
           id_servicio: client.id_servicio,
+          folio: extractFolioServicio(client) || (onuRecord ? extractFolioServicio(onuRecord) : '') || String(client.id_servicio),
           nombre: client.nombre,
           smartolt_name: onuRecord?.name || client.nombre,
           telefono: targetPhone10,
@@ -1087,8 +1122,10 @@ self.addEventListener('fetch', (event) => {
           direccion: client.direccion || onuRecord?.zone_name,
           ip: client.ip || onuRecord?.ip_address,
           router: client.router,
-          estado: (Number(client.saldo || 0) <= 0 && String(client.estado || '').toLowerCase().includes('suspend')) ? 'Activo' : client.estado,
-          saldo: client.saldo || 0,
+          estado: (effectiveClientBalance <= 0 && String(client.estado || '').toLowerCase().includes('suspend')) ? 'Activo' : client.estado,
+          saldo: effectiveClientBalance,
+          raw_saldo: client.saldo || 0,
+          has_pending: hasPendingInvoices || effectiveClientBalance > 0,
           precio_plan: client.precio_plan,
           plan_internet: client.plan_internet || onuRecord?.speed_profile || '40 Megas',
           dia_corte: client.dia_corte,
@@ -1133,17 +1170,28 @@ self.addEventListener('fetch', (event) => {
         return;
       }
 
-      const services = await ClientPortalController.findClientsByIdentifier(rawId);
-      if (!services || services.length === 0) {
-        res.status(404).json({ success: false, message: 'Servicio no encontrado.' });
-        return;
+      const db = getDbClient();
+      let client: any = null;
+      const targetServiceId = (req.query.serviceId || req.query.id || '') ? String(req.query.serviceId || req.query.id).trim() : '';
+
+      // Si nos pasaron un serviceId o ID numérico, buscar DIRECTAMENTE por clave primaria id_servicio
+      if (targetServiceId && /^\d+$/.test(targetServiceId)) {
+        const byId = await db.execute({
+          sql: `SELECT * FROM wisphub_clients WHERE id_servicio = ? LIMIT 1`,
+          args: [Number(targetServiceId)],
+        });
+        if (byId.rows.length > 0) {
+          client = byId.rows[0];
+        }
       }
 
-      let client = services[0];
-      const targetServiceId = req.query.serviceId ? String(req.query.serviceId).trim() : '';
-      if (targetServiceId) {
-        const exact = services.find((s: any) => String(s.id_servicio) === targetServiceId);
-        if (exact) client = exact;
+      if (!client) {
+        const services = await ClientPortalController.findClientsByIdentifier(rawId);
+        if (!services || services.length === 0) {
+          res.status(404).json({ success: false, message: 'Servicio no encontrado.' });
+          return;
+        }
+        client = services[0];
       }
       let facturas: any[] = [];
       let rawUserData: any = {};
@@ -1161,17 +1209,22 @@ self.addEventListener('fetch', (event) => {
       }
 
       // Estructurar respuesta con facturas e información de pago bancario
+      const pendingInvoices = facturas.filter((f: any) => !String(f.estado || '').toLowerCase().includes('pagad'));
+      const pendingInvoicesTotal = pendingInvoices.reduce((sum: number, f: any) => sum + Number(f.total || f.monto || 0), 0);
+      const effectiveBalance = Math.max(clientBalance, pendingInvoicesTotal);
+
       res.json({
         success: true,
-        balance: clientBalance,
+        balance: effectiveBalance,
+        hasPending: pendingInvoices.length > 0,
+        pendingCount: pendingInvoices.length,
         planPrice: Number(client.precio_plan || 0),
-        dueDate: client.fecha_corte || `Día ${client.dia_corte || 5} de cada mes`,
+        dueDate: pendingInvoices[0]?.fecha_vencimiento || client.fecha_corte || `Día ${client.dia_corte || 5} de cada mes`,
         status: client.estado,
         invoices: facturas.map((f: any) => {
-          let estado = f.estado;
-          if (clientBalance <= 0) {
-            estado = 'Pagada';
-          }
+          let estado = f.estado || 'Pendiente de Pago';
+          if (estado === '1') estado = 'Pendiente de Pago';
+          if (estado === '2') estado = 'Pagada';
           const isPaid = String(estado || '').toLowerCase().includes('pagad');
           let extra: any = {};
           try { extra = JSON.parse(f.raw_data || '{}'); } catch (_) {}
@@ -1179,12 +1232,12 @@ self.addEventListener('fetch', (event) => {
             id: f.id_factura || f.id || client.id_servicio,
             folio: f.folio || `FAC-${f.id_factura || client.id_servicio}`,
             monto: Number(f.total || f.monto || client.saldo || client.precio_plan || 0),
-            estado: estado || (clientBalance > 0 ? 'Pendiente de Pago' : 'Pagada'),
+            estado: estado,
             fecha_emision: f.fecha_emision || new Date().toISOString().slice(0, 10),
             fecha_vencimiento: f.fecha_vencimiento || client.fecha_corte || 'Próximo corte',
-            fecha_pago: f.fecha_pago || (isPaid ? (f.fecha_emision || new Date().toISOString().slice(0, 10)) : null),
-            forma_pago: extra.forma_pago || f.forma_pago || 'Efectivo',
-            cajero: extra.cajero || f.cajero || '',
+            fecha_pago: isPaid ? (f.fecha_pago || f.fecha_emision) : null,
+            forma_pago: extra.forma_pago || f.forma_pago || (isPaid ? 'Efectivo' : null),
+            cajero: (extra.cajero && typeof extra.cajero === 'object') ? (extra.cajero.nombre || '') : (extra.cajero || f.cajero || ''),
             descripcion: f.descripcion || '',
             link_pago: f.link_pago || (f.id_factura ? `https://wisphub.net/factura/${f.id_factura}/` : null),
             pdf_url: `/api/portal/invoice/${f.id_factura || f.id || client.id_servicio}/receipt`,
@@ -1625,15 +1678,33 @@ self.addEventListener('fetch', (event) => {
       }
     }
 
-    // 3. SI ES UN IDENTIFICADOR NUMÉRICO CORTO (ej. 715 o 696)
+    // 3. SI ES UN IDENTIFICADOR NUMÉRICO CORTO (ej. 1311 o 696)
     if (initialMatches.length === 0 && /^\d{1,6}$/.test(clean)) {
-      // 3.1 Buscar PRIMERO por ID de servicio directo en WispHub (el folio oficial del contrato)
-      const res = await db.execute({
-        sql: `SELECT * FROM wisphub_clients WHERE id_servicio = ? LIMIT 1`,
-        args: [Number(clean)],
+      // 3.1 Buscar PRIMERO por Folio de Servicio en WispHub (prefijo en 'servicio' o 'nombre')
+      const padded = clean.padStart(4, '0');
+      const folioRes = await db.execute({
+        sql: `SELECT * FROM wisphub_clients 
+              WHERE servicio LIKE ? OR servicio LIKE ? 
+                 OR nombre LIKE ? OR nombre LIKE ? 
+                 OR servicio LIKE ? OR nombre LIKE ? 
+              LIMIT 5`,
+        args: [
+          `${clean}-%`, `${clean} - %`,
+          `${clean}-%`, `${clean} - %`,
+          `${padded}-%`, `${padded}-%`,
+        ],
       });
-      if (res.rows.length > 0) {
-        initialMatches.push(...(res.rows as any[]));
+      if (folioRes.rows.length > 0) {
+        initialMatches.push(...(folioRes.rows as any[]));
+      } else {
+        // Fallback: Buscar por ID de servicio directo en WispHub si no existió como folio
+        const res = await db.execute({
+          sql: `SELECT * FROM wisphub_clients WHERE id_servicio = ? LIMIT 1`,
+          args: [Number(clean)],
+        });
+        if (res.rows.length > 0) {
+          initialMatches.push(...(res.rows as any[]));
+        }
       }
 
       // 3.2 Si no existe en WispHub como folio directo, cruzar con SmartOLT por prefijo de ONU (ej: "696-Maria del Pilar")
@@ -1887,6 +1958,157 @@ self.addEventListener('fetch', (event) => {
     } catch (err: any) {
       logger.error('Error al generar recibo HTML:', err);
       res.status(500).send('<h1>Error al generar comprobante</h1>');
+    }
+  }
+
+  /**
+   * Retorna la configuración pública de Openpay para inicializar Openpay.js en el cliente
+   */
+  static getOpenpayConfig(_req: Request, res: Response): void {
+    const config = OpenpayService.getConfig();
+    res.json({
+      success: true,
+      isEnabled: config.isEnabled,
+      isSandbox: config.isSandbox,
+      merchantId: config.merchantId,
+      publicKey: config.publicKey,
+      feePercent: config.cardFeePercent,
+      feeFixed: config.cardFeeFixed,
+    });
+  }
+
+  /**
+   * Obtiene la CLABE interbancaria y datos SPEI personalizados del cliente
+   */
+  static async getOpenpaySpei(req: Request, res: Response): Promise<void> {
+    try {
+      const rawId = (req.query.id || req.query.serviceId || req.query.phone || '') as string;
+      if (!rawId) {
+        res.status(400).json({ success: false, message: 'Identificador de servicio requerido.' });
+        return;
+      }
+
+      const db = getDbClient();
+      let client: any = null;
+      const targetServiceId = (req.query.serviceId || req.query.id || '') ? String(req.query.serviceId || req.query.id).trim() : '';
+
+      if (targetServiceId && /^\d+$/.test(targetServiceId)) {
+        const byId = await db.execute({
+          sql: `SELECT * FROM wisphub_clients WHERE id_servicio = ? LIMIT 1`,
+          args: [Number(targetServiceId)],
+        });
+        if (byId.rows.length > 0) {
+          client = byId.rows[0];
+        }
+      }
+
+      if (!client) {
+        const services = await ClientPortalController.findClientsByIdentifier(rawId);
+        if (!services || services.length === 0) {
+          res.status(404).json({ success: false, message: 'Servicio no encontrado.' });
+          return;
+        }
+        client = services[0];
+      }
+
+      const speiDetails = await OpenpayService.getClientSpeiDetails({
+        id_servicio: client.id_servicio,
+        nombre: client.nombre,
+        telefono: client.telefono,
+        saldo: Number(client.saldo || 0),
+      });
+
+      if (!speiDetails) {
+        res.status(500).json({ success: false, message: 'No se pudo generar la CLABE en Openpay.' });
+        return;
+      }
+
+      res.json({
+        success: true,
+        spei: speiDetails,
+      });
+    } catch (err: any) {
+      logger.error('Error en getOpenpaySpei:', err?.message || err);
+      res.status(500).json({ success: false, message: 'Error interno al consultar CLABE.' });
+    }
+  }
+
+  /**
+   * Calcula el desglose de comisiones para pago con tarjeta
+   */
+  static calculateOpenpayFee(req: Request, res: Response): void {
+    const rawAmount = Number(req.query.amount || req.body?.amount || 0);
+    const fee = OpenpayService.calculateCardFee(rawAmount);
+    res.json({
+      success: true,
+      ...fee,
+    });
+  }
+
+  /**
+   * Procesa el cargo de tarjeta tokenizada con Openpay
+   */
+  static async chargeOpenpayCard(req: Request, res: Response): Promise<void> {
+    try {
+      const {
+        tokenId,
+        deviceSessionId,
+        amount,
+        description,
+        orderId,
+        clientId,
+        phone,
+      } = req.body;
+
+      if (!tokenId || !deviceSessionId || !amount || !clientId) {
+        res.status(400).json({ success: false, message: 'Faltan parámetros obligatorios para procesar el cargo.' });
+        return;
+      }
+
+      const db = getDbClient();
+      let client: any = null;
+      const sIdStr = String(clientId || '').trim();
+      if (sIdStr && /^\d+$/.test(sIdStr)) {
+        const byId = await db.execute({
+          sql: `SELECT * FROM wisphub_clients WHERE id_servicio = ? LIMIT 1`,
+          args: [Number(sIdStr)],
+        });
+        if (byId.rows.length > 0) client = byId.rows[0];
+      }
+      if (!client) {
+        const services = await ClientPortalController.findClientsByIdentifier(sIdStr);
+        client = services && services.length > 0 ? services[0] : null;
+      }
+
+      const chargeResult = await OpenpayService.chargeCard({
+        tokenId,
+        deviceSessionId,
+        amount: Number(amount),
+        description: description || `Pago Internet Contrato #${clientId}`,
+        orderId: orderId || `CARD_${clientId}_${Date.now()}`,
+        clientId,
+        clientName: client?.nombre || 'Cliente CloudWare',
+        clientPhone: phone || client?.telefono || '',
+        clientEmail: (client as any)?.email,
+      });
+
+      res.json(chargeResult);
+    } catch (err: any) {
+      logger.error('Error en chargeOpenpayCard:', err?.message || err);
+      res.status(500).json({ success: false, message: 'Error interno al procesar el pago con tarjeta.' });
+    }
+  }
+
+  /**
+   * Manejador de Webhook de Openpay
+   */
+  static async openpayWebhook(req: Request, res: Response): Promise<void> {
+    try {
+      const result = await OpenpayService.handleWebhook(req.body);
+      res.status(200).json(result);
+    } catch (err: any) {
+      logger.error('Error en openpayWebhook:', err?.message || err);
+      res.status(200).json({ success: false, message: 'Webhook recibido con errores' });
     }
   }
 }

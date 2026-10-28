@@ -2,11 +2,11 @@ import { Client } from 'ssh2';
 
 const conn = new Client();
 conn.on('ready', () => {
-  conn.exec('docker ps', (err, stream) => {
+  conn.exec('docker ps && docker exec chatbot_app cat /app/olt-manager/package.json 2>/dev/null || docker exec chatbot_app ls -la /app', (err, stream) => {
     let out = '';
     stream.on('data', d => out += d);
     stream.on('close', () => {
-      console.log('Docker containers:\n', out);
+      console.log('OUTPUT:\n', out);
       conn.end();
     });
   });

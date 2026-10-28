@@ -34,6 +34,16 @@ router.get('/api/portal/invoice/:id/receipt', ClientPortalController.renderInvoi
 router.get('/recibo/:id', ClientPortalController.renderInvoiceReceipt);
 
 // ==========================================
+// PASARELA OPENPAY (TARJETAS, SPEI Y WEBHOOK)
+// ==========================================
+router.get('/api/portal/openpay/config', ClientPortalController.getOpenpayConfig);
+router.get('/api/portal/openpay/spei', ClientPortalController.getOpenpaySpei);
+router.get('/api/portal/openpay/calculate-fee', ClientPortalController.calculateOpenpayFee);
+router.post('/api/portal/openpay/charge-card', ClientPortalController.chargeOpenpayCard);
+router.post('/api/webhooks/openpay', ClientPortalController.openpayWebhook);
+router.post('/webhook/openpay', ClientPortalController.openpayWebhook);
+
+// ==========================================
 // PANEL WEB DE ADMINISTRACIÓN (UI SPA)
 // ==========================================
 router.get('/', (_req, res) => {

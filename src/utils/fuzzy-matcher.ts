@@ -157,6 +157,111 @@ export function cleanPersonName(name: string): string {
     .trim();
 }
 
+export interface ExtractedFolioAndName {
+  folio?: string;         // e.g. "942", "2970", "970"
+  serviceSuffix?: string; // e.g. "2" de "-2"
+  cleanName: string;      // e.g. "Alberto Monroy Najera"
+}
+
+/**
+ * Descompone una consulta para extraer de forma inteligente el Folio de servicio,
+ * el número de servicio/sufijo y el nombre limpio de la persona.
+ * Ejemplos:
+ * - "942-Alberto monroy najera" -> { folio: "942", cleanName: "Alberto monroy najera" }
+ * - "970-Alberto monroy najera" -> { folio: "970", cleanName: "Alberto monroy najera" }
+ * - "Alberto monroy najera-2"   -> { serviceSuffix: "2", cleanName: "Alberto monroy najera" }
+ * - "942"                       -> { folio: "942", cleanName: "" }
+ */
+export function extractFolioAndCleanName(input: string): ExtractedFolioAndName {
+  if (!input) return { cleanName: '' };
+  const raw = input.trim().replace(/^[#\s]+/, '');
+
+  // 1. Número puro (Folio único: ej "942", "2970", "0942")
+  if (/^\d{1,6}$/.test(raw)) {
+    return {
+      folio: raw.replace(/^0+/, '') || raw,
+      cleanName: '',
+    };
+  }
+
+  // 2. Prefijo numérico / folio con delimitador (ej: "942-Alberto", "942 Alberto", "0942-Alberto", "folio 942 Alberto")
+  const prefixMatch = raw.match(/^(?:folio\s*)?0*(\d{1,6})[-\s_:]+(.+)$/i);
+  if (prefixMatch) {
+    const folio = prefixMatch[1].replace(/^0+/, '') || prefixMatch[1];
+    const rest = prefixMatch[2].trim();
+    const suffixMatch = rest.match(/^(.*?)[-\s_]+([1-9])$/);
+    if (suffixMatch && suffixMatch[1].trim()) {
+      return {
+        folio,
+        serviceSuffix: suffixMatch[2],
+        cleanName: cleanPersonName(suffixMatch[1]),
+      };
+    }
+    return {
+      folio,
+      cleanName: cleanPersonName(rest),
+    };
+  }
+
+  // 3. Sufijo de servicio al final (ej: "Alberto monroy najera-2", "Alberto monroy 2", "Alberto monroy servicio 2")
+  const serviceSuffixMatch = raw.match(/^(.*?)(?:[-\s_]+(?:servicio|srv|cto|linea|línea)?\s*([1-9]))$/i);
+  if (serviceSuffixMatch && serviceSuffixMatch[1].trim() && isNaN(Number(serviceSuffixMatch[1].trim()))) {
+    return {
+      serviceSuffix: serviceSuffixMatch[2],
+      cleanName: cleanPersonName(serviceSuffixMatch[1]),
+    };
+  }
+
+  // 4. Folio colocado al final (ej: "Alberto monroy 942", "Alberto monroy folio 942")
+  const trailingFolioMatch = raw.match(/^(.*?)(?:[-\s_]+(?:folio|f)?\s*0*(\d{3,6}))$/i);
+  if (trailingFolioMatch && trailingFolioMatch[1].trim() && isNaN(Number(trailingFolioMatch[1].trim()))) {
+    return {
+      folio: trailingFolioMatch[2].replace(/^0+/, '') || trailingFolioMatch[2],
+      cleanName: cleanPersonName(trailingFolioMatch[1]),
+    };
+  }
+
+  return {
+    cleanName: cleanPersonName(raw),
+  };
+}
+
+/**
+ * Comprueba si un registro de SmartOLT (name) o WispHub (servicio / nombre) coincide
+ * con un folio de servicio dado (ej: "942", "2970", "970").
+ */
+export function candidateMatchesFolio(candidateText: string, folio: string): boolean {
+  if (!folio || !candidateText) return false;
+  const clean = candidateText.trim();
+  const f = folio.trim().replace(/^0+/, '');
+  if (!f) return false;
+
+  // Extraer folio numérico del candidato al inicio: ej "942-Alberto...", "2970-Alberto...", "0942-Alberto..."
+  const candFolioMatch = clean.match(/^0*(\d+)/);
+  if (candFolioMatch) {
+    const candFolio = candFolioMatch[1].replace(/^0+/, '');
+    // 1. Coincidencia exacta de folio ("942" === "942" o "2970" === "2970")
+    if (candFolio === f) return true;
+    // 2. Coincidencia de terminación (ej: folio WispHub/OLT "2970" termina en "970" proporcionado por técnico)
+    if (candFolio.endsWith(f) || f.endsWith(candFolio)) return true;
+  }
+
+  // 3. Delimitado en cualquier parte del texto: "-942-", " 942 ", etc.
+  const regex = new RegExp(`(?:^|[-_\\s(])0*${f}(?:[-_\\s)]|$)`, 'i');
+  return regex.test(clean);
+}
+
+/**
+ * Comprueba si un registro coincide con el sufijo de servicio (ej: "-2" para segundo servicio).
+ */
+export function candidateMatchesServiceSuffix(candidateText: string, suffix: string): boolean {
+  if (!suffix || !candidateText) return false;
+  const s = suffix.trim();
+  const regex = new RegExp(`(?:[-_\\s]+(?:servicio|srv|cto)?\\s*${s})$`, 'i');
+  return regex.test(candidateText.trim());
+}
+
+
 /**
  * Calcula un puntaje de coincidencia global (0 a 100) entre la consulta del usuario y un registro.
  * Soporta:

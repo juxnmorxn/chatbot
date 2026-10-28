@@ -4544,15 +4544,15 @@ export function getAdminDashboardHtml(): string {
             </p>
             <div class="form-group">
               <label class="form-label">Banco</label>
-              <input type="text" id="setting-PAYMENT_BANK" class="form-control" placeholder="BBVA Bancomer" value="BBVA Bancomer">
+              <input type="text" id="setting-PAYMENT_BANK" class="form-control" placeholder="BBVA" value="BBVA">
             </div>
             <div class="form-group">
               <label class="form-label">Número de Cuenta / CLABE Interbancaria (18 dígitos)</label>
-              <input type="text" id="setting-PAYMENT_ACCOUNT" class="form-control" placeholder="012 180 0152433212 90" value="012 180 0152433212 90" spellcheck="false">
+              <input type="text" id="setting-PAYMENT_ACCOUNT" class="form-control" placeholder="012290004848824666" value="012290004848824666" spellcheck="false">
             </div>
             <div class="form-group">
               <label class="form-label">Nombre del Titular / Beneficiario</label>
-              <input type="text" id="setting-PAYMENT_BENEFICIARY" class="form-control" placeholder="CloudWare Telecomunicaciones" value="CloudWare Telecomunicaciones">
+              <input type="text" id="setting-PAYMENT_BENEFICIARY" class="form-control" placeholder="Osbaldo Tovar Campero" value="Osbaldo Tovar Campero">
             </div>
             <div class="form-group">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; flex-wrap: wrap; gap: 6px;">
@@ -4561,9 +4561,9 @@ export function getAdminDashboardHtml(): string {
                   🔄 Autocompletar de WhatsApp
                 </button>
               </div>
-              <input type="text" id="setting-PAYMENT_OFFICE_PHONE" class="form-control" placeholder="7721284398" value="7721284398">
+              <input type="text" id="setting-PAYMENT_OFFICE_PHONE" class="form-control" placeholder="7721292969" value="7721292969">
               <span style="font-size: 11px; color: var(--text-muted); display: block; margin-top: 4px;">
-                Se toma automáticamente de la línea de WhatsApp agregada como Oficina/Atención o Soporte.
+                Número al que los clientes deben enviar sus comprobantes de pago. Configurable aquí o autocompletado de WhatsApp.
               </span>
             </div>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
@@ -4579,6 +4579,94 @@ export function getAdminDashboardHtml(): string {
             <div class="form-group">
               <label class="form-label">Dirección de Oficina (Opcional)</label>
               <input type="text" id="setting-OFFICE_ADDRESS" class="form-control" placeholder="Ej: Av. Principal #123, Actopan, Hgo.">
+            </div>
+          </div>
+
+          <!-- Card 5: 💳 Pasarela de Pagos Openpay (BBVA) -->
+          <div class="glass-card" style="border-color: rgba(6, 182, 212, 0.35);">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 8px;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 20px;">💳</span>
+                <h3 style="font-size: 15px; font-weight: 700;">Pasarela de Pagos Openpay (BBVA)</h3>
+              </div>
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer;">
+                  <input type="checkbox" id="setting-OPENPAY_ENABLED" style="transform: scale(1.2); cursor: pointer;" checked>
+                  <span style="font-weight: 600;">Habilitar Openpay</span>
+                </label>
+              </div>
+            </div>
+            <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">
+              Permite a los clientes pagar con Tarjeta (Débito/Crédito) y Transferencia SPEI con CLABE única personalizada en el Portal de Clientes.
+            </p>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+              <div class="form-group">
+                <label class="form-label">Merchant ID (Código Alfanumérico)</label>
+                <input type="text" id="setting-OPENPAY_MERCHANT_ID" class="form-control credential-field" placeholder="mvbe6i5366z6sofetydr" value="mvbe6i5366z6sofetydr">
+                <small style="font-size: 11px; color: var(--text-dim); display: block; margin-top: 3px;">
+                  Identificador de tu comercio (visible en la URL o ajustes de Openpay).
+                </small>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Entorno</label>
+                <select id="setting-OPENPAY_SANDBOX" class="form-control" style="font-size: 12px;">
+                  <option value="true">🧪 Modo Pruebas (Sandbox)</option>
+                  <option value="false">🚀 Modo Producción (Live)</option>
+                </select>
+                <small style="font-size: 11px; color: var(--text-dim); display: block; margin-top: 3px;">
+                  Cambia a Producción cuando Openpay apruebe tu cuenta comercial.
+                </small>
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+              <div class="form-group">
+                <label class="form-label">Llave Pública (Public Key)</label>
+                <input type="text" id="setting-OPENPAY_PUBLIC_KEY" class="form-control credential-field" placeholder="pk_..." value="pk_10123fcc934d42aa843f2532c7711691">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Llave Secreta (Secret Key)</label>
+                <div class="password-input-wrap">
+                  <input type="password" id="setting-OPENPAY_SECRET_KEY" class="form-control credential-field" placeholder="sk_..." value="sk_9e6cd6d4f4da4eea8fe855dc6a56b8ae" autocomplete="new-password">
+                  <button type="button" class="btn-toggle-password" onclick="togglePasswordVisibility('setting-OPENPAY_SECRET_KEY', this)" title="Mostrar / Ocultar Clave">
+                    <svg class="svg-icon" viewBox="0 0 24 24" style="width: 17px; height: 17px;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 6px;">
+              <div class="form-group">
+                <label class="form-label">Comisión Porcentual Tarjeta (%)</label>
+                <input type="number" step="0.1" id="setting-OPENPAY_CARD_FEE_PERCENT" class="form-control" placeholder="2.9" value="2.9">
+                <small style="font-size: 11px; color: var(--text-dim); display: block; margin-top: 3px;">
+                  Porcentaje cobrado por Openpay (estándar 2.9%).
+                </small>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Comisión Fija Tarjeta (MXN)</label>
+                <input type="number" step="0.5" id="setting-OPENPAY_CARD_FEE_FIXED" class="form-control" placeholder="2.50" value="2.50">
+                <small style="font-size: 11px; color: var(--text-dim); display: block; margin-top: 3px;">
+                  Comisión fija por transacción (estándar $2.50 MXN).
+                </small>
+              </div>
+            </div>
+
+            <!-- Webhook URL Box -->
+            <div style="background: rgba(0,0,0,0.3); border: 1px dashed rgba(6, 182, 212, 0.4); border-radius: var(--radius-sm); padding: 12px 14px; margin-top: 10px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; flex-wrap: wrap; gap: 6px;">
+                <span style="font-size: 12px; font-weight: 700; color: var(--accent-cyan);">🔔 Webhook URL para Openpay:</span>
+                <button type="button" class="btn btn-secondary btn-xs" onclick="copyOpenpayWebhookUrl()" style="font-size: 11px; padding: 2px 8px;">
+                  📋 Copiar URL
+                </button>
+              </div>
+              <div id="openpay-webhook-url-display" style="font-family: var(--font-mono); font-size: 12px; color: #fff; word-break: break-all; background: rgba(0,0,0,0.4); padding: 6px 10px; border-radius: 4px;">
+                https://tuservidor.com/api/webhooks/openpay
+              </div>
+              <small style="font-size: 11px; color: var(--text-dim); display: block; margin-top: 6px; line-height: 1.4;">
+                Registra esta URL en tu panel de Openpay (<a href="https://sandbox-dashboard.openpay.mx/settings" target="_blank" style="color: var(--accent-cyan); text-decoration: underline;">Configuraciones &gt; Webhooks</a>) para que el sistema active automáticamente el servicio en WispHub en cuanto el cliente realice una transferencia SPEI o pago con tarjeta.
+              </small>
             </div>
           </div>
         </div>
@@ -8153,6 +8241,20 @@ export function getAdminDashboardHtml(): string {
             OFFICE_HOURS_SATURDAY: 'setting-OFFICE_HOURS_SATURDAY',
             officeAddress: 'setting-OFFICE_ADDRESS',
             OFFICE_ADDRESS: 'setting-OFFICE_ADDRESS',
+            openpayEnabled: 'setting-OPENPAY_ENABLED',
+            OPENPAY_ENABLED: 'setting-OPENPAY_ENABLED',
+            openpayMerchantId: 'setting-OPENPAY_MERCHANT_ID',
+            OPENPAY_MERCHANT_ID: 'setting-OPENPAY_MERCHANT_ID',
+            openpayPublicKey: 'setting-OPENPAY_PUBLIC_KEY',
+            OPENPAY_PUBLIC_KEY: 'setting-OPENPAY_PUBLIC_KEY',
+            openpaySecretKey: 'setting-OPENPAY_SECRET_KEY',
+            OPENPAY_SECRET_KEY: 'setting-OPENPAY_SECRET_KEY',
+            openpaySandbox: 'setting-OPENPAY_SANDBOX',
+            OPENPAY_SANDBOX: 'setting-OPENPAY_SANDBOX',
+            openpayCardFeePercent: 'setting-OPENPAY_CARD_FEE_PERCENT',
+            OPENPAY_CARD_FEE_PERCENT: 'setting-OPENPAY_CARD_FEE_PERCENT',
+            openpayCardFeeFixed: 'setting-OPENPAY_CARD_FEE_FIXED',
+            OPENPAY_CARD_FEE_FIXED: 'setting-OPENPAY_CARD_FEE_FIXED',
           };
 
           Object.keys(s).forEach(k => {
@@ -8172,11 +8274,33 @@ export function getAdminDashboardHtml(): string {
 
           const chkSuspension = document.getElementById('setting-NOTIF_SUSPENSION_ENABLED');
           if (chkSuspension) chkSuspension.checked = s.NOTIF_SUSPENSION_ENABLED === 'true' || s.NOTIF_SUSPENSION_ENABLED === true || s.NOTIF_SUSPENSION_ENABLED === '1';
+
+          const chkOpenpay = document.getElementById('setting-OPENPAY_ENABLED');
+          if (chkOpenpay) chkOpenpay.checked = s.OPENPAY_ENABLED === 'true' || s.OPENPAY_ENABLED === true || s.OPENPAY_ENABLED === '1' || s.OPENPAY_ENABLED === undefined;
+
+          // Actualizar display del Webhook URL
+          const whDisplay = document.getElementById('openpay-webhook-url-display');
+          if (whDisplay) {
+            whDisplay.textContent = window.location.origin + '/api/webhooks/openpay';
+          }
         }
         fetchWhatsAppStatus();
         fetchWhatsAppGroups();
       } catch (err) {
         console.error('Error loading settings:', err);
+      }
+    }
+
+    function copyOpenpayWebhookUrl() {
+      const url = window.location.origin + '/api/webhooks/openpay';
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(url).then(() => {
+          showToast('Copiado', 'Webhook URL de Openpay copiado al portapapeles', 'success');
+        }).catch(() => {
+          prompt('Copia esta URL para registrarla en Openpay:', url);
+        });
+      } else {
+        prompt('Copia esta URL para registrarla en Openpay:', url);
       }
     }
 
@@ -8203,13 +8327,20 @@ export function getAdminDashboardHtml(): string {
         NOTIF_DIA_CORTE_ENABLED: document.getElementById('setting-NOTIF_DIA_CORTE_ENABLED')?.checked ? 'true' : 'false',
         NOTIF_SUSPENSION_ENABLED: document.getElementById('setting-NOTIF_SUSPENSION_ENABLED')?.checked ? 'true' : 'false',
         NOTIF_INSTANCE_NAME: document.getElementById('setting-NOTIF_INSTANCE_NAME')?.value || 'atencion',
-        PAYMENT_BANK: document.getElementById('setting-PAYMENT_BANK')?.value.trim() || 'BBVA Bancomer',
-        PAYMENT_ACCOUNT: document.getElementById('setting-PAYMENT_ACCOUNT')?.value.trim() || '',
-        PAYMENT_BENEFICIARY: document.getElementById('setting-PAYMENT_BENEFICIARY')?.value.trim() || '',
-        PAYMENT_OFFICE_PHONE: document.getElementById('setting-PAYMENT_OFFICE_PHONE')?.value.trim() || '7721284398',
+        PAYMENT_BANK: document.getElementById('setting-PAYMENT_BANK')?.value.trim() || 'BBVA',
+        PAYMENT_ACCOUNT: document.getElementById('setting-PAYMENT_ACCOUNT')?.value.trim() || '012290004848824666',
+        PAYMENT_BENEFICIARY: document.getElementById('setting-PAYMENT_BENEFICIARY')?.value.trim() || 'Osbaldo Tovar Campero',
+        PAYMENT_OFFICE_PHONE: document.getElementById('setting-PAYMENT_OFFICE_PHONE')?.value.trim() || '7721292969',
         OFFICE_HOURS_WEEKDAY: document.getElementById('setting-OFFICE_HOURS_WEEKDAY')?.value.trim() || '9:00 a 18:00 hrs',
         OFFICE_HOURS_SATURDAY: document.getElementById('setting-OFFICE_HOURS_SATURDAY')?.value.trim() || '9:00 a 15:00 hrs',
         OFFICE_ADDRESS: document.getElementById('setting-OFFICE_ADDRESS')?.value.trim() || '',
+        OPENPAY_ENABLED: document.getElementById('setting-OPENPAY_ENABLED')?.checked ? 'true' : 'false',
+        OPENPAY_MERCHANT_ID: document.getElementById('setting-OPENPAY_MERCHANT_ID')?.value.trim() || 'mvbe6i5366z6sofetydr',
+        OPENPAY_PUBLIC_KEY: document.getElementById('setting-OPENPAY_PUBLIC_KEY')?.value.trim() || 'pk_10123fcc934d42aa843f2532c7711691',
+        OPENPAY_SECRET_KEY: document.getElementById('setting-OPENPAY_SECRET_KEY')?.value.trim() || 'sk_9e6cd6d4f4da4eea8fe855dc6a56b8ae',
+        OPENPAY_SANDBOX: document.getElementById('setting-OPENPAY_SANDBOX')?.value || 'true',
+        OPENPAY_CARD_FEE_PERCENT: document.getElementById('setting-OPENPAY_CARD_FEE_PERCENT')?.value || '2.9',
+        OPENPAY_CARD_FEE_FIXED: document.getElementById('setting-OPENPAY_CARD_FEE_FIXED')?.value || '2.50',
       };
 
       try {

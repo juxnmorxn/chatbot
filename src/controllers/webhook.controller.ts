@@ -229,13 +229,24 @@ export class WebhookController {
       // --- MANEJO DE NOTAS DE VOZ / AUDIOS CON GROQ WHISPER ---
       if (extracted.isAudio) {
         logger.info(`[Audio recibido] Descargando nota de voz de ${phone} para transcripción con Groq Whisper...`);
-        const media = await EvolutionService.getBase64FromMedia(messageObj, incomingInstance || undefined);
-        if (media && media.buffer) {
-          const trans = await GroqService.transcribirAudio(media.buffer, media.mimeType);
-          if (trans) {
-            extracted.text = trans;
-            logger.info(`[Audio Transcrito] ${phone}: "${trans}"`);
+        try {
+          const media = await EvolutionService.getBase64FromMedia(messageObj, incomingInstance || undefined);
+          if (media && media.buffer) {
+            const trans = await GroqService.transcribirAudio(media.buffer, media.mimeType);
+            if (trans && trans.trim()) {
+              extracted.text = trans.trim();
+              logger.info(`[Audio Transcrito] ${phone}: "${extracted.text}"`);
+            } else {
+              logger.warn(`[Audio Transcripción Vacía] ${phone}: Groq Whisper no devolvió texto.`);
+              extracted.text = 'AUDIO_NO_ENTENDIDO';
+            }
+          } else {
+            logger.warn(`[Audio Sin Buffer] ${phone}: no se pudo descargar el archivo de audio.`);
+            extracted.text = 'AUDIO_NO_ENTENDIDO';
           }
+        } catch (audioErr: any) {
+          logger.error(`Error transcribiendo audio de ${phone}:`, audioErr?.message || audioErr);
+          extracted.text = 'AUDIO_NO_ENTENDIDO';
         }
       }
 
@@ -261,6 +272,7 @@ export class WebhookController {
         text: extracted.text,
         buttonId: extracted.buttonId,
         isMedia: extracted.isMedia,
+        isAudio: extracted.isAudio,
         imageAnalysis,
         location: extracted.location || null,
         instanceName: incomingInstance || undefined,
@@ -302,10 +314,10 @@ export class WebhookController {
         return;
       }
 
-      if (extracted.buttonId) {
+      if (extracted.buttonId || extracted.text === 'AUDIO_NO_ENTENDIDO') {
         setImmediate(() => {
           BotOrchestrator.procesarMensaje(incomingEvent).catch((err) => {
-            logger.error(`Error en BotOrchestrator para botón de ${phone}:`, err?.message || err);
+            logger.error(`Error en BotOrchestrator para acción inmediata de ${phone}:`, err?.message || err);
           });
         });
         return;
@@ -387,7 +399,21 @@ export class WebhookController {
       isLive?: boolean;
     };
   } {
-    const message = msg.message || {};
+    let message = msg.message || {};
+
+    // Desenvolver mensajes envueltos por WhatsApp / Baileys (ephemeral, viewOnce, documentWithCaption, etc.)
+    while (
+      (message as any).ephemeralMessage?.message ||
+      (message as any).viewOnceMessage?.message ||
+      (message as any).viewOnceMessageV2?.message ||
+      (message as any).documentWithCaptionMessage?.message
+    ) {
+      message =
+        (message as any).ephemeralMessage?.message ||
+        (message as any).viewOnceMessage?.message ||
+        (message as any).viewOnceMessageV2?.message ||
+        (message as any).documentWithCaptionMessage?.message;
+    }
 
     // 1. Botón interactivo tradicional
     if (message.buttonsResponseMessage?.selectedButtonId) {

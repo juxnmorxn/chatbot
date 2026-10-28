@@ -55,8 +55,9 @@ export class WispHubService {
         headers: {
           'Authorization': `Api-Key ${apiKey}`,
           'Content-Type': 'application/json',
+          'User-Agent': 'CloudWareBot/2.0 (compatible; WispHub-Sync)',
         },
-        timeout: 8000,
+        timeout: 10000,
       });
     }
     return this.api;
@@ -118,16 +119,37 @@ export class WispHubService {
     const { getDbClient } = await import('../database/db');
     const client = getDbClient();
 
-    // 1. Si tenemos rawId estrictamente numérico, validar si existe en wisphub_clients
+    // 1. Si tenemos rawId estrictamente numérico, el número representa el Folio de servicio (ej: 1311, 2046)
     if (rawId && /^\d+$/.test(rawId)) {
       try {
-        const res = await client.execute({
-          sql: `SELECT id_servicio, nombre FROM wisphub_clients WHERE id_servicio = ? LIMIT 1`,
-          args: [Number(rawId)],
+        const idNum = rawId;
+        const padded = idNum.padStart(4, '0');
+        // Prioridad 1: Buscar por Folio de servicio (prefijo en 'servicio' o 'nombre')
+        const folioRes = await client.execute({
+          sql: `SELECT id_servicio, nombre, servicio FROM wisphub_clients 
+                WHERE servicio LIKE ? OR servicio LIKE ? 
+                   OR nombre LIKE ? OR nombre LIKE ? 
+                   OR servicio LIKE ? OR nombre LIKE ? 
+                LIMIT 1`,
+          args: [
+            `${idNum}-%`, `${idNum} - %`,
+            `${idNum}-%`, `${idNum} - %`,
+            `${padded}-%`, `${padded}-%`,
+          ],
         });
-        if (res.rows.length > 0) {
-          targetId = Number(res.rows[0].id_servicio);
-          logger.info(`[WispHub API] Activación: ID ${targetId} verificado directamente en DB local (${res.rows[0].nombre}).`);
+        if (folioRes.rows.length > 0) {
+          targetId = Number(folioRes.rows[0].id_servicio);
+          logger.info(`[WispHub API] Activación: Cliente identificado por Folio de servicio #${idNum} ("${folioRes.rows[0].nombre}") -> ID interno=${targetId}.`);
+        } else {
+          // Fallback a ID interno sólo si no existe como folio
+          const res = await client.execute({
+            sql: `SELECT id_servicio, nombre FROM wisphub_clients WHERE id_servicio = ? LIMIT 1`,
+            args: [Number(rawId)],
+          });
+          if (res.rows.length > 0) {
+            targetId = Number(res.rows[0].id_servicio);
+            logger.info(`[WispHub API] Activación: ID interno ${targetId} verificado directamente en DB local (${res.rows[0].nombre}).`);
+          }
         }
       } catch {}
     }
@@ -594,6 +616,136 @@ export class WispHubService {
     } catch (error: any) {
       logger.error('Error al buscar cliente por nombre en WispHub:', error?.response?.data || error?.message || error);
       return [];
+    }
+  }
+
+  /**
+   * Consulta la disponibilidad o estado de un folio/servicio en WispHub
+   * Revisa en Base de Datos Local y luego en la API en vivo de WispHub (/clientes/{id}/)
+   */
+  static async consultarDisponibilidadFolio(folio: string | number): Promise<{
+    ocupado: boolean;
+    cliente?: {
+      id_servicio: number;
+      nombre: string;
+      estado: string;
+      ip?: string;
+      sn_onu?: string;
+      plan_internet?: string;
+      telefono?: string;
+      direccion?: string;
+      coordenadas_gps?: string;
+      google_maps_url?: string;
+      saldo?: number;
+    };
+    detalle?: string;
+  }> {
+    const rawId = String(folio).trim();
+    if (!rawId) return { ocupado: false, detalle: 'Folio vacío' };
+
+    const numMatch = rawId.match(/^0*(\d+)/);
+    const idNum = numMatch ? Number(numMatch[1]) : null;
+
+    try {
+      const client = getDbClient();
+
+      // 1. Búsqueda rápida en Base de Datos Local por prefijo de folio estricto (ej: "1311-...")
+      if (idNum) {
+        let localRes = await client.execute({
+          sql: `
+            SELECT id_servicio, nombre, servicio, estado, ip, sn_onu, plan_internet, telefono, direccion, coordenadas_gps, google_maps_url, saldo
+            FROM wisphub_clients
+            WHERE servicio LIKE ? OR servicio LIKE ? OR nombre LIKE ? OR nombre LIKE ?
+               OR servicio LIKE ? OR servicio LIKE ? OR nombre LIKE ? OR nombre LIKE ?
+            LIMIT 1
+          `,
+          args: [
+            `${idNum}-%`, `${idNum} - %`, `${idNum}-%`, `${idNum} - %`,
+            `${rawId}-%`, `${rawId} - %`, `${rawId}-%`, `${rawId} - %`,
+          ],
+        });
+
+        if (localRes.rows.length === 0) {
+          localRes = await client.execute({
+            sql: `
+              SELECT id_servicio, nombre, servicio, estado, ip, sn_onu, plan_internet, telefono, direccion, coordenadas_gps, google_maps_url, saldo
+              FROM wisphub_clients
+              WHERE servicio = ? OR servicio = ?
+              LIMIT 1
+            `,
+            args: [String(idNum), rawId],
+          });
+        }
+
+        if (localRes.rows.length > 0) {
+          const row = localRes.rows[0];
+          const estado = String(row.estado || 'Activo').toLowerCase();
+          const esCancelado = estado.includes('cancelad') || estado.includes('retirad') || estado.includes('baja');
+
+          const rawNom = String(row.nombre || row.servicio || '').trim();
+          const cleanNom = rawNom.replace(/^[\d\s\-#_.]+/i, '').trim();
+
+          return {
+            ocupado: !esCancelado,
+            cliente: {
+              id_servicio: Number(row.id_servicio),
+              nombre: cleanNom || rawNom,
+              estado: String(row.estado || 'Activo'),
+              ip: row.ip ? String(row.ip) : undefined,
+              sn_onu: row.sn_onu ? String(row.sn_onu) : undefined,
+              plan_internet: row.plan_internet ? String(row.plan_internet) : undefined,
+              telefono: row.telefono ? String(row.telefono) : undefined,
+              direccion: row.direccion ? String(row.direccion) : undefined,
+              coordenadas_gps: row.coordenadas_gps ? String(row.coordenadas_gps) : undefined,
+              google_maps_url: row.google_maps_url ? String(row.google_maps_url) : undefined,
+              saldo: row.saldo ? Number(row.saldo) : undefined,
+            },
+            detalle: esCancelado ? 'Cancelado en WispHub' : 'Registrado en WispHub',
+          };
+        }
+      }
+
+      // 2. Consulta en vivo en la API de WispHub (/clientes/{id}/)
+      const apiKey = this.getApiKey();
+      if (apiKey && !apiKey.includes('tu_token') && idNum) {
+        try {
+          const api = this.getApi();
+          const liveRes = await api.get(`/clientes/${idNum}/`);
+          const d = liveRes.data;
+
+          if (d && (d.id_servicio || d.id || d.nombre || d.usuario_rb)) {
+            const estado = String(d.estado || 'Activo').toLowerCase();
+            const esCancelado = estado.includes('cancelad') || estado.includes('retirad') || estado.includes('baja');
+
+            return {
+              ocupado: !esCancelado,
+              cliente: {
+                id_servicio: Number(d.id_servicio || d.id || idNum),
+                nombre: String(d.nombre || d.usuario_rb || ''),
+                estado: String(d.estado || 'Activo'),
+                ip: d.ip ? String(d.ip) : undefined,
+                sn_onu: d.sn_onu ? String(d.sn_onu) : undefined,
+                plan_internet: typeof d.plan_internet === 'object' ? d.plan_internet?.nombre : String(d.plan_internet || ''),
+                telefono: d.telefono ? String(d.telefono) : undefined,
+                direccion: d.direccion ? String(d.direccion) : undefined,
+                coordenadas_gps: d.coordenadas || d.coordenadas_gps ? String(d.coordenadas || d.coordenadas_gps) : undefined,
+                saldo: d.saldo ? Number(d.saldo) : 0,
+              },
+              detalle: esCancelado ? 'Cancelado en WispHub (API en vivo)' : 'Ocupado en WispHub (API en vivo)',
+            };
+          }
+        } catch (apiErr: any) {
+          if (apiErr?.response?.status === 404) {
+            return { ocupado: false, detalle: 'No existe en WispHub' };
+          }
+          logger.warn(`Consulta en vivo WispHub para folio ${idNum}:`, apiErr?.message || apiErr);
+        }
+      }
+
+      return { ocupado: false, detalle: 'No encontrado en WispHub' };
+    } catch (err: any) {
+      logger.error(`Error en WispHubService.consultarDisponibilidadFolio para ${rawId}:`, err?.message || err);
+      return { ocupado: false, detalle: 'Error de consulta' };
     }
   }
 
@@ -1186,11 +1338,13 @@ export class WispHubService {
         const clienteTel = f.cliente?.telefono ? String(f.cliente.telefono) : '';
         const total = Number(f.total || 0);
         const subTotal = Number(f.sub_total || total);
-        const descuento = Number(f.descuento || 0);
-        const estado = String(f.estado || 'Pendiente de Pago');
+        let estado = String(f.estado || 'Pendiente de Pago');
+        if (estado === '1') estado = 'Pendiente de Pago';
+        if (estado === '2') estado = 'Pagada';
+        const isPaidInvoice = estado.toLowerCase().includes('pagad');
         const fechaEmision = f.fecha_emision ? String(f.fecha_emision) : null;
         const fechaVencimiento = f.fecha_vencimiento ? String(f.fecha_vencimiento) : null;
-        const fechaPago = f.fecha_pago ? String(f.fecha_pago) : null;
+        const fechaPago = isPaidInvoice && f.fecha_pago ? String(f.fecha_pago) : null;
         const descripcion = Array.isArray(f.articulos) && f.articulos[0]?.descripcion ? String(f.articulos[0].descripcion) : '';
         const linkPago = f.url_pasarela || f.url_payu || (idFactura ? `https://wisphub.net/factura/${idFactura}/` : null);
         const pdfUrl = f.url_pdf || (idFactura ? `https://wisphub.net/factura/pdf/${idFactura}/` : null);
@@ -1344,44 +1498,27 @@ export class WispHubService {
       }
     }
 
-    // 4. Conciliación y verificación en vivo de facturas:
-    // A) Si el cliente está al corriente (saldo <= 0), todas sus facturas anteriores deben quedar 'Pagada'
-    const isZeroBalance = options?.saldo !== undefined && Number(options.saldo) <= 0;
-    if (isZeroBalance && rows.length > 0) {
-      const hadPending = rows.some((r: any) => !String(r.estado || '').toLowerCase().includes('pagad'));
-      if (hadPending) {
-        rows = rows.map((r: any) => ({
-          ...r,
-          estado: 'Pagada',
-          fecha_pago: r.fecha_pago || r.fecha_emision || new Date().toISOString(),
-        }));
-        if (!isNaN(cleanId) && cleanId > 0) {
-          db.execute({
-            sql: `UPDATE wisphub_invoices SET estado = 'Pagada', updated_at = CURRENT_TIMESTAMP WHERE id_servicio = ? AND LOWER(estado) NOT LIKE '%pagad%'`,
-            args: [cleanId],
-          }).catch(() => {});
-        }
-      }
-    }
-
-    // B) Si la factura más reciente sigue marcada como pendiente, verificar WispHub en vivo (/facturas/{id}/)
-    // para capturar pagos recién realizados en caja/oficina sin demoras
-    if (rows.length > 0 && !String(rows[0].estado || '').toLowerCase().includes('pagad') && rows[0].id_factura) {
+    // 4. Verificación en vivo de la factura más reciente directamente en la API de WispHub:
+    // Garantiza congruencia 100% en tiempo real entre WispHub y el Portal
+    if (rows.length > 0 && rows[0].id_factura) {
       try {
         const api = this.getApi();
         const topFacturaId = rows[0].id_factura;
         const liveFactRes = await api.get(`/facturas/${topFacturaId}/`);
-        if (liveFactRes.data && liveFactRes.data.estado) {
-          const liveState = String(liveFactRes.data.estado);
-          if (liveState.toLowerCase().includes('pagad')) {
-            rows[0].estado = 'Pagada';
-            rows[0].fecha_pago = liveFactRes.data.fecha_pago || rows[0].fecha_pago || new Date().toISOString();
-            rows[0].total = Number(liveFactRes.data.total || rows[0].total);
-            db.execute({
-              sql: `UPDATE wisphub_invoices SET estado = 'Pagada', fecha_pago = ?, total = ?, updated_at = CURRENT_TIMESTAMP WHERE id_factura = ?`,
-              args: [rows[0].fecha_pago, rows[0].total, topFacturaId],
-            }).catch(() => {});
-          }
+        if (liveFactRes.data && liveFactRes.data.estado !== undefined) {
+          let liveState = String(liveFactRes.data.estado);
+          if (liveState === '1') liveState = 'Pendiente de Pago';
+          if (liveState === '2') liveState = 'Pagada';
+          const isPaid = liveState.toLowerCase().includes('pagad');
+          rows[0].estado = liveState;
+          rows[0].total = Number(liveFactRes.data.total || rows[0].total);
+          rows[0].fecha_vencimiento = liveFactRes.data.fecha_vencimiento || rows[0].fecha_vencimiento;
+          rows[0].fecha_pago = isPaid ? (liveFactRes.data.fecha_pago || rows[0].fecha_pago) : null;
+          
+          await db.execute({
+            sql: `UPDATE wisphub_invoices SET estado = ?, fecha_pago = ?, total = ?, fecha_vencimiento = ?, updated_at = CURRENT_TIMESTAMP WHERE id_factura = ?`,
+            args: [rows[0].estado, rows[0].fecha_pago, rows[0].total, rows[0].fecha_vencimiento, topFacturaId],
+          });
         }
       } catch (checkErr: any) {
         logger.warn(`No se pudo verificar factura ${rows[0]?.id_factura} en vivo:`, checkErr?.message);
@@ -1389,6 +1526,72 @@ export class WispHubService {
     }
 
     return rows;
+  }
+
+  /**
+   * Registra un pago para un cliente en WispHub (por pasarela Openpay o SPEI)
+   */
+  static async registerPaymentForClient(
+    idServicio: number | string,
+    params: {
+      monto: number;
+      forma_pago?: string;
+      referencia?: string;
+      comentario?: string;
+    }
+  ): Promise<{ success: boolean; message: string }> {
+    const sId = Number(idServicio);
+    const db = getDbClient();
+    const now = new Date().toISOString();
+
+    logger.info(`[WispHubService] Registrando pago de $${params.monto} MXN para contrato #${sId}...`);
+
+    try {
+      // 1. Buscar facturas pendientes locales
+      const invRes = await db.execute({
+        sql: `SELECT id_factura, folio, total FROM wisphub_invoices WHERE id_servicio = ? AND LOWER(estado) NOT LIKE '%pagad%' ORDER BY fecha_emision ASC LIMIT 1`,
+        args: [sId],
+      });
+
+      const topInv = invRes.rows[0] as any;
+      const api = this.getApi();
+
+      if (topInv && topInv.id_factura) {
+        try {
+          const d = new Date();
+          const pad = (n: number) => String(n).padStart(2, '0');
+          const fechaPagoStr = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+
+          await api.post(`/facturas/${topInv.id_factura}/registrar-pago/`, {
+            referencia: params.referencia || `OP-${Date.now()}`,
+            fecha_pago: fechaPagoStr,
+            total_cobrado: Number(params.monto),
+            accion: 1, // 1 = Registrar pago y activar servicio automáticamente
+            forma_pago: 21899, // 21899 = Transferencia Bancaria en WispHub
+          });
+          logger.info(`[WispHubService] ¡Pago registrado exitosamente en WispHub para factura #${topInv.id_factura}!`);
+        } catch (apiErr: any) {
+          logger.warn(`Aviso al enviar /facturas/${topInv.id_factura}/registrar-pago/ a WispHub:`, apiErr?.response?.data || apiErr?.message);
+        }
+
+        // Marcar pagada localmente
+        await db.execute({
+          sql: `UPDATE wisphub_invoices SET estado = 'Pagada', fecha_pago = ?, updated_at = ? WHERE id_factura = ?`,
+          args: [now, now, topInv.id_factura],
+        });
+      }
+
+      // Actualizar cliente localmente a estado activo y saldo ajustado
+      await db.execute({
+        sql: `UPDATE wisphub_clients SET estado = 'activo', saldo = '0', updated_at = ? WHERE id_servicio = ?`,
+        args: [now, sId],
+      });
+
+      return { success: true, message: `Pago registrado con éxito para contrato #${sId}` };
+    } catch (err: any) {
+      logger.error(`Error al registrar pago en WispHub para ${sId}:`, err?.message || err);
+      return { success: false, message: err?.message || 'Error al registrar pago.' };
+    }
   }
 }
 

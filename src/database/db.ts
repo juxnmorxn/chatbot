@@ -600,6 +600,51 @@ export async function initDatabase(): Promise<void> {
     try { await client.execute(`ALTER TABLE tickets ADD COLUMN assigned_office TEXT;`); } catch (_) {}
     try { await client.execute(`ALTER TABLE tickets ADD COLUMN whatsapp_group_jid TEXT;`); } catch (_) {}
 
+    // Tabla de Clientes Openpay (Cuentas Virtuales y CLABEs SPEI)
+    await client.execute(`
+      CREATE TABLE IF NOT EXISTS openpay_customers (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id INTEGER UNIQUE NOT NULL,
+        phone TEXT,
+        customer_id TEXT UNIQUE NOT NULL,
+        clabe TEXT,
+        agreement TEXT,
+        bank_name TEXT DEFAULT 'BBVA Bancomer',
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_op_cust_client ON openpay_customers(client_id);`);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_op_cust_phone ON openpay_customers(phone);`);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_op_cust_clabe ON openpay_customers(clabe);`);
+
+    // Tabla de Transacciones y Cobros Openpay (Tarjetas y SPEI)
+    await client.execute(`
+      CREATE TABLE IF NOT EXISTS openpay_transactions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        transaction_id TEXT UNIQUE NOT NULL,
+        order_id TEXT,
+        client_id INTEGER,
+        phone TEXT,
+        amount REAL NOT NULL,
+        fee REAL DEFAULT 0,
+        net_amount REAL,
+        method TEXT NOT NULL,
+        status TEXT NOT NULL,
+        description TEXT,
+        clabe TEXT,
+        card_brand TEXT,
+        card_last4 TEXT,
+        authorization TEXT,
+        raw_data TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_op_tx_order ON openpay_transactions(order_id);`);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_op_tx_client ON openpay_transactions(client_id);`);
+    await client.execute(`CREATE INDEX IF NOT EXISTS idx_op_tx_status ON openpay_transactions(status);`);
+
     // Sembrar superadmin inicial si la tabla está vacía
     const { hashPassword } = await import('../utils/auth');
     const existingAdmins = await client.execute(`SELECT COUNT(*) as count FROM admin_users`);

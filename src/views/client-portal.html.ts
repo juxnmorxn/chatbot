@@ -43,6 +43,9 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <!-- QRCode.js -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <!-- Openpay.js & Device Data SDK -->
+  <script type="text/javascript" src="https://js.openpay.mx/openpay.v1.min.js"></script>
+  <script type="text/javascript" src="https://js.openpay.mx/openpay-data.v1.min.js"></script>
 
   <style>
     :root, [data-theme="dark"] {
@@ -1392,7 +1395,7 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
           <div class="titular-info">
             <div class="titular-badge-row">
               <span class="titular-verified-badge"><i class="fa-solid fa-circle-check"></i> Titular Verificado</span>
-              <span id="titularContractBadge" class="titular-folio-badge">Contrato <strong id="titularHeroFolio" style="margin-left: 2px;">#715</strong></span>
+              <span id="titularContractBadge" class="titular-folio-badge">Contrato <strong id="titularHeroFolio" style="margin-left: 2px;">#---</strong></span>
             </div>
             <div id="titularHeroName" class="titular-hero-name">Cargando titular...</div>
             <div class="titular-sub-meta">
@@ -1524,9 +1527,14 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
               <div id="billingAmountLabel" class="billing-hero-amount" style="font-size: 24px;">$0.00</div>
               <div id="billingDueLabel" class="billing-hero-date" style="font-size: 11px;">Día 5 de cada mes</div>
             </div>
-            <button class="btn-outline" style="width: auto; padding: 8px 12px; font-size: 12px;" onclick="openModalBank()">
-              <i class="fa-solid fa-building-columns"></i> Datos de Pago
-            </button>
+            <div style="display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; align-items: center;">
+              <button class="btn-outline" style="width: auto; padding: 8px 12px; font-size: 12px;" onclick="openModalBank()">
+                <i class="fa-solid fa-building-columns"></i> SPEI / Banco
+              </button>
+              <button class="btn-main" style="width: auto; padding: 8px 14px; font-size: 12px; background: linear-gradient(135deg, #0284c7 0%, #1d4ed8 100%); font-weight: 700;" onclick="openModalCardPayment()">
+                <i class="fa-solid fa-credit-card"></i> Pagar con Tarjeta
+              </button>
+            </div>
           </div>
 
           <!-- Lista de recibos detallados de WispHub -->
@@ -1738,11 +1746,14 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
           </div>
         </div>
 
-        <!-- Tarjeta: CLABE Interbancaria (SPEI) -->
-        <div style="background: var(--bg-surface); border: 1.5px solid rgba(56, 189, 248, 0.35); padding: 12px 14px; border-radius: var(--radius-md);">
-          <div style="margin-bottom: 6px;">
-            <span style="font-size: 11px; color: #38bdf8; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">
-              <i class="fa-solid fa-shield-halved"></i> CLABE Interbancaria (SPEI)
+        <!-- Tarjeta: CLABE Interbancaria (SPEI Openpay / Banco) -->
+        <div style="background: var(--bg-surface); border: 1.5px solid rgba(56, 189, 248, 0.4); padding: 12px 14px; border-radius: var(--radius-md);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <span style="font-size: 11px; color: #38bdf8; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 5px;">
+              <i class="fa-solid fa-bolt" style="color: #f59e0b;"></i> Tu CLABE Única (SPEI Inmediato)
+            </span>
+            <span id="clabeLiveBadge" style="font-size: 9.5px; background: rgba(16, 185, 129, 0.15); color: #10b981; padding: 2px 7px; border-radius: 999px; font-weight: 700; border: 1px solid rgba(16, 185, 129, 0.3);">
+              Auto-Acreditación 24/7
             </span>
           </div>
           <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
@@ -1752,6 +1763,11 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
             <button class="btn-outline" onclick="copyClabe()" style="width: auto; padding: 4px 10px; font-size: 11px; height: 28px; flex-shrink: 0;">
               <i class="fa-solid fa-copy"></i> Copiar
             </button>
+          </div>
+          <div id="speiConvenioBox" style="display: none; margin-top: 8px; padding-top: 8px; border-top: 1px dashed rgba(255,255,255,0.08); font-size: 11.5px; color: var(--text-body);">
+            <span>Convenio CIE BBVA: <strong id="speiAgreementLabel" style="color: #38bdf8; font-family: monospace;">-</strong></span>
+            <span style="margin: 0 6px;">•</span>
+            <span>Referencia: <strong id="speiReferenceLabel" style="color: var(--text-title); font-family: monospace;">-</strong></span>
           </div>
         </div>
 
@@ -1919,6 +1935,126 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
 
       <button type="button" class="btn-main" onclick="closeModal('modalPasswordSuccess')" style="padding: 12px 18px; font-size: 14.5px; font-weight: 700; margin-top: 4px;">
         <i class="fa-solid fa-arrow-right"></i> Entendido, ir a Mi Portal
+      </button>
+    </div>
+  </div>
+
+  <!-- MODAL: PAGO CON TARJETA DE DÉBITO / CRÉDITO (OPENPAY) -->
+  <div id="modalCardPayment" class="modal-overlay" style="z-index: 240;">
+    <div class="modal-sheet" style="max-width: 440px; border-color: rgba(14, 165, 233, 0.45); box-shadow: 0 25px 60px rgba(0, 0, 0, 0.7);">
+      <div class="modal-sheet-header">
+        <div class="modal-sheet-title" style="display: flex; align-items: center; gap: 8px;">
+          <i class="fa-solid fa-credit-card" style="color: #38bdf8;"></i> Pagar con Tarjeta Bancaria
+        </div>
+        <button class="btn-close-modal" onclick="closeModal('modalCardPayment')">&times;</button>
+      </div>
+
+      <!-- Resumen del Pago con Comisión Desglosada -->
+      <div style="background: rgba(14, 165, 233, 0.08); border: 1.5px solid rgba(14, 165, 233, 0.35); border-radius: var(--radius-md); padding: 12px 14px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--text-body); margin-bottom: 5px;">
+          <span>Mensualidad de Internet:</span>
+          <strong id="cardPayBaseAmountLabel" style="color: var(--text-title); font-size: 14px;">$0.00 MXN</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11.5px; color: var(--text-muted); margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px dashed var(--border-card);">
+          <span>Comisión pasarela bancaria:</span>
+          <strong id="cardPayFeeAmountLabel" style="color: #f59e0b;">+$0.00 MXN</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-weight: 800; font-size: 13px; color: var(--text-title);">Total a Cobrar:</span>
+          <strong id="cardPayTotalAmountLabel" style="font-size: 19px; font-weight: 800; color: #38bdf8; font-family: 'Outfit', sans-serif;">$0.00 MXN</strong>
+        </div>
+      </div>
+
+      <!-- Formulario Seguro Openpay -->
+      <form id="cardPaymentForm" onsubmit="handleProcessCardPayment(event)" style="display: flex; flex-direction: column; gap: 11px;">
+        <input type="hidden" id="openpayDeviceSessionId">
+
+        <div>
+          <label style="font-size: 12px; color: var(--text-body); font-weight: 600; display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+            <span>Número de Tarjeta (16 dígitos)</span>
+            <span style="display: flex; gap: 4px; font-size: 14px; color: var(--text-muted);">
+              <i class="fa-brands fa-cc-visa"></i>
+              <i class="fa-brands fa-cc-mastercard"></i>
+            </span>
+          </label>
+          <div style="position: relative;">
+            <input type="tel" inputmode="numeric" id="cardInputNumber" class="form-input" autocomplete="cc-number" placeholder="4152 0000 0000 1234" maxlength="19" required oninput="formatCardNumber(this)" style="font-family: monospace; letter-spacing: 1.5px; font-size: 15px;">
+            <span id="cardBrandIcon" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-size: 18px; color: var(--text-muted);"></span>
+          </div>
+        </div>
+
+        <div>
+          <label style="font-size: 12px; color: var(--text-body); font-weight: 600; margin-bottom: 4px; display: block;">
+            Nombre del Titular (como aparece en la tarjeta)
+          </label>
+          <input type="text" id="cardInputHolder" class="form-input" autocomplete="cc-name" placeholder="JUAN PEREZ" required style="text-transform: uppercase;">
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div>
+            <label style="font-size: 12px; color: var(--text-body); font-weight: 600; margin-bottom: 4px; display: block;">
+              Vencimiento (MM/AA)
+            </label>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
+              <input type="tel" inputmode="numeric" id="cardInputExpMonth" class="form-input" autocomplete="cc-exp-month" placeholder="MM" maxlength="2" required oninput="handleExpMonthInput(this)" style="text-align: center; font-family: monospace; font-size: 15px;">
+              <input type="tel" inputmode="numeric" id="cardInputExpYear" class="form-input" autocomplete="cc-exp-year" placeholder="AA" maxlength="2" required oninput="handleExpYearInput(this)" style="text-align: center; font-family: monospace; font-size: 15px;">
+            </div>
+          </div>
+          <div>
+            <label style="font-size: 12px; color: var(--text-body); font-weight: 600; margin-bottom: 4px; display: flex; justify-content: space-between; align-items: center;">
+              <span>CVV / CVC</span>
+              <span style="font-size: 10px; color: var(--text-muted);"><i class="fa-solid fa-lock"></i> 3 dígitos</span>
+            </label>
+            <input type="password" inputmode="numeric" id="cardInputCvv" class="form-input" autocomplete="cc-csc" placeholder="123" maxlength="4" required oninput="this.value = this.value.replace(/[^0-9]/g, '')" style="text-align: center; font-family: monospace; letter-spacing: 2px; font-size: 15px;">
+          </div>
+        </div>
+
+        <div id="cardPayErrorAlert" style="display: none; font-size: 12px; color: #ef4444; background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.3); padding: 8px 12px; border-radius: var(--radius-sm); line-height: 1.35;"></div>
+
+        <div style="font-size: 11px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; justify-content: center;">
+          <i class="fa-solid fa-shield-halved" style="color: #10b981;"></i>
+          <span>Pagos protegidos por Openpay BBVA con cifrado SSL</span>
+        </div>
+
+        <button type="submit" id="btnSubmitCardPay" class="btn-main" style="padding: 13px 16px; font-size: 15px; font-weight: 700; margin-top: 2px; background: linear-gradient(135deg, #0284c7 0%, #1d4ed8 100%);">
+          <i class="fa-solid fa-lock"></i> <span id="btnCardPayText">Confirmar y Pagar</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: RECIBO DE PAGO CONFIRMADO CON TARJETA -->
+  <div id="modalPaymentReceipt" class="modal-overlay" style="z-index: 250;">
+    <div class="modal-sheet" style="text-align: center; max-width: 420px; border-color: rgba(16, 185, 129, 0.4); box-shadow: 0 25px 60px rgba(0, 0, 0, 0.7);">
+      <div style="width: 56px; height: 56px; border-radius: 50%; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.35); display: flex; align-items: center; justify-content: center; margin: 4px auto 8px; font-size: 26px; color: #10b981;">
+        <i class="fa-solid fa-circle-check"></i>
+      </div>
+
+      <div class="modal-sheet-title" style="font-size: 19px; color: var(--text-title); justify-content: center;">
+        ¡Pago Aprobado con Éxito!
+      </div>
+
+      <p style="font-size: 13px; color: var(--text-body); line-height: 1.45; margin: 0;">
+        Tu pago ha sido acreditado en tu cuenta y tu servicio de internet queda activo al 100%.
+      </p>
+
+      <div style="background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border-card); border-radius: var(--radius-md); padding: 14px 16px; text-align: left; display: flex; flex-direction: column; gap: 8px; font-size: 13px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span style="color: var(--text-muted);">Monto Pagado:</span>
+          <strong id="receiptAmountLabel" style="color: #10b981; font-size: 16px;">$0.00 MXN</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span style="color: var(--text-muted);">Método de Pago:</span>
+          <strong id="receiptMethodLabel" style="color: var(--text-title); font-size: 13px;">Tarjeta Bancaria</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span style="color: var(--text-muted);">Autorización Bancaria:</span>
+          <strong id="receiptAuthLabel" style="color: #38bdf8; font-family: monospace; font-size: 13px;">-</strong>
+        </div>
+      </div>
+
+      <button type="button" class="btn-main" onclick="closeModal('modalPaymentReceipt')" style="padding: 12px 18px; font-size: 14.5px; font-weight: 700; margin-top: 4px; background: linear-gradient(135deg, #10b981 0%, #059669 100%);">
+        <i class="fa-solid fa-check"></i> Listo, Continuar en mi Portal
       </button>
     </div>
   </div>
@@ -2469,21 +2605,21 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
       if (heroNameEl) heroNameEl.innerText = cleanTitular;
 
       const heroFolioEl = document.getElementById('titularHeroFolio');
-      if (heroFolioEl) heroFolioEl.innerText = '#' + c.id_servicio;
+      if (heroFolioEl) heroFolioEl.innerText = '#' + (c.folio || c.id_servicio);
 
       const heroPhoneEl = document.getElementById('titularHeroPhone');
       if (heroPhoneEl) heroPhoneEl.innerText = currentPhone || 'Registrado';
 
       // 2. Tarjeta de Paquete
       document.getElementById('titularName').innerText = cleanTitular;
-      document.getElementById('contractFolio').innerText = '#' + c.id_servicio;
+      document.getElementById('contractFolio').innerText = '#' + (c.folio || c.id_servicio);
 
       // 3. Modal Datos de Pago Bancario
       const bankTitularEl = document.getElementById('bankTitularName');
       if (bankTitularEl) bankTitularEl.innerText = cleanTitular;
 
       const bankRefEl = document.getElementById('bankRefText');
-      if (bankRefEl) bankRefEl.innerText = 'SRV-' + c.id_servicio;
+      if (bankRefEl) bankRefEl.innerText = 'SRV-' + (c.folio || c.id_servicio);
 
       const bankConceptEl = document.getElementById('bankConceptText');
       if (bankConceptEl) {
@@ -2635,17 +2771,24 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
       document.getElementById('wifiPassSharedLabel').innerText = sharedPass;
 
       // Facturación y Saldo
-      const balance = Number(c.saldo || 0);
-      document.getElementById('billingAmountLabel').innerText = '$' + balance.toFixed(2);
-      document.getElementById('billingDueLabel').innerText = 'Corte: ' + (c.fecha_corte || ('Día ' + (c.dia_corte || 5) + ' del mes'));
-
+      currentClientPlanPrice = Number(c.precio_plan || 250);
+      const balance = Number(c.saldo !== undefined ? c.saldo : 0);
+      const hasPending = !!c.has_pending || balance > 0;
+      const bAmt = document.getElementById('billingAmountLabel');
+      const bDue = document.getElementById('billingDueLabel');
       const bBadge = document.getElementById('billingBadge');
-      if (balance <= 0) {
-        bBadge.className = 'badge-status paid';
-        bBadge.innerText = 'Al Corriente';
-      } else {
-        bBadge.className = 'badge-status pending';
-        bBadge.innerText = 'Pago Pendiente';
+
+      if (bAmt) bAmt.innerText = '$' + balance.toFixed(2);
+      if (bDue) bDue.innerText = 'Corte: ' + (c.fecha_corte || ('Día ' + (c.dia_corte || 5) + ' del mes'));
+
+      if (bBadge) {
+        if (!hasPending && balance <= 0) {
+          bBadge.className = 'badge-status paid';
+          bBadge.innerText = 'Al Corriente';
+        } else {
+          bBadge.className = 'badge-status pending';
+          bBadge.innerText = 'Pago Pendiente';
+        }
       }
 
       document.getElementById('bankRefText').innerText = 'SRV-' + c.id_servicio;
@@ -2708,6 +2851,32 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
           applyBankDetails(data.bankDetails, titular, currentContractId);
         }
 
+        if (data.success) {
+          // Sincronizar dinámicamente saldo principal con el balance real y facturas pendientes
+          const effectiveBalance = Number(data.balance !== undefined ? data.balance : 0);
+          const hasPending = data.hasPending || (data.invoices && data.invoices.some(inv => !String(inv.estado || '').toLowerCase().includes('pagad')));
+          const bAmt = document.getElementById('billingAmountLabel');
+          const bBadge = document.getElementById('billingBadge');
+          const bDue = document.getElementById('billingDueLabel');
+
+          if (hasPending || effectiveBalance > 0) {
+            if (bAmt) bAmt.innerText = '$' + effectiveBalance.toFixed(2);
+            if (bBadge) {
+              bBadge.className = 'badge-status pending';
+              bBadge.innerText = 'Pago Pendiente';
+            }
+            if (bDue && data.dueDate) {
+              bDue.innerText = 'Vence: ' + data.dueDate;
+            }
+          } else {
+            if (bAmt) bAmt.innerText = '$0.00';
+            if (bBadge) {
+              bBadge.className = 'badge-status paid';
+              bBadge.innerText = 'Al Corriente';
+            }
+          }
+        }
+
         if (data.success && data.invoices && data.invoices.length > 0) {
           const countBadge = document.getElementById('invoicesTotalCountBadge');
           if (countBadge) {
@@ -2717,7 +2886,9 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
             const isPaid = String(inv.estado || '').toLowerCase().includes('pagad');
             const statusClass = isPaid ? 'paid' : 'pending';
             const statusText = isPaid ? 'Pagada' : (inv.estado || 'Pendiente de Pago');
-            const payBtn = (!isPaid && inv.link_pago) ? '<a href="' + inv.link_pago + '" target="_blank" class="btn-main" style="width:auto; padding:5px 12px; font-size:12px; height:30px; border-radius:7px; display:inline-flex; align-items:center; gap:5px;" title="Pagar Factura"><i class="fa-solid fa-credit-card"></i> Pagar</a>' : '';
+            const payBtn = (!isPaid) 
+              ? '<button onclick="openModalCardPayment(' + inv.id + ', ' + Number(inv.monto || 0) + ')" class="btn-main" style="width:auto; padding:5px 12px; font-size:12px; height:30px; border-radius:7px; display:inline-flex; align-items:center; gap:5px; background:linear-gradient(135deg, #0284c7 0%, #1d4ed8 100%); font-weight:700;"><i class="fa-solid fa-credit-card"></i> Pagar con Tarjeta</button>' 
+              : '';
             
             let fechaPagoStr = '';
             if (inv.fecha_pago) {
@@ -2733,10 +2904,21 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
                 fechaPagoStr = String(inv.fecha_pago).slice(0, 16).replace('T', ' ');
               }
             }
-            const vence = inv.fecha_vencimiento ? inv.fecha_vencimiento.slice(0, 10) : '';
+            let venceStr = '';
+            if (inv.fecha_vencimiento) {
+              const parts = String(inv.fecha_vencimiento).split('T')[0].split('-');
+              if (parts.length === 3) {
+                const day = parts[2];
+                const mon = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'][parseInt(parts[1], 10) - 1] || parts[1];
+                const yr = parts[0];
+                venceStr = day + '/' + mon + '/' + yr;
+              } else {
+                venceStr = inv.fecha_vencimiento;
+              }
+            }
             const fechaLabel = isPaid 
               ? ('Pagada el ' + (fechaPagoStr || inv.fecha_emision || 'Reciente'))
-              : ('Vence el ' + (vence || 'Próximo corte'));
+              : ('Vence el ' + (venceStr || 'Próximo corte'));
 
             const receiptBtn = inv.pdf_url ? '<a href="' + inv.pdf_url + '" target="_blank" style="font-size:11px; color:#0284c7; text-decoration:none; display:inline-flex; align-items:center; gap:4px; font-weight:600; padding:3px 8px; border-radius:6px; background:rgba(2,132,199,0.08); border:1px solid rgba(2,132,199,0.25);"><i class="fa-solid fa-file-arrow-down"></i> Recibo</a>' : '';
 
@@ -2786,13 +2968,9 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
         const el = document.getElementById('bankBeneficiaryText');
         if (el) el.innerText = b.beneficiary;
       }
-      if (b.concept) {
-        const el = document.getElementById('bankConceptText');
-        if (el) el.innerText = b.concept;
-      } else if (titularName) {
-        const el = document.getElementById('bankConceptText');
-        if (el) el.innerText = titularName;
-      }
+      const conceptTitular = titularName || b.titular || b.concept || 'Cliente';
+      const conceptEl = document.getElementById('bankConceptText');
+      if (conceptEl) conceptEl.innerText = conceptTitular;
       const rawPhone = b.officePhone || '${officePhone}';
       updateOfficePaymentLink(rawPhone, titularName || b.titular, contractId);
     }
@@ -3055,9 +3233,346 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
           const titular = document.getElementById('bankConceptText')?.innerText || document.getElementById('titularHeroName')?.innerText || data.bankDetails.titular || 'Cliente';
           applyBankDetails(data.bankDetails, titular, cId);
         }
+
+        // Consultar CLABE personalizada de Openpay en segundo plano
+        fetch('/api/portal/openpay/spei?serviceId=' + encodeURIComponent(cId))
+          .then(r => r.json())
+          .then(speiData => {
+            if (speiData && speiData.success && speiData.spei?.clabe) {
+              const clabeVal = String(speiData.spei.clabe).trim();
+              if (clabeVal.length === 18 && clabeVal !== '000000000000000001') {
+                const clabeEl = document.getElementById('bankClabeText');
+                if (clabeEl) clabeEl.innerText = clabeVal;
+              }
+              if (speiData.spei.agreement) {
+                const box = document.getElementById('speiConvenioBox');
+                const agEl = document.getElementById('speiAgreementLabel');
+                const refEl = document.getElementById('speiReferenceLabel');
+                if (box) box.style.display = 'block';
+                if (agEl) agEl.innerText = speiData.spei.agreement;
+                if (refEl) refEl.innerText = speiData.spei.reference || ('SRV-' + cId);
+              }
+            }
+          })
+          .catch(() => {});
       } catch (err) {
         console.warn('Error al actualizar datos bancarios en vivo:', err);
       }
+    }
+
+    // ==========================================
+    // LOGICA OPENPAY (TARJETA Y DISPOSITIVO)
+    // ==========================================
+    let openpayConfig = null;
+    let currentPendingAmount = 0;
+    let currentTargetInvoiceId = null;
+
+    async function initOpenpaySdk() {
+      if (openpayConfig) return true;
+      try {
+        const res = await fetch('/api/portal/openpay/config');
+        const data = await res.json();
+        if (data && data.success && data.merchantId && data.publicKey) {
+          openpayConfig = data;
+          if (window.OpenPay) {
+            OpenPay.setId(data.merchantId);
+            OpenPay.setApiKey(data.publicKey);
+            OpenPay.setSandboxMode(data.isSandbox);
+          }
+          return true;
+        }
+      } catch (err) {
+        console.warn('Error al cargar config de Openpay:', err);
+      }
+      return false;
+    }
+
+    async function openModalCardPayment(invoiceId, amount) {
+      await initOpenpaySdk();
+
+      currentTargetInvoiceId = invoiceId || null;
+      if (amount !== undefined && Number(amount) > 0) {
+        currentPendingAmount = Number(amount);
+      } else {
+        const saldoTxt = document.getElementById('billingAmountLabel')?.innerText || '$0';
+        const num = parseFloat(saldoTxt.replace(/[^0-9.]/g, '')) || 0;
+        currentPendingAmount = num > 0 ? num : (currentClientPlanPrice || 250);
+      }
+
+      updateCardPaymentFeeDisplay(currentPendingAmount);
+
+      const form = document.getElementById('cardPaymentForm');
+      if (form) form.reset();
+      const errBox = document.getElementById('cardPayErrorAlert');
+      if (errBox) errBox.style.display = 'none';
+
+      if (window.OpenPay && window.OpenPay.deviceData) {
+        try {
+          const deviceSessionId = OpenPay.deviceData.setup('cardPaymentForm');
+          const devIn = document.getElementById('openpayDeviceSessionId');
+          if (devIn) devIn.value = deviceSessionId;
+        } catch (e) {
+          console.warn('Error setup OpenPay deviceData:', e);
+        }
+      }
+
+      openModalWithState('modalCardPayment');
+    }
+
+    function updateCardPaymentFeeDisplay(net) {
+      const p = openpayConfig?.feePercent || 2.9;
+      const f = openpayConfig?.feeFixed || 2.5;
+      const taxFactor = 1.16;
+      const P = (p / 100) * taxFactor;
+      const F = f * taxFactor;
+      const total = Math.round(((net + F) / (1 - P)) * 100) / 100;
+      const fee = Math.round((total - net) * 100) / 100;
+
+      const baseEl = document.getElementById('cardPayBaseAmountLabel');
+      if (baseEl) baseEl.innerText = '$' + net.toFixed(2) + ' MXN';
+
+      const feeEl = document.getElementById('cardPayFeeAmountLabel');
+      if (feeEl) feeEl.innerText = '+$' + fee.toFixed(2) + ' MXN (' + p + '% + $' + f + ' +IVA)';
+
+      const totalEl = document.getElementById('cardPayTotalAmountLabel');
+      if (totalEl) totalEl.innerText = '$' + total.toFixed(2) + ' MXN';
+
+      const btnTxt = document.getElementById('btnCardPayText');
+      if (btnTxt) btnTxt.innerText = 'Pagar $' + total.toFixed(2) + ' MXN';
+    }
+
+    function formatCardNumber(input) {
+      // 1. Extraer estrictamente los dígitos (sin backslashes vulnerables a template literal)
+      var val = (input.value || '').replace(/[^0-9]/g, '').slice(0, 16);
+      
+      // 2. Formatear en bloques de 4 dígitos limpios (ej: 4111 1111 1111 1111)
+      var parts = [];
+      for (var i = 0; i < val.length; i += 4) {
+        parts.push(val.substring(i, i + 4));
+      }
+      input.value = parts.join(' ');
+
+      // 3. Detectar marca de tarjeta y mostrar icono
+      var icon = document.getElementById('cardBrandIcon');
+      if (icon) {
+        if (/^4/.test(val)) {
+          icon.innerHTML = '<i class="fa-brands fa-cc-visa" style="color:#0284c7;"></i>';
+        } else if (/^(5[1-5]|2[2-7])/.test(val)) {
+          icon.innerHTML = '<i class="fa-brands fa-cc-mastercard" style="color:#f59e0b;"></i>';
+        } else if (/^3[47]/.test(val)) {
+          icon.innerHTML = '<i class="fa-brands fa-cc-amex" style="color:#10b981;"></i>';
+        } else {
+          icon.innerHTML = '';
+        }
+      }
+
+      // Si ya completó los 16 dígitos, pasar el foco al nombre del titular
+      if (val.length === 16) {
+        var holderIn = document.getElementById('cardInputHolder');
+        if (holderIn && !holderIn.value.trim()) {
+          holderIn.focus();
+        }
+      }
+    }
+
+    function handleExpMonthInput(input) {
+      input.value = input.value.replace(/[^0-9]/g, '').slice(0, 2);
+      if (input.value.length === 2) {
+        var num = parseInt(input.value, 10);
+        if (num > 12) input.value = '12';
+        if (num === 0) input.value = '01';
+        var yIn = document.getElementById('cardInputExpYear');
+        if (yIn) yIn.focus();
+      }
+    }
+
+    function handleExpYearInput(input) {
+      input.value = input.value.replace(/[^0-9]/g, '').slice(0, 2);
+      if (input.value.length === 2) {
+        var cIn = document.getElementById('cardInputCvv');
+        if (cIn) cIn.focus();
+      }
+    }
+
+    async function handleProcessCardPayment(e) {
+      e.preventDefault();
+      const btn = document.getElementById('btnSubmitCardPay');
+      const errBox = document.getElementById('cardPayErrorAlert');
+      if (errBox) errBox.style.display = 'none';
+
+      const origText = btn ? btn.innerHTML : '';
+
+      if (!window.OpenPay) {
+        if (errBox) {
+          errBox.innerText = 'No se pudo cargar la pasarela bancaria. Verifica tu conexión a internet.';
+          errBox.style.display = 'block';
+        }
+        return;
+      }
+
+      const holderName = (document.getElementById('cardInputHolder')?.value || '').trim();
+      const cardNumber = (document.getElementById('cardInputNumber')?.value || '').replace(/[^0-9]/g, '');
+      const expMonth = (document.getElementById('cardInputExpMonth')?.value || '').replace(/[^0-9]/g, '').padStart(2, '0');
+      const expYear = (document.getElementById('cardInputExpYear')?.value || '').replace(/[^0-9]/g, '').slice(-2);
+      const cvv2 = (document.getElementById('cardInputCvv')?.value || '').replace(/[^0-9]/g, '');
+
+      // Validaciones previas en el cliente con mensajes en español claro
+      if (!cardNumber || cardNumber.length < 15 || cardNumber.length > 19) {
+        if (errBox) {
+          errBox.innerText = 'Por favor ingresa los 16 dígitos completos de tu tarjeta.';
+          errBox.style.display = 'block';
+        }
+        document.getElementById('cardInputNumber')?.focus();
+        return;
+      }
+
+      if (!holderName || holderName.length < 3) {
+        if (errBox) {
+          errBox.innerText = 'Escribe el nombre del titular como aparece en la tarjeta.';
+          errBox.style.display = 'block';
+        }
+        document.getElementById('cardInputHolder')?.focus();
+        return;
+      }
+
+      if (!expMonth || parseInt(expMonth, 10) < 1 || parseInt(expMonth, 10) > 12) {
+        if (errBox) {
+          errBox.innerText = 'Mes de vencimiento inválido (01 al 12).';
+          errBox.style.display = 'block';
+        }
+        document.getElementById('cardInputExpMonth')?.focus();
+        return;
+      }
+
+      if (!expYear || expYear.length !== 2) {
+        if (errBox) {
+          errBox.innerText = 'Año de vencimiento inválido (2 dígitos, ej: 26).';
+          errBox.style.display = 'block';
+        }
+        document.getElementById('cardInputExpYear')?.focus();
+        return;
+      }
+
+      if (!cvv2 || cvv2.length < 3) {
+        if (errBox) {
+          errBox.innerText = 'Ingresa el código CVV (3 dígitos al reverso de tu tarjeta).';
+          errBox.style.display = 'block';
+        }
+        document.getElementById('cardInputCvv')?.focus();
+        return;
+      }
+
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Validando tarjeta con banco...';
+      }
+
+      const tokenData = {
+        holder_name: holderName,
+        card_number: cardNumber,
+        cvv2: cvv2,
+        expiration_month: expMonth,
+        expiration_year: expYear
+      };
+
+      OpenPay.token.create(tokenData, async (response) => {
+        const tokenId = response.data.id;
+        let deviceSessionId = document.getElementById('openpayDeviceSessionId')?.value;
+        if (!deviceSessionId && OpenPay.deviceData) {
+          deviceSessionId = OpenPay.deviceData.setup('cardPaymentForm');
+        }
+
+        if (btn) btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Procesando cargo bancario...';
+
+        try {
+          const chargeRes = await fetch('/api/portal/openpay/charge-card', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              tokenId,
+              deviceSessionId: deviceSessionId || 'sandbox_session',
+              amount: currentPendingAmount,
+              clientId: currentContractId,
+              orderId: 'CARD_' + currentContractId + '_' + Date.now(),
+              phone: currentPhone,
+              description: 'Pago de Internet CloudWare Contrato #' + currentContractId
+            })
+          });
+
+          const chargeData = await chargeRes.json();
+          if (chargeData.success) {
+            closeModal('modalCardPayment');
+            showToast('✅ ¡Pago con tarjeta aprobado!');
+
+            openModalPaymentReceipt({
+              amount: chargeData.amount || currentPendingAmount,
+              authorization: chargeData.authorization || 'N/A',
+              cardBrand: chargeData.card?.brand || 'Tarjeta Bancaria',
+              cardLast4: chargeData.card?.cardNumber ? chargeData.card.cardNumber.slice(-4) : ''
+            });
+
+            setTimeout(() => loadDashboard(), 1500);
+          } else {
+            if (errBox) {
+              errBox.innerText = chargeData.message || 'La tarjeta fue rechazada por el banco emisor.';
+              errBox.style.display = 'block';
+            }
+          }
+        } catch (err) {
+          if (errBox) {
+            errBox.innerText = 'Error de conexión con el servidor al procesar el cobro.';
+            errBox.style.display = 'block';
+          }
+        } finally {
+          if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = origText;
+          }
+        }
+      }, (error) => {
+        var rawMsg = (error.data && error.data.description) ? String(error.data.description) : (error.message || '');
+        var friendly = 'Los datos de la tarjeta son inválidos.';
+        if (/must contain only digits/i.test(rawMsg)) {
+          friendly = 'El número de tarjeta debe contener solo números (16 dígitos).';
+        } else if (/length is invalid/i.test(rawMsg)) {
+          friendly = 'El número de tarjeta debe tener 16 dígitos.';
+        } else if (/holder_name/i.test(rawMsg)) {
+          friendly = 'Ingresa el nombre del titular de la tarjeta.';
+        } else if (/expiration_month/i.test(rawMsg) || /expiration/i.test(rawMsg)) {
+          friendly = 'La fecha de vencimiento es inválida o la tarjeta está vencida.';
+        } else if (/cvv/i.test(rawMsg)) {
+          friendly = 'El código CVV es incorrecto (3 dígitos al reverso).';
+        } else if (/declined|rechaz/i.test(rawMsg)) {
+          friendly = 'Tarjeta rechazada por el banco emisor. Verifica fondos o llama a tu banco.';
+        } else if (rawMsg) {
+          friendly = rawMsg;
+        }
+
+        if (errBox) {
+          errBox.innerText = friendly;
+          errBox.style.display = 'block';
+        }
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = origText;
+        }
+      });
+    }
+
+    function openModalPaymentReceipt(info) {
+      const amtEl = document.getElementById('receiptAmountLabel');
+      if (amtEl) amtEl.innerText = '$' + Number(info.amount || 0).toFixed(2) + ' MXN';
+
+      const methEl = document.getElementById('receiptMethodLabel');
+      if (methEl) {
+        const last4 = info.cardLast4 ? (' •••• ' + info.cardLast4) : '';
+        methEl.innerText = (info.cardBrand || 'Tarjeta') + last4;
+      }
+
+      const authEl = document.getElementById('receiptAuthLabel');
+      if (authEl) authEl.innerText = info.authorization || 'N/A';
+
+      openModalWithState('modalPaymentReceipt');
     }
 
     let isCreatePassMandatory = false;

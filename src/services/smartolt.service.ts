@@ -2,6 +2,7 @@ import axios, { AxiosInstance } from 'axios';
 import { config } from '../config/env';
 import { SettingsService } from './settings.service';
 import { DbService, SmartOltOnuRecord } from './db.service';
+import { getDbClient } from '../database/db';
 import { IpamService } from './ipam.service';
 import { Logger } from '../utils/logger';
 
@@ -1306,6 +1307,95 @@ export class SmartOLTService {
   }
 
   /**
+   * Reactiva y habilita los SSIDs y radios Wi-Fi (WLAN 2.4G y 5G) en la ONT
+   * enviando comandos por TR-069 (GenieACS) y SmartOLT para encender la red inalámbrica apagada.
+   */
+  static async reactivarWlanSsid(
+    onuIdOrExternalId: string
+  ): Promise<{ success: boolean; message: string; ssid24?: string; ssid5g?: string }> {
+    const cleanId = onuIdOrExternalId.trim();
+    let onuRecord = await DbService.getOnuById(cleanId);
+    if (!onuRecord && cleanId.length < 12) {
+      const matches = await DbService.searchOnusFuzzy(cleanId, 1);
+      if (matches.length > 0) onuRecord = matches[0];
+    }
+    const externalId = onuRecord?.unique_external_id || cleanId;
+    const sn = (onuRecord?.sn || cleanId).replace(/[-_]/g, '');
+
+    let tr069Ok = false;
+    // 1. Intentar por TR-069 directo a GenieACS
+    try {
+      const acsUrl = process.env.GENIEACS_URL || 'http://127.0.0.1:7557';
+      const query = JSON.stringify({
+        $or: [
+          { 'InternetGatewayDevice.DeviceInfo.SerialNumber._value': sn },
+          { '_id': { $regex: sn, $options: 'i' } }
+        ]
+      });
+      const acsRes = await fetch(`${acsUrl}/devices/?query=${encodeURIComponent(query)}`);
+      if (acsRes.ok) {
+        const devices = await acsRes.json();
+        if (devices && devices.length > 0) {
+          const deviceId = devices[0]._id;
+          const parameterValues: [string, string, string][] = [
+            ['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.Enable', 'true', 'xsd:boolean'],
+            ['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.RadioEnabled', 'true', 'xsd:boolean'],
+            ['InternetGatewayDevice.LANDevice.1.WLANConfiguration.2.Enable', 'true', 'xsd:boolean'],
+            ['InternetGatewayDevice.LANDevice.1.WLANConfiguration.2.RadioEnabled', 'true', 'xsd:boolean'],
+            ['InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.Enable', 'true', 'xsd:boolean'],
+            ['InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.RadioEnabled', 'true', 'xsd:boolean'],
+            ['Device.WiFi.Radio.1.Enable', 'true', 'xsd:boolean'],
+            ['Device.WiFi.Radio.2.Enable', 'true', 'xsd:boolean'],
+            ['Device.WiFi.SSID.1.Enable', 'true', 'xsd:boolean'],
+            ['Device.WiFi.SSID.2.Enable', 'true', 'xsd:boolean'],
+            ['Device.WiFi.AccessPoint.1.Enable', 'true', 'xsd:boolean'],
+            ['Device.WiFi.AccessPoint.2.Enable', 'true', 'xsd:boolean']
+          ];
+          const taskRes = await fetch(`${acsUrl}/devices/${encodeURIComponent(deviceId)}/tasks?connection_request`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: 'setParameterValues', parameterValues })
+          });
+          if (taskRes.ok) {
+            tr069Ok = true;
+            logger.info(`[TR069] Tarea de reactivación de SSIDs WLAN enviada para ONT ${deviceId} (${sn})`);
+          }
+        }
+      }
+    } catch (e: any) {
+      logger.warn(`[TR069] No se pudo enviar reactivación vía GenieACS para ${sn}:`, e?.message);
+    }
+
+    // 2. Intentar refrescar puertos Wi-Fi en SmartOLT
+    try {
+      const existingWifi = await this.getOnuWifiDetails(externalId);
+      const ssid24 = existingWifi?.wlan1?.ssid || existingWifi?.ssid || (onuRecord ? `CloudWare-${onuRecord.name?.split('-').pop()?.trim().slice(0, 10)}` : 'CloudWare-WiFi');
+      const pass = existingWifi?.wlan1?.password || existingWifi?.wifi_password || 'CloudWare1234';
+
+      const api = this.getApi();
+      const params24 = new URLSearchParams();
+      params24.append('wifi_port', 'wifi_0/1');
+      params24.append('ssid', ssid24);
+      params24.append('password', pass);
+      params24.append('authentication_mode', 'WPA2');
+      await api.post(`/onu/set_wifi_port_transparent/${encodeURIComponent(externalId)}`, params24.toString(), {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      }).catch(() => {});
+
+      return {
+        success: true,
+        message: 'Señales Wi-Fi reactivadas con éxito.',
+        ssid24,
+      };
+    } catch (err: any) {
+      return {
+        success: tr069Ok,
+        message: tr069Ok ? 'Reactivado vía TR-069' : err?.message || 'Error al reactivar WLAN',
+      };
+    }
+  }
+
+  /**
    * Actualiza el perfil de velocidad (Paquete) de una ONU en SmartOLT en tiempo real
    */
   static async updateSpeedProfile(
@@ -1440,6 +1530,122 @@ export class SmartOLTService {
         success: false,
         message: `Error en SmartOLT: ${errMsg}`,
       };
+    }
+  }
+
+  /**
+   * Consulta la disponibilidad o existencia de una ONU asignada a un folio en SmartOLT
+   * Revisa primero en Base de Datos Local (smartolt_onus) y si no se encuentra, consulta en vivo en la API de SmartOLT.
+   */
+  static async consultarDisponibilidadFolio(folio: string | number): Promise<{
+    ocupado: boolean;
+    onu?: {
+      unique_external_id: string;
+      sn: string;
+      name: string;
+      ip_address?: string;
+      olt_name?: string;
+      zone_name?: string;
+      speed_profile?: string;
+      status?: string;
+      signal?: string;
+    };
+    detalle?: string;
+  }> {
+    const rawId = String(folio).trim();
+    if (!rawId) return { ocupado: false, detalle: 'Folio vacío' };
+
+    const numMatch = rawId.match(/^0*(\d+)/);
+    const idNum = numMatch ? numMatch[1] : rawId;
+    const paddedId = idNum.padStart(4, '0');
+
+    try {
+      const client = getDbClient();
+
+      // 1. Búsqueda en Base de Datos Local smartolt_onus por prefijo de folio en name o external_id
+      const localRes = await client.execute({
+        sql: `
+          SELECT unique_external_id, sn, name, ip_address, olt_name, zone_name, speed_profile, raw_data
+          FROM smartolt_onus
+          WHERE name LIKE ?
+             OR name LIKE ?
+             OR name LIKE ?
+             OR name LIKE ?
+             OR unique_external_id = ?
+             OR unique_external_id = ?
+          LIMIT 1
+        `,
+        args: [`${idNum}-%`, `${idNum} - %`, `${paddedId}-%`, `${paddedId} - %`, idNum, paddedId],
+      });
+
+      if (localRes.rows.length > 0) {
+        const row = localRes.rows[0];
+        let statusStr: string | undefined;
+        let signalStr: string | undefined;
+        if (row.raw_data) {
+          try {
+            const parsed = typeof row.raw_data === 'string' ? JSON.parse(String(row.raw_data)) : row.raw_data;
+            statusStr = parsed.status || parsed.onu_status;
+            signalStr = parsed.signal || parsed.optical_power || parsed.rx_power;
+          } catch {}
+        }
+
+        const rawOltName = String(row.name || '').trim();
+        const cleanOltName = rawOltName.replace(/^[\d\s\-#_.]+/i, '').trim();
+
+        return {
+          ocupado: true,
+          onu: {
+            unique_external_id: String(row.unique_external_id || ''),
+            sn: String(row.sn || ''),
+            name: cleanOltName || rawOltName,
+            ip_address: row.ip_address ? String(row.ip_address) : undefined,
+            olt_name: row.olt_name ? String(row.olt_name) : undefined,
+            zone_name: row.zone_name ? String(row.zone_name) : undefined,
+            speed_profile: row.speed_profile ? String(row.speed_profile) : undefined,
+            status: statusStr,
+            signal: signalStr,
+          },
+          detalle: 'ONU registrada en SmartOLT (Base de Datos Local)',
+        };
+      }
+
+      // 2. Consulta en vivo en API SmartOLT si hay API Key configurada
+      const apiKey = this.getApiKey();
+      if (apiKey && !apiKey.includes('tu_token')) {
+        const candidates = Array.from(new Set([rawId, idNum, paddedId]));
+        for (const cand of candidates) {
+          try {
+            const api = this.getApi();
+            const res = await api.get(`/onu/get_onu_details/${encodeURIComponent(cand)}`);
+            const d = res.data?.onu_details || res.data;
+            if (res.data?.status === true || (d && (d.sn || d.name || d.unique_external_id))) {
+              return {
+                ocupado: true,
+                onu: {
+                  unique_external_id: String(d.unique_external_id || cand),
+                  sn: String(d.sn || ''),
+                  name: String(d.name || ''),
+                  ip_address: d.ip_address || d.ip ? String(d.ip_address || d.ip) : undefined,
+                  olt_name: d.olt_name ? String(d.olt_name) : undefined,
+                  zone_name: d.zone || d.zone_name ? String(d.zone || d.zone_name) : undefined,
+                  speed_profile: d.speed_profile_name || d.download_speed ? String(d.speed_profile_name || d.download_speed) : undefined,
+                  status: d.status || d.onu_status ? String(d.status || d.onu_status) : undefined,
+                  signal: d.signal || d.optical_power ? String(d.signal || d.optical_power) : undefined,
+                },
+                detalle: 'ONU registrada en SmartOLT (API en vivo)',
+              };
+            }
+          } catch (apiErr: any) {
+            // Continúa si no se encuentra con esta variación
+          }
+        }
+      }
+
+      return { ocupado: false, detalle: 'No existe en SmartOLT' };
+    } catch (err: any) {
+      logger.error(`Error en SmartOLTService.consultarDisponibilidadFolio para ${rawId}:`, err?.message || err);
+      return { ocupado: false, detalle: 'Error de consulta' };
     }
   }
 

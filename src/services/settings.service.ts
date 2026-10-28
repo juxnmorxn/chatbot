@@ -35,6 +35,14 @@ export interface AppSettings {
   paymentMercadopagoUrl?: string;
   mercadopagoAccessToken?: string;
   mercadopagoPublicKey?: string;
+  // Openpay BBVA
+  openpayMerchantId?: string;
+  openpayPublicKey?: string;
+  openpaySecretKey?: string;
+  openpaySandbox?: string;
+  openpayEnabled?: string;
+  openpayCardFeePercent?: string;
+  openpayCardFeeFixed?: string;
   // Automatizaciones y Notificaciones de Cobro
   notifRecordatorioPrevioEnabled?: string;
   notifRecordatorioPrevioDias?: string;
@@ -171,14 +179,21 @@ export class SettingsService {
       soporteHumanoPhone: this.get('SOPORTE_HUMANO_PHONE', 'SOPORTE_HUMANO_PHONE', ''),
       activationsGroupJid: this.get('ACTIVATIONS_GROUP_JID', 'ACTIVATIONS_GROUP_JID', this.get('GRUPO_ACTIVACIONES', 'GRUPO_ACTIVACIONES', '')),
       paymentBank: this.get('PAYMENT_BANK', 'PAYMENT_BANK', 'BBVA'),
-      paymentAccount: this.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', ''),
+      paymentAccount: this.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', '012290004848824666'),
       paymentConvenio: this.get('PAYMENT_CONVENIO', 'PAYMENT_CONVENIO', ''),
-      paymentBeneficiary: this.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', ''),
+      paymentBeneficiary: this.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', 'Osbaldo Tovar Campero'),
       paymentOfficePhone: await this.getPaymentOfficePhoneAsync(),
       paymentNotes: this.get('PAYMENT_NOTES', 'PAYMENT_NOTES', ''),
       paymentMercadopagoUrl: this.get('PAYMENT_MERCADOPAGO_URL', 'MERCADOPAGO_URL', ''),
       mercadopagoAccessToken: this.get('MERCADOPAGO_ACCESS_TOKEN', 'MERCADOPAGO_ACCESS_TOKEN', ''),
       mercadopagoPublicKey: this.get('MERCADOPAGO_PUBLIC_KEY', 'MERCADOPAGO_PUBLIC_KEY', ''),
+      openpayMerchantId: this.get('OPENPAY_MERCHANT_ID', 'OPENPAY_MERCHANT_ID', 'mvbe6i5366z6sofetydr'),
+      openpayPublicKey: this.get('OPENPAY_PUBLIC_KEY', 'OPENPAY_PUBLIC_KEY', 'pk_10123fcc934d42aa843f2532c7711691'),
+      openpaySecretKey: this.get('OPENPAY_SECRET_KEY', 'OPENPAY_SECRET_KEY', 'sk_9e6cd6d4f4da4eea8fe855dc6a56b8ae'),
+      openpaySandbox: this.get('OPENPAY_SANDBOX', 'OPENPAY_SANDBOX', 'true'),
+      openpayEnabled: this.get('OPENPAY_ENABLED', 'OPENPAY_ENABLED', 'true'),
+      openpayCardFeePercent: this.get('OPENPAY_CARD_FEE_PERCENT', 'OPENPAY_CARD_FEE_PERCENT', '2.9'),
+      openpayCardFeeFixed: this.get('OPENPAY_CARD_FEE_FIXED', 'OPENPAY_CARD_FEE_FIXED', '2.50'),
       notifRecordatorioPrevioEnabled: this.get('NOTIF_RECORDATORIO_PREVIO_ENABLED', 'NOTIF_RECORDATORIO_PREVIO_ENABLED', 'true'),
       notifRecordatorioPrevioDias: this.get('NOTIF_RECORDATORIO_PREVIO_DIAS', 'NOTIF_RECORDATORIO_PREVIO_DIAS', '3'),
       notifDiaCorteEnabled: this.get('NOTIF_DIA_CORTE_ENABLED', 'NOTIF_DIA_CORTE_ENABLED', 'false'),
@@ -200,28 +215,28 @@ export class SettingsService {
 
   /**
    * Obtiene dinámicamente el teléfono de oficina / pagos:
-   * 1. Si hay una instancia de oficina/atención/pagos en Base de Datos Local con teléfono, toma ese.
-   * 2. Si hay un teléfono configurado explícitamente en settings (no placeholder), toma ese.
-   * 3. Si hay una instancia de soporte conectada, toma ese como respaldo.
-   * 4. Si no, usa el fallback por defecto.
+   * 1. Si hay un teléfono configurado explícitamente en settings (no placeholder), toma ese.
+   * 2. Si hay una instancia de oficina/atención/pagos en Base de Datos Local con teléfono, toma ese.
+   * 3. Si hay variable de entorno, toma esa.
+   * 4. Si no, usa el número oficial por defecto (7721292969).
    */
   static async getPaymentOfficePhoneAsync(): Promise<string> {
-    try {
-      const officeFromDb = await DbService.getOfficeWhatsAppPhone();
-      if (officeFromDb) return officeFromDb;
-    } catch {}
-
     const configured = this.get('PAYMENT_OFFICE_PHONE').replace(/\D/g, '');
-    if (configured && configured !== '7777777777' && configured !== '7721284398') {
+    if (configured && configured !== '7777777777' && configured.length >= 10) {
       return configured.slice(-10);
     }
 
     try {
-      const supportFromDb = await DbService.getSupportWhatsAppPhone();
-      if (supportFromDb) return supportFromDb;
+      const officeFromDb = await DbService.getOfficeWhatsAppPhone();
+      if (officeFromDb && officeFromDb.length >= 10) return officeFromDb.slice(-10);
     } catch {}
 
-    return this.get('PAYMENT_OFFICE_PHONE', 'OFFICE_PHONE', this.get('SOPORTE_HUMANO_PHONE', 'SOPORTE_HUMANO_PHONE', '7721284398'));
+    const envOffice = (process.env.PAYMENT_OFFICE_PHONE || process.env.OFFICE_PHONE || '').replace(/\D/g, '');
+    if (envOffice && envOffice.length >= 10) {
+      return envOffice.slice(-10);
+    }
+
+    return '7721292969';
   }
 
   /**

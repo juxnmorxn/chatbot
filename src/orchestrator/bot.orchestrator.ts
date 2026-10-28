@@ -1,4 +1,4 @@
-import { DbService, Session } from '../services/db.service';
+import { DbService, Session, extractFolioServicio } from '../services/db.service';
 import { GroqService, GroqClassificationResult, GroqImageAnalysisResult, ContratoInstalacionDatos, ActivacionModificacionesParsed } from '../services/groq.service';
 import { WispHubService, WispHubCliente } from '../services/wisphub.service';
 import { SmartOLTService, SmartOltStatusResult, getSmartOltSpeedProfiles, AuthorizeOnuPayload } from '../services/smartolt.service';
@@ -9,7 +9,7 @@ import { config } from '../config/env';
 import { SettingsService } from '../services/settings.service';
 import { Logger } from '../utils/logger';
 import { parseSpintax } from '../utils/spintax';
-import { cleanPersonName, computeNameMatchScore, normalizeText } from '../utils/fuzzy-matcher';
+import { cleanPersonName, computeNameMatchScore, normalizeText, extractFolioAndCleanName, candidateMatchesFolio, candidateMatchesServiceSuffix } from '../utils/fuzzy-matcher';
 import { generateClientPortalToken } from '../utils/auth';
 
 const logger = new Logger('BotOrchestrator');
@@ -50,6 +50,7 @@ export interface IncomingMessageEvent {
   text?: string;
   buttonId?: string;
   isMedia?: boolean;
+  isAudio?: boolean;
   imageAnalysis?: GroqImageAnalysisResult | null;
   location?: {
     latitude?: number;
@@ -82,6 +83,12 @@ export class BotOrchestrator {
     timeoutHandle: NodeJS.Timeout;
     targetSn: string;
     startTime: number;
+  }>();
+
+  private static folioDebounceMap = new Map<string, {
+    folios: Set<string>;
+    timer: NodeJS.Timeout;
+    targetJid?: string;
   }>();
 
   /**
@@ -473,24 +480,30 @@ export class BotOrchestrator {
     return name;
   }
 
-  private static getFichaBancaria(session: Session | null): string {
-    const bank = SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK', 'BBVA Bancomer');
-    const account = SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', '012 180 0152433212 90');
-    const beneficiary = SettingsService.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', this.getIspName());
+  private static async getFichaBancaria(session: Session | null): Promise<string> {
+    const bank = SettingsService.get('PAYMENT_BANK', 'PAYMENT_BANK', 'BBVA');
+    const account = SettingsService.get('PAYMENT_ACCOUNT', 'PAYMENT_ACCOUNT', '012290004848824666');
+    const beneficiary = SettingsService.get('PAYMENT_BENEFICIARY', 'PAYMENT_BENEFICIARY', 'Osbaldo Tovar Campero');
+    const officePhone = await SettingsService.getPaymentOfficePhoneAsync();
+    const officeClean = officePhone.replace(/\D/g, '').slice(-10) || '7721292969';
+    const officeFormatted = officeClean.length === 10
+      ? `${officeClean.slice(0, 3)} ${officeClean.slice(3, 6)} ${officeClean.slice(6)}`
+      : officeClean;
     const officeWeekday = SettingsService.get('OFFICE_HOURS_WEEKDAY', 'OFFICE_HOURS_WEEKDAY', '9:00 a 18:00 hrs');
     const officeSaturday = SettingsService.get('OFFICE_HOURS_SATURDAY', 'OFFICE_HOURS_SATURDAY', '9:00 a 15:00 hrs');
     const officeAddress = SettingsService.get('OFFICE_ADDRESS', 'OFFICE_ADDRESS', '').trim();
     const clientName = this.formatDisplayName(session?.client_name) || 'tu nombre completo';
 
-    let txt = `\n🏦 *Pago por Transferencia Bancaria (BBVA):*\n` +
+    let txt = `\n🏦 *DATOS DE PAGO (${bank})*\n\n` +
       `• *Banco:* ${bank}\n` +
       `• *CLABE / Cuenta:* \`${account}\`\n` +
-      `• *Titular / Beneficiario:* ${beneficiary}\n` +
-      `• *Concepto / Motivo:* *${session?.client_name || clientName}*\n\n` +
-      (officeAddress ? `🏢 *Pago en Oficina Física:*\n• *Horario:* Lun-Vie ${officeWeekday}, Sáb ${officeSaturday}\n• *Dirección:* ${officeAddress}\n\n` : '') +
-      `📸 *Envío de Comprobante:*\n` +
-      `Al realizar tu transferencia, por favor envíanos la foto o captura de tu comprobante por aquí para aplicarlo de inmediato a tu cuenta.\n\n` +
-      `💡 _*Tip:* También puedes consultar tu saldo en tu Portal Web: ${this.getClientPortalLink(session?.phone || undefined, session?.client_name || undefined)}_`;
+      `• *Titular:* ${beneficiary}\n` +
+      `• *Concepto:* *${session?.client_name || clientName}*\n\n` +
+      (officeAddress ? `🏢 *Pago en Ventanilla / Oficina Física:*\n• *Horario:* Lun-Vie ${officeWeekday}, Sáb ${officeSaturday}\n• *Dirección:* ${officeAddress}\n\n` : '') +
+      `📲 *ENVÍA TU COMPROBANTE AL ÁREA ADMINISTRATIVA:*\n` +
+      `👉 *WhatsApp:* *${officeFormatted}* (https://wa.me/52${officeClean})\n\n` +
+      `⚠️ *Nota:* En esta línea te atendemos para Soporte Técnico. Por favor envía tu foto o comprobante al WhatsApp administrativo arriba indicado para validar tu pago y mantener activo tu servicio sin demoras.\n\n` +
+      `💡 _*Tip:* También puedes consultar tus fechas de pago y saldo en tu Portal Web: ${this.getClientPortalLink(session?.phone || undefined, session?.client_name || undefined)}_`;
 
     return txt;
   }
@@ -628,6 +641,13 @@ export class BotOrchestrator {
     }
     const inputContent = rawText || (buttonId ? `[Botón: ${buttonId}]` : (event.isMedia ? '[Foto/Comprobante]' : '[Desconocido]'));
     const lowerMsg = rawText.toLowerCase().trim();
+
+    // Si se recibió una nota de voz que no pudo ser transcrita con claridad
+    if (rawText === 'AUDIO_NO_ENTENDIDO') {
+      const msjAudio = `¡Hola! 👋 Recibí tu nota de voz, pero no pude escucharla con claridad.\n\n¿Podrías por favor escribirnos tu consulta o mensaje por aquí en texto para poder apoyarte de inmediato? ¡Muchas gracias!`;
+      await this.enviarYLoguear(phone, msjAudio, 'SALUDO', 'AUDIO_NO_ENTENDIDO', targetJid);
+      return;
+    }
 
     // Protección de números de Staff / Administración (evitar que queden atrapados como clientes)
     const cleanPhoneDigits = phone.replace(/\D/g, '');
@@ -1044,7 +1064,49 @@ export class BotOrchestrator {
 
       // Caso 5: El técnico envía comando de cambio de contraseña Wi-Fi
       if (esComandoCambioWifi) {
+        this.cancelarDebounceFolios(phone);
         await this.procesarCambioWifiTecnico(phone, rawText, session, targetJid);
+        return;
+      }
+
+      // Caso 5.1: El técnico solicita explícitamente ficha técnica / info de cliente o folio
+      const infoMatch = this.esConsultaInfoClienteTecnico(rawText);
+      if (infoMatch.esConsulta && infoMatch.query) {
+        this.cancelarDebounceFolios(phone);
+        await this.procesarConsultaInfoClienteTecnico(phone, infoMatch.query, targetJid);
+        return;
+      }
+
+      // Caso 5.2: El técnico solicita explícitamente revisión de folios ("revisar folios 1265, 2046", "revision de folios...")
+      if (this.esConsultaRevisionFolios(rawText)) {
+        this.cancelarDebounceFolios(phone);
+        const foliosEnTexto = this.extraerFoliosDeTexto(rawText);
+        if (foliosEnTexto.length >= 1) {
+          await this.procesarRevisionFoliosTecnico(phone, foliosEnTexto, targetJid);
+        } else {
+          await this.enviarYLoguear(
+            phone,
+            `📋 *Revisión de Folios*\n\nPor favor incluye los folios a verificar.\n\n_Ejemplos:_\n• \`revisar folios 1265, 2046, 1269\`\n• O escribe los folios uno por uno en este chat.`,
+            'REVISION_FOLIOS_TECNICO',
+            'AYUDA_REVISION_FOLIOS',
+            targetJid
+          );
+        }
+        return;
+      }
+
+      // Caso 5.3: El técnico envía una lista multilínea de folios o números (2 o más folios en el mismo mensaje)
+      const foliosDetectados = this.extraerFoliosDeTexto(rawText);
+      if (foliosDetectados.length >= 2 && this.esMensajeListaDeFolios(rawText, foliosDetectados)) {
+        this.cancelarDebounceFolios(phone);
+        await this.procesarRevisionFoliosTecnico(phone, foliosDetectados, targetJid);
+        return;
+      }
+
+      // Caso 5.4: El técnico envía un solo número o folio suelto (ej: "2046" o "#2046" o "folio 2046")
+      const folioSuelto = this.esNumeroOFolioSuelto(rawText);
+      if (folioSuelto.esFolio && folioSuelto.folio) {
+        this.manejarFolioEnDebounce(phone, folioSuelto.folio, targetJid);
         return;
       }
 
@@ -1053,7 +1115,7 @@ export class BotOrchestrator {
         const nombreTec = authTecnico.tech?.name ? ` *${authTecnico.tech.name}*` : '';
         await this.enviarYLoguear(
           phone,
-          `*Panel Operativo de Técnicos*\n\nHola${nombreTec}, no reconocí ese comando.\n\nEscribe *menu tecnico* para ver las opciones disponibles o ejecuta directamente:\n\n• \`activar cliente [SN] [Folio-Nombre] [Plan] [Zona]\`\n• \`cambio de domicilio [Folio o Nombre]\`\n• \`cambio de modem [Folio o Nombre]\`\n• \`ubicacion [Folio o Nombre]\`\n• \`cambiar plan [Folio] a [Megas]\`\n• \`cambiar wifi [SN] [NuevoSSID] [NuevaClave]\``,
+          `*Panel Operativo de Técnicos*\n\nHola${nombreTec}, no reconocí ese comando.\n\nEscribe *menu tecnico* para ver las opciones disponibles o ejecuta directamente:\n\n• \`revisar folios [Folio 1, Folio 2, ...]\` (o envía números de folio)\n• \`info [Folio o Nombre]\` (ficha técnica con señal óptica en dBm)\n• \`activar cliente [SN] [Folio-Nombre] [Plan] [Zona]\`\n• \`cambio de domicilio [Folio o Nombre]\`\n• \`cambio de modem [Folio o Nombre]\`\n• \`ubicacion [Folio o Nombre]\`\n• \`cambiar plan [Folio] a [Megas]\`\n• \`cambiar wifi [SN] [NuevoSSID] [NuevaClave]\``,
           'ACTIVACION_TECNICO',
           'AYUDA_COMANDO_TECNICO',
           targetJid
@@ -1196,6 +1258,18 @@ export class BotOrchestrator {
     // Si el cliente está en la comprobación o dudas de Smart TV / Red 5G (ej: Netflix / YouTube dando círculos)
     if (session?.step === 'COMPROBACION_STREAMING_TV') {
       await this.procesarStreamingTv(phone, rawText, event, session, targetJid);
+      return;
+    }
+
+    // Si el cliente está validando si ya apareció su red Wi-Fi (SSIDs reactivados por TR-069 o revisados en router)
+    if (session?.step === 'VALIDANDO_RED_WIFI_VISIBLE' || session?.step === 'VALIDANDO_RED_WIFI_ANTENA') {
+      await this.procesarValidacionRedWifiVisible(phone, rawText, event, session, targetJid);
+      return;
+    }
+
+    // Si el cliente está confirmando si su Speedtest fue en red 2.4 GHz o 5G
+    if (session?.step === 'ESPERANDO_CONFIRMACION_TEST_5G') {
+      await this.procesarConfirmacionTest5g(phone, rawText, event, session, targetJid);
       return;
     }
 
@@ -1525,8 +1599,13 @@ export class BotOrchestrator {
     }
 
     const clienteCtx = await this.obtenerContextoClienteCompleto(phone, session);
+    const officePhone = await SettingsService.getPaymentOfficePhoneAsync();
+    const officeClean = officePhone.replace(/\D/g, '').slice(-10) || '7721292969';
+    const officeFormatted = officeClean.length === 10
+      ? `${officeClean.slice(0, 3)} ${officeClean.slice(3, 6)} ${officeClean.slice(6)}`
+      : officeClean;
 
-    logger.info(`Generando respuesta conversacional con Groq para ${phone} (Plan: "${clienteCtx.planInternet || 'N/A'}", ${clienteCtx.velocidadMegas || 'N/A'} Mbps)...`);
+    const portalUrl = await BotOrchestrator.getClientPortalLinkAsync(phone, session?.client_name || undefined);
     const respuestaIA = await GroqService.generarRespuestaConversacional(rawText, historial, {
       clientName: session?.client_name,
       ispName: this.getIspName(),
@@ -1536,6 +1615,9 @@ export class BotOrchestrator {
       ip: clienteCtx.ip,
       estadoServicio: clienteCtx.estadoServicio,
       infoOlt: infoOltContext,
+      portalUrl,
+      paymentOfficePhone: officeFormatted,
+      diaCorte: (session as any)?.dia_corte || clienteCtx.clientWh?.dia_corte || null,
     });
 
     await this.enviarYLoguear(
@@ -1592,6 +1674,12 @@ export class BotOrchestrator {
     targetJid?: string,
     event?: IncomingMessageEvent
   ): Promise<void> {
+    // Manejo prioritario de quejas/consultas por demora en reactivación de pago o fechas de corte
+    if (c.reclamando_demora_pago) {
+      await this.flujoDemoraReactivacionPago(phone, session, targetJid);
+      return;
+    }
+
     switch (c.intencion) {
       case 'CONSULTAR_NIVELES':
         await this.flujoConsultarNiveles(phone, session, targetJid);
@@ -1799,7 +1887,7 @@ export class BotOrchestrator {
   }
 
   /**
-   * Flujo de Reportar Pago: Entrega la ficha bancaria configurada o confirma recepción de comprobante
+   * Flujo de Reportar Pago: Entrega la ficha bancaria configurada con canalización a oficina o atiende reclamo de demora
    */
   private static async flujoReportarPago(
     phone: string,
@@ -1808,13 +1896,31 @@ export class BotOrchestrator {
     session: Session | null,
     targetJid?: string
   ): Promise<void> {
+    const officePhone = await SettingsService.getPaymentOfficePhoneAsync();
+    const officeClean = officePhone.replace(/\D/g, '').slice(-10) || '7721292969';
+    const officeFormatted = officeClean.length === 10
+      ? `${officeClean.slice(0, 3)} ${officeClean.slice(3, 6)} ${officeClean.slice(6)}`
+      : officeClean;
+
+    const lower = (rawText || '').toLowerCase();
+    const esReclamoOEspera = /\b(no\s*responden|ya\s*mand[eé]|ya\s*envi[eé]|acabo\s*de\s*mandar|reactivar|reactiven|no\s*me\s*activan|por\s*qu[eé]\s*no\s*activan|cuanto\s*tardan|cuánto\s*tardan|esperando|sigo\s*sin)\b/i.test(lower);
+
+    if (esReclamoOEspera) {
+      await this.flujoDemoraReactivacionPago(phone, session, targetJid);
+      return;
+    }
+
     if (event?.isMedia) {
-      const nombre = session?.client_name ? ` a nombre de *${session.client_name}*` : '';
+      const msj =
+        `¡Buen día! Te comunicas al área de Soporte Técnico de ${this.getIspName()}.\n\n` +
+        `Para brindarte una mejor atención con la validación de tu servicio, te pedimos reportar tus comprobantes de pago directamente con nuestra *Área Administrativa* al número *${officeFormatted}* ( https://wa.me/52${officeClean} ).\n\n` +
+        `Ellos con gusto te atenderán a la brevedad para corroborar tu pago y mantener activo tu servicio. ¡Quedamos a tus órdenes!`;
+
       await this.enviarYLoguear(
         phone,
-        `¡Muchas gracias por tu comprobante! 📸 Hemos recibido la captura de tu pago${nombre}.\n\nNuestro equipo administrativo validará la transferencia en el sistema para aplicar tu abono a la brevedad. ¡Que tengas un excelente día!`,
+        msj,
         'REPORTAR_PAGO',
-        'COMPROBANTE_RECIBIDO',
+        'CANALIZACION_OFICINA_PAGOS',
         targetJid
       );
       await this.marcarConsultaFinalizada(phone, session);
@@ -1822,7 +1928,7 @@ export class BotOrchestrator {
     }
 
     // Si envió texto solicitando datos o información de pago
-    const ficha = this.getFichaBancaria(session);
+    const ficha = await this.getFichaBancaria(session);
     await this.enviarYLoguear(
       phone,
       ficha,
@@ -1830,6 +1936,57 @@ export class BotOrchestrator {
       'FICHA_PAGO_ENVIADA',
       targetJid
     );
+  }
+
+  /**
+   * Flujo de Demora en Reactivación / Fechas de Corte:
+   * Empatía ante alto volumen de pagos y recomendación preventiva de pagar con anticipación según día de corte
+   */
+  private static async flujoDemoraReactivacionPago(
+    phone: string,
+    session: Session | null,
+    targetJid?: string
+  ): Promise<void> {
+    const officePhone = await SettingsService.getPaymentOfficePhoneAsync();
+    const officeClean = officePhone.replace(/\D/g, '').slice(-10) || '7721292969';
+    const officeFormatted = officeClean.length === 10
+      ? `${officeClean.slice(0, 3)} ${officeClean.slice(3, 6)} ${officeClean.slice(6)}`
+      : officeClean;
+
+    // Buscar si tenemos el cliente en Base de Datos Local para saber su día de corte
+    let diaCorte = '';
+    let nombreCliente = session?.client_name || '';
+
+    try {
+      const clientWh = session?.client_id
+        ? await DbService.getWisphubClient(session.client_id)
+        : await DbService.getClientByPhone(phone);
+
+      if (clientWh) {
+        if (!nombreCliente && clientWh.nombre) nombreCliente = clientWh.nombre;
+        if (clientWh.dia_corte) diaCorte = String(clientWh.dia_corte).trim();
+        else if (clientWh.fecha_corte) diaCorte = String(clientWh.fecha_corte).trim();
+      }
+    } catch {}
+
+    const nombreLimpio = formatDisplayName(nombreCliente, true);
+    const saludoNombre = nombreLimpio ? ` estimado/a *${nombreLimpio}*` : '';
+
+    let consejoAnticipacion = '';
+    if (diaCorte) {
+      consejoAnticipacion = `para evitar el corte, le recomendamos realizar su pago con 3 a 4 días de anticipación de acuerdo a su fecha habitual de corte (*día ${diaCorte}* de cada mes).`;
+    } else {
+      consejoAnticipacion = `para evitar el corte, le recomendamos realizar su pago con 3 a 4 días de anticipación de acuerdo a su fecha de corte.`;
+    }
+
+    const msj =
+      `Una disculpa${saludoNombre}, en fechas de corte y facturación hay muchos pagos por registrar y pagos en ventanilla.\n\n` +
+      `Le pedimos sea paciente a que el personal administrativo corrobore su pago y reactive su servicio en el sistema por turnos.\n\n` +
+      `💡 *Recomendación:* ${consejoAnticipacion}\n\n` +
+      `Si ya envió su comprobante al Área Administrativa (*${officeFormatted}*), ellos con gusto lo validarán a la brevedad. ¡Agradecemos mucho su paciencia y comprensión!`;
+
+    await this.enviarYLoguear(phone, msj, 'REPORTAR_PAGO', 'DEMORA_REACTIVACION_PAGO', targetJid);
+    await this.marcarConsultaFinalizada(phone, session);
   }
 
 
@@ -2147,43 +2304,145 @@ export class BotOrchestrator {
       return;
     }
 
-    // CASO ESPECIAL: WI-FI / SSIDs NO VISIBLES EN DOMICILIO (WLAN APAGADO)
+    // CASO ESPECIAL 1: WI-FI / SSIDs NO VISIBLES EN DOMICILIO (WLAN APAGADO)
     if (c.red_wifi_no_visible) {
-      const ticket = await DbService.createTicket({
-        phone,
-        client_name: session.client_name,
-        onu_id: session.onu_id,
-        issue_summary: 'Wi-Fi / SSIDs no visibles en domicilio (WLAN deshabilitado en ONT)',
-        checks_performed: `Cliente reportó que no aparece la red Wi-Fi: "${c.resumen_queja || 'Red no visible'}". Requiere entrar a la ONT / SmartOLT para habilitar SSIDs.`,
-        status: 'ABIERTO',
-        is_out_of_hours: this.isFueraDeHorario() ? 1 : 0,
+      const tec = this.determinarTecnologiaCliente({
+        sn_onu: session.onu_id || meta.sn,
+        router: session.router || meta.router,
+        ip: meta.ip,
+        zona: meta.zona,
+        plan_internet: meta.plan_internet,
+        paquete: meta.paquete,
       });
 
-      if (session.client_id) {
-        await WispHubService.crearTicketSoporte(
-          session.client_id,
-          `Wi-Fi No Visible - ${ticket.folio}`,
-          `Ticket técnico: ${ticket.issue_summary}. ${ticket.checks_performed}`,
-          'Media'
-        ).catch(() => {});
+      const esAntenaOMagdalena = tec.esAntena || tec.esFibraManual || (session.router && /magdalena/i.test(session.router));
+
+      if (esAntenaOMagdalena) {
+        // En clientes con antena o zonas como Magdalena, NO hay acceso TR-069 al módem/router particular
+        const mensajeAntena =
+          `Hola${nombre}, para tu servicio ${tec.esAntena ? 'con antena inalámbrica' : 'en tu zona'} no es posible acceder de forma remota a tu router particular.\n\n` +
+          `Por favor corrobora la energía y alimentación de tus equipos con estos sencillos pasos:\n` +
+          `1️⃣ *Corrobora la energía del router:* Verifica que su eliminador/cargador esté bien conectado a la corriente y que las luces frontales de tu router estén encendidas.\n` +
+          (tec.esAntena ? `2️⃣ *Verifica la energía de la antena (PoE):* Revisa que la fuente de tu antena (cajita negra) esté bien conectada al enchufe y con su foquito encendido fijo.\n` : '') +
+          `3️⃣ *Ciclo de energía:* Desconecta tu router del enchufe de la luz durante 15 segundos y vuelve a conectarlo para reiniciar la energía del equipo.\n\n` +
+          `¿Me puedes confirmar si tu router tiene sus luces encendidas y si ya logras visualizar tu red Wi-Fi?`;
+
+        await DbService.upsertSession({
+          phone,
+          step: 'VALIDANDO_RED_WIFI_ANTENA',
+          metadata: JSON.stringify({
+            ...meta,
+            resumenFalla: 'Wi-Fi no visible en router particular (Antena/Magdalena)',
+            consultaFinalizada: false,
+          }),
+        });
+
+        await this.enviarYLoguear(phone, mensajeAntena, 'FALLA_INTERNET', 'WIFI_NO_VISIBLE_ANTENA', targetJid);
+        return;
       }
 
-      const mensajeWifi =
-        `Hola${nombre}, revisé tu equipo en el sistema y detecté que el servicio de Wi-Fi de tu módem requiere una configuración interna.\n\n` +
-        `🛠️ Ya te generé tu reporte *#${ticket.folio}*. Nuestro equipo técnico accederá a tu módem para activarlo a la brevedad y te avisamos por aquí en cuanto quede listo para que te conectes.`;
+      // En clientes de Fibra Óptica FTTH con módem accesible: reactivamos SSIDs vía TR-069 / SmartOLT
+      SmartOLTService.reactivarWlanSsid(session.onu_id || meta.sn || '').then(res => {
+        logger.info(`Reactivación de WLAN para ${phone} (${session.onu_id}): ${res.message}`);
+      }).catch(err => {
+        logger.warn(`Error al reactivar WLAN para ${session.onu_id}:`, err?.message || err);
+      });
+
+      const mensajeFibra =
+        `Hola${nombre}, revisé tu módem en el sistema y reactivé las señales Wi-Fi (SSID 2.4G y 5G) de tu equipo.\n\n` +
+        `¿Me puedes confirmar si ya te aparece tu red por favor? (Si no aparece de inmediato, apaga y vuelve a encender el Wi-Fi de tu celular o prueba de nuevo en unos segundos).`;
 
       await DbService.upsertSession({
         phone,
-        step: 'CONSULTA_FINALIZADA',
+        step: 'VALIDANDO_RED_WIFI_VISIBLE',
         metadata: JSON.stringify({
           ...meta,
-          resumenFalla: 'Wi-Fi no visible / SSIDs deshabilitados',
-          ticketFolio: ticket.folio,
-          consultaFinalizada: true,
+          resumenFalla: 'Wi-Fi no visible / SSIDs reactivados remotamente',
+          reintentosWifi: 0,
+          consultaFinalizada: false,
         }),
       });
 
-      await this.enviarYLoguear(phone, mensajeWifi, 'FALLA_INTERNET', `WIFI_DESHABILITADO_${ticket.folio}`, targetJid);
+      await this.enviarYLoguear(phone, mensajeFibra, 'FALLA_INTERNET', 'WIFI_REACTIVADO_TR069', targetJid);
+      return;
+    }
+
+    // CASO ESPECIAL 2: CELULAR CONECTADO A WI-FI PERO SIN ACCESO A INTERNET
+    if (c.conectado_sin_internet) {
+      // 1. Verificar si está suspendido en WispHub por pago
+      if (session.client_id) {
+        try {
+          const estadoFinanciero = await WispHubService.verificarEstadoFinanciero({
+            clienteId: session.client_id,
+            nombre: session.client_name,
+            phone,
+            sn: meta.sn,
+            ip: meta.ip,
+          });
+          if (estadoFinanciero.suspendido && (estadoFinanciero.tieneDeudaReal || estadoFinanciero.totalDeuda > 0)) {
+            await this.flujoConsultarSaldo(phone, session, targetJid);
+            return;
+          }
+        } catch (_) {}
+      }
+
+      // 2. Si es Fibra SmartOLT, verificar corte óptico (LOS)
+      if (diag && diag.status === 'LOS') {
+        const ticket = await DbService.createTicket({
+          phone,
+          client_name: session.client_name,
+          onu_id: session.onu_id,
+          issue_summary: 'Sin acceso a internet (LOS detectado en central)',
+          checks_performed: 'SmartOLT reporta pérdida de señal óptica (LOS). Cable cortado o desconectado en trayecto.',
+          status: 'ABIERTO',
+          is_out_of_hours: this.isFueraDeHorario() ? 1 : 0,
+        });
+
+        if (session.client_id) {
+          await WispHubService.crearTicketSoporte(
+            session.client_id,
+            `Corte de Fibra - ${ticket.folio}`,
+            `Celular conectado a Wi-Fi pero sin acceso a internet. Central reporta LOS. Folio: ${ticket.folio}`,
+            'Alta'
+          ).catch(() => {});
+        }
+
+        const mensajeCorte =
+          `Hola${nombre}, se ha generado tu reporte *#${ticket.folio}* y en breve nos comunicaremos contigo.\n\n` +
+          `Detectamos que tu módem perdió la señal óptica desde nuestra central.\n` +
+          `📍 Por favor compártenos la *ubicación actual de tu domicilio* (o tu dirección por mensaje) para la cuadrilla.`;
+
+        await DbService.upsertSession({
+          phone,
+          step: 'ESPERANDO_UBICACION_TECNICO',
+          metadata: JSON.stringify({
+            ...meta,
+            ticketFolio: ticket.folio,
+            resumenFalla: 'Corte de señal óptica hacia domicilio',
+          }),
+        });
+
+        await this.enviarYLoguear(phone, mensajeCorte, 'FALLA_INTERNET', `CORTE_OPTICO_SIN_INTERNET_${ticket.folio}`, targetJid);
+        return;
+      }
+
+      // 3. Enlace óptico normal o equipo inalámbrico: guiar reinicio de 30 segundos para renovar sesión IP/WAN
+      const mensajeSinAcceso =
+        `Hola${nombre}, cuando tu celular indica *"Conectado / Sin acceso a internet"*, significa que la conexión inalámbrica hacia tu módem funciona bien, pero tu módem necesita renovar su enlace de internet con la central.\n\n` +
+        `Por favor desconecta tu módem de la corriente eléctrica durante *30 segundos* y vuelve a conectarlo.\n\n` +
+        `¿Me puedes confirmar si una vez que prendan las luces verdes ya te permite navegar con normalidad?`;
+
+      await DbService.upsertSession({
+        phone,
+        step: 'DIAGNOSTICO_POST_REINICIO',
+        metadata: JSON.stringify({
+          ...meta,
+          rebootTriggeredAt: new Date().toISOString(),
+          resumenFalla: 'Conectado sin acceso a internet',
+        }),
+      });
+
+      await this.enviarYLoguear(phone, mensajeSinAcceso, 'FALLA_INTERNET', 'CONECTADO_SIN_INTERNET_GUIA', targetJid);
       return;
     }
 
@@ -2544,9 +2803,11 @@ export class BotOrchestrator {
     }
 
     // D. Respuesta libre con Groq si tiene alguna otra duda
+    const portalUrl = await BotOrchestrator.getClientPortalLinkAsync(phone, session?.client_name || undefined);
     const respuestaIA = await GroqService.generarRespuestaConversacional(rawText, [], {
       clientName: session?.client_name,
       ispName: this.getIspName(),
+      portalUrl,
     });
     await this.enviarYLoguear(phone, respuestaIA, 'FALLA_INTERNET', 'STREAMING_CONVERSACIONAL', targetJid);
   }
@@ -2756,6 +3017,169 @@ export class BotOrchestrator {
       targetJid
     );
     await this.marcarConsultaFinalizada(phone, session);
+  }
+
+  /**
+   * Procesa la validación de si el cliente ya puede visualizar su red Wi-Fi
+   * tras haber reactivado las señales por TR-069 o tras corroborar la energía del router en antenas/Magdalena.
+   */
+  private static async procesarValidacionRedWifiVisible(
+    phone: string,
+    rawText: string,
+    event: IncomingMessageEvent,
+    session: Session | null,
+    targetJid?: string
+  ): Promise<void> {
+    const lower = rawText.toLowerCase().trim();
+    let meta: any = {};
+    try { meta = JSON.parse(session?.metadata || '{}'); } catch {}
+    const nombreLimpio = formatDisplayName(session?.client_name, true);
+    const nombre = nombreLimpio ? ` *${nombreLimpio}*` : '';
+
+    const esAfirmativo = /\b(ya|si|sí|ya\s*(?:la\s*)?(?:puedo|veo|apareci[oó]|aparece|salio|sali[oó])|ya\s*qued[oó]|listo|gracias|muchas\s*gracias|ya\s*est[aá]|conect[oó])\b/i.test(lower);
+    const esNegativo = /\b(a[uú]n\s*no|todav[ií]a\s*no|no\s*aparece|no\s*sale|no\s*veo|sigue\s*sin|no\s*(?:la\s*)?visualizo|no\s*puedo\s*visualizar|no|nel|nada)\b/i.test(lower);
+
+    if (esAfirmativo && !esNegativo) {
+      await this.enviarYLoguear(
+        phone,
+        `¡Excelente${nombre}! Me da mucho gusto que ya puedas visualizar y conectarte a tu red Wi-Fi. 😊\n\nEn *${this.getIspName()}* estamos siempre a tus órdenes si requieres algo más. ¡Que tengas un excelente día!`,
+        'FALLA_INTERNET',
+        'WIFI_VISIBLE_CONFIRMADO_EXITO',
+        targetJid
+      );
+      await this.marcarConsultaFinalizada(phone, session);
+      return;
+    }
+
+    // Si aún no aparece
+    const reintentos = Number(meta.reintentosWifi || 0);
+    const esAntena = session?.step === 'VALIDANDO_RED_WIFI_ANTENA';
+
+    if (reintentos === 0 && !esAntena) {
+      meta.reintentosWifi = 1;
+      await DbService.upsertSession({
+        phone,
+        metadata: JSON.stringify(meta),
+      });
+
+      await this.enviarYLoguear(
+        phone,
+        `Pruebe de nuevo por favor (apague el Wi-Fi de su celular durante 5 segundos y vuelva a encenderlo para que actualice la lista de redes, o verifique si el foco WLAN de su módem ya está encendido).`,
+        'FALLA_INTERNET',
+        'WIFI_PRUEBE_DE_NUEVO',
+        targetJid
+      );
+      return;
+    }
+
+    // Si tras el reintento o en router de antena sigue sin verse, generamos ticket técnico
+    const ticket = await DbService.createTicket({
+      phone,
+      client_name: session?.client_name,
+      onu_id: session?.onu_id,
+      issue_summary: esAntena
+        ? 'Wi-Fi no visible en router particular (Antena/Nodo Magdalena sin acceso remoto)'
+        : 'Wi-Fi no visible en domicilio tras reactivación remota de SSIDs',
+      checks_performed: `Cliente reporta que aún no puede visualizar su red Wi-Fi tras comprobaciones. Mensaje: "${rawText}"`,
+      status: 'ABIERTO',
+      is_out_of_hours: this.isFueraDeHorario() ? 1 : 0,
+    });
+
+    if (session?.client_id) {
+      await WispHubService.crearTicketSoporte(
+        session.client_id,
+        `Wi-Fi No Visible - ${ticket.folio}`,
+        `Cliente no visualiza red Wi-Fi tras reactivación/revisión. ${ticket.issue_summary}. Folio: ${ticket.folio}`,
+        'Media'
+      ).catch(() => {});
+    }
+
+    const msjTicket =
+      `Entendido${nombre}. Ya generé tu reporte *#${ticket.folio}* para que el personal técnico acuda o revise tu equipo a la brevedad.\n\n` +
+      `Nos comunicaremos contigo en cuanto el técnico esté en camino a tu domicilio. ¡Muchas gracias por tu paciencia!`;
+
+    await DbService.upsertSession({
+      phone,
+      step: 'CONSULTA_FINALIZADA',
+      metadata: JSON.stringify({
+        ...meta,
+        ticketFolio: ticket.folio,
+        consultaFinalizada: true,
+      }),
+    });
+
+    await this.enviarYLoguear(phone, msjTicket, 'FALLA_INTERNET', `TICKET_WIFI_NO_VISIBLE_${ticket.folio}`, targetJid);
+  }
+
+  /**
+   * Procesa la confirmación del cliente sobre si su test de velocidad fue en red 2.4 GHz o 5G.
+   */
+  private static async procesarConfirmacionTest5g(
+    phone: string,
+    rawText: string,
+    event: IncomingMessageEvent,
+    session: Session | null,
+    targetJid?: string
+  ): Promise<void> {
+    const lower = rawText.toLowerCase().trim();
+    let meta: any = {};
+    try { meta = JSON.parse(session?.metadata || '{}'); } catch {}
+    const nombreLimpio = formatDisplayName(session?.client_name, true);
+    const nombre = nombreLimpio ? ` *${nombreLimpio}*` : '';
+
+    const fueEnNormal = /\b(normal|2\.4|no\s*5g|comun|otra|la\s*primera|no\s*era\s*5g|la\s*otra)\b/i.test(lower) ||
+      (lower.includes('no') && !lower.includes('en la 5g'));
+    const fueEn5g = /\b(5g|5|cinco|si|sí|en\s*la\s*5g|cable|por\s*cable|ethernet)\b/i.test(lower);
+
+    if (fueEnNormal && !fueEn5g) {
+      const msjExplicacion =
+        `¡Justo como sospechábamos${nombre}! 😊\n\n` +
+        `Al estar conectado a la red convencional 2.4 GHz, la velocidad siempre topará entre *30 y 45 Mbps* debido a la interferencia del entorno y saturación del canal.\n\n` +
+        `Por favor conéctate a tu red con terminación *-5G* (con la misma contraseña) estando cerca del módem y repite la prueba en https://www.speedtest.net.\n\n` +
+        `Verás que en la red 5G tu conexión entregará la velocidad completa de tu paquete. 🚀 ¡Quedamos a tus órdenes!`;
+
+      await this.enviarYLoguear(phone, msjExplicacion, 'FALLA_INTERNET', 'EXPLICACION_24G_CONFIRMADA', targetJid);
+      await this.marcarConsultaFinalizada(phone, session);
+      return;
+    }
+
+    // Si fue en 5G o cable y marca velocidad baja real: generamos ticket formal
+    const bajada = meta.speedtestPrevioBajada || 'baja';
+    const ticket = await DbService.createTicket({
+      phone,
+      client_name: session?.client_name,
+      onu_id: session?.onu_id,
+      issue_summary: `Velocidad baja confirmada en red 5G (${bajada} Mbps)`,
+      checks_performed: `Cliente confirmó que la prueba de velocidad se realizó en la red 5G/cable. Rendimiento por debajo del perfil contratado.`,
+      has_speedtest: 1,
+      status: 'ABIERTO',
+      is_out_of_hours: this.isFueraDeHorario() ? 1 : 0,
+    });
+
+    if (session?.client_id) {
+      await WispHubService.crearTicketSoporte(
+        session.client_id,
+        `Speedtest Bajo en 5G - ${ticket.folio}`,
+        `Cliente confirma prueba en 5G con ${bajada} Mbps. Folio: ${ticket.folio}`,
+        'Media'
+      ).catch(() => {});
+    }
+
+    const msjTicket5g =
+      `Entendido${nombre}. Dado que la prueba fue realizada en la red 5G y marca *${bajada} Mbps*, ya registré tu reporte *#${ticket.folio}* para que el personal técnico revise la calibración y estabilidad de tu enlace en la central.\n\n` +
+      `¡Muchas gracias por confirmarnos la información!`;
+
+    await DbService.upsertSession({
+      phone,
+      step: 'CONSULTA_FINALIZADA',
+      metadata: JSON.stringify({
+        ...meta,
+        ticketFolio: ticket.folio,
+        consultaFinalizada: true,
+      }),
+    });
+
+    await this.enviarYLoguear(phone, msjTicket5g, 'FALLA_INTERNET', `TICKET_SPEEDTEST_5G_${ticket.folio}`, targetJid);
   }
 
   /**
@@ -3301,6 +3725,95 @@ export class BotOrchestrator {
       return;
     }
 
+    // 0.3 CASO AJUSTES WI-FI EN CELULAR / PANTALLA DE ESTADO DE RED (Android / iOS)
+    if (analysis?.tipo === 'ESTADO_WIFI_CELULAR' || (analysis?.estado_wifi && analysis.estado_wifi.conectado_sin_internet)) {
+      const redConectada = analysis?.estado_wifi?.red_conectada || 'tu red Wi-Fi';
+      const estadoTexto = analysis?.estado_wifi?.estado_texto || 'Conectado / Sin acceso a internet';
+
+      // 1. Diagnosticar si está suspendido por falta de pago
+      if (session?.client_id) {
+        try {
+          const estadoFinanciero = await WispHubService.verificarEstadoFinanciero({
+            clienteId: session.client_id,
+            nombre: session.client_name,
+            phone,
+            sn: meta.sn,
+            ip: meta.ip,
+          });
+          if (estadoFinanciero.suspendido && (estadoFinanciero.tieneDeudaReal || estadoFinanciero.totalDeuda > 0)) {
+            await this.flujoConsultarSaldo(phone, session, targetJid);
+            return;
+          }
+        } catch (_) {}
+      }
+
+      // 2. Verificar estado óptico en SmartOLT
+      let opticalDiag: any = null;
+      if (session?.onu_id || meta.sn) {
+        opticalDiag = await SmartOLTService.diagnosticarEstadoOptico(session?.onu_id || meta.sn).catch(() => null);
+      }
+
+      if (opticalDiag && (opticalDiag.status === 'LOS' || opticalDiag.status === 'OFFLINE')) {
+        const ticket = await DbService.createTicket({
+          phone,
+          client_name: session?.client_name,
+          onu_id: session?.onu_id,
+          issue_summary: 'Sin acceso a internet (LOS detectado en central)',
+          checks_performed: `Captura de celular muestra "${estadoTexto}". En central, SmartOLT reporta ${opticalDiag.status}.`,
+          has_photo: 1,
+          status: 'ABIERTO',
+          is_out_of_hours: this.isFueraDeHorario() ? 1 : 0,
+        });
+
+        if (session?.client_id) {
+          await WispHubService.crearTicketSoporte(
+            session.client_id,
+            `Corte de Señal - ${ticket.folio}`,
+            `Celular muestra "${estadoTexto}". SmartOLT reporta ${opticalDiag.status}. Folio: ${ticket.folio}`,
+            'Alta'
+          ).catch(() => {});
+        }
+
+        const msjCorte =
+          `Hola${nombre}, revisé la captura de pantalla de tu celular. Se observa que tu dispositivo está conectado a tu red Wi-Fi (*${redConectada}*), pero marca *"${estadoTexto}"*.\n\n` +
+          `Detectamos en la central que tu módem perdió la señal óptica (corte exterior).\n` +
+          `Ya te generé tu reporte *#${ticket.folio}*. Por favor compártenos tu *ubicación actual de domicilio* para la cuadrilla.`;
+
+        await DbService.upsertSession({
+          phone,
+          step: 'ESPERANDO_UBICACION_TECNICO',
+          metadata: JSON.stringify({
+            ...meta,
+            ticketFolio: ticket.folio,
+            resumenFalla: 'Corte de señal óptica hacia domicilio',
+          }),
+        });
+
+        await this.enviarYLoguear(phone, msjCorte, 'FALLA_INTERNET', `CAPTURA_SIN_INTERNET_LOS_${ticket.folio}`, targetJid);
+        return;
+      }
+
+      // 3. Si la señal óptica está bien o es router inalámbrico, guiar reinicio de 30 segundos
+      const msjWifiSinInternet =
+        `Hola${nombre}, revisé la captura de pantalla de tu celular. Tu equipo está conectado a tu red Wi-Fi (*${redConectada}*), pero marca *"${estadoTexto}"*.\n\n` +
+        `Esto significa que el enlace inalámbrico entre tu celular y el módem funciona bien, pero tu módem necesita refrescar su sesión de internet con la central.\n\n` +
+        `Por favor desconecta tu módem de la corriente eléctrica durante *30 segundos* y vuelve a conectarlo.\n\n` +
+        `¿Me puedes confirmar si una vez que prendan las luces verdes ya te permite navegar con normalidad?`;
+
+      await DbService.upsertSession({
+        phone,
+        step: 'DIAGNOSTICO_POST_REINICIO',
+        metadata: JSON.stringify({
+          ...meta,
+          rebootTriggeredAt: new Date().toISOString(),
+          resumenFalla: 'Conectado sin acceso a internet',
+        }),
+      });
+
+      await this.enviarYLoguear(phone, msjWifiSinInternet, 'FALLA_INTERNET', 'CAPTURA_CONECTADO_SIN_INTERNET', targetJid);
+      return;
+    }
+
     // 1. CASO SPEEDTEST / TEST DE VELOCIDAD
     if (analysis?.tipo === 'SPEEDTEST') {
       const bajadaNum = analysis.speedtest?.bajada_mbps;
@@ -3371,7 +3884,31 @@ export class BotOrchestrator {
         return;
       }
 
-      // CASO B: Velocidad por debajo de lo contratado (se mantiene/crea ticket de soporte)
+      // CASO B: Si la velocidad está en rango de limitación típica de 2.4 GHz (~20 a 50 Mbps)
+      // y el paquete es de mayor capacidad (o no especificado), preguntar si realizó la prueba en 5G
+      if (bajadaNum && bajadaNum >= 18 && bajadaNum <= 50 && (!planMegasNum || planMegasNum >= 50) && !meta.confirmadoEn5g) {
+        const msj5g =
+          `¡Recibí tu prueba de velocidad de Speedtest! 📊\n\n` +
+          `${resumenMetricas}${planTexto}\n\n` +
+          `Buenos días${nombre}, ¿realizó el test conectado a la *red 5G* (la red que termina en *-5G*)?\n\n` +
+          `💡 *Nota importante:* La red convencional 2.4 GHz tiene una limitación física por interferencia ambiental que normalmente topa entre *30 y 45 Mbps*. Para medir y recibir la velocidad completa de tu paquete (*${planContratado || 'tu plan'}* de ${planMegasNum || '50+'} Mbps), por favor conéctate a tu red 5G cerca del módem y repite la prueba en https://www.speedtest.net.\n\n` +
+          `¿Nos puedes confirmar si tu prueba fue en la red normal o en la 5G?`;
+
+        await DbService.upsertSession({
+          phone,
+          step: 'ESPERANDO_CONFIRMACION_TEST_5G',
+          metadata: JSON.stringify({
+            ...meta,
+            speedtestPrevioBajada: bajadaNum,
+            speedtestPrevioMetricas: resumenMetricas,
+          }),
+        });
+
+        await this.enviarYLoguear(phone, msj5g, 'FALLA_INTERNET', 'PREGUNTA_RED_5G_SPEEDTEST', targetJid);
+        return;
+      }
+
+      // CASO C: Velocidad confirmada por debajo de lo contratado (se mantiene/crea ticket de soporte)
       if (folio) {
         await DbService.updateTicketStatus(
           folio,
@@ -3607,19 +4144,32 @@ export class BotOrchestrator {
           await DbService.updateWisphubClientPhone(clienteIdentificado.unique_external_id, phone).catch(() => {});
         }
 
-        const msj =
-          `¡Hola! 👋 Muchas gracias, recibí tu comprobante de pago por *${monto}* a nombre de *${nombreTitular}*${ubicacion}. 🧾✨\n${detalleInfo}\n\n` +
-          `✅ *Pago registrado en el sistema:* La información ya fue enviada a nuestra área de *Atención y Cobranza* para su validación en el banco y aplicación en tu cuenta.\n\n` +
-          `¡Agradecemos mucho tu puntualidad! Si necesitas algo más, seguimos a tus órdenes.`;
+        const officePhone = await SettingsService.getPaymentOfficePhoneAsync();
+        const officeClean = officePhone.replace(/\D/g, '').slice(-10) || '7721292969';
+        const officeFormatted = officeClean.length === 10
+          ? `${officeClean.slice(0, 3)} ${officeClean.slice(3, 6)} ${officeClean.slice(6)}`
+          : officeClean;
 
-        await this.enviarYLoguear(phone, msj, 'REPORTAR_PAGO', `COMPROBANTE_AUTO_IDENTIFICADO_${folio || 'OK'}`, targetJid);
+        const msj =
+          `¡Buen día! Te comunicas al área de Soporte Técnico de ${this.getIspName()}.\n\n` +
+          `Para brindarte una mejor atención con la validación de tu servicio, te pedimos reportar tus comprobantes de pago directamente con nuestra *Área Administrativa* al número *${officeFormatted}* ( https://wa.me/52${officeClean} ).\n\n` +
+          `Ellos con gusto te atenderán a la brevedad para corroborar tu pago y mantener activo tu servicio. ¡Quedamos a tus órdenes!`;
+
+        await this.enviarYLoguear(phone, msj, 'REPORTAR_PAGO', `COMPROBANTE_CANALIZADO_${folio || 'OK'}`, targetJid);
+        await this.marcarConsultaFinalizada(phone, session);
         return;
       } else {
-        // CLIENTE AÚN NO RECONOCIDO -> ENTRAR EN VENTANA DE ESPERA DE DATOS
+        // CLIENTE AÚN NO RECONOCIDO -> ENTRAR EN VENTANA DE ESPERA DE DATOS Y CANALIZAR A OFICINA
+        const officePhone = await SettingsService.getPaymentOfficePhoneAsync();
+        const officeClean = officePhone.replace(/\D/g, '').slice(-10) || '7721292969';
+        const officeFormatted = officeClean.length === 10
+          ? `${officeClean.slice(0, 3)} ${officeClean.slice(3, 6)} ${officeClean.slice(6)}`
+          : officeClean;
+
         await DbService.upsertSession({
           phone,
           department: 'ATENCION',
-          step: 'ESPERANDO_DATOS_PAGO',
+          step: 'CONSULTA_FINALIZADA',
           metadata: JSON.stringify({
             ...meta,
             pagoPendiente: {
@@ -3630,15 +4180,16 @@ export class BotOrchestrator {
               destinatario,
               timestamp: Date.now(),
             },
+            consultaFinalizada: true,
           }),
         });
 
         const msj =
-          `¡Hola! 👋 He recibido tu comprobante de pago por *${monto}*${banco ? ` de *${banco}*` : ''}. 📸\n${detalleInfo}\n\n` +
-          `Para registrarlo y aplicarlo correctamente a tu cuenta:\n` +
-          `👉 *¿Podrías indicarnos a nombre de quién está contratado el servicio de internet o tu dirección / comunidad?*`;
+          `¡Buen día! Te comunicas al área de Soporte Técnico de ${this.getIspName()}.\n\n` +
+          `Para brindarte una mejor atención con la validación de tu servicio, te pedimos reportar tus comprobantes de pago directamente con nuestra *Área Administrativa* al número *${officeFormatted}* ( https://wa.me/52${officeClean} ).\n\n` +
+          `Ellos con gusto te atenderán a la brevedad para corroborar tu pago y mantener activo tu servicio. ¡Quedamos a tus órdenes!`;
 
-        await this.enviarYLoguear(phone, msj, 'REPORTAR_PAGO', 'COMPROBANTE_ESPERANDO_DATOS', targetJid);
+        await this.enviarYLoguear(phone, msj, 'REPORTAR_PAGO', 'COMPROBANTE_CANALIZADO_DESCONOCIDO', targetJid);
         return;
       }
     }
@@ -3951,16 +4502,33 @@ export class BotOrchestrator {
 
     let targetClient: any = null;
 
-    // 1. Si es numérico (ID de servicio)
+    // 1. Si es numérico (Folio de servicio)
     const numId = cleanInput.replace(/\D/g, '');
     if (numId && /^\d+$/.test(cleanInput)) {
       try {
-        const res = await client.execute({
-          sql: `SELECT id_servicio, nombre, ip, router, direccion, coordenadas_gps FROM wisphub_clients WHERE id_servicio = ? LIMIT 1`,
-          args: [Number(numId)],
+        const padded = numId.padStart(4, '0');
+        const folioRes = await client.execute({
+          sql: `SELECT id_servicio, nombre, servicio, ip, router, direccion, coordenadas_gps FROM wisphub_clients 
+                WHERE servicio LIKE ? OR servicio LIKE ? 
+                   OR nombre LIKE ? OR nombre LIKE ? 
+                   OR servicio LIKE ? OR nombre LIKE ? 
+                LIMIT 1`,
+          args: [
+            `${numId}-%`, `${numId} - %`,
+            `${numId}-%`, `${numId} - %`,
+            `${padded}-%`, `${padded}-%`,
+          ],
         });
-        if (res.rows.length > 0) {
-          targetClient = res.rows[0];
+        if (folioRes.rows.length > 0) {
+          targetClient = folioRes.rows[0];
+        } else {
+          const res = await client.execute({
+            sql: `SELECT id_servicio, nombre, servicio, ip, router, direccion, coordenadas_gps FROM wisphub_clients WHERE id_servicio = ? LIMIT 1`,
+            args: [Number(numId)],
+          });
+          if (res.rows.length > 0) {
+            targetClient = res.rows[0];
+          }
         }
       } catch {}
     }
@@ -3975,9 +4543,11 @@ export class BotOrchestrator {
           } else {
             let listMsg = `*Múltiples coincidencias para "${cleanInput}":*\n\n`;
             fuzzyList.slice(0, 5).forEach((r: any) => {
-              listMsg += `• *#${r.id_servicio}* - ${r.nombre} (IP: ${r.ip || 'N/A'})\n`;
+              const fol = extractFolioServicio(r);
+              listMsg += `• *#${fol || r.id_servicio}* - ${r.nombre} (IP: ${r.ip || 'N/A'})\n`;
             });
-            listMsg += `\nResponde con el *ID de servicio* a asignar (ej: *${fuzzyList[0].id_servicio}*):`;
+            const primerFolio = extractFolioServicio(fuzzyList[0]) || fuzzyList[0].id_servicio;
+            listMsg += `\nResponde con el *Folio de servicio* a asignar (ej: *${primerFolio}*):`;
 
             await this.enviarYLoguear(phone, listMsg, 'ACTIVACION_TECNICO', 'GPS_MULTIPLES_COINCIDENCIAS', targetJid);
             return;
@@ -4069,14 +4639,31 @@ export class BotOrchestrator {
     let targetClient: any = null;
     const numId = cleanInput.replace(/\D/g, '');
 
-    // 1. Si es numérico (ID de servicio)
+    // 1. Si es numérico (Folio de servicio)
     if (numId && /^\d+$/.test(cleanInput)) {
       try {
-        const res = await client.execute({
-          sql: `SELECT id_servicio, nombre, direccion FROM wisphub_clients WHERE id_servicio = ? LIMIT 1`,
-          args: [Number(numId)],
+        const padded = numId.padStart(4, '0');
+        const folioRes = await client.execute({
+          sql: `SELECT id_servicio, nombre, servicio, direccion FROM wisphub_clients 
+                WHERE servicio LIKE ? OR servicio LIKE ? 
+                   OR nombre LIKE ? OR nombre LIKE ? 
+                   OR servicio LIKE ? OR nombre LIKE ? 
+                LIMIT 1`,
+          args: [
+            `${numId}-%`, `${numId} - %`,
+            `${numId}-%`, `${numId} - %`,
+            `${padded}-%`, `${padded}-%`,
+          ],
         });
-        if (res.rows.length > 0) targetClient = res.rows[0];
+        if (folioRes.rows.length > 0) {
+          targetClient = folioRes.rows[0];
+        } else {
+          const res = await client.execute({
+            sql: `SELECT id_servicio, nombre, servicio, direccion FROM wisphub_clients WHERE id_servicio = ? LIMIT 1`,
+            args: [Number(numId)],
+          });
+          if (res.rows.length > 0) targetClient = res.rows[0];
+        }
       } catch {}
     }
 
@@ -4556,7 +5143,7 @@ export class BotOrchestrator {
     const tieneDeudaReal = estadoFinanciero.tieneDeudaReal && (estadoFinanciero.totalDeuda > 0 || facturas.length > 0);
 
     if (!tieneDeudaReal) {
-      const ficha = this.getFichaBancaria(session);
+      const ficha = await this.getFichaBancaria(session);
       const nombreCliente = formatDisplayName(session?.client_name, true) || 'Cliente';
 
       if (estadoFinanciero.suspendido && (estadoFinanciero.yaPagoPeroNoActivo || !tieneDeudaReal)) {
@@ -4610,10 +5197,11 @@ export class BotOrchestrator {
         detalleRecibos += `• *Recibo #${f.folio}:* $${f.monto.toFixed(2)} MXN (Vence: ${f.fecha_vencimiento})\n`;
       });
 
+      const ficha = await this.getFichaBancaria(session);
       let textoFacturas = `📋 *Estado de Cuenta - ${this.getIspName()}*\nEstimado(a) *${nombreCliente}*:\n\n` +
         detalleRecibos +
         `\n💰 *Total a pagar: $${totalAdeudo.toFixed(2)} MXN*\n` +
-        this.getFichaBancaria(session);
+        ficha;
 
       await this.enviarYLoguear(phone, textoFacturas, 'CONSULTAR_SALDO', 'FACTURAS_PENDIENTES_ENVIADAS', targetJid);
       await DbService.updateStep(phone, 'ESPERANDO_COMPROBANTE');
@@ -4622,10 +5210,11 @@ export class BotOrchestrator {
 
     // Saldo adeudado sin facturas listadas
     const nombreCliente = formatDisplayName(session?.client_name, true) || 'Cliente';
+    const ficha = await this.getFichaBancaria(session);
     const mensajeMoroso =
       `¡Hola, *${nombreCliente}*! 👋\n\n` +
       `Revisé tu cuenta y detectamos que registras un saldo pendiente por *$${estadoFinanciero.totalDeuda.toFixed(2)} MXN*.\n` +
-      this.getFichaBancaria(session);
+      ficha;
 
     await this.enviarYLoguear(phone, mensajeMoroso, 'CONSULTAR_SALDO', 'AVISO_SUSPENDIDO_SALDO', targetJid);
     await DbService.updateStep(phone, 'ESPERANDO_COMPROBANTE');
@@ -6073,6 +6662,7 @@ ${techInfo}───────────────────────
 
     if (result.success) {
       const nombreCliente = this.formatDisplayName(onuRecord.name || session?.client_name, true) || 'Cliente';
+      const portalUrl = await BotOrchestrator.getClientPortalLinkAsync(phone, session?.client_name || undefined);
       const cardWifi = `*CONTRASEÑA WI-FI ACTUALIZADA*
 ──────────────────────────────
 • *Titular:* *${nombreCliente}*
@@ -6081,7 +6671,10 @@ ${result.has5g ? `• *Red 5 GHz:* *${result.ssid5g}*\n` : ''}• *Nueva Clave:*
 ──────────────────────────────
 La nueva contraseña (10 caracteres) ha sido guardada y configurada en tu módem.
 
-Por favor reconecta tus dispositivos ingresando esta nueva clave.`;
+Por favor reconecta tus dispositivos ingresando esta nueva clave.
+
+💡 _*Tip:* También puedes ver tus redes, cambiar tu clave o consultar todos tus servicios desde tu Portal Web:_
+👉 ${portalUrl}`;
 
       await this.enviarYLoguear(
         phone,
@@ -6183,26 +6776,405 @@ Por favor reconecta tus dispositivos ingresando esta nueva clave.`;
       `1. *Activar Módem / Cliente:*\n` +
       `\`activar cliente [SN] [Folio-Nombre] [Plan] [Zona]\`\n` +
       `_Ej: \`activar cliente 4317B5 3456-Juan Perez 40M Actopan\`_\n\n` +
-      `2. *Cambio de Domicilio / Reubicación:*\n` +
+      `2. *Revisión de Folios (Disponibilidad en vivo):*\n` +
+      `\`revisar folios [Folio 1, Folio 2, ...]\` o pega tu lista.\n` +
+      `_Ej: \`revisar folios 1265, 2046, 1269\` (o reenvía números uno por uno)_\n\n` +
+      `3. *Ficha Técnica / Info de Cliente:*\n` +
+      `\`info [Folio, Nombre o SN]\`\n` +
+      `_Ej: \`info 1265\` (WispHub + SmartOLT + Señal óptica dBm + GPS)_\n\n` +
+      `4. *Cambio de Domicilio / Reubicación:*\n` +
       `\`cambio de domicilio [Folio, Nombre o IP]\`\n` +
       `_Ej: \`cambio de domicilio 3456\`_\n\n` +
-      `3. *Cambio de Módem (Swap):*\n` +
+      `5. *Cambio de Módem (Swap):*\n` +
       `\`cambio de modem [Folio, Nombre o IP]\`\n` +
       `_Ej: \`cambio de modem 3456\`_\n\n` +
-      `4. *Consultar / Cargar Ubicación GPS:*\n` +
+      `6. *Consultar / Cargar Ubicación GPS:*\n` +
       `\`ubicacion [Folio, Nombre o IP]\`\n` +
       `_Ej: \`ubicacion 3017\` o envía un PIN de ubicación para asignarlo_\n\n` +
-      `5. *Cambiar Paquete / Velocidad:*\n` +
+      `7. *Cambiar Paquete / Velocidad:*\n` +
       `\`cambiar plan [Folio/Nombre/SN] a [Velocidad]\`\n` +
       `_Ej: \`cambiar plan 3456 a 60 megas\`_\n\n` +
-      `6. *Cambiar Contraseña Wi-Fi:*\n` +
+      `8. *Cambiar Contraseña Wi-Fi:*\n` +
       `\`cambiar wifi [SN] [NuevoSSID] [NuevaClave]\`\n` +
       `_Ej: \`cambiar wifi 4317B5 MiRed2.4G Clave2026*\`_\n\n` +
-      `7. *Guía Didáctica TR-069 & OLT:*\n` +
+      `9. *Guía Didáctica TR-069 & OLT:*\n` +
       `Escribe: \`guia tr069\`\n\n` +
       `_Puedes escribir cualquier comando directamente en este chat._`;
 
     await this.enviarYLoguear(phone, menu, 'ACTIVACION_TECNICO', 'PANEL_TECNICO_ENVIADO', targetJid);
+  }
+
+  /**
+   * Cancela cualquier temporizador pendiente de acumulación de folios para este técnico
+   */
+  private static cancelarDebounceFolios(phone: string): void {
+    const existing = this.folioDebounceMap.get(phone);
+    if (existing) {
+      clearTimeout(existing.timer);
+      this.folioDebounceMap.delete(phone);
+    }
+  }
+
+  /**
+   * Gestiona el búfer anti-ráfaga de folios para técnicos en WhatsApp (debounce de 2.5s)
+   * Si el técnico reenvía o envía varios folios uno tras otro, se consolidan en una sola respuesta
+   */
+  private static manejarFolioEnDebounce(
+    phone: string,
+    folio: string,
+    targetJid?: string
+  ): void {
+    const existing = this.folioDebounceMap.get(phone);
+    if (existing) {
+      clearTimeout(existing.timer);
+      existing.folios.add(folio);
+      existing.targetJid = targetJid || existing.targetJid;
+      existing.timer = setTimeout(() => {
+        this.ejecutarDebounceFolios(phone).catch(err => {
+          logger.error(`Error en ejecutarDebounceFolios para ${phone}:`, err?.message || err);
+        });
+      }, 2500);
+      logger.info(`[Folio Debounce] Agregado folio ${folio} para ${phone}. Total acumulados: ${existing.folios.size}`);
+    } else {
+      const folios = new Set<string>();
+      folios.add(folio);
+      const timer = setTimeout(() => {
+        this.ejecutarDebounceFolios(phone).catch(err => {
+          logger.error(`Error en ejecutarDebounceFolios para ${phone}:`, err?.message || err);
+        });
+      }, 2500);
+      this.folioDebounceMap.set(phone, { folios, timer, targetJid });
+      logger.info(`[Folio Debounce] Iniciado buffer para ${phone} con folio ${folio} (esperando 2.5s)`);
+    }
+  }
+
+  /**
+   * Ejecuta la resolución de folios una vez expirado el tiempo de espera (2.5s de inactividad)
+   */
+  private static async ejecutarDebounceFolios(phone: string): Promise<void> {
+    const entry = this.folioDebounceMap.get(phone);
+    this.folioDebounceMap.delete(phone);
+    if (!entry) return;
+
+    const folios = Array.from(entry.folios);
+    logger.info(`[Folio Debounce] Disparando resolución para ${phone}. Folios acumulados (${folios.length}): ${folios.join(', ')}`);
+
+    if (folios.length >= 1) {
+      await this.procesarRevisionFoliosTecnico(phone, folios, entry.targetJid);
+    }
+  }
+
+  /**
+   * Determina si el texto es una petición explícita de revisión de folios
+   */
+  private static esConsultaRevisionFolios(text: string): boolean {
+    const t = text.trim().toLowerCase();
+    if (/(?:revis(?:ar|i[oó]n)|checar|verificar|disponibilidad|libres?|ocupados?|status\s+folios?|validar)\s*(?:de\s+)?(?:folios?|servicios?|ids?|cuentas?)?/i.test(t)) {
+      return true;
+    }
+    if (/^folios?\b/i.test(t)) {
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Extrae números de folio válidos (2 a 6 dígitos) ignorando números de teléfono de 10 dígitos o fechas
+   */
+  private static extraerFoliosDeTexto(text: string): string[] {
+    // Remover números de teléfono de 10 dígitos para evitar confundirlos con folios
+    const sinTelefonos = text.replace(/\b\d{10}\b/g, ' ');
+    const matches = sinTelefonos.match(/\b\d{2,6}\b/g);
+    if (!matches) return [];
+
+    const folios: string[] = [];
+    for (const m of matches) {
+      const clean = m.trim();
+      if (!folios.includes(clean)) {
+        folios.push(clean);
+      }
+    }
+    return folios;
+  }
+
+  /**
+   * Determina si un mensaje contiene una lista de folios (pegada en una sola vez o multilínea)
+   */
+  private static esMensajeListaDeFolios(text: string, folios: string[]): boolean {
+    if (folios.length < 2) return false;
+    if (this.esConsultaRevisionFolios(text)) return true;
+    if (text.includes('\n')) {
+      const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+      const numLinesWithDigits = lines.filter(l => /\d{2,6}/.test(l)).length;
+      if (numLinesWithDigits >= 2) return true;
+    }
+    // Si la gran mayoría del mensaje son dígitos, comas, espacios o saltos de línea
+    const nonFolioChars = text.replace(/[\d\s,;\.\-\n\r#]/g, '').length;
+    if (nonFolioChars < 25) return true;
+    return false;
+  }
+
+  /**
+   * Determina si el texto es un solo número de folio suelto (ej: "2046", "#2046", "folio 2046")
+   */
+  private static esNumeroOFolioSuelto(text: string): { esFolio: boolean; folio?: string } {
+    const t = text.trim();
+    const m = t.match(/^(?:folio\s*|#\s*)?(\d{2,6})$/i);
+    if (m) {
+      return { esFolio: true, folio: m[1] };
+    }
+    return { esFolio: false };
+  }
+
+  /**
+   * Determina si el texto es una consulta de info/ficha de cliente (ej: "info 1265", "cliente Juan", "datos 2046")
+   */
+  private static esConsultaInfoClienteTecnico(text: string): { esConsulta: boolean; query?: string } {
+    const match = text.trim().match(/^(?:info|informaci[oó]n|cliente|folio|datos|ficha|status|estado)\s+([A-Za-z0-9\s\-_#]+)$/i);
+    if (match) {
+      const q = match[1].replace(/^#/, '').trim();
+      if (q) return { esConsulta: true, query: q };
+    }
+    return { esConsulta: false };
+  }
+
+  /**
+   * Revisa la disponibilidad de una lista de folios en tiempo real contra WispHub y SmartOLT
+   */
+  private static async procesarRevisionFoliosTecnico(
+    phone: string,
+    folios: string[],
+    targetJid?: string
+  ): Promise<void> {
+    if (!folios || folios.length === 0) {
+      await this.enviarYLoguear(
+        phone,
+        `📋 *Revisión de Folios*\n\nPor favor envía los números de folio a consultar.\n\n_Ejemplos:_\n• \`revisar folios 1265, 2046, 1269\`\n• O pega tu lista de números directamente.`,
+        'REVISION_FOLIOS_TECNICO',
+        'FALTAN_FOLIOS',
+        targetJid
+      );
+      return;
+    }
+
+    // Limitar a máximo 30 folios por consulta para proteger tiempos de respuesta
+    const lista = Array.from(new Set(folios.map(f => f.trim()).filter(Boolean))).slice(0, 30);
+
+    // Consultar todos en paralelo en WispHub y SmartOLT
+    const resultados = await Promise.all(
+      lista.map(async (folio) => {
+        const [whRes, oltRes] = await Promise.all([
+          WispHubService.consultarDisponibilidadFolio(folio).catch(() => ({ ocupado: false, cliente: undefined, detalle: 'Error WH' })),
+          SmartOLTService.consultarDisponibilidadFolio(folio).catch(() => ({ ocupado: false, onu: undefined, detalle: 'Error SmartOLT' })),
+        ]);
+
+        const ocupado = whRes.ocupado || oltRes.ocupado;
+        return {
+          folio,
+          ocupado,
+          whRes,
+          oltRes,
+        };
+      })
+    );
+
+    let mensaje = `*Folios:*\n\n`;
+
+    for (const r of resultados) {
+      if (!r.ocupado) {
+        mensaje += `• *${r.folio}* ✓\n`;
+      } else {
+        const rawNom = r.whRes.cliente?.nombre || r.oltRes.onu?.name || '';
+        const nomLimpio = rawNom ? formatDisplayName(rawNom, false).replace(/[\-–—\._]+$/, '').trim() : '';
+        const display = nomLimpio ? ` ${nomLimpio}` : '';
+        mensaje += `• *${r.folio}* ✗${display}\n`;
+      }
+    }
+
+    await this.enviarYLoguear(
+      phone,
+      mensaje.trim(),
+      'REVISION_FOLIOS_TECNICO',
+      'REPORTE_FOLIOS_ENVIADO',
+      targetJid
+    );
+  }
+
+  /**
+   * Consulta la ficha técnica completa de un cliente o folio para técnicos en campo
+   * Consulta WispHub, SmartOLT y potencia óptica en tiempo real (dBm)
+   */
+  private static async procesarConsultaInfoClienteTecnico(
+    phone: string,
+    query: string,
+    targetJid?: string
+  ): Promise<void> {
+    const rawTarget = query.trim().replace(/^#/, '');
+    if (!rawTarget) {
+      await this.enviarYLoguear(
+        phone,
+        `Indica el Folio, Nombre o Serie (SN) a consultar.\nEjemplo: \`info 1265\` o \`cliente Juan Pérez\``,
+        'CONSULTA_CLIENTE_TECNICO',
+        'FALTA_QUERY',
+        targetJid
+      );
+      return;
+    }
+
+    // 1. Consultar WispHub (por folio o búsqueda de cliente)
+    let clienteWh: any = null;
+    const numMatch = rawTarget.match(/^0*(\d+)/);
+    const folioNum = numMatch ? numMatch[1] : null;
+
+    if (folioNum) {
+      const whDisp = await WispHubService.consultarDisponibilidadFolio(folioNum).catch(() => null);
+      if (whDisp?.cliente) {
+        clienteWh = whDisp.cliente;
+      }
+    }
+
+    if (!clienteWh) {
+      // Buscar por nombre, teléfono o IP en Base de Datos Local
+      clienteWh = await DbService.findWisphubClient({
+        name: rawTarget,
+        ip: rawTarget,
+        sn: rawTarget,
+      }).catch(() => null);
+    }
+
+    if (!clienteWh && !isNaN(Number(rawTarget))) {
+      clienteWh = await DbService.getWisphubClientByAny({ id: rawTarget }).catch(() => null);
+    }
+
+    // 2. Consultar SmartOLT (por folio, SN o nombre)
+    let onuRecord: any = null;
+    if (folioNum) {
+      const oltDisp = await SmartOLTService.consultarDisponibilidadFolio(folioNum).catch(() => null);
+      if (oltDisp?.onu) {
+        onuRecord = oltDisp.onu;
+      }
+    }
+
+    if (!onuRecord && clienteWh?.sn_onu) {
+      onuRecord = await DbService.getOnuById(clienteWh.sn_onu).catch(() => null);
+    }
+
+    if (!onuRecord) {
+      onuRecord = await DbService.getOnuById(rawTarget).catch(() => null);
+    }
+
+    if (!onuRecord) {
+      const fuzzy = await DbService.searchOnusFuzzy(rawTarget, 1).catch(() => []);
+      if (fuzzy.length > 0 && fuzzy[0].matchScore >= 40) {
+        onuRecord = fuzzy[0];
+      }
+    }
+
+    // Si no se encontró ni en WispHub ni en SmartOLT
+    if (!clienteWh && !onuRecord) {
+      // Si el target era un número de folio, indicar que está disponible
+      if (folioNum) {
+        await this.enviarYLoguear(
+          phone,
+          `*Folio ${folioNum} disponible*\nEste folio no existe en WispHub ni en SmartOLT.\n\nPuedes activarlo con:\n\`activar cliente [SN] ${folioNum}-[Nombre] [Plan] [Zona]\``,
+          'REVISION_FOLIOS_TECNICO',
+          'FOLIO_LIBRE_INDIVIDUAL',
+          targetJid
+        );
+        return;
+      }
+
+      await this.enviarYLoguear(
+        phone,
+        `No se encontró ningún cliente o equipo con el identificador "${rawTarget}".`,
+        'CONSULTA_CLIENTE_TECNICO',
+        'NO_ENCONTRADO',
+        targetJid
+      );
+      return;
+    }
+
+    // 3. Consultar estado y potencia óptica en tiempo real en SmartOLT
+    let estadoOlt: SmartOltStatusResult | null = null;
+    const targetSn = onuRecord?.sn || clienteWh?.sn_onu;
+    const targetExternalId = onuRecord?.unique_external_id || folioNum;
+
+    if (targetSn || targetExternalId) {
+      try {
+        estadoOlt = await SmartOLTService.obtenerEstadoONU(targetSn || targetExternalId);
+      } catch (err: any) {
+        logger.warn(`Error al consultar estado óptico para ${targetSn || targetExternalId}:`, err?.message || err);
+      }
+    }
+
+    // 4. Formatear potencia óptica limpia
+    let potenciaTexto = 'No disponible';
+    if (estadoOlt) {
+      if (estadoOlt.status === 'LOS') {
+        potenciaTexto = 'Corte de fibra / Desconectada (LOS)';
+      } else if (estadoOlt.status === 'POWER_FAIL') {
+        potenciaTexto = 'Sin energía eléctrica (Power Fail)';
+      } else if (estadoOlt.opticalPowerDbm !== null && estadoOlt.opticalPowerDbm !== undefined) {
+        const dbm = Number(estadoOlt.opticalPowerDbm);
+        let calificacion = 'Excelente';
+        if (dbm > -15) {
+          calificacion = 'Saturada (Muy alta)';
+        } else if (dbm <= -15 && dbm >= -25) {
+          calificacion = 'Excelente';
+        } else if (dbm < -25 && dbm >= -27) {
+          calificacion = 'Aceptable';
+        } else {
+          calificacion = 'Atenuación crítica (Revisar fibra)';
+        }
+        potenciaTexto = `${dbm} dBm (${calificacion})`;
+      } else if (estadoOlt.status === 'ONLINE') {
+        potenciaTexto = 'En Línea (Online)';
+      } else {
+        potenciaTexto = 'Desconectada / Offline';
+      }
+    }
+
+    // 5. Construir ficha técnica limpia sin emojis
+    const rawNombre = clienteWh?.nombre || onuRecord?.name || 'Cliente sin nombre';
+    const cleanNombre = rawNombre.replace(/^0*\d+\s*[-_]\s*/, '').trim();
+    const folioCalculado = extractFolioServicio(clienteWh) || extractFolioServicio(onuRecord) || folioNum || (clienteWh?.id_servicio ? String(clienteWh.id_servicio) : 'N/A');
+    const tel = clienteWh?.telefono || onuRecord?.phone || '';
+    const dir = clienteWh?.direccion || onuRecord?.address || '';
+    const estadoWh = clienteWh?.estado || 'Sin registrar en WH';
+    const saldo = clienteWh?.saldo !== undefined ? `$${Number(clienteWh.saldo).toFixed(2)}` : 'Al corriente';
+    const plan = clienteWh?.plan_internet || onuRecord?.speed_profile || 'N/A';
+    const ip = clienteWh?.ip || onuRecord?.ip_address || 'N/A';
+    const snFinal = targetSn || 'Sin ONU asignada';
+    const oltZona = onuRecord?.olt_name || onuRecord?.zone_name || '';
+    const gpsUrl = clienteWh?.google_maps_url || (clienteWh?.coordenadas_gps ? `https://www.google.com/maps?q=${clienteWh.coordenadas_gps}` : null);
+
+    let ficha = `*Ficha de Cliente*\n`;
+    ficha += `• *Folio:* *#${folioCalculado}*\n`;
+    ficha += `• *Cliente:* *${cleanNombre}*\n`;
+    if (tel && tel !== 'Sin registrar') ficha += `• *Teléfono:* ${tel}\n`;
+    if (dir && dir !== 'Sin registrar') ficha += `• *Dirección:* ${dir}\n`;
+    ficha += `\n*WispHub:*\n`;
+    ficha += `• *Estado:* ${estadoWh} (Saldo: ${saldo})\n`;
+    ficha += `• *Plan:* ${plan}\n`;
+    ficha += `• *IP:* \`${ip}\`\n`;
+
+    ficha += `\n*SmartOLT:*\n`;
+    ficha += `• *Serie (SN):* \`${snFinal}\`\n`;
+    ficha += `• *Potencia Óptica:* ${potenciaTexto}\n`;
+    if (oltZona) ficha += `• *OLT / Zona:* ${oltZona}\n`;
+    if (estadoOlt?.uptime) ficha += `• *Uptime:* ${estadoOlt.uptime}\n`;
+
+    if (gpsUrl) {
+      ficha += `\n*Ubicación GPS:*\n${gpsUrl}\n`;
+    }
+
+    await this.enviarYLoguear(
+      phone,
+      ficha.trim(),
+      'CONSULTA_CLIENTE_TECNICO',
+      'FICHA_TECNICA_ENVIADA',
+      targetJid
+    );
   }
 
   /**
@@ -6684,17 +7656,34 @@ _(O indica un cambio, ej: cambiar paquete 60 megas)_`;
     const numId = query.replace(/\D/g, '');
     let targetClient: any = null;
 
-    // 1. Búsqueda directa en WispHub por ID numérico
+    // 1. Búsqueda directa en WispHub por Folio numérico de servicio
     if (numId && /^\d+$/.test(query.trim())) {
       try {
         const { getDbClient } = await import('../database/db');
         const client = getDbClient();
-        const res = await client.execute({
-          sql: `SELECT id_servicio, nombre, ip, router, direccion, coordenadas_gps, google_maps_url, zona_smartolt, olt_smartolt, ubicacion_notas FROM wisphub_clients WHERE id_servicio = ? LIMIT 1`,
-          args: [Number(numId)],
+        const padded = numId.padStart(4, '0');
+        const folioRes = await client.execute({
+          sql: `SELECT id_servicio, nombre, servicio, ip, router, direccion, coordenadas_gps, google_maps_url, zona_smartolt, olt_smartolt, ubicacion_notas FROM wisphub_clients 
+                WHERE servicio LIKE ? OR servicio LIKE ? 
+                   OR nombre LIKE ? OR nombre LIKE ? 
+                   OR servicio LIKE ? OR nombre LIKE ? 
+                LIMIT 1`,
+          args: [
+            `${numId}-%`, `${numId} - %`,
+            `${numId}-%`, `${numId} - %`,
+            `${padded}-%`, `${padded}-%`,
+          ],
         });
-        if (res.rows.length > 0) {
-          targetClient = res.rows[0];
+        if (folioRes.rows.length > 0) {
+          targetClient = folioRes.rows[0];
+        } else {
+          const res = await client.execute({
+            sql: `SELECT id_servicio, nombre, servicio, ip, router, direccion, coordenadas_gps, google_maps_url, zona_smartolt, olt_smartolt, ubicacion_notas FROM wisphub_clients WHERE id_servicio = ? LIMIT 1`,
+            args: [Number(numId)],
+          });
+          if (res.rows.length > 0) {
+            targetClient = res.rows[0];
+          }
         }
       } catch {}
     }
@@ -6708,7 +7697,8 @@ _(O indica un cambio, ej: cambiar paquete 60 megas)_`;
         } else if (matches.length > 1) {
           let listMsg = `*Múltiples coincidencias para "${query}":*\n──────────────────────────────\n`;
           matches.slice(0, 5).forEach((m: any, idx) => {
-            listMsg += `*${idx + 1}.* #${m.id_servicio} - ${m.nombre} (IP: ${m.ip || 'N/A'})\n`;
+            const fol = extractFolioServicio(m);
+            listMsg += `*${idx + 1}.* #${fol || m.id_servicio} - ${m.nombre} (IP: ${m.ip || 'N/A'})\n`;
           });
           listMsg += `──────────────────────────────\nResponde con el *número de opción* o *folio*:`;
 
@@ -6880,7 +7870,7 @@ _(O indica un cambio, ej: cambiar paquete 60 megas)_`;
     targetJid?: string
   ): Promise<void> {
     const isIp = /^172\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(query) || /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(query);
-    const isFullSn = query.length >= 12;
+    const isFullSn = /^[A-Z0-9]{12,16}$/i.test(query.trim()) && !/\s/.test(query.trim());
 
     let oldOnu: any = null;
 
@@ -6899,29 +7889,66 @@ _(O indica un cambio, ej: cambiar paquete 60 megas)_`;
         }
       }
 
+      // Si el técnico incluyó un folio o sufijo en la consulta (ej: "942-Alberto", "942", "Alberto-2"),
+      // filtrar directamente al servicio que coincide exactamente con ese folio para no pedir selección redundante
+      const extractedQ = extractFolioAndCleanName(query);
+      if (distinctMatches.length > 1 && (extractedQ.folio || extractedQ.serviceSuffix)) {
+        const folioFiltered = distinctMatches.filter(m => {
+          const matchesF = extractedQ.folio ? (candidateMatchesFolio(m.name, extractedQ.folio) || candidateMatchesFolio(m.unique_external_id || '', extractedQ.folio)) : true;
+          const matchesS = extractedQ.serviceSuffix ? candidateMatchesServiceSuffix(m.name, extractedQ.serviceSuffix) : true;
+          const matchesN = extractedQ.cleanName ? (computeNameMatchScore(extractedQ.cleanName, m.name) >= 45) : true;
+          return matchesF && matchesS && matchesN;
+        });
+        if (folioFiltered.length === 1) {
+          distinctMatches.length = 0;
+          distinctMatches.push(folioFiltered[0]);
+        }
+      }
+
+
       if (distinctMatches.length > 1) {
-        for (const m of distinctMatches) {
-          if (!m.speed_profile || m.speed_profile === '40MB-DOWN' || m.speed_profile === '40MB') {
+        // Enriquecer candidatos con datos reales de SmartOLT / WispHub
+        await Promise.all(
+          distinctMatches.map(async (m) => {
             try {
-              const whClient = await DbService.findWisphubClient({
-                ip: m.ip_address,
-                name: m.name,
-                sn: m.sn,
-              });
-              if (whClient && (whClient.plan_internet || whClient.servicio)) {
-                const sp = getSmartOltSpeedProfiles(whClient.plan_internet || whClient.servicio);
-                m.speed_profile = sp.down;
+              const details = await SmartOLTService.getOnuDetails(m.unique_external_id || m.sn);
+              if (details) {
+                if (details.download_speed_profile_name || details.speed_profile) {
+                  m.speed_profile = details.download_speed_profile_name || details.speed_profile;
+                }
+                if (details.zone || details.zone_name) {
+                  m.zone_name = details.zone || details.zone_name;
+                }
+                if (details.name) {
+                  m.name = details.name;
+                }
+                if (details.ip_address) {
+                  m.ip_address = details.ip_address;
+                }
+              } else {
+                const whClient = await DbService.findWisphubClient({
+                  ip: m.ip_address,
+                  name: m.name,
+                  sn: m.sn,
+                });
+                if (whClient && (whClient.plan_internet || whClient.servicio)) {
+                  const sp = getSmartOltSpeedProfiles(whClient.plan_internet || whClient.servicio);
+                  m.speed_profile = sp.down;
+                }
               }
             } catch {}
-          }
-        }
+          })
+        );
 
-        let msg = `*SE ENCONTRARON ${distinctMatches.length} SERVICIOS REGISTRADOS PARA "${query}":*\n──────────────────────────────\n`;
+        let msg = `🔍 *Se encontraron ${distinctMatches.length} servicios para "${query}"*\n\nSelecciona a cuál corresponde la reubicación:\n\n`;
         distinctMatches.forEach((m, idx) => {
           const plan = (m.speed_profile || '40MB').replace(/MB-DOWN|MB/i, ' Megas');
-          msg += `*${idx + 1}.* IP: \`${m.ip_address || 'Sin IP'}\` | SN: \`${m.sn}\` | Zona: ${m.zone_name || 'Actopan'} | Plan: ${plan}\n   • Titular: ${m.name}\n`;
+          const zonaStr = m.zone_name ? ` • ${m.zone_name}` : '';
+          msg += `*${idx + 1}.* *${m.name}*\n`;
+          msg += `   • *IP:* \`${m.ip_address || 'Sin IP'}\` (${plan})\n`;
+          msg += `   • *Módem:* \`${m.sn}\`${zonaStr}\n\n`;
         });
-        msg += `──────────────────────────────\n¿A cuál de los servicios corresponde este cambio de domicilio?\nResponde con el número de opción (ej: *1* o *2*) o la *IP*.`;
+        msg += `Responde con el *número* (ej: *1* o *2*), el *folio* o la *IP*.\n_O escribe *cancelar* para salir._`;
 
         let metaObj: any = {};
         try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
@@ -7132,7 +8159,7 @@ _(O indica un cambio, ej: cambiar paquete 60 megas)_`;
     targetJid?: string
   ): Promise<void> {
     const isIp = /^172\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(query) || /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(query);
-    const isFullSn = query.length >= 12;
+    const isFullSn = /^[A-Z0-9]{12,16}$/i.test(query.trim()) && !/\s/.test(query.trim());
 
     let oldOnu: any = null;
 
@@ -7151,31 +8178,67 @@ _(O indica un cambio, ej: cambiar paquete 60 megas)_`;
         }
       }
 
+      // Si el técnico incluyó un folio o sufijo en la consulta (ej: "942-Alberto", "942", "Alberto-2"),
+      // filtrar directamente al servicio que coincide exactamente con ese folio para no pedir selección redundante
+      const extractedQ = extractFolioAndCleanName(query);
+      if (distinctMatches.length > 1 && (extractedQ.folio || extractedQ.serviceSuffix)) {
+        const folioFiltered = distinctMatches.filter(m => {
+          const matchesF = extractedQ.folio ? (candidateMatchesFolio(m.name, extractedQ.folio) || candidateMatchesFolio(m.unique_external_id || '', extractedQ.folio)) : true;
+          const matchesS = extractedQ.serviceSuffix ? candidateMatchesServiceSuffix(m.name, extractedQ.serviceSuffix) : true;
+          const matchesN = extractedQ.cleanName ? (computeNameMatchScore(extractedQ.cleanName, m.name) >= 45) : true;
+          return matchesF && matchesS && matchesN;
+        });
+        if (folioFiltered.length === 1) {
+          distinctMatches.length = 0;
+          distinctMatches.push(folioFiltered[0]);
+        }
+      }
+
+
       if (distinctMatches.length > 1) {
-        // Enriquecer candidatos con planes reales de WispHub si es necesario
-        for (const m of distinctMatches) {
-          if (!m.speed_profile || m.speed_profile === '40MB-DOWN' || m.speed_profile === '40MB') {
+        // Enriquecer candidatos con datos reales de SmartOLT / WispHub
+        await Promise.all(
+          distinctMatches.map(async (m) => {
             try {
-              const whClient = await DbService.findWisphubClient({
-                ip: m.ip_address,
-                name: m.name,
-                sn: m.sn,
-              });
-              if (whClient && (whClient.plan_internet || whClient.servicio)) {
-                const sp = getSmartOltSpeedProfiles(whClient.plan_internet || whClient.servicio);
-                m.speed_profile = sp.down;
+              const details = await SmartOLTService.getOnuDetails(m.unique_external_id || m.sn);
+              if (details) {
+                if (details.download_speed_profile_name || details.speed_profile) {
+                  m.speed_profile = details.download_speed_profile_name || details.speed_profile;
+                }
+                if (details.zone || details.zone_name) {
+                  m.zone_name = details.zone || details.zone_name;
+                }
+                if (details.name) {
+                  m.name = details.name;
+                }
+                if (details.ip_address) {
+                  m.ip_address = details.ip_address;
+                }
+              } else {
+                const whClient = await DbService.findWisphubClient({
+                  ip: m.ip_address,
+                  name: m.name,
+                  sn: m.sn,
+                });
+                if (whClient && (whClient.plan_internet || whClient.servicio)) {
+                  const sp = getSmartOltSpeedProfiles(whClient.plan_internet || whClient.servicio);
+                  m.speed_profile = sp.down;
+                }
               }
             } catch {}
-          }
-        }
+          })
+        );
 
         // MULTISERVICIO: El cliente tiene 2 o más servicios registrados
-        let msg = `*SE ENCONTRARON ${distinctMatches.length} SERVICIOS PARA "${query}":*\n──────────────────────────────\n`;
+        let msg = `🔍 *Se encontraron ${distinctMatches.length} servicios para "${query}"*\n\nSelecciona a cuál se le realizará el cambio:\n\n`;
         distinctMatches.forEach((m, idx) => {
           const plan = (m.speed_profile || '40MB').replace(/MB-DOWN|MB/i, ' Megas');
-          msg += `*${idx + 1}.* \`${m.ip_address || 'Sin IP'}\` | SN: \`${m.sn}\` | Plan: ${plan} (${m.name})\n`;
+          const zonaStr = m.zone_name ? ` • ${m.zone_name}` : '';
+          msg += `*${idx + 1}.* *${m.name}*\n`;
+          msg += `   • *IP:* \`${m.ip_address || 'Sin IP'}\` (${plan})\n`;
+          msg += `   • *Módem:* \`${m.sn}\`${zonaStr}\n\n`;
         });
-        msg += `──────────────────────────────\nResponde con el número de opción (ej: *1*) o la *IP*.`;
+        msg += `Responde con el *número* (ej: *1* o *2*), el *folio* o la *IP*.\n_O escribe *cancelar* para salir._`;
 
         let metaObj: any = {};
         try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
@@ -7283,7 +8346,7 @@ _(O indica un cambio, ej: cambiar paquete 60 megas)_`;
     });
 
     const planDisplay = (oldOnu.download_speed_profile_name || '40MB').replace(/MB-DOWN|MB/i, ' Megas');
-    const msg = `*Cambio de Módem*\n• *Cliente:* *${oldOnu.name}*\n• *Zona:* ${oldOnu.zone || 'Actopan'}\n• *IP:* \`${oldOnu.ip_address}\` (${planDisplay})\n• *Módem actual:* \`${oldOnu.sn}\`\n\nEscribe los dígitos del *nuevo módem* (o indica cambios de zona/paquete):`;
+    const msg = `🔄 *Cambio de Módem*\n\n• *Cliente:* *${oldOnu.name}*\n• *Zona:* ${oldOnu.zone || 'Actopan'}\n• *IP:* \`${oldOnu.ip_address}\` (${planDisplay})\n• *Módem actual:* \`${oldOnu.sn}\`\n\nEscribe los dígitos del *nuevo módem* (ej: *4484* o *474B4484*):`;
 
     await this.enviarYLoguear(phone, msg, 'ACTIVACION_TECNICO', 'SOLICITUD_SN_NUEVO_SWAP', targetJid);
   }
@@ -7304,7 +8367,7 @@ _(O indica un cambio, ej: cambiar paquete 60 megas)_`;
 
     if (!choiceData || !Array.isArray(choiceData.candidates) || choiceData.candidates.length === 0) {
       await DbService.upsertSession({ phone, step: 'CONVERSACIONAL' });
-      await this.enviarYLoguear(phone, 'No hay ninguna seleccion de cambio de modem pendiente. Puedes escribir `cambio de modem [Cliente]` para iniciar.', 'ACTIVACION_TECNICO', 'ERROR_SESION', targetJid);
+      await this.enviarYLoguear(phone, 'No hay ninguna selección de cambio de módem pendiente. Puedes escribir `cambio de módem [Cliente]` para iniciar.', 'ACTIVACION_TECNICO', 'ERROR_SESION', targetJid);
       return;
     }
 
@@ -7315,20 +8378,29 @@ _(O indica un cambio, ej: cambiar paquete 60 megas)_`;
         step: 'CONVERSACIONAL',
         metadata: JSON.stringify(metaObj),
       });
-      await this.enviarYLoguear(phone, '*Cambio de modem cancelado.*', 'ACTIVACION_TECNICO', 'SWAP_CANCELADO', targetJid);
+      await this.enviarYLoguear(phone, '*Operación cancelada.*', 'ACTIVACION_TECNICO', 'SWAP_CANCELADO', targetJid);
       return;
     }
 
     const candidates: any[] = choiceData.candidates;
     let selectedCandidate: any = null;
 
-    // 1. Opción numérica (1, 2, 3...)
-    const numMatch = lower.match(/^(\d+)(?:[.)]|\s|$)/);
+    // 1. Opción numérica (1, 2, 3...) o prefijo "opcion 1", "servicio 2"
+    const numMatch = lower.match(/^(?:opci[oó]n|servicio|el|num|número)?\s*(\d+)(?:[.)]|\s|$)/i);
     if (numMatch) {
       const idx = parseInt(numMatch[1], 10) - 1;
       if (idx >= 0 && idx < candidates.length) {
         selectedCandidate = candidates[idx];
       }
+    }
+
+    // 1.1 Si el técnico envió un número que es el Folio del servicio (ej: "942", "2970", "970")
+    if (!selectedCandidate && numMatch) {
+      const folioInput = numMatch[1];
+      selectedCandidate = candidates.find(c =>
+        candidateMatchesFolio(c.name || '', folioInput) ||
+        candidateMatchesFolio(String(c.unique_external_id || ''), folioInput)
+      );
     }
 
     // 2. IP exacta
@@ -7340,19 +8412,26 @@ _(O indica un cambio, ej: cambiar paquete 60 megas)_`;
       }
     }
 
-    // 3. SN exacto
+    // 3. SN exacto o terminación de SN (últimos 4 o más caracteres)
     if (!selectedCandidate) {
-      const cleanUpper = rawText.trim().toUpperCase();
-      const foundBySn = candidates.find(c => (c.sn || '').toUpperCase().includes(cleanUpper) || cleanUpper.includes((c.sn || '').toUpperCase()));
-      if (foundBySn) selectedCandidate = foundBySn;
+      const cleanUpper = rawText.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (cleanUpper.length >= 4) {
+        const foundBySn = candidates.find(c => {
+          const cSn = (c.sn || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+          return cSn.includes(cleanUpper) || cSn.endsWith(cleanUpper);
+        });
+        if (foundBySn) selectedCandidate = foundBySn;
+      }
     }
 
     if (!selectedCandidate) {
-      let retryMsg = `No logre identificar el servicio con esa respuesta.\n\nPor favor responde con el *numero de opcion* (1, 2...) o la *IP* exacta:\n\n`;
+      let retryMsg = `No logré identificar el servicio con esa respuesta.\n\nPor favor selecciona una opción:\n\n`;
       candidates.forEach((m: any, idx: number) => {
-        retryMsg += `*${idx + 1}.* IP: \`${m.ip_address || 'Sin IP'}\` | SN: \`${m.sn}\` (${m.name})\n`;
+        const plan = (m.speed_profile || '').replace(/MB-DOWN|MB/i, ' Megas');
+        const planStr = plan ? ` (${plan})` : '';
+        retryMsg += `*${idx + 1}.* *${m.name}*\n   • IP: \`${m.ip_address || 'Sin IP'}\`${planStr} | Módem: \`${m.sn}\`\n\n`;
       });
-      retryMsg += `\n_O escribe *cancelar* para salir._`;
+      retryMsg += `Responde con el *número* (ej: *1* o *2*), el *folio* o la *IP*.\n_O escribe *cancelar* para salir._`;
       await this.enviarYLoguear(phone, retryMsg, 'ACTIVACION_TECNICO', 'REINTENTO_SELECCION_IP', targetJid);
       return;
     }
@@ -7399,7 +8478,7 @@ _(O indica un cambio, ej: cambiar paquete 60 megas)_`;
         });
 
         const planDisplay = (oldOnu.download_speed_profile_name || '40MB').replace(/MB-DOWN|MB/i, ' Megas');
-        const waitMsg = `*CAMBIO DE DOMICILIO / REUBICACIÓN*\n──────────────────────────────\n• *Cliente / Folio:* *${oldOnu.name}*\n• *Módem a Reubicar:* \`${oldSn}\` (${oldOnu.onu_type || 'Huawei'})\n• *IP a Conservar:* \`${oldOnu.ip_address}\` (VLAN ${calculatedVlan})\n• *Paquete:* *${planDisplay}*\n• *Zona:* *${oldOnu.zone || 'Actopan'}*\n──────────────────────────────\nBuscando el módem en su nueva caja/puerto en SmartOLT...\nEl equipo aún no sincroniza con la central. Esperando conexión de fibra óptica en la nueva ubicación (búsqueda activa durante 5 minutos)...\n\n💡 _En cuanto conectes la fibra al nuevo puerto, el bot lo detectará y te enviará la confirmación._`;
+        const waitMsg = `📍 *Cambio de Domicilio*\n\n• *Cliente:* *${oldOnu.name}*\n• *Zona:* ${oldOnu.zone || 'Actopan'}\n• *IP a conservar:* \`${oldOnu.ip_address}\` (${planDisplay})\n• *Módem:* \`${oldSn}\` (${oldOnu.onu_type || 'Huawei'})\n\nBuscando el módem en su nueva ubicación en SmartOLT...\nEsperando conexión de fibra óptica en la central (búsqueda activa durante 5 minutos).\n\n💡 _En cuanto conectes la fibra al nuevo puerto, te enviaré la confirmación._`;
 
         await this.enviarYLoguear(phone, waitMsg, 'ACTIVACION_TECNICO', 'INICIANDO_POLLING_DOMICILIO', targetJid);
         this.iniciarPollingSwapSmartOlt(phone, oldSn, targetJid);
@@ -7414,15 +8493,7 @@ _(O indica un cambio, ej: cambiar paquete 60 megas)_`;
     });
 
     const planDisplay = (oldOnu.download_speed_profile_name || '40MB').replace(/MB-DOWN|MB/i, ' Megas');
-    const msg = `*SERVICIO SELECCIONADO PARA CAMBIO DE MODEM*
-──────────────────────────────
-• *Cliente / Folio:* *${oldOnu.name}*
-• *Zona / Municipio:* *${oldOnu.zone || 'Actopan'}*
-• *IP:* \`${oldOnu.ip_address}\` (VLAN ${calculatedVlan})
-• *Paquete:* *${planDisplay}*
-• *Modem Actual (a retirar):* \`${oldOnu.sn}\`
-──────────────────────────────
-Por favor escribe los ultimos digitos del SN del NUEVO modem (ej: *474B4484* o *4484*):`;
+    const msg = `🔄 *Cambio de Módem*\n\n• *Cliente:* *${oldOnu.name}*\n• *Zona:* ${oldOnu.zone || 'Actopan'}\n• *IP:* \`${oldOnu.ip_address}\` (${planDisplay})\n• *Módem actual:* \`${oldOnu.sn}\`\n\nEscribe los dígitos del *nuevo módem* (ej: *4484* o *474B4484*):`;
 
     await this.enviarYLoguear(phone, msg, 'ACTIVACION_TECNICO', 'SOLICITUD_SN_NUEVO_SWAP', targetJid);
   }

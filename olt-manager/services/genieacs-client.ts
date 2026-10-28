@@ -208,6 +208,35 @@ declare("Device.IP.Interface.1.IPv4Address.1.IPAddress", {value: 1});
   }
 
   /**
+   * Habilitar y reactivar SSIDs y radios Wi-Fi (2.4 GHz y 5 GHz) de forma remota por TR-069
+   */
+  public async enableWlan(deviceId: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      const parameterValues: [string, string, string][] = [
+        ['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.Enable', 'true', 'xsd:boolean'],
+        ['InternetGatewayDevice.LANDevice.1.WLANConfiguration.1.RadioEnabled', 'true', 'xsd:boolean'],
+        ['InternetGatewayDevice.LANDevice.1.WLANConfiguration.2.Enable', 'true', 'xsd:boolean'],
+        ['InternetGatewayDevice.LANDevice.1.WLANConfiguration.2.RadioEnabled', 'true', 'xsd:boolean'],
+        ['InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.Enable', 'true', 'xsd:boolean'],
+        ['InternetGatewayDevice.LANDevice.1.WLANConfiguration.5.RadioEnabled', 'true', 'xsd:boolean'],
+        ['Device.WiFi.Radio.1.Enable', 'true', 'xsd:boolean'],
+        ['Device.WiFi.Radio.2.Enable', 'true', 'xsd:boolean'],
+        ['Device.WiFi.SSID.1.Enable', 'true', 'xsd:boolean'],
+        ['Device.WiFi.SSID.2.Enable', 'true', 'xsd:boolean'],
+        ['Device.WiFi.AccessPoint.1.Enable', 'true', 'xsd:boolean'],
+        ['Device.WiFi.AccessPoint.2.Enable', 'true', 'xsd:boolean']
+      ];
+
+      return await this.createTask(deviceId, {
+        name: 'setParameterValues',
+        parameterValues
+      });
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  }
+
+  /**
    * Configurar Modo WAN (IP Estática / DHCP / PPPoE / IPv6) en la ONT
    */
   public async setWanMode(

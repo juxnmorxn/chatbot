@@ -32,6 +32,8 @@ export interface GroqClassificationResult {
   bloqueo_paginas_apps: boolean;
   problema_streaming_tv: boolean;
   consulta_canales_cable: boolean;
+  reclamando_demora_pago?: boolean;
+  conectado_sin_internet?: boolean;
   alcance_dispositivos: 'TODOS' | 'SOLO_UNO' | 'INDETERMINADO';
   ya_reinicio: boolean;
   nombre_mencionado: string | null;
@@ -63,11 +65,17 @@ export interface ActivacionModificacionesParsed {
 }
 
 export interface GroqImageAnalysisResult {
-  tipo: 'COMPROBANTE_PAGO' | 'SPEEDTEST' | 'MODEM_LUCES' | 'CONTRATO_INSTALACION' | 'POTENCIA_OPTICA' | 'ETIQUETA_MODEM' | 'OTRO';
+  tipo: 'COMPROBANTE_PAGO' | 'SPEEDTEST' | 'MODEM_LUCES' | 'CONTRATO_INSTALACION' | 'POTENCIA_OPTICA' | 'ETIQUETA_MODEM' | 'ESTADO_WIFI_CELULAR' | 'OTRO';
   descripcion: string;
   foco_rojo: boolean;
   equipo_apagado: boolean;
   luces_verdes: boolean;
+  estado_wifi?: {
+    red_conectada: string | null;
+    estado_texto: string | null;
+    conectado_sin_internet: boolean;
+    redes_visibles?: string[];
+  };
   speedtest?: {
     bajada_mbps: number | null;
     subida_mbps: number | null;
@@ -178,16 +186,31 @@ Tu objetivo es examinar la imagen recibida y clasificarla estrictamente en una d
    - equipo_apagado = true si el equipo no tiene ninguna luz encendida (apagado total).
    - luces_verdes = true si las luces principales (PON, POWER, LAN, WLAN) se ven en verde o azul normal.
 
-7. "OTRO":
+7. "ESTADO_WIFI_CELULAR":
+   - Captura de pantalla de los ajustes de Wi-Fi de un teléfono celular o computadora (pantalla de redes Wi-Fi).
+   - Muestra redes disponibles o la red conectada, indicando estados como "Conectado / Sin acceso a internet", "Conectado sin internet", "Sin conexión", "Buscando...", o lista de SSIDs.
+   - Extrae:
+     * red_conectada: Nombre de la red Wi-Fi a la que está enlazado (ej: "CloudWare-VbdG").
+     * estado_texto: Texto exacto de estado que aparece debajo de la red (ej: "Conectado / Sin acceso a internet", "Conectado", "Obteniendo dirección IP...", "Sin internet").
+     * conectado_sin_internet: true si dice explícitamente "Sin acceso a internet", "Sin internet", "Sin conexión" o advertencia similar.
+     * redes_visibles: lista de nombres de otras redes Wi-Fi visibles en la pantalla (ej: ["CloudWare-VbdG-5G", "CloudWare-6CAF"]).
+
+8. "OTRO":
    - Cualquier otra imagen que no pertenezca a las categorías anteriores.
 
 Devuelve EXCLUSIVAMENTE un JSON válido con esta estructura:
 {
-  "tipo": "CONTRATO_INSTALACION" | "POTENCIA_OPTICA" | "ETIQUETA_MODEM" | "COMPROBANTE_PAGO" | "SPEEDTEST" | "MODEM_LUCES" | "OTRO",
+  "tipo": "CONTRATO_INSTALACION" | "POTENCIA_OPTICA" | "ETIQUETA_MODEM" | "COMPROBANTE_PAGO" | "SPEEDTEST" | "MODEM_LUCES" | "ESTADO_WIFI_CELULAR" | "OTRO",
   "descripcion": "resumen en 1 oración de lo que se ve en la foto",
   "foco_rojo": boolean,
   "equipo_apagado": boolean,
   "luces_verdes": boolean,
+  "estado_wifi": {
+    "red_conectada": string | null,
+    "estado_texto": string | null,
+    "conectado_sin_internet": boolean,
+    "redes_visibles": string[]
+  },
   "speedtest": {
     "bajada_mbps": number | null,
     "subida_mbps": number | null,
@@ -314,6 +337,9 @@ Devuelve EXCLUSIVAMENTE un JSON válido con esta estructura:
       ip?: string | null;
       estadoServicio?: string | null;
       infoOlt?: string | null;
+      portalUrl?: string | null;
+      paymentOfficePhone?: string | null;
+      diaCorte?: string | null;
     }
   ): Promise<string> {
     try {
@@ -336,11 +362,20 @@ Devuelve EXCLUSIVAMENTE un JSON válido con esta estructura:
       if (contexto?.estadoServicio) {
         clienteTexto += `\n- Estado en el sistema: ${contexto.estadoServicio}`;
       }
+      if (contexto?.diaCorte) {
+        clienteTexto += `\n- Día habitual de corte: Día ${contexto.diaCorte} de cada mes`;
+      }
       if (contexto?.ip) {
         clienteTexto += `\n- IP asignada: ${contexto.ip}`;
       }
       if (contexto?.infoOlt) {
         clienteTexto += `\n- Estado de conexión SmartOLT: ${contexto.infoOlt}`;
+      }
+      if (contexto?.paymentOfficePhone) {
+        clienteTexto += `\n- Teléfono oficial de Oficina Administrativa / Pagos: ${contexto.paymentOfficePhone}`;
+      }
+      if (contexto?.portalUrl) {
+        clienteTexto += `\n- Enlace directo a su Portal Web (PWA): ${contexto.portalUrl}`;
       }
 
       const systemPrompt = `
@@ -359,7 +394,13 @@ Objetivo y comportamiento:
 4. Si el usuario reporta una falla de internet (ej. "no tengo internet", "está muy lento", "foco rojo", "parpadea LOS", "el módem no prende"):
    - Sé empático y dale pasos sencillos y claros de revisión rápida (ej. verificar que el módem esté conectado a la luz, que el cable de fibra amarillo no esté doblado, o reiniciar desconectando de la corriente por 30 segundos).
    - Indícale que si el problema persiste o si tiene foco rojo (corte de fibra), con gusto canalizamos el reporte técnico para que la cuadrilla lo revise.
-5. Si el usuario pregunta por pagos, saldos o contratación, oriéntalo con amabilidad.
+5. REGLA ESTRICTA DE PAGOS, COMPROBANTES Y OFICINA ADMINISTRATIVA:
+   - En este número de WhatsApp atendemos de forma técnica y operativa (no procesamos cobros ni validamos pagos directamente en esta línea).
+   - Si el cliente solicita datos para realizar pagos o transferencias, dale los datos bancarios (Banco: BBVA, Cuenta CLABE, Titular, indicando que en Concepto escriba su nombre completo), PERO indícale con toda claridad que DEBE enviar su comprobante de pago al WhatsApp del Área Administrativa al número: ${contexto?.paymentOfficePhone || '772 129 2969'}.
+   - Si el cliente indica que ya pagó, que ya mandó su comprobante pero "no le responden", que sigue suspendido o se queja de tardanza en la reactivación:
+     * Discúlpate cordialmente con empatía: explícale que en fechas de corte se procesan muchos pagos por registrar y pagos en ventanilla, por lo que el personal administrativo va corroborando y reactivando los servicios por turnos.
+     * Pídele paciencia a que el área administrativa verifique su pago.
+     * Recomiéndale que para evitar cortes en el servicio en futuros meses, procure realizar su pago con 3 a 4 días de anticipación de acuerdo a su fecha habitual de corte${contexto?.diaCorte ? ' (día ' + contexto.diaCorte + ' de cada mes)' : ''}.
 6. REGLA ESTRICTA DE PLANES, VELOCIDADES Y TEST DE VELOCIDAD:
    - Si el usuario pregunta cuál es su velocidad, qué plan tiene o reporta que siente el servicio lento, infórmale con EXACTITUD los datos de su registro oficial: "${contexto?.planInternet || 'tu plan contratado'}" (${contexto?.velocidadMegas ? contexto.velocidadMegas + ' Mbps' : 'velocidad contratada'}).
    - SIEMPRE que sugieras o hables de medir la velocidad o hacer un test, proporciona el enlace directo: https://www.speedtest.net recomendándole realizarlo cerca del módem.
@@ -374,7 +415,26 @@ Objetivo y comportamiento:
    - En ${ispName} vendemos y proveemos EXCLUSIVAMENTE servicio de INTERNET de alta velocidad (fibra óptica / inalámbrico).
    - NO vendemos, NO ofrecemos y NO manejamos servicio de televisión por cable ni canales de televisión abierta/paga.
    - Si el cliente pregunta por canales de tele, que no se ven canales, o contratar televisión/cable, aclárale con amabilidad, calidez y empatía que somos una empresa 100% proveedora de internet. Si cuenta con Smart TV, con nuestro internet puede usar aplicaciones como YouTube o Netflix (recomendándole conectarse a la señal Wi-Fi 5G con la misma contraseña), pero la señal de canales tradicionales de televisión no forma parte de nuestro servicio.
-10. Contexto del usuario:
+10. GESTIÓN DE WI-FI Y PORTAL WEB DEL CLIENTE (PWA):
+   - El cliente puede solicitar cambiar su contraseña de Wi-Fi ("cambiar mi contraseña", "nueva clave wifi"), consultar saldo, facturas o verificar su conexión DIRECTAMENTE aquí en el chat de WhatsApp.
+   - Si el cliente pregunta por su contraseña o cambiarla, o si tiene varios servicios o desea ver detalles de sus contratos/recibos, indícale que puede pedirlo por aquí mismo, y además recomiéndale amablemente su Portal Web donde puede ver todos sus servicios de forma visual y gráfica: ${contexto?.portalUrl || 'https://portal.cloudwaremx.com/portal'}.
+11. REGLA ESTRICTA DE RED WI-FI NO VISIBLE (SSIDs DESHABILITADOS) Y TECNOLOGÍAS:
+   - Si el cliente reporta que "no puede visualizar su red", "no aparece su red", "se borró el Wi-Fi" o no sale su red en el celular:
+     * Si el cliente es de FIBRA ÓPTICA (FTTH): En muchas ocasiones los SSIDs (nombre de red) se deshabilitaron internamente en el módem. Desde soporte/sistema podemos reactivar las señales por TR-069. Pregúntale con amabilidad si ya le aparece su red: "¿Me puede confirmar que ya le aparezca su red por favor?". Si dice "aún no", dile que pruebe de nuevo apagando y encendiendo el Wi-Fi de su celular o espere unos segundos.
+     * Si el cliente es con ANTENA INALÁMBRICA o de zonas/nodos donde NO se puede acceder a su módem remotamente (como MAGDALENA o routers particulares): Explícale que para su tipo de servicio no es posible acceder de forma remota a su router particular y guíalo a corroborar la energía de sus equipos (NUNCA pedirle que presione botones del router para evitar desconfiguraciones accidentales):
+       1) Corroborar la energía del router: verificar que su eliminador/cargador esté bien conectado al enchufe y que las luces frontales del router estén encendidas.
+       2) Si tiene antena en techo, verificar que la fuente de alimentación (cajita negra PoE) esté bien conectada a la corriente con su foquito encendido fijo.
+       3) Desconectar el router del enchufe de la luz durante 15 segundos y volverlo a conectar para restablecer la energía del equipo.
+       4) Si después de corroborar la energía sigue sin aparecer su red, con gusto se agenda visita técnica a su domicilio.
+12. REGLA ESTRICTA DE SPEEDTEST Y DIFERENCIACIÓN DE RED 2.4 GHz vs 5G:
+   - Cuando el cliente comparta un test de velocidad o mencione lentitud con valores entre 25 y 45 Mbps (ej: 37 Mbps):
+     * Pregúntale siempre cordialmente: "Buenos días / tardes, ¿realizó el test con la red 5G (la red que termina en -5G)?".
+     * Explícale con sencillez y claridad técnica: La red convencional 2.4 GHz tiene un límite físico por interferencia del entorno que normalmente topa entre 30 y 45 Mbps. Para medir y recibir la velocidad completa de su paquete contratado (${contexto?.planInternet || 'su plan'}), debe conectarse a su red 5G cerca del módem y repetir la prueba en https://www.speedtest.net.
+13. REGLA DE "CONECTADO / SIN ACCESO A INTERNET":
+   - Si el teléfono del cliente dice "Conectado / Sin acceso a internet":
+     * Explícale que la conexión inalámbrica entre su celular y el módem está funcionando bien, pero el módem no tiene salida de internet desde la central.
+     * Indícale que desconecte el módem de la corriente por 30 segundos para renovar su enlace, mientras desde el sistema se verifica si hay afectación en central o corte de cableado.
+14. Contexto del usuario:
 ${clienteTexto}
 
 ¡Responde de inmediato al último mensaje del usuario!
@@ -457,6 +517,7 @@ CATEGORÍAS DE INTENCIÓN PERMITIDAS (Elige EXACTAMENTE una de esta lista):
 - "DESCONOCIDO": Mensajes incoherentes, bromas, temas ajenos al servicio de telecomunicaciones o dudas no contempladas.
 
 EXTRACCIÓN DE BANDERAS Y DETALLES:
+- "reclamando_demora_pago": true si el cliente indica que ya pagó, ya mandó su comprobante o ficha pero aún no le activan el internet, dice que no le responden, pregunta por qué sigue suspendido si ya pagó, o se queja de tardanza en la reactivación (ej: "no responden", "ya les mandé mi comprobante y no responden", "ya pagué y no me activan", "acabo de mandar mi comprobante para ver si me reactivan", "cuánto tardan en activar", "me pueden activar ya pagué", "sigo sin internet y ya pagué"); false si no.
 - "problema_streaming_tv": true si indica que aplicaciones de streaming o video en su tele/Smart TV o dispositivo (Netflix, YouTube, Prime, Disney+, etc.) marcan error de conexión, se quedan cargando, no abren los videos o se quedan dando círculos / la ruedita / buffering; false si no.
 - "consulta_canales_cable": true si pregunta por canales de televisión tradicional/cable o reporta que no se ven canales de la tele; false si no.
 - "alcance_dispositivos": "TODOS" si el usuario indica que la falla le pasa en todos sus aparatos, en toda la casa, o en varios dispositivos (ej. "en mi tele y en mi celular", "en todos", "en ninguno agarra", "en varias teles"); "SOLO_UNO" si indica claramente que solo es en un aparato en particular (ej. "solo en mi celular", "solo en una tele", "en el patio"); "INDETERMINADO" si no especifica.
@@ -464,7 +525,8 @@ EXTRACCIÓN DE BANDERAS Y DETALLES:
 - "equipo_apagado": true si dice que el módem no prende, se fue la luz en la casa, o no encienden las luces del equipo; false si no.
 - "reporta_lentitud": true si dice que el internet está lento, intermitente, sube y baja o hay lag; false si no.
 - "sin_internet_total": true si dice que NO TIENE INTERNET, no da internet, sin internet, se cayó el internet, no navega nada o corte total; false si no.
-- "red_wifi_no_visible": true si indica que no le aparece el nombre de su red Wi-Fi, no sale su red en el celular, no encuentra la red, se le borró el internet o no prende el foco de WLAN/Wi-Fi; false si no.
+- "red_wifi_no_visible": true si indica que no le aparece el nombre de su red Wi-Fi, no sale su red en el celular, no encuentra la red, no puede visualizar su red, se le borró el internet o no prende el foco de WLAN/Wi-Fi; false si no.
+- "conectado_sin_internet": true si indica que su celular o equipo está conectado al Wi-Fi pero le marca "sin acceso a internet", "conectado sin internet", "sin conexión", o que la señal de internet se va aunque esté conectado al módem; false si no.
 - "bloqueo_paginas_apps": true ÚNICAMENTE si indica que no le abre una página web específica o un portal bancario/corporativo particular mientras el resto del internet sí funciona (NUNCA usar para lentitud o buffering en Netflix/YouTube/videos); false si no.
 - "ya_reinicio": true si el usuario aclara que ya lo desconectó, ya lo reinició o ya lo apagó y prendió; false si no.
 - "nombre_mencionado": string con el nombre propio limpio y capitalizado (ej. si dice "me llamo Juan Manuel" -> "Juan Manuel", si dice "carlos" -> "Carlos"), o null si no menciona nombre.
@@ -508,8 +570,13 @@ Contexto actual del cliente:
       const textLower = mensajeUsuario.toLowerCase();
       const indicaFallaGeneral = textLower.includes('faltando') || textLower.includes('fallando') || textLower.includes('falla') || textLower.includes('inestable') || textLower.includes('intermitente') || textLower.includes('problemas con el servicio') || textLower.includes('no agarra') || textLower.includes('se va');
 
+      const esReclamoPago = /\b(ya\s*(?:mand[eé]|envi[eé]|pagu[eé]|transfer[ií])|comprobante.*no\s*responden|no\s*responden|no\s*me\s*activan|por\s*qu[eé]\s*no\s*activan|reactivar|reactiven|sigo\s*sin\s*(?:servicio|internet).*pagu[eé])\b/i.test(textLower);
+      const reclamandoDemoraPago = Boolean(parsed.reclamando_demora_pago) || esReclamoPago;
+
       if (consultaCanales) {
         finalIntent = 'CONSULTAR_TV_CANALES';
+      } else if (reclamandoDemoraPago) {
+        finalIntent = 'REPORTAR_PAGO';
       } else if ((reportaLentitud || sinInternetTotal || focoRojo || equipoApagado || redWifiNoVisible || bloqueoPaginas || problemaStreamingTv || indicaFallaGeneral) && (finalIntent === 'DESCONOCIDO' || finalIntent === 'IDENTIFICAR_CLIENTE' || finalIntent === 'SALUDO')) {
         finalIntent = 'FALLA_INTERNET';
         if (indicaFallaGeneral && !sinInternetTotal) {
@@ -521,6 +588,13 @@ Contexto actual del cliente:
       const alcanceDispositivos: 'TODOS' | 'SOLO_UNO' | 'INDETERMINADO' =
         alcanceRaw === 'TODOS' ? 'TODOS' : (alcanceRaw === 'SOLO_UNO' ? 'SOLO_UNO' : 'INDETERMINADO');
 
+      const conectadoSinInternet = Boolean(parsed.conectado_sin_internet) ||
+        textLower.includes('sin acceso a internet') ||
+        textLower.includes('sin acceso') ||
+        textLower.includes('conectado sin internet') ||
+        textLower.includes('se va la señal de internet') ||
+        textLower.includes('se va el internet');
+
       return {
         intencion: finalIntent,
         foco_rojo: focoRojo,
@@ -528,9 +602,11 @@ Contexto actual del cliente:
         reporta_lentitud: reportaLentitud,
         sin_internet_total: sinInternetTotal,
         red_wifi_no_visible: redWifiNoVisible,
+        conectado_sin_internet: conectadoSinInternet,
         bloqueo_paginas_apps: bloqueoPaginas,
         problema_streaming_tv: problemaStreamingTv,
         consulta_canales_cable: consultaCanales,
+        reclamando_demora_pago: reclamandoDemoraPago,
         alcance_dispositivos: alcanceDispositivos,
         ya_reinicio: Boolean(parsed.ya_reinicio),
         nombre_mencionado: parsed.nombre_mencionado || null,
@@ -553,10 +629,13 @@ Contexto actual del cliente:
 
     const esCanales = lower.includes('canal') || lower.includes('canales') || lower.includes('television') || lower.includes('televisión') || lower.includes('cable') || lower.includes('tele no agarra') || lower.includes('no se ve la tele') || lower.includes('no se ven los canales');
     const esStreaming = lower.includes('netflix') || lower.includes('youtube') || lower.includes('circulos') || lower.includes('círculos') || lower.includes('pantalla') || lower.includes('smart tv') || lower.includes('smart');
+    const esReclamoPago = /\b(ya\s*(?:mand[eé]|envi[eé]|pagu[eé]|transfer[ií])|comprobante.*no\s*responden|no\s*responden|no\s*me\s*activan|por\s*qu[eé]\s*no\s*activan|reactivar|reactiven|sigo\s*sin\s*(?:servicio|internet).*pagu[eé])\b/i.test(lower);
 
     let intencion: BotIntent = 'DESCONOCIDO';
     if (esCanales && !esStreaming) {
       intencion = 'CONSULTAR_TV_CANALES';
+    } else if (esReclamoPago) {
+      intencion = 'REPORTAR_PAGO';
     } else if (lower.includes('hola') || lower.includes('buenos dias') || lower.includes('buenas tardes')) {
       intencion = 'SALUDO';
     } else if (lower.includes('saldo') || lower.includes('debo') || lower.includes('recibo') || lower.includes('pagar')) {
@@ -587,10 +666,12 @@ Contexto actual del cliente:
       equipo_apagado: lower.includes('apagado') || lower.includes('no prende') || lower.includes('sin luz'),
       reporta_lentitud: lower.includes('lento') || lower.includes('lentitud') || lower.includes('intermitente'),
       sin_internet_total: lower.includes('no tengo internet') || lower.includes('sin internet') || lower.includes('no da internet') || lower.includes('sin conexion') || lower.includes('sin conexión'),
-      red_wifi_no_visible: lower.includes('no aparece') || lower.includes('no sale mi') || lower.includes('no veo mi red') || lower.includes('se borro') || lower.includes('wlan'),
+      red_wifi_no_visible: lower.includes('no aparece') || lower.includes('no sale mi') || lower.includes('no veo mi red') || lower.includes('se borro') || lower.includes('wlan') || lower.includes('no puedo visualizar') || lower.includes('visualizar mi red') || lower.includes('no visualizo'),
+      conectado_sin_internet: lower.includes('sin acceso a internet') || lower.includes('sin acceso') || lower.includes('conectado pero') || lower.includes('conectado sin internet'),
       bloqueo_paginas_apps: lower.includes('portal cautivo') || lower.includes('bloqueada'),
       problema_streaming_tv: esStreaming,
       consulta_canales_cable: esCanales && !esStreaming,
+      reclamando_demora_pago: esReclamoPago,
       alcance_dispositivos: alcance,
       ya_reinicio: lower.includes('ya reinicie') || lower.includes('ya lo apague'),
       nombre_mencionado: null,
