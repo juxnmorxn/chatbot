@@ -183,7 +183,8 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
     /* Breakpoint Tablets y Pantallas Medianas (768px - 1059px) */
     @media (min-width: 768px) and (max-width: 1059px) {
       .app-screen {
-        max-width: 960px;
+        max-width: 980px;
+        width: 95%;
         padding: 20px 24px 80px 24px;
         gap: 18px;
       }
@@ -192,15 +193,18 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
         display: grid !important;
         grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
         gap: 18px;
-        align-items: start;
+        align-items: stretch !important;
       }
 
       .card-billing-box {
         grid-column: 1 / -1;
       }
 
-      .support-banner-card {
-        grid-column: 1 / -1;
+      .dashboard-bottom-grid {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 18px;
+        width: 100%;
       }
 
       .app-card {
@@ -211,25 +215,39 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
     /* Breakpoint Pantallas Grandes / Desktop (>= 1060px) */
     @media (min-width: 1060px) {
       .app-screen {
-        max-width: 1280px;
-        padding: 24px 32px 90px 32px;
-        gap: 22px;
+        max-width: 1440px;
+        width: 95%;
+        padding: 24px 36px 90px 36px;
+        gap: 20px;
       }
 
       .dashboard-grid {
         display: grid !important;
         grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-        gap: 22px;
-        align-items: start;
+        gap: 20px;
+        align-items: stretch !important;
       }
 
-      .card-plan-box, .card-wifi-box, .card-billing-box {
-        display: flex;
-        flex-direction: column;
+      .dashboard-bottom-grid {
+        display: grid !important;
+        grid-template-columns: 1.85fr 1.15fr !important;
+        gap: 20px;
+        align-items: stretch !important;
+        width: 100%;
       }
 
-      .support-banner-card {
-        grid-column: 1 / -1;
+      .card-plan-box, .card-wifi-box, .card-billing-box, .card-history-box, .support-banner-card {
+        display: flex !important;
+        flex-direction: column !important;
+        height: 100% !important;
+      }
+
+      .invoices-scroll-grid {
+        display: grid !important;
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        gap: 10px !important;
+        max-height: 310px !important;
+        overflow-y: auto !important;
       }
 
       .app-card {
@@ -237,11 +255,19 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
       }
     }
 
-    /* Breakpoint Pantallas Extra Grandes / Monitores Ultra-Wide (>= 1400px) */
-    @media (min-width: 1400px) {
+    /* Breakpoint Pantallas Extra Grandes / Monitores Ultra-Wide (>= 1440px) */
+    @media (min-width: 1440px) {
       .app-screen {
-        max-width: 1380px;
-        padding: 28px 40px 100px 40px;
+        max-width: 1560px;
+        width: 95%;
+        padding: 28px 48px 100px 48px;
+        gap: 24px;
+      }
+      .dashboard-grid {
+        gap: 24px;
+      }
+      .dashboard-bottom-grid {
+        gap: 24px;
       }
     }
 
@@ -376,8 +402,16 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
       }
     }
 
-    /* Cuadrícula Adaptativa del Dashboard */
+    /* Cuadrícula Adaptativa del Dashboard (Fila Superior 3 Columnas) */
     .dashboard-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      width: 100%;
+    }
+
+    /* Cuadrícula Adaptativa del Dashboard (Fila Inferior 2 Columnas) */
+    .dashboard-bottom-grid {
       display: flex;
       flex-direction: column;
       gap: 16px;
@@ -394,8 +428,8 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
     }
 
     /* Scrollbar estilizada y límite de altura para historial de facturas */
-    #invoicesList {
-      max-height: 220px;
+    #invoicesList, .invoices-scroll-grid {
+      max-height: 280px;
       overflow-y: auto;
       display: flex;
       flex-direction: column;
@@ -1412,27 +1446,28 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
         </div>
       </div>
 
-      <!-- Contenedor adaptativo: 3 columnas en pantallas grandes, 2 columnas en tablets, 1 columna en móvil -->
+      <!-- Fila Superior: 3 Tarjetas de Servicio Equilibradas y de Misma Altura -->
       <div class="dashboard-grid">
 
-        <!-- TARJETA 1: TU PAQUETE CONTRATADO (ALTO ÉNFASIS Y VELOCIDAD) -->
-        <div class="app-card card-plan-box" style="background: var(--plan-card-bg); border: 1px solid var(--border-highlight); box-shadow: var(--card-shadow);">
+        <!-- TARJETA 1: TU PAQUETE CONTRATADO Y MÓDEM -->
+        <div class="app-card card-plan-box" style="background: var(--plan-card-bg); border: 1px solid var(--border-highlight); box-shadow: var(--card-shadow); display: flex; flex-direction: column;">
           <div class="card-head" style="margin-bottom: 4px;">
             <div class="card-head-title" style="color: #0284c7; font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px;">
               <i class="fa-solid fa-bolt"></i> Tu Paquete de Internet
             </div>
-            <span class="status-speed-badge" style="background: rgba(16, 185, 129, 0.15); color: #059669; border-color: rgba(16, 185, 129, 0.3); font-size: 11px;">
+            <span id="planStatusBadge" class="status-speed-badge" style="background: rgba(16, 185, 129, 0.15); color: #059669; border-color: rgba(16, 185, 129, 0.3); font-size: 11px;">
               <i class="fa-solid fa-circle-check"></i> Activo
             </span>
           </div>
 
           <!-- Nombre de Paquete y Velocidad -->
-          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 6px 0 14px 0; padding-bottom: 14px; border-bottom: 1px solid var(--border-card);">
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 4px 0 10px 0; padding-bottom: 10px; border-bottom: 1px solid var(--border-card);">
             <div style="min-width: 0; flex: 1;">
-              <span style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 3px;">Plan Activo</span>
-              <div id="planNameBig" style="font-family: 'Outfit', sans-serif; font-size: 22px; font-weight: 800; color: var(--text-title); line-height: 1.2; word-break: break-word;">
+              <span style="font-size: 10.5px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 2px;">Plan Contratado</span>
+              <div id="planNameBig" style="font-family: 'Outfit', sans-serif; font-size: 21px; font-weight: 800; color: var(--text-title); line-height: 1.2; word-break: break-word;">
                 Paquete 40 Megas
               </div>
+              <div id="planPriceLabel" style="font-size: 12px; color: #38bdf8; font-weight: 700; margin-top: 2px;">$250.00 MXN / mes</div>
             </div>
             <div style="text-align: right; background: rgba(14, 165, 233, 0.1); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 12px; padding: 6px 14px; flex-shrink: 0;">
               <div id="planSpeedBig" style="font-family: 'Outfit', sans-serif; font-size: 26px; font-weight: 800; color: #0284c7; line-height: 1;">
@@ -1442,14 +1477,33 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
             </div>
           </div>
 
-          <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11.5px; color: var(--text-muted); margin-top: auto; padding-top: 10px; border-top: 1px solid var(--border-card);">
+          <!-- Estado del Módem y Conexión en Vivo -->
+          <div style="background: var(--bg-surface); border: 1px solid var(--border-card); border-radius: var(--radius-md); padding: 10px 12px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 6px;">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span id="statusPulseDot" class="status-pulse-circle"></span>
+                <span id="statusFriendlyTitle" style="font-size: 12px; font-weight: 700; color: var(--text-title);">Conexión de Fibra Estable</span>
+              </div>
+              <span id="opticalPowerBadge" style="font-size: 10.5px; font-weight: 700; color: #10b981; background: rgba(16, 185, 129, 0.12); padding: 2px 7px; border-radius: 6px;">-23.0 dBm</span>
+            </div>
+            <div style="font-size: 11px; color: var(--text-muted); display: flex; justify-content: space-between; align-items: center;">
+              <span><i class="fa-solid fa-microchip"></i> <span id="onuSnLabel">ONU: --</span></span>
+              <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 55%;"><i class="fa-solid fa-location-dot"></i> <span id="clientAddressLabel">Francisco Villa S/N</span></span>
+            </div>
+          </div>
+
+          <!-- Pie de tarjeta: Folio y Botón de Reinicio -->
+          <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11.5px; color: var(--text-muted); margin-top: auto; padding-top: 8px; border-top: 1px solid var(--border-card);">
             <span>Folio Contrato: <strong id="contractFolio" style="color: #0284c7;">#-</strong></span>
+            <button class="btn-outline" onclick="handleRebootModem()" style="width: auto; padding: 4px 10px; font-size: 11px; border-color: rgba(56, 189, 248, 0.35); color: #38bdf8;">
+              <i class="fa-solid fa-rotate-right"></i> Reiniciar Módem
+            </button>
             <span id="titularName" style="display: none;">-</span>
           </div>
         </div>
 
         <!-- TARJETA 2: TU RED WI-FI (DOBLE BANDA - UNA SOLA CONTRASEÑA) -->
-        <div class="app-card card-wifi-box">
+        <div class="app-card card-wifi-box" style="display: flex; flex-direction: column;">
           <div class="card-head" style="margin-bottom: 4px;">
             <div class="card-head-title" style="color: #0284c7; font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px;">
               <i class="fa-solid fa-wifi"></i> Tu Red Wi-Fi
@@ -1485,7 +1539,7 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
           </div>
 
           <!-- Contraseña Wi-Fi ÚNICA y Compartida -->
-          <div style="background: var(--bg-surface); border: 1px solid var(--border-highlight); border-radius: var(--radius-md); padding: 12px 14px; margin-top: auto; display: flex; flex-direction: column; gap: 8px;">
+          <div style="background: var(--bg-surface); border: 1px solid var(--border-highlight); border-radius: var(--radius-md); padding: 10px 12px; margin-top: auto; display: flex; flex-direction: column; gap: 7px;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
               <span class="wifi-label" style="color: #0284c7; font-size: 11px; display: flex; align-items: center; gap: 5px;">
                 <i class="fa-solid fa-key"></i> Contraseña Única Wi-Fi
@@ -1493,75 +1547,101 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
               <span style="font-size: 10px; color: var(--text-muted);">Misma clave 2.4G/5G</span>
             </div>
 
-            <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--bg-card); padding: 8px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-card);">
-              <span id="wifiPassSharedLabel" class="wifi-val mono" style="font-size: 16px; letter-spacing: 1px;">Cargando...</span>
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--bg-card); padding: 7px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-card);">
+              <span id="wifiPassSharedLabel" class="wifi-val mono" style="font-size: 15px; letter-spacing: 1px;">Cargando...</span>
               <div class="wifi-actions">
-                <button class="btn-action-icon" style="width: 32px; height: 32px; font-size: 13px;" onclick="copyWifiPassShared()" title="Copiar contraseña"><i class="fa-solid fa-copy"></i></button>
+                <button class="btn-action-icon" style="width: 30px; height: 30px; font-size: 12px;" onclick="copyWifiPassShared()" title="Copiar contraseña"><i class="fa-solid fa-copy"></i></button>
               </div>
             </div>
 
             <!-- Acciones Rápidas: QR 5 GHz Directo y Cambiar Clave -->
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 2px;">
-              <button class="btn-outline" onclick="openQrModal('5g')" style="padding: 8px 10px; font-size: 12px; border-color: rgba(168, 85, 247, 0.4); background: rgba(168, 85, 247, 0.12); color: #a855f7; font-weight: 700;">
+              <button class="btn-outline" onclick="openQrModal('5g')" style="padding: 7px 10px; font-size: 11.5px; border-color: rgba(168, 85, 247, 0.4); background: rgba(168, 85, 247, 0.12); color: #a855f7; font-weight: 700;">
                 <i class="fa-solid fa-qrcode"></i> Conectar QR
               </button>
-              <button class="btn-main" onclick="openModalWifi()" style="padding: 8px 10px; font-size: 12px;">
+              <button class="btn-main" onclick="openModalWifi()" style="padding: 7px 10px; font-size: 11.5px;">
                 <i class="fa-solid fa-pen"></i> Cambiar Clave
               </button>
             </div>
           </div>
         </div>
 
-        <!-- TARJETA 3: TU SALDO Y PAGOS -->
-        <div class="app-card card-billing-box">
+        <!-- TARJETA 3: TU SALDO Y PAGOS INMEDIATOS -->
+        <div class="app-card card-billing-box" style="display: flex; flex-direction: column;">
           <div class="card-head" style="margin-bottom: 4px;">
             <div class="card-head-title" style="color: #0284c7; font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px;">
-              <i class="fa-solid fa-receipt"></i> Tu Saldo y Recibos
+              <i class="fa-solid fa-wallet"></i> Tu Saldo y Pagos
             </div>
             <span id="billingBadge" class="badge-status paid">Al Corriente</span>
           </div>
 
-          <div class="billing-hero" style="padding: 10px 14px; margin-bottom: 2px;">
+          <div class="billing-hero" style="padding: 10px 14px; margin: 4px 0 10px 0;">
             <div class="billing-hero-left">
               <span style="font-size: 10.5px; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">Saldo a Pagar</span>
-              <div id="billingAmountLabel" class="billing-hero-amount" style="font-size: 24px;">$0.00</div>
-              <div id="billingDueLabel" class="billing-hero-date" style="font-size: 11px;">Día 5 de cada mes</div>
-            </div>
-            <div style="display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; align-items: center;">
-              <button class="btn-outline" style="width: auto; padding: 8px 12px; font-size: 12px;" onclick="openModalBank()">
-                <i class="fa-solid fa-building-columns"></i> SPEI / Banco
-              </button>
-              <button class="btn-main" style="width: auto; padding: 8px 14px; font-size: 12px; background: linear-gradient(135deg, #0284c7 0%, #1d4ed8 100%); font-weight: 700;" onclick="openModalCardPayment()">
-                <i class="fa-solid fa-credit-card"></i> Pagar con Tarjeta
-              </button>
+              <div id="billingAmountLabel" class="billing-hero-amount" style="font-size: 26px;">$0.00</div>
+              <div id="billingDueLabel" class="billing-hero-date" style="font-size: 11px;">Día 11 de cada mes</div>
             </div>
           </div>
 
-          <!-- Lista de recibos detallados de WispHub -->
-          <div style="margin-top: 4px; display: flex; flex-direction: column; flex: 1;">
-            <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
-              <span><i class="fa-solid fa-clock-rotate-left" style="color: #0284c7; margin-right: 4px;"></i> Historial de Pagos</span>
-              <span id="invoicesTotalCountBadge" style="font-size: 10px; background: rgba(56, 189, 248, 0.12); color: #38bdf8; padding: 2px 8px; border-radius: 999px; font-weight: 700; border: 1px solid rgba(56, 189, 248, 0.25);"></span>
+          <!-- Acciones de Pago Inmediatas -->
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px;">
+            <button class="btn-main" style="padding: 9px 10px; font-size: 12px; background: linear-gradient(135deg, #0284c7 0%, #1d4ed8 100%); font-weight: 700;" onclick="openModalCardPayment()">
+              <i class="fa-solid fa-credit-card"></i> Pagar Tarjeta
+            </button>
+            <button class="btn-outline" style="padding: 9px 10px; font-size: 12px; border-color: rgba(2, 132, 199, 0.4); color: var(--primary); font-weight: 700;" onclick="openModalBank()">
+              <i class="fa-solid fa-building-columns"></i> SPEI / Banco
+            </button>
+          </div>
+
+          <!-- Cuadro de Referencia Rápida SPEI -->
+          <div style="background: var(--bg-surface); border: 1px solid var(--border-card); border-radius: var(--radius-md); padding: 9px 12px; margin-top: auto; display: flex; justify-content: space-between; align-items: center;">
+            <div style="min-width: 0;">
+              <span style="font-size: 10px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; display: block;">Referencia SPEI / Banco:</span>
+              <span id="bankRefText" class="mono" style="font-size: 13.5px; font-weight: 800; color: #38bdf8;">SRV-696</span>
             </div>
-            <div id="invoicesList" style="max-height: 320px; overflow-y: auto; padding-right: 4px; display: flex; flex-direction: column; gap: 8px;">
-              <div style="text-align: center; color: var(--text-muted); font-size: 12.5px; padding: 10px;">Consultando facturas...</div>
-            </div>
+            <button class="btn-action-icon" style="width: 30px; height: 30px; font-size: 12px;" onclick="copyBankRef()" title="Copiar referencia"><i class="fa-solid fa-copy"></i></button>
           </div>
         </div>
 
-        <!-- TARJETA 4: ASISTENCIA Y SOPORTE DIRECTO (BANNER HORIZONTAL VIP) -->
-        <div class="support-banner-card">
-          <div class="support-banner-left">
-            <div class="support-icon-circle">
+      </div>
+
+      <!-- SEGUNDA FILA: HISTORIAL DE RECIBOS Y CENTRO DE SOPORTE -->
+      <div class="dashboard-bottom-grid">
+
+        <!-- TARJETA: HISTORIAL DE RECIBOS Y FACTURAS (AMPLIO Y ORGANIZADO) -->
+        <div class="app-card card-history-box" style="display: flex; flex-direction: column;">
+          <div class="card-head" style="margin-bottom: 8px;">
+            <div class="card-head-title" style="color: #0284c7; font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.6px;">
+              <i class="fa-solid fa-clock-rotate-left"></i> Historial de Recibos y Facturas
+            </div>
+            <span id="invoicesTotalCountBadge" style="font-size: 10.5px; background: rgba(56, 189, 248, 0.12); color: #38bdf8; padding: 2px 8px; border-radius: 999px; font-weight: 700; border: 1px solid rgba(56, 189, 248, 0.25);">0 Pagos</span>
+          </div>
+
+          <div id="invoicesList" class="invoices-scroll-grid">
+            <div style="text-align: center; color: var(--text-muted); font-size: 12.5px; padding: 20px;">Consultando facturas...</div>
+          </div>
+        </div>
+
+        <!-- TARJETA: CENTRO DE ASISTENCIA Y SOPORTE DIRECTO -->
+        <div class="app-card support-banner-card" style="display: flex; flex-direction: column; justify-content: space-between; gap: 14px;">
+          <div style="display: flex; align-items: flex-start; gap: 14px;">
+            <div class="support-icon-circle" style="flex-shrink: 0;">
               <i class="fa-brands fa-whatsapp"></i>
             </div>
             <div>
-              <div class="support-banner-title">¿Tienes alguna duda o reporte con tu servicio?</div>
-              <p class="support-banner-sub">Nuestro equipo técnico y de atención está listo para atenderte por WhatsApp.</p>
+              <div style="font-size: 11px; font-weight: 800; color: #10b981; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px;">Atención Inmediata</div>
+              <div class="support-banner-title" style="font-size: 16px; line-height: 1.3;">¿Dudas o fallas con tu servicio?</div>
+              <p class="support-banner-sub" style="font-size: 12.5px; margin-top: 4px;">Atención personalizada técnica por WhatsApp y en oficinas.</p>
             </div>
           </div>
-          <a id="btnSupportWa" href="https://wa.me/${supportPhone}?text=Hola,%20necesito%20apoyo%20con%20mi%20servicio" target="_blank" class="btn-whatsapp" style="width: auto; padding: 11px 22px; font-size: 13.5px; flex-shrink: 0;">
-            <i class="fa-brands fa-whatsapp"></i> Chatear con Soporte
+
+          <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: var(--radius-sm); padding: 8px 12px; font-size: 11.5px; color: var(--text-muted); display: flex; justify-content: space-between; align-items: center;">
+            <span><i class="fa-solid fa-headset" style="color: #10b981;"></i> Soporte Técnico</span>
+            <span style="color: #10b981; font-weight: 700;">Lun - Sáb 9am a 7pm</span>
+          </div>
+
+          <a id="btnSupportWa" href="https://wa.me/${supportPhone}?text=Hola,%20necesito%20apoyo%20con%20mi%20servicio" target="_blank" class="btn-whatsapp" style="width: 100%; padding: 11px 18px; font-size: 13.5px; text-align: center; justify-content: center;">
+            <i class="fa-brands fa-whatsapp"></i> Chatear con Soporte Técnico
           </a>
         </div>
 
@@ -2751,6 +2831,32 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
         }
       }
 
+      // Información complementaria de paquete y módem
+      const priceEl = document.getElementById('planPriceLabel');
+      if (priceEl && c.precio_plan) {
+        priceEl.innerText = '$' + Number(c.precio_plan).toFixed(2) + ' MXN / mes';
+      }
+
+      const pwrBadge = document.getElementById('opticalPowerBadge');
+      if (pwrBadge) {
+        if (sig.opticalPowerDbm) {
+          pwrBadge.innerText = sig.opticalPowerDbm + ' dBm';
+          pwrBadge.style.color = (Number(sig.opticalPowerDbm) < -27) ? '#f59e0b' : '#10b981';
+        } else {
+          pwrBadge.innerText = 'Fibra OK';
+        }
+      }
+
+      const onuSnEl = document.getElementById('onuSnLabel');
+      if (onuSnEl) {
+        onuSnEl.innerText = 'ONU: ' + (data.onu?.sn || c.sn_onu || 'GPON');
+      }
+
+      const addrEl = document.getElementById('clientAddressLabel');
+      if (addrEl) {
+        addrEl.innerText = (c.direccion || data.onu?.zone_name || 'Domicilio registrado');
+      }
+
       // Wi-Fi Real Dual Band Simplificado (Una Sola Contraseña Compartida)
       const wifi = data.wifi || {};
       realWifiSsid24 = wifi.ssid24 || ('CloudWare_' + c.id_servicio);
@@ -3046,6 +3152,34 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
       const val = (document.getElementById('bankConceptText')?.innerText || '').trim();
       navigator.clipboard.writeText(val);
       showToast('Nombre de titular copiado: ' + val);
+    }
+
+    function copyBankRef() {
+      const val = (document.getElementById('bankRefText')?.innerText || '').trim();
+      if (val) {
+        navigator.clipboard.writeText(val);
+        showToast('Referencia copiada: ' + val);
+      }
+    }
+
+    async function handleRebootModem() {
+      if (!confirm('¿Deseas enviar una señal para reiniciar tu módem de fibra? El equipo tardará entre 1 y 2 minutos en volver a sincronizar.')) return;
+      showToast('Enviando señal de reinicio a tu módem...');
+      try {
+        const res = await fetch('/api/portal/reboot', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ clientId: currentContractId, token: currentToken })
+        });
+        const d = await res.json();
+        if (d.success) {
+          showToast('✅ Señal enviada. El módem se está reiniciando.');
+        } else {
+          showToast(d.message || 'No se pudo reiniciar el módem.');
+        }
+      } catch (e) {
+        showToast('Error de conexión con el servidor.');
+      }
     }
 
     function openModalWifi() {
