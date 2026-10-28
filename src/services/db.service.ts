@@ -1085,32 +1085,64 @@ export class DbService {
         const rawId = String(serviceId).replace(/\D/g, '');
         const numericId = rawId ? Number(rawId) : NaN;
         if (!isNaN(numericId) && numericId > 0) {
-          const padded = String(numericId).padStart(4, '0');
-          // Prioridad 1: Buscar por Folio de Servicio (prefijo en 'servicio' o 'nombre')
-          const folioRes = await client.execute({
-            sql: `SELECT id_servicio, telefono, telefonos_adicionales FROM wisphub_clients 
-                  WHERE servicio LIKE ? OR servicio LIKE ? 
-                     OR nombre LIKE ? OR nombre LIKE ? 
-                     OR servicio LIKE ? OR nombre LIKE ? 
-                  LIMIT 1`,
-            args: [
-              `${numericId}-%`, `${numericId} - %`,
-              `${numericId}-%`, `${numericId} - %`,
-              `${padded}-%`, `${padded}-%`,
-            ],
+          // Prioridad 1: Buscar por ID de servicio directo en WispHub (porque serviceId es el ID interno/primario)
+          const res = await client.execute({
+            sql: `SELECT id_servicio, nombre, servicio, telefono, telefonos_adicionales FROM wisphub_clients WHERE id_servicio = ? LIMIT 1`,
+            args: [numericId],
           });
-          if (folioRes.rows.length > 0) {
-            targetRow = folioRes.rows[0];
-            targetServiceId = Number(folioRes.rows[0].id_servicio);
-          } else {
-            // Fallback: Buscar por id_servicio directo si no existió como folio
-            const res = await client.execute({
-              sql: `SELECT id_servicio, telefono, telefonos_adicionales FROM wisphub_clients WHERE id_servicio = ? LIMIT 1`,
-              args: [numericId],
-            });
-            if (res.rows.length > 0) {
-              targetRow = res.rows[0];
+          if (res.rows.length > 0) {
+            const row = res.rows[0];
+            let match = true;
+            if (clientName && clientName.trim().length >= 3) {
+              const cleanCName = cleanPersonName(clientName);
+              const cleanRowName = cleanPersonName(String(row.nombre || ''));
+              if (cleanCName.length >= 6 && cleanRowName.length >= 6) {
+                const score = computeNameMatchScore(cleanCName, cleanRowName);
+                if (score < 30) {
+                  match = false;
+                  logger.warn(`[linkClientPhoneInLocalDb] Conflicto de titular para id_servicio ${numericId}: "${clientName}" vs "${row.nombre}". Se buscará por nombre.`);
+                }
+              }
+            }
+            if (match) {
+              targetRow = row;
               targetServiceId = numericId;
+            }
+          }
+
+          // Fallback: Si no existió como id_servicio, buscar por Folio de Servicio en el prefijo
+          if (!targetRow) {
+            const padded = String(numericId).padStart(4, '0');
+            const folioRes = await client.execute({
+              sql: `SELECT id_servicio, nombre, servicio, telefono, telefonos_adicionales FROM wisphub_clients 
+                    WHERE servicio LIKE ? OR servicio LIKE ? 
+                       OR nombre LIKE ? OR nombre LIKE ? 
+                       OR servicio LIKE ? OR nombre LIKE ? 
+                    LIMIT 1`,
+              args: [
+                `${numericId}-%`, `${numericId} - %`,
+                `${numericId}-%`, `${numericId} - %`,
+                `${padded}-%`, `${padded}-%`,
+              ],
+            });
+            if (folioRes.rows.length > 0) {
+              const row = folioRes.rows[0];
+              let match = true;
+              if (clientName && clientName.trim().length >= 3) {
+                const cleanCName = cleanPersonName(clientName);
+                const cleanRowName = cleanPersonName(String(row.nombre || ''));
+                if (cleanCName.length >= 6 && cleanRowName.length >= 6) {
+                  const score = computeNameMatchScore(cleanCName, cleanRowName);
+                  if (score < 30) {
+                    match = false;
+                    logger.warn(`[linkClientPhoneInLocalDb] Conflicto de titular para folio ${numericId}: "${clientName}" vs "${row.nombre}". No coincide.`);
+                  }
+                }
+              }
+              if (match) {
+                targetRow = row;
+                targetServiceId = Number(row.id_servicio);
+              }
             }
           }
         }
@@ -1119,7 +1151,7 @@ export class DbService {
       if (!targetRow && clientName && clientName.trim().length >= 3) {
         const cleanName = cleanPersonName(clientName);
         const res = await client.execute({
-          sql: `SELECT id_servicio, telefono, telefonos_adicionales FROM wisphub_clients WHERE nombre LIKE ? OR nombre_normalized LIKE ? LIMIT 1`,
+          sql: `SELECT id_servicio, nombre, servicio, telefono, telefonos_adicionales FROM wisphub_clients WHERE nombre LIKE ? OR nombre_normalized LIKE ? LIMIT 1`,
           args: [`%${cleanName}%`, `%${normalizeText(cleanName)}%`],
         });
         if (res.rows.length > 0) {

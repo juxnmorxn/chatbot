@@ -2699,7 +2699,8 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
             ? '<span class="service-card-badge active"><i class="fa-solid fa-circle-check"></i> En Pantalla</span>' 
             : '<span class="service-card-badge inactive"><i class="fa-regular fa-circle"></i> Tocar para ver</span>';
           const dir = s.direccion || s.zona || s.router || ('Servicio ' + (idx + 1));
-          const srvTitle = s.smartolt_name || s.nombre || ('Servicio #' + s.id_servicio);
+          const folioVal = s.folio || s.id_servicio;
+          const srvTitle = s.smartolt_name || s.nombre || ('Servicio #' + folioVal);
           let plan = (s.plan_internet || 'Internet Fibra').replace(/^(?:paquete|pakete|plan)\\s+/i, '');
           const saldo = Number(s.saldo || 0);
           const saldoTxt = saldo <= 0 ? 'Al corriente' : ('Debe $' + saldo.toFixed(2));
@@ -2709,7 +2710,7 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
           return '<div class="service-card-item ' + activeClass + '" data-service-id="' + s.id_servicio + '" onclick="onSwitchService(' + s.id_servicio + ')">' +
             '<div style="display:flex; align-items:center; justify-content:space-between; gap:6px;">' +
               '<span style="font-weight:800; font-size:13.5px; color:var(--text-title); display:flex; align-items:center; gap:6px;">' +
-                '<i class="fa-solid fa-house-signal" style="color:#0284c7;"></i> Folio #' + s.id_servicio +
+                '<i class="fa-solid fa-house-signal" style="color:#0284c7;"></i> Folio #' + folioVal +
               '</span>' +
               activeBadge +
             '</div>' +
@@ -2791,7 +2792,7 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
         }
       }
 
-      document.getElementById('bankRefText').innerText = 'SRV-' + c.id_servicio;
+      document.getElementById('bankRefText').innerText = 'SRV-' + (c.folio || c.id_servicio);
       if (data.bankDetails) {
         cachedBankDetails = data.bankDetails;
         applyBankDetails(data.bankDetails, c.nombre || data.bankDetails.titular, c.id_servicio);
