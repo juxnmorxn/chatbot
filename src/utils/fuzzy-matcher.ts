@@ -51,7 +51,8 @@ export function phoneticNormalize(text: string): string {
 export function generateSearchFragments(query: string): string[] {
   const norm = normalizeText(query);
   const phon = phoneticNormalize(query);
-  const words = Array.from(new Set([...norm.split(' '), ...phon.split(' ')])).filter(w => w.length >= 2);
+  const words = Array.from(new Set([...norm.split(' '), ...phon.split(' ')]))
+    .filter(w => w.length >= 2 && !STOP_WORDS.has(w));
   const fragments = new Set<string>();
 
   for (const w of words) {
@@ -139,7 +140,12 @@ export function diceCoefficient(str1: string, str2: string): number {
 /**
  * Palabras comunes irrelevantes en nombres de personas o descripciones de ONU
  */
-const STOP_WORDS = new Set(['de', 'del', 'la', 'las', 'el', 'los', 'y', 'en', 'onu', 'cliente', 'casa', 'soy', 'yo', 'me', 'llamo', 'mi', 'nombre', 'es', 'hola']);
+export const SPANISH_STOP_WORDS = new Set([
+  'de', 'del', 'la', 'las', 'el', 'los', 'y', 'en', 'onu', 'cliente', 'casa', 'servicio',
+  'soy', 'yo', 'me', 'llamo', 'mi', 'nombre', 'es', 'hola', 'buenas', 'buen', 'dia', 'dias', 'tardes', 'noches',
+  'dle', 'dela', 'delas', 'delos', 'ala', 'al', 'o', 'u', 'ed', 'eld'
+]);
+const STOP_WORDS = SPANISH_STOP_WORDS;
 
 /**
  * Elimina prefijos numéricos de contrato comunes en SmartOLT (ej: "2095-Magdalena", "696-Maria")

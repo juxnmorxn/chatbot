@@ -1,6 +1,6 @@
 import { getDbClient } from '../database/db';
 import { Logger } from '../utils/logger';
-import { normalizeText, computeNameMatchScore, cleanPersonName, generateSearchFragments, phoneticNormalize, extractFolioAndCleanName, candidateMatchesFolio, candidateMatchesServiceSuffix } from '../utils/fuzzy-matcher';
+import { normalizeText, computeNameMatchScore, cleanPersonName, generateSearchFragments, phoneticNormalize, extractFolioAndCleanName, candidateMatchesFolio, candidateMatchesServiceSuffix, SPANISH_STOP_WORDS } from '../utils/fuzzy-matcher';
 
 const logger = new Logger('DbService');
 
@@ -2210,29 +2210,15 @@ export class DbService {
       }
 
       // 2. Extraer palabras clave de la consulta para filtrar candidatos en SQL
-      const STOP_QUERY = new Set(['de', 'del', 'la', 'las', 'el', 'los', 'y', 'en', 'onu', 'casa', 'soy', 'yo', 'me', 'llamo', 'mi', 'nombre', 'es', 'hola']);
-      const queryWords = normQuery.split(' ').filter(w => w.length > 1 && !STOP_QUERY.has(w));
+      const queryWords = normQuery.split(' ').filter(w => w.length > 1 && !SPANISH_STOP_WORDS.has(w));
       const candidateRowsMap = new Map<string, any>();
 
-      // A. Búsqueda por fragmentos fonéticos y trigramas (tolera errores tipográficos como "mribel", "marivel", "arrivel")
-      const fragments = generateSearchFragments(cleanedQuery || normQuery);
-      if (fragments.length > 0) {
-        const fragClauses = fragments.map(() => 'name_normalized LIKE ?').join(' OR ');
-        const fragRes = await client.execute({
-          sql: `SELECT * FROM smartolt_onus WHERE ${fragClauses} LIMIT 400`,
-          args: fragments.map(f => `%${f}%`),
-        });
-        for (const r of fragRes.rows) {
-          candidateRowsMap.set(String(r.unique_external_id), r);
-        }
-      }
-
       if (queryWords.length > 0) {
-        // B. Búsqueda con AND (todas las palabras presentes)
+        // A. Búsqueda con AND (todas las palabras presentes: ej. "maria" AND "pilar" AND "perez")
         if (queryWords.length >= 2) {
           const andClauses = queryWords.map(() => 'name_normalized LIKE ?').join(' AND ');
           const andRes = await client.execute({
-            sql: `SELECT * FROM smartolt_onus WHERE ${andClauses} LIMIT 100`,
+            sql: `SELECT * FROM smartolt_onus WHERE ${andClauses} LIMIT 50`,
             args: queryWords.map(w => `%${w}%`),
           });
           for (const r of andRes.rows) {
@@ -2240,11 +2226,45 @@ export class DbService {
           }
         }
 
-        // C. Búsqueda prioritaria por primer nombre
+        // B. Búsqueda por pares de palabras clave (si hay 3 o más palabras: ej. (maria AND pilar) OR (pilar AND perez))
+        if (queryWords.length >= 3) {
+          const pairClauses: string[] = [];
+          const pairArgs: string[] = [];
+          for (let i = 0; i < queryWords.length; i++) {
+            for (let j = i + 1; j < queryWords.length; j++) {
+              pairClauses.push('(name_normalized LIKE ? AND name_normalized LIKE ?)');
+              pairArgs.push(`%${queryWords[i]}%`, `%${queryWords[j]}%`);
+            }
+          }
+          if (pairClauses.length > 0) {
+            const pairRes = await client.execute({
+              sql: `SELECT * FROM smartolt_onus WHERE ${pairClauses.join(' OR ')} LIMIT 100`,
+              args: pairArgs,
+            });
+            for (const r of pairRes.rows) {
+              candidateRowsMap.set(String(r.unique_external_id), r);
+            }
+          }
+        }
+
+        // C. Búsqueda por palabras distintivas largas (>= 5 letras: ej. "pilar", "mendoza", "perez")
+        const longWords = queryWords.filter(w => w.length >= 5);
+        if (longWords.length > 0) {
+          const longClauses = longWords.map(() => 'name_normalized LIKE ?').join(' OR ');
+          const longRes = await client.execute({
+            sql: `SELECT * FROM smartolt_onus WHERE ${longClauses} LIMIT 100`,
+            args: longWords.map(w => `%${w}%`),
+          });
+          for (const r of longRes.rows) {
+            candidateRowsMap.set(String(r.unique_external_id), r);
+          }
+        }
+
+        // D. Primer nombre (si no se han reunido suficientes candidatos)
         const firstName = queryWords[0];
-        if (firstName && firstName.length >= 3) {
+        if (candidateRowsMap.size < 30 && firstName && firstName.length >= 3) {
           const fnRes = await client.execute({
-            sql: `SELECT * FROM smartolt_onus WHERE name_normalized LIKE ? LIMIT 150`,
+            sql: `SELECT * FROM smartolt_onus WHERE name_normalized LIKE ? LIMIT 100`,
             args: [`%${firstName}%`],
           });
           for (const r of fnRes.rows) {
@@ -2253,9 +2273,25 @@ export class DbService {
         }
       }
 
+      // E. Si todavía hay pocos candidatos (ej. consultas cortas con errores tipográficos o 1 sola palabra como "mribel"),
+      // usar fragmentos trigramas/fonéticos
+      if (candidateRowsMap.size < 30) {
+        const fragments = generateSearchFragments(cleanedQuery || normQuery);
+        if (fragments.length > 0) {
+          const fragClauses = fragments.map(() => 'name_normalized LIKE ?').join(' OR ');
+          const fragRes = await client.execute({
+            sql: `SELECT * FROM smartolt_onus WHERE ${fragClauses} LIMIT 150`,
+            args: fragments.map(f => `%${f}%`),
+          });
+          for (const r of fragRes.rows) {
+            candidateRowsMap.set(String(r.unique_external_id), r);
+          }
+        }
+      }
+
       let rowsToEvaluate = Array.from(candidateRowsMap.values());
-      if (rowsToEvaluate.length < 50) {
-        const sampleResult = await client.execute('SELECT * FROM smartolt_onus LIMIT 600');
+      if (rowsToEvaluate.length < 20) {
+        const sampleResult = await client.execute('SELECT * FROM smartolt_onus LIMIT 400');
         for (const r of sampleResult.rows) {
           candidateRowsMap.set(String(r.unique_external_id), r);
         }
@@ -2264,13 +2300,13 @@ export class DbService {
 
       // 3. Evaluar cada candidato con el algoritmo de scoring difuso
       const scored: Array<SmartOltOnuRecord & { matchScore: number }> = [];
+      const minThreshold = queryWords.length >= 3 ? 65 : 50;
 
       for (const row of rowsToEvaluate) {
         const candidateName = String(row.name || '');
         const score = computeNameMatchScore(cleanedQuery || rawQuery, candidateName);
 
-        // Umbral mínimo de similitud: 50%
-        if (score >= 50) {
+        if (score >= minThreshold) {
           scored.push({
             unique_external_id: String(row.unique_external_id),
             sn: String(row.sn || ''),
@@ -2289,7 +2325,15 @@ export class DbService {
 
       // Ordenar por mayor puntuación de coincidencia
       scored.sort((a, b) => b.matchScore - a.matchScore);
-      return scored.slice(0, limit);
+
+      // Si el mejor resultado tiene alta confianza (>= 80), descartar opciones irrelevantes mucho más bajas
+      let filtered = scored;
+      if (filtered.length > 0 && filtered[0].matchScore >= 80) {
+        const bestScore = filtered[0].matchScore;
+        filtered = filtered.filter(r => r.matchScore >= bestScore - 15);
+      }
+
+      return filtered.slice(0, limit);
     } catch (error: any) {
       logger.error(`Error en búsqueda difusa de ONUs para "${query}":`, error?.message || error);
       return [];
@@ -2413,28 +2457,15 @@ export class DbService {
 
 
       // 2. Extraer palabras clave de búsqueda
-      const STOP_QUERY = new Set(['de', 'del', 'la', 'las', 'el', 'los', 'y', 'en', 'casa', 'soy', 'yo', 'me', 'llamo', 'mi', 'nombre', 'es', 'hola']);
-      const queryWords = normQuery.split(' ').filter(w => w.length > 1 && !STOP_QUERY.has(w));
+      const queryWords = normQuery.split(' ').filter(w => w.length > 1 && !SPANISH_STOP_WORDS.has(w));
       const candidateRowsMap = new Map<string, any>();
 
-      // A. Búsqueda por fragmentos fonéticos y trigramas
-      const fragments = generateSearchFragments(cleanedQuery || normQuery);
-      if (fragments.length > 0) {
-        const fragClauses = fragments.map(() => 'nombre_normalized LIKE ?').join(' OR ');
-        const fragRes = await client.execute({
-          sql: `SELECT * FROM wisphub_clients WHERE ${fragClauses} LIMIT 400`,
-          args: fragments.map(f => `%${f}%`),
-        });
-        for (const r of fragRes.rows) {
-          candidateRowsMap.set(String(r.id_servicio), r);
-        }
-      }
-
       if (queryWords.length > 0) {
+        // A. Búsqueda con AND (todas las palabras presentes: ej. "maria" AND "pilar" AND "perez")
         if (queryWords.length >= 2) {
           const andClauses = queryWords.map(() => 'nombre_normalized LIKE ?').join(' AND ');
           const andRes = await client.execute({
-            sql: `SELECT * FROM wisphub_clients WHERE ${andClauses} LIMIT 100`,
+            sql: `SELECT * FROM wisphub_clients WHERE ${andClauses} LIMIT 50`,
             args: queryWords.map(w => `%${w}%`),
           });
           for (const r of andRes.rows) {
@@ -2442,10 +2473,45 @@ export class DbService {
           }
         }
 
+        // B. Búsqueda por pares de palabras clave (si hay 3 o más palabras)
+        if (queryWords.length >= 3) {
+          const pairClauses: string[] = [];
+          const pairArgs: string[] = [];
+          for (let i = 0; i < queryWords.length; i++) {
+            for (let j = i + 1; j < queryWords.length; j++) {
+              pairClauses.push('(nombre_normalized LIKE ? AND nombre_normalized LIKE ?)');
+              pairArgs.push(`%${queryWords[i]}%`, `%${queryWords[j]}%`);
+            }
+          }
+          if (pairClauses.length > 0) {
+            const pairRes = await client.execute({
+              sql: `SELECT * FROM wisphub_clients WHERE ${pairClauses.join(' OR ')} LIMIT 100`,
+              args: pairArgs,
+            });
+            for (const r of pairRes.rows) {
+              candidateRowsMap.set(String(r.id_servicio), r);
+            }
+          }
+        }
+
+        // C. Búsqueda por palabras distintivas largas (>= 5 letras)
+        const longWords = queryWords.filter(w => w.length >= 5);
+        if (longWords.length > 0) {
+          const longClauses = longWords.map(() => 'nombre_normalized LIKE ?').join(' OR ');
+          const longRes = await client.execute({
+            sql: `SELECT * FROM wisphub_clients WHERE ${longClauses} LIMIT 100`,
+            args: longWords.map(w => `%${w}%`),
+          });
+          for (const r of longRes.rows) {
+            candidateRowsMap.set(String(r.id_servicio), r);
+          }
+        }
+
+        // D. Primer nombre (si no se han reunido suficientes candidatos)
         const firstName = queryWords[0];
-        if (firstName && firstName.length >= 3) {
+        if (candidateRowsMap.size < 30 && firstName && firstName.length >= 3) {
           const fnRes = await client.execute({
-            sql: `SELECT * FROM wisphub_clients WHERE nombre_normalized LIKE ? LIMIT 150`,
+            sql: `SELECT * FROM wisphub_clients WHERE nombre_normalized LIKE ? LIMIT 100`,
             args: [`%${firstName}%`],
           });
           for (const r of fnRes.rows) {
@@ -2454,9 +2520,24 @@ export class DbService {
         }
       }
 
+      // E. Si todavía hay pocos candidatos, usar fragmentos trigramas/fonéticos
+      if (candidateRowsMap.size < 30) {
+        const fragments = generateSearchFragments(cleanedQuery || normQuery);
+        if (fragments.length > 0) {
+          const fragClauses = fragments.map(() => 'nombre_normalized LIKE ?').join(' OR ');
+          const fragRes = await client.execute({
+            sql: `SELECT * FROM wisphub_clients WHERE ${fragClauses} LIMIT 150`,
+            args: fragments.map(f => `%${f}%`),
+          });
+          for (const r of fragRes.rows) {
+            candidateRowsMap.set(String(r.id_servicio), r);
+          }
+        }
+      }
+
       let rowsToEvaluate = Array.from(candidateRowsMap.values());
-      if (rowsToEvaluate.length < 50) {
-        const sampleResult = await client.execute('SELECT * FROM wisphub_clients LIMIT 600');
+      if (rowsToEvaluate.length < 20) {
+        const sampleResult = await client.execute('SELECT * FROM wisphub_clients LIMIT 400');
         for (const r of sampleResult.rows) {
           candidateRowsMap.set(String(r.id_servicio), r);
         }
@@ -2464,12 +2545,13 @@ export class DbService {
       }
 
       const scored: Array<WisphubClientRecord & { matchScore: number }> = [];
+      const minThreshold = queryWords.length >= 3 ? 65 : 50;
 
       for (const row of rowsToEvaluate) {
         const candidateName = String(row.nombre || '');
         const score = computeNameMatchScore(cleanedQuery || rawQuery, candidateName);
 
-        if (score >= 40) {
+        if (score >= minThreshold) {
           scored.push({
             id_servicio: Number(row.id_servicio),
             nombre: String(row.nombre || ''),
@@ -2492,7 +2574,15 @@ export class DbService {
       }
 
       scored.sort((a, b) => b.matchScore - a.matchScore);
-      return scored.slice(0, limit);
+
+      // Si el mejor resultado tiene alta confianza (>= 80), descartar opciones irrelevantes mucho más bajas
+      let filtered = scored;
+      if (filtered.length > 0 && filtered[0].matchScore >= 80) {
+        const bestScore = filtered[0].matchScore;
+        filtered = filtered.filter(r => r.matchScore >= bestScore - 15);
+      }
+
+      return filtered.slice(0, limit);
     } catch (error: any) {
       logger.error('Error en búsqueda difusa de WispHub en Base de Datos Local:', error?.message || error);
       return [];
