@@ -360,8 +360,10 @@ self.addEventListener('fetch', (event) => {
       // Opción A: Sesión ya autenticada legítimamente por Magic Link / WhatsApp
       const authHeader = req.headers.authorization || (req.headers['x-client-token'] as string) || '';
       const token = authHeader.startsWith('Bearer ') ? authHeader.substring(7).trim() : authHeader.trim();
-      if (token) {
-        const payload = verifyClientPortalToken(token);
+      const bodyAuthToken = (req.body?.authToken || req.body?.auth || req.query?.auth || '').toString().trim();
+      const candidateToken = token || bodyAuthToken;
+      if (candidateToken) {
+        const payload = verifyClientPortalToken(candidateToken);
         if (payload && payload.phone === last10) {
           isVerified = true;
         }

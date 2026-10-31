@@ -2226,6 +2226,10 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
         <button type="submit" id="btnSubmitCreatePass" class="btn-main" style="padding: 13px 16px; font-size: 14.5px; font-weight: 700; margin-top: 4px;">
           <i class="fa-solid fa-floppy-disk"></i> Guardar mi Contraseña y Continuar
         </button>
+
+        <button type="button" onclick="closeModal('modalCreatePassword')" style="background: transparent; border: 1px solid rgba(255,255,255,0.12); color: var(--text-muted); padding: 10px 14px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 600; cursor: pointer; text-align: center; margin-top: 2px;">
+          Hacerlo más tarde
+        </button>
       </form>
     </div>
   </div>
@@ -4185,7 +4189,7 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
         if (titleEl) titleEl.innerHTML = '<i class="fa-solid fa-key" style="color: #38bdf8;"></i> Cambiar Contraseña de Acceso';
         if (subEl) subEl.innerText = 'Actualiza tu clave para iniciar sesión en tu portal desde cualquier celular, computadora o tablet.';
       } else {
-        if (closeBtn) closeBtn.style.display = 'none';
+        if (closeBtn) closeBtn.style.display = 'flex';
         if (titleEl) titleEl.innerHTML = '<i class="fa-solid fa-shield-halved" style="color: #38bdf8;"></i> Crea tu Contraseña de Acceso';
         if (subEl) subEl.innerText = 'Configura tu contraseña para entrar a tu portal desde cualquier celular, computadora o tablet sin depender de WhatsApp.';
       }
@@ -4223,11 +4227,17 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
       const cleanUrlP = urlP.replace(/\D/g, '').slice(-10);
       const phone = (cleanUrlP || currentPhone || localStorage.getItem('cp_phone') || '').replace(/\D/g, '').slice(-10);
 
+      const activeToken = currentToken || localStorage.getItem('cp_token') || new URLSearchParams(window.location.search).get('auth') || '';
+      const reqHeaders = { 'Content-Type': 'application/json' };
+      if (activeToken) {
+        reqHeaders['Authorization'] = 'Bearer ' + activeToken;
+      }
+
       try {
         const res = await fetch('/api/portal/auth/register', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phone, password: pass })
+          headers: reqHeaders,
+          body: JSON.stringify({ phone, password: pass, authToken: activeToken })
         });
         const d = await res.json();
         if (d.success) {
