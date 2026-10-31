@@ -939,7 +939,7 @@ export class BotOrchestrator {
     }
 
     // 2.0 RECEPCIÓN DE IMÁGENES / MULTIMEDIA (SPEEDTEST, FOTOS DE MÓDEM, COMPROBANTES DE PAGO, CONTRATOS)
-    if (event.isMedia && event.imageAnalysis) {
+    if (event.isMedia && !event.isAudio && event.imageAnalysis) {
       await this.procesarImagenInteligente(phone, rawText, event, session, targetJid);
       return;
     }
@@ -1396,7 +1396,7 @@ export class BotOrchestrator {
     }
 
     // --- ENRUTAMIENTO DE IMÁGENES ANALIZADAS CON VISIÓN (SPEEDTEST, PAGOS, LUCES MÓDEM HUAWEI) ---
-    if (event.isMedia) {
+    if (event.isMedia && !event.isAudio) {
       await this.procesarImagenInteligente(phone, rawText, event, session, targetJid);
       return;
     }

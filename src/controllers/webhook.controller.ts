@@ -236,18 +236,22 @@ export class WebhookController {
             const trans = await GroqService.transcribirAudio(media.buffer, media.mimeType);
             if (trans && trans.trim()) {
               extracted.text = trans.trim();
+              extracted.isMedia = false; // El audio transcrito se procesa como texto conversacional
               logger.info(`[Audio Transcrito] ${phone}: "${extracted.text}"`);
             } else {
               logger.warn(`[Audio Transcripción Vacía] ${phone}: Groq Whisper no devolvió texto.`);
               extracted.text = 'AUDIO_NO_ENTENDIDO';
+              extracted.isMedia = false;
             }
           } else {
             logger.warn(`[Audio Sin Buffer] ${phone}: no se pudo descargar el archivo de audio.`);
             extracted.text = 'AUDIO_NO_ENTENDIDO';
+            extracted.isMedia = false;
           }
         } catch (audioErr: any) {
           logger.error(`Error transcribiendo audio de ${phone}:`, audioErr?.message || audioErr);
           extracted.text = 'AUDIO_NO_ENTENDIDO';
+          extracted.isMedia = false;
         }
       }
 
@@ -527,7 +531,7 @@ export class WebhookController {
     if (message.audioMessage || message.pttMessage) {
       return {
         isAudio: true,
-        isMedia: true,
+        isMedia: false,
       };
     }
 
