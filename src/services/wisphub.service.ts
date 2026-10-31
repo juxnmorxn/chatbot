@@ -440,38 +440,57 @@ export class WispHubService {
         });
         const srvResults = srvRes.data?.results || srvRes.data;
         if (Array.isArray(srvResults) && srvResults.length > 0) {
-          const s = srvResults[0];
-          return {
-            id: s.id_servicio || s.id,
-            nombre: String(s.nombre || s.cliente?.nombre || `${s.cliente?.nombre || ''} ${s.cliente?.apellidos || ''}`).trim(),
-            telefono: s.telefono || s.cliente?.telefono || phone10,
-            direccion: s.direccion || s.cliente?.direccion || '',
-            ip: s.ip || '',
-            servicio_id: String(s.id_servicio || s.id),
-            onu_id: s.custom_onu_id || s.onu_id || null,
-            estado: this.normalizarEstado(s.estado || s.estado_servicio),
-            estado_facturas: s.estado_facturas || (Number(s.saldo || 0) > 0 ? 'Pendiente' : 'Pagadas'),
-            precio_plan: s.precio_plan || s.plan_precio || 0,
-            saldo: s.saldo || s.cliente?.saldo || 0,
-          };
+          // VALIDACIÓN ESTRICTA: WispHub a veces devuelve lista completa sin filtrar.
+          // Solo aceptar si el teléfono coincide con los últimos 10 dígitos.
+          const matchSrv = srvResults.find((s: any) => {
+            const t1 = String(s.telefono || '').replace(/\D/g, '');
+            const t2 = String(s.cliente?.telefono || '').replace(/\D/g, '');
+            const tExtra = String(s.telefonos_adicionales || '').replace(/\D/g, '');
+            return t1.endsWith(phone10) || t2.endsWith(phone10) || tExtra.includes(phone10);
+          });
+
+          if (matchSrv) {
+            return {
+              id: matchSrv.id_servicio || matchSrv.id,
+              nombre: String(matchSrv.nombre || matchSrv.cliente?.nombre || `${matchSrv.cliente?.nombre || ''} ${matchSrv.cliente?.apellidos || ''}`).trim(),
+              telefono: matchSrv.telefono || matchSrv.cliente?.telefono || phone10,
+              direccion: matchSrv.direccion || matchSrv.cliente?.direccion || '',
+              ip: matchSrv.ip || '',
+              servicio_id: String(matchSrv.id_servicio || matchSrv.id),
+              onu_id: matchSrv.custom_onu_id || matchSrv.onu_id || null,
+              estado: this.normalizarEstado(matchSrv.estado || matchSrv.estado_servicio),
+              estado_facturas: matchSrv.estado_facturas || (Number(matchSrv.saldo || 0) > 0 ? 'Pendiente' : 'Pagadas'),
+              precio_plan: matchSrv.precio_plan || matchSrv.plan_precio || 0,
+              saldo: matchSrv.saldo || matchSrv.cliente?.saldo || 0,
+            };
+          }
         }
       }
 
       if (Array.isArray(results) && results.length > 0) {
-        const c = results[0];
-        return {
-          id: c.id_servicio || c.id,
-          nombre: `${c.nombre || ''} ${c.apellidos || ''}`.trim() || c.nombre || '',
-          telefono: c.telefono || phone10,
-          direccion: c.direccion || '',
-          ip: c.ip || '',
-          servicio_id: String(c.id_servicio || c.id),
-          onu_id: c.custom_onu_id || c.onu_id || null,
-          estado: this.normalizarEstado(c.estado),
-          estado_facturas: c.estado_facturas || (Number(c.saldo || 0) > 0 ? 'Pendiente' : 'Pagadas'),
-          precio_plan: c.precio_plan || 0,
-          saldo: c.saldo || 0,
-        };
+        // VALIDACIÓN ESTRICTA: Verificar que el teléfono realmente pertenezca al cliente retornado
+        const matchClient = results.find((c: any) => {
+          const t1 = String(c.telefono || '').replace(/\D/g, '');
+          const t2 = String(c.cliente?.telefono || '').replace(/\D/g, '');
+          const tExtra = String(c.telefonos_adicionales || '').replace(/\D/g, '');
+          return t1.endsWith(phone10) || t2.endsWith(phone10) || tExtra.includes(phone10);
+        });
+
+        if (matchClient) {
+          return {
+            id: matchClient.id_servicio || matchClient.id,
+            nombre: `${matchClient.nombre || ''} ${matchClient.apellidos || ''}`.trim() || matchClient.nombre || '',
+            telefono: matchClient.telefono || phone10,
+            direccion: matchClient.direccion || '',
+            ip: matchClient.ip || '',
+            servicio_id: String(matchClient.id_servicio || matchClient.id),
+            onu_id: matchClient.custom_onu_id || matchClient.onu_id || null,
+            estado: this.normalizarEstado(matchClient.estado),
+            estado_facturas: matchClient.estado_facturas || (Number(matchClient.saldo || 0) > 0 ? 'Pendiente' : 'Pagadas'),
+            precio_plan: matchClient.precio_plan || 0,
+            saldo: matchClient.saldo || 0,
+          };
+        }
       }
       return null;
     } catch (error: any) {
