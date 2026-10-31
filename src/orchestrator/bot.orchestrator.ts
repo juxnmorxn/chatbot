@@ -710,7 +710,8 @@ export class BotOrchestrator {
     }
 
     // Detección de comandos para desvincular o cambiar de titular en cualquier momento
-    const esComandoDesvincular = /^(?:cambiar\s+titular|cambiar\s+nombre|cambiar\s+cliente|no\s+soy\s+ese\s+cliente|no\s+soy\s+yo|desvincular|desvincular\s+cuenta|desvincular\s+numero|reiniciar\s+cuenta|reiniciar\s+cliente)\b/i.test(lowerMsg) ||
+    const esComandoDesvincular = /^(?:cambiar\s+titular|cambiar\s+nombre|cambiar\s+cliente|no\s+soy\s+ese\s+cliente|no\s+soy\s+yo|no\s+soy\s+[a-záéíóúñ\s]+|yo\s+no\s+soy\s+[a-záéíóúñ\s]+|no\s+me\s+llamo\s+[a-záéíóúñ\s]+|yo\s+no\s+me\s+llamo\s+[a-záéíóúñ\s]+|desvincular|desvincular\s+cuenta|desvincular\s+numero|reiniciar\s+cuenta|reiniciar\s+cliente|equivoque\s+de\s+cliente|cliente\s+incorrecto|no\s+es\s+mi\s+cuenta|no\s+es\s+mi\s+nombre)\b/i.test(lowerMsg) ||
+      /\b(?:no\s+soy\s+amador|yo\s+no\s+soy\s+amador|no\s+me\s+llamo\s+amador|no\s+soy\s+ese|no\s+soy\s+esa\s+persona)\b/i.test(lowerMsg) ||
       lowerMsg === 'cambiar titular' ||
       lowerMsg === 'cambiar cliente' ||
       lowerMsg === 'desvincular' ||
@@ -719,14 +720,23 @@ export class BotOrchestrator {
     if (esComandoDesvincular) {
       logger.info(`[Desvinculación Manual] Usuario ${phone} solicitó desvincular la cuenta actual (${session?.client_name || 'Sin nombre'}).`);
       await DbService.unlinkClientFromSession(phone);
+      const metaDesvinculado = { unlinkedByUser: true, unlinkedAt: new Date().toISOString() };
+      await DbService.upsertSession({
+        phone,
+        client_id: null,
+        service_id: null,
+        client_name: null,
+        onu_id: null,
+        step: 'ESPERANDO_IDENTIFICACION',
+        metadata: JSON.stringify(metaDesvinculado),
+      });
       await this.enviarYLoguear(
         phone,
-        `He desvinculado la cuenta previa de este chat. 👍\n\nPara identificarte con tu servicio, por favor indícame tu *Nombre completo* (tal como aparece en tu contrato) o tu *Folio de servicio*.`,
+        `He desvinculado la cuenta previa de este chat. 👍\n\nPara identificarte con tu servicio correcto, por favor indícame tu *Nombre completo* (tal como aparece en tu contrato) o tu *Folio de servicio*.`,
         'DESVINCULAR_CLIENTE',
         'SESION_DESVINCULADA',
         targetJid
       );
-      await DbService.updateStep(phone, 'ESPERANDO_IDENTIFICACION');
       return;
     }
 
@@ -737,8 +747,8 @@ export class BotOrchestrator {
     const esComandoCambioDomicilio = /^(?:realizar|hacer|ejecutar|solicitar)?\s*(?:un\s+)?(?:cambio\s+de\s+domicilio|cambiar\s+domicilio|reubicaci[oó]n|reubicar|mover\s+modem|mover\s+m[oó]dem|mover\s+caja|cambio\s+de\s+caja|cambio\s+de\s+puerto)\b/i.test(lowerMsg) ||
       /^(?:cambio\s+de\s+domicilio|reubicaci[oó]n|reubicar)\b/i.test(lowerMsg);
 
-    const esComandoCambioModem = /^(?:realizar|hacer|ejecutar|solicitar)?\s*(?:un\s+)?(?:cambio|reemplazar|reemplazo|cambiar|swap)(?:\s+(?:de|del))?\s*(?:m[oó]dems?|m[oó]dens?|odems?|modns?|onus?|equipos?|routers?|cpe)\b/i.test(lowerMsg) ||
-      /^(?:cambio|reemplazo|swap)\s+(?:m[oó]dems?|m[oó]dens?|odems?|modns?|onus?|equipos?|routers?|cpe)\b/i.test(lowerMsg);
+    const esComandoCambioModem = /^(?:realizar|hacer|ejecutar|solicitar)?\s*(?:un\s+)?(?:cambio|reemplazar|reemplazo|cambiar|swap)(?:\s+(?:de|del))?\s*(?:m[oó]dems?|m[oó]dens?|odems?|modns?|onus?|equipos?|routers?|cpe|moda\s+en)\b/i.test(lowerMsg) ||
+      /^(?:cambio|reemplazo|swap)\s+(?:m[oó]dems?|m[oó]dens?|odems?|modns?|onus?|equipos?|routers?|cpe|moda\s+en)\b/i.test(lowerMsg);
 
     const esComandoReaprovisionar = /^(?:realizar|hacer|ejecutar|solicitar)?\s*(?:un\s+)?(?:reaprovisionar|re-aprovisionar|reaprovisionamiento|re-aprovisionamiento|reset\s+onu|resetear\s+onu|reiniciar\s+onu|reactivar\s+onu|re-activar\s+onu|reactivar|reautorizar\s+onu)\b/i.test(lowerMsg);
 
@@ -747,6 +757,8 @@ export class BotOrchestrator {
     const esComandoCambioNombre = /^(?:cambiar\s+nombre|cambio\s+de\s+nombre|actualizar\s+nombre|renombrar\s+onu|renombrar\s+cliente|renombrar)\b/i.test(lowerMsg);
 
     const esComandoCambioWifi = /^(?:cambiar\s+wifi|cambio\s+de\s+wifi|cambiar\s+contrase[ñn]a\s+wifi|cambiar\s+password|nueva\s+contrase[ñn]a\s+wifi|actualizar\s+wifi)\b/i.test(lowerMsg);
+
+    const esComandoInfoTecnico = this.esConsultaInfoClienteTecnico(rawText).esConsulta;
 
     const esComandoRecuperarClave = /(?:olvid[eé]|recuperar|restablecer|cambiar|mi)\s+(?:mi\s+)?(?:contrase[ñn]a|clave|password|pin|acceso)(?:\s+(?:del\s+)?(?:portal|cuenta|app|web))?/i.test(lowerMsg) ||
       /^(?:olvide\s+mi\s+clave|recuperar\s+clave|olvide\s+mi\s+contrase[ñn]a|clave\s+portal|contrase[ñn]a\s+portal)\b/i.test(lowerMsg);
@@ -771,7 +783,7 @@ export class BotOrchestrator {
       session?.step === 'PENDIENTE_POLLING_REAPROVISION' ||
       session?.step === 'TECNICO_ESPERANDO_CLIENTE_GPS';
 
-    const esComandoTecnicoExplicito = esComandoActivacion || esComandoCambioPaquete || esComandoCambioModem || esComandoCambioDomicilio || esComandoConsultaUbicacion || esComandoCambioWifi || esComandoReaprovisionar || esComandoCambioNombre;
+    const esComandoTecnicoExplicito = esComandoActivacion || esComandoCambioPaquete || esComandoCambioModem || esComandoCambioDomicilio || esComandoConsultaUbicacion || esComandoCambioWifi || esComandoReaprovisionar || esComandoCambioNombre || esComandoInfoTecnico;
     const esTecnicoAutorizado = Boolean(await DbService.isAuthorizedTechnician(phone).catch(() => null));
     const esAccionTecnica = esComandoTecnicoExplicito || esPasoTecnicoEnCurso || esTecnicoAutorizado;
 
@@ -1529,8 +1541,9 @@ export class BotOrchestrator {
     // -------------------------------------------------------------------------
     const esPasoInicialOIdentificacion = !session?.client_id || !session?.client_name || session?.step === 'ESPERANDO_IDENTIFICACION' || session?.step === 'INICIO';
     const esNuevaConsultaOInactividad = consultaTerminada || minutosInactividad >= 30;
+    const fueDesvinculadoManualmente = metaObj.unlinkedByUser === true && session?.step === 'ESPERANDO_IDENTIFICACION';
 
-    if (esPasoInicialOIdentificacion || esNuevaConsultaOInactividad) {
+    if ((esPasoInicialOIdentificacion || esNuevaConsultaOInactividad) && !fueDesvinculadoManualmente) {
       const serviciosDetectados = await this.resolverServiciosPorTelefono(phone);
 
       if (serviciosDetectados.length === 1) {
@@ -7392,13 +7405,19 @@ Por favor reconecta tus dispositivos ingresando esta nueva clave.
   }
 
   /**
-   * Determina si el texto es una consulta de info/ficha de cliente (ej: "info 1265", "cliente Juan", "datos 2046")
+   * Determina si el texto es una consulta de info/ficha de cliente (ej: "info 1265", "cliente Juan", "datos 2046", "info maría del pilar")
    */
   private static esConsultaInfoClienteTecnico(text: string): { esConsulta: boolean; query?: string } {
-    const match = text.trim().match(/^(?:info|informaci[oó]n|cliente|folio|datos|ficha|status|estado)\s+([A-Za-z0-9\s\-_#]+)$/i);
+    const clean = text.trim();
+    // 1. Comando aislado: "info", "informacion", "ficha", "ficha tecnica"
+    if (/^(?:info|informaci[oó]n|ficha(?:\s+t[eé]cnica)?)\b$/i.test(clean)) {
+      return { esConsulta: true, query: '' };
+    }
+    // 2. Consulta con parámetro (acepta acentos, letras, números, guiones, nombres completos como "María del Pilar Pérez Mendoza")
+    const match = clean.match(/^(?:info|informaci[oó]n|ficha(?:\s+t[eé]cnica)?|cliente|folio|datos|status|estado)(?:\s+(?:de\s+|del\s+|sobre\s+)?)?(.+)$/i);
     if (match) {
       const q = match[1].replace(/^#/, '').trim();
-      if (q) return { esConsulta: true, query: q };
+      if (q && !/^(?:tr069|smartolt|olt)$/i.test(q)) return { esConsulta: true, query: q };
     }
     return { esConsulta: false };
   }
@@ -7474,11 +7493,11 @@ Por favor reconecta tus dispositivos ingresando esta nueva clave.
     query: string,
     targetJid?: string
   ): Promise<void> {
-    const rawTarget = query.trim().replace(/^#/, '');
+    const rawTarget = (query || '').trim().replace(/^#/, '');
     if (!rawTarget) {
       await this.enviarYLoguear(
         phone,
-        `Indica el Folio, Nombre o Serie (SN) a consultar.\nEjemplo: \`info 1265\` o \`cliente Juan Pérez\``,
+        `📋 *Consulta de Ficha Técnica / Info de Cliente*\n\nPor favor indica el Folio, Nombre o Serie (SN) a consultar.\n\n_Ejemplos:_\n• \`info 1265\`\n• \`info María del Pilar\``,
         'CONSULTA_CLIENTE_TECNICO',
         'FALTA_QUERY',
         targetJid
@@ -7505,6 +7524,22 @@ Por favor reconecta tus dispositivos ingresando esta nueva clave.
         ip: rawTarget,
         sn: rawTarget,
       }).catch(() => null);
+    }
+
+    if (!clienteWh) {
+      const fuzzyWh = await DbService.searchWisphubClientsFuzzy(rawTarget, 1).catch(() => []);
+      if (fuzzyWh.length > 0 && fuzzyWh[0].matchScore >= 40) {
+        clienteWh = fuzzyWh[0];
+      }
+    }
+
+    if (!clienteWh) {
+      try {
+        const whResults = await WispHubService.buscarClientePorNombre(rawTarget);
+        if (whResults && whResults.length > 0) {
+          clienteWh = whResults[0];
+        }
+      } catch (_) {}
     }
 
     if (!clienteWh && !isNaN(Number(rawTarget))) {

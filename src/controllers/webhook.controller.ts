@@ -348,6 +348,7 @@ export class WebhookController {
         ...entry.event,
         ...event,
         isMedia: event.isMedia || entry.event.isMedia,
+        isAudio: event.isAudio || entry.event.isAudio,
         imageAnalysis: event.imageAnalysis || entry.event.imageAnalysis,
         location: event.location || entry.event.location,
       };

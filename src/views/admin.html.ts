@@ -4360,7 +4360,7 @@ export function getAdminDashboardHtml(): string {
               </div>
               <div class="form-group">
                 <label class="form-label">Modelo Groq</label>
-                <input type="text" id="setting-GROQ_MODEL" class="form-control credential-field" placeholder="llama-3.1-8b-instant" value="llama-3.1-8b-instant" disabled>
+                <input type="text" id="setting-GROQ_MODEL" class="form-control credential-field" placeholder="openai/gpt-oss-20b" value="openai/gpt-oss-20b" disabled>
               </div>
             </div>
 
@@ -8364,7 +8364,7 @@ export function getAdminDashboardHtml(): string {
         EVOLUTION_URL: evoUrl || '',
         EVOLUTION_API_KEY: document.getElementById('setting-EVOLUTION_API_KEY')?.value.trim() || '',
         GROQ_API_KEY: document.getElementById('setting-GROQ_API_KEY')?.value.trim() || '',
-        GROQ_MODEL: document.getElementById('setting-GROQ_MODEL')?.value.trim() || 'llama-3.1-8b-instant',
+        GROQ_MODEL: document.getElementById('setting-GROQ_MODEL')?.value.trim() || 'openai/gpt-oss-20b',
         WISPHUB_API_URL: document.getElementById('setting-WISPHUB_API_URL')?.value.trim() || '',
         WISPHUB_API_KEY: document.getElementById('setting-WISPHUB_API_KEY')?.value.trim() || '',
         SMARTOLT_API_URL: document.getElementById('setting-SMARTOLT_API_URL')?.value.trim() || '',

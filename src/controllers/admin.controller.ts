@@ -825,7 +825,8 @@ export class AdminController {
 
       if (service === 'groq') {
         const apiKey = overrideSettings.GROQ_API_KEY || SettingsService.get('GROQ_API_KEY', 'GROQ_API_KEY', config.groq.apiKey);
-        const model = overrideSettings.GROQ_MODEL || SettingsService.get('GROQ_MODEL', 'GROQ_MODEL', config.groq.model || 'llama-3.1-8b-instant');
+        const rawModel = overrideSettings.GROQ_MODEL || SettingsService.get('GROQ_MODEL', 'GROQ_MODEL', config.groq.model || 'openai/gpt-oss-20b');
+        const cleanModel = rawModel.includes('llama-3.1-8b-instant') ? 'openai/gpt-oss-20b' : rawModel;
 
         if (!apiKey || apiKey.includes('tu_clave')) {
           return { success: false, service: 'groq', latencyMs: 0, message: 'GROQ_API_KEY no configurada', error: 'Clave de Groq vacía o sin configurar' };
@@ -833,7 +834,6 @@ export class AdminController {
 
         const Groq = (await import('groq-sdk')).default;
         const groq = new Groq({ apiKey });
-        const cleanModel = model.includes('gpt-oss-20b') ? 'llama-3.1-8b-instant' : model;
         const completion = await groq.chat.completions.create({
           model: cleanModel,
           messages: [{ role: 'user', content: 'Ping' }],

@@ -295,25 +295,49 @@ Devuelve EXCLUSIVAMENTE un JSON válido con esta estructura:
   }
 
   /**
-   * Transcribe una nota de voz o audio de WhatsApp a texto utilizando Groq Whisper (whisper-large-v3-turbo).
-   * 100% Gratuito y de ultra baja latencia.
+   * Obtiene el modelo de chat activo en Groq, protegiendo contra modelos discontinuados como llama-3.1-8b-instant
+   */
+  public static getActiveChatModel(): string {
+    const raw = SettingsService.get('GROQ_MODEL', 'GROQ_MODEL', config.groq.model || 'openai/gpt-oss-20b');
+    if (!raw || raw.toLowerCase().includes('llama-3.1-8b-instant')) {
+      return 'openai/gpt-oss-20b';
+    }
+    return raw;
+  }
+
+  /**
+   * Transcribe una nota de voz o audio de WhatsApp a texto utilizando Groq Whisper (whisper-large-v3-turbo)
+   * con vocabulario técnico de contexto ISP y normalización fonética.
    */
   static async transcribirAudio(audioBuffer: Buffer, mimeType: string = 'audio/ogg'): Promise<string> {
     try {
       const groq = this.getClient();
-      const ext = mimeType.includes('mp4') || mimeType.includes('m4a') ? 'm4a' : (mimeType.includes('mp3') ? 'mp3' : 'ogg');
-      const file = await toFile(audioBuffer, `audio.${ext}`, { type: mimeType });
+      const pureMime = (mimeType || 'audio/ogg').split(';')[0].trim();
+      const ext = pureMime.includes('mp4') || pureMime.includes('m4a') ? 'm4a' : (pureMime.includes('mp3') ? 'mp3' : 'ogg');
+      const file = await toFile(audioBuffer, `audio.${ext}`, { type: pureMime });
 
-      logger.info(`Transcribiendo audio de WhatsApp (${audioBuffer.length} bytes, ${mimeType}) con Groq Whisper...`);
+      logger.info(`Transcribiendo audio de WhatsApp (${audioBuffer.length} bytes, ${pureMime}) con Groq Whisper...`);
       const transcription = await groq.audio.transcriptions.create({
         file,
         model: 'whisper-large-v3-turbo',
         language: 'es',
         temperature: 0.0,
+        prompt: 'CloudWareMx, SmartOLT, WispHub, módem, módems, cambio de módem, cambio de domicilio, reaprovisionar, activar cliente, info cliente, ficha técnica, ONU, OLT, folio, plan, megas, fibra óptica, María del Pilar Pérez Mendoza, reporte de falla, saldo, Wi-Fi, 5G',
       });
 
-      const text = (transcription.text || '').trim();
-      logger.info(`[Groq Whisper] Transcripción completada: "${text}"`);
+      let text = (transcription.text || '').trim();
+      logger.info(`[Groq Whisper] Transcripción original: "${text}"`);
+
+      // Normalización fonética de términos técnicos y comandos de voz comunes en español
+      text = text
+        .replace(/\b(?:cambiar\s+moda\s+en|cambio\s+de\s+moda\s+en)\b/gi, 'cambiar módem')
+        .replace(/\b(?:moda\s+en)\b/gi, 'módem')
+        .replace(/\b(?:moden|modens|modns?|odems?)\b/gi, 'módem')
+        .replace(/\b(?:re\s+aprovisionar|re\s+provisionar)\b/gi, 'reaprovisionar')
+        .replace(/\b(?:o\s*n\s*u)\b/gi, 'ONU')
+        .replace(/\b(?:o\s*l\s*t)\b/gi, 'OLT');
+
+      logger.info(`[Groq Whisper] Transcripción normalizada: "${text}"`);
       return text;
     } catch (error: any) {
       logger.error('Error al transcribir audio con Groq Whisper:', error?.message || error);
@@ -447,7 +471,7 @@ ${clienteTexto}
 ¡Responde de inmediato al último mensaje del usuario!
 `.trim();
 
-      const model = SettingsService.get('GROQ_MODEL', 'GROQ_MODEL', config.groq.model);
+      const model = this.getActiveChatModel();
 
       const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
         { role: 'system', content: systemPrompt },
@@ -545,7 +569,7 @@ Contexto actual del cliente:
 - Nombre conocido: ${contexto?.clientName || 'NO IDENTIFICADO'}
 `;
 
-      const model = SettingsService.get('GROQ_MODEL', 'GROQ_MODEL', config.groq.model);
+      const model = this.getActiveChatModel();
       const response = await groq.chat.completions.create({
         model,
         messages: [
