@@ -1173,6 +1173,9 @@ self.addEventListener('fetch', (event) => {
           smartolt_name: matchedOnu?.name || s.nombre,
           sn_onu: matchedOnu?.sn || s.sn_onu || '',
           direccion: s.direccion || matchedOnu?.zone_name || s.router || 'Domicilio registrado',
+          coordenadas_gps: s.coordenadas_gps || matchedOnu?.coordenadas_gps || null,
+          google_maps_url: s.google_maps_url || matchedOnu?.google_maps_url || null,
+          has_location: Boolean((s.coordenadas_gps && String(s.coordenadas_gps).trim()) || (s.google_maps_url && String(s.google_maps_url).trim())),
           zona: matchedOnu?.zone_name || s.router || '',
           ip: s.ip || matchedOnu?.ip_address,
           router: s.router,
@@ -1402,6 +1405,9 @@ self.addEventListener('fetch', (event) => {
           telefono: targetPhone10,
           telefono_wisphub: client.telefono,
           direccion: client.direccion || onuRecord?.zone_name,
+          coordenadas_gps: client.coordenadas_gps || onuRecord?.coordenadas_gps || null,
+          google_maps_url: client.google_maps_url || onuRecord?.google_maps_url || null,
+          has_location: Boolean((client.coordenadas_gps && String(client.coordenadas_gps).trim()) || (client.google_maps_url && String(client.google_maps_url).trim())),
           ip: client.ip || onuRecord?.ip_address,
           router: client.router,
           estado: (effectiveClientBalance <= 0 && String(client.estado || '').toLowerCase().includes('suspend')) ? 'Activo' : client.estado,
@@ -1761,6 +1767,61 @@ self.addEventListener('fetch', (event) => {
     } catch (err: any) {
       logger.error('Error al reiniciar módem desde portal:', err?.message || err);
       res.status(500).json({ success: false, message: 'Error al enviar orden de reinicio.' });
+    }
+  }
+
+  /**
+   * Actualizar ubicación domiciliaria GPS del cliente desde el portal
+   */
+  static async updateLocation(req: Request, res: Response): Promise<void> {
+    try {
+      const { lat, lng, clientId, serviceId } = req.body;
+      const authHeader = req.headers.authorization || '';
+      const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : (req.body.token || req.query.token || '');
+      let authPhone = '';
+      if (token) {
+        const payload = verifyClientPortalToken(token);
+        if (payload?.phone) {
+          authPhone = payload.phone;
+        }
+      }
+
+      const numLat = parseFloat(String(lat));
+      const numLng = parseFloat(String(lng));
+      if (isNaN(numLat) || isNaN(numLng) || numLat === 0 || numLng === 0) {
+        res.status(400).json({ success: false, message: 'Coordenadas GPS no válidas.' });
+        return;
+      }
+
+      // Validar rango razonable de coordenadas geográficas
+      if (numLat < -90 || numLat > 90 || numLng < -180 || numLng > 180) {
+        res.status(400).json({ success: false, message: 'Coordenadas fuera de rango válido.' });
+        return;
+      }
+
+      const identifier = serviceId || clientId || authPhone || req.body.phone;
+      if (!identifier) {
+        res.status(400).json({ success: false, message: 'Identificador de cliente o servicio requerido.' });
+        return;
+      }
+
+      const targetId = serviceId || clientId;
+      await DbService.updateClientLocation(identifier, {
+        lat: numLat,
+        lng: numLng,
+        clientId: targetId,
+      });
+
+      logger.info(`[Portal GPS] Ubicación registrada para ${identifier}: ${numLat},${numLng}`);
+      res.json({
+        success: true,
+        message: 'Ubicación domiciliaria guardada con éxito.',
+        coordenadas_gps: `${numLat},${numLng}`,
+        google_maps_url: `https://www.google.com/maps?q=${numLat},${numLng}`,
+      });
+    } catch (err: any) {
+      logger.error('Error al actualizar ubicación GPS desde el portal:', err?.message || err);
+      res.status(500).json({ success: false, message: 'Error interno al guardar ubicación.' });
     }
   }
 

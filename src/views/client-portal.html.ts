@@ -1693,6 +1693,10 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
               <span><i class="fa-solid fa-microchip"></i> <span id="onuSnLabel">ONU: --</span></span>
               <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 55%;"><i class="fa-solid fa-location-dot"></i> <span id="clientAddressLabel">Domicilio registrado</span></span>
             </div>
+            <div id="clientLocationBadgeRow" style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; padding-top: 3px; border-top: 1px dashed rgba(255, 255, 255, 0.08);">
+              <span style="color: var(--text-muted);"><i class="fa-solid fa-map-pin" style="color: #38bdf8;"></i> Ubicación técnica:</span>
+              <span id="clientLocationBadgeContent"></span>
+            </div>
             <div id="statusFriendlySub" style="display: none;"></div>
           </div>
 
@@ -2270,6 +2274,42 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
     </div>
   </div>
 
+  <!-- MODAL: SOLICITUD DE UBICACIÓN GPS DEL SERVICIO -->
+  <div id="modalGpsPrompt" class="modal-overlay" style="z-index: 270;">
+    <div class="modal-sheet" style="text-align: center; max-width: 420px; border-color: rgba(14, 165, 233, 0.45); box-shadow: 0 25px 60px rgba(0, 0, 0, 0.7);">
+      <div style="width: 58px; height: 58px; border-radius: 50%; background: rgba(14, 165, 233, 0.15); border: 1px solid rgba(14, 165, 233, 0.35); display: flex; align-items: center; justify-content: center; margin: 4px auto 10px; font-size: 26px; color: #38bdf8;">
+        <i class="fa-solid fa-location-dot"></i>
+      </div>
+
+      <div class="modal-sheet-title" style="font-size: 19px; color: var(--text-title); justify-content: center;">
+        Ubica tu Servicio
+      </div>
+
+      <p style="font-size: 13px; color: var(--text-body); line-height: 1.45; margin: 0 0 6px 0;">
+        Para acelerar la atención técnica en caso de fallas o visitas de soporte, comparte la ubicación de tu domicilio e instalación.
+      </p>
+
+      <div style="background: rgba(14, 165, 233, 0.06); border: 1px solid rgba(14, 165, 233, 0.2); border-radius: var(--radius-md); padding: 12px 14px; text-align: left; font-size: 12px; color: var(--text-muted); line-height: 1.4;">
+        <div style="display: flex; gap: 8px; align-items: flex-start;">
+          <i class="fa-solid fa-circle-info" style="color: #38bdf8; font-size: 15px; margin-top: 2px;"></i>
+          <span>Solo se requiere <strong>una sola vez</strong>. Si estás en el domicilio donde está instalado tu módem, presiona el botón para registrarlo.</span>
+        </div>
+      </div>
+
+      <div id="gpsAlertBox" style="display: none; font-size: 12px; padding: 10px; border-radius: var(--radius-sm); margin-top: 6px; text-align: left;"></div>
+
+      <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 10px;">
+        <button type="button" class="btn-main" id="btnShareGpsLocation" onclick="handleShareGpsLocation()" style="padding: 13px 18px; font-size: 14.5px; font-weight: 700;">
+          <i class="fa-solid fa-location-crosshairs"></i> Guardar mi Ubicación Actual
+        </button>
+
+        <button type="button" onclick="dismissGpsPrompt()" style="background: transparent; border: 1px solid rgba(255,255,255,0.12); color: var(--text-muted); padding: 10px 14px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 600; cursor: pointer; text-align: center;">
+          Hacerlo más tarde
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- MODAL: PAGO CON TARJETA DE DÉBITO / CRÉDITO (OPENPAY) -->
   <div id="modalCardPayment" class="modal-overlay" style="z-index: 240;">
     <div class="modal-sheet" style="max-width: 440px; border-color: rgba(14, 165, 233, 0.45); box-shadow: 0 25px 60px rgba(0, 0, 0, 0.7);">
@@ -2397,6 +2437,7 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
     let currentToken = localStorage.getItem('cp_token') || '';
     let currentPhone = localStorage.getItem('cp_phone') || '';
     let currentContractId = '';
+    let currentClient = null;
     let currentServices = [];
     let realWifiPassword24 = '';
     let realWifiPassword5g = '';
@@ -3007,6 +3048,7 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
 
     function renderDashboard(data) {
       const c = data.client;
+      currentClient = c;
       currentContractId = String(c.id_servicio);
       currentServices = data.relatedServices || [];
       const urlPNow = new URLSearchParams(window.location.search).get('p') || new URLSearchParams(window.location.search).get('phone') || '';
@@ -3199,6 +3241,24 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
       const addrEl = document.getElementById('clientAddressLabel');
       if (addrEl) {
         addrEl.innerText = (c.direccion || data.onu?.zone_name || 'Domicilio registrado');
+      }
+
+      // Ubicación GPS técnica
+      const locContent = document.getElementById('clientLocationBadgeContent');
+      if (locContent) {
+        if (c.has_location) {
+          const mapUrl = c.google_maps_url || (c.coordenadas_gps ? ('https://www.google.com/maps?q=' + encodeURIComponent(c.coordenadas_gps)) : '#');
+          locContent.innerHTML = '<a href="' + mapUrl + '" target="_blank" style="color: #10b981; font-weight: 700; text-decoration: none; display: inline-flex; align-items: center; gap: 4px;"><i class="fa-solid fa-circle-check"></i> Registrada <i class="fa-solid fa-arrow-up-right-from-square" style="font-size: 9px;"></i></a>';
+        } else {
+          locContent.innerHTML = '<button type="button" onclick="openGpsPromptModal()" style="font-size: 10px; background: rgba(14, 165, 233, 0.15); color: #38bdf8; border: 1px solid rgba(14, 165, 233, 0.35); border-radius: 6px; padding: 2px 7px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; font-weight: 600;"><i class="fa-solid fa-location-crosshairs"></i> Agregar GPS</button>';
+        }
+      }
+
+      // Si el cliente no tiene ubicación registrada y no tiene pendiente crear contraseña
+      if (c && !c.has_location && data.hasPassword !== false) {
+        setTimeout(() => {
+          checkAndShowGpsPrompt();
+        }, 600);
       }
 
       // Wi-Fi Real Dual Band Simplificado (Una Sola Contraseña Compartida)
@@ -4298,6 +4358,13 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
           }
         } catch {}
       }
+      if (id === 'modalPasswordSuccess') {
+        if (currentClient && !currentClient.has_location) {
+          setTimeout(() => {
+            checkAndShowGpsPrompt();
+          }, 350);
+        }
+      }
     }
 
     // Navegación táctil hacia atrás (gesto de retroceso de Android / iOS / botón Volver)
@@ -4422,6 +4489,145 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
           btn.innerHTML = origText;
         }
       }
+    }
+
+    // ==========================================
+    // UBICACIÓN GPS TÉCNICA DEL DOMICILIO
+    // ==========================================
+    function openGpsPromptModal() {
+      const alertBox = document.getElementById('gpsAlertBox');
+      if (alertBox) alertBox.style.display = 'none';
+      const btn = document.getElementById('btnShareGpsLocation');
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-location-crosshairs"></i> Guardar mi Ubicación Actual';
+      }
+      openModalWithState('modalGpsPrompt');
+    }
+
+    function checkAndShowGpsPrompt() {
+      if (!currentClient || currentClient.has_location) return;
+      const targetId = currentContractId || (currentClient && currentClient.id_servicio) || currentPhone;
+      const key = 'gps_prompt_dismissed_' + targetId;
+      if (sessionStorage.getItem(key)) return;
+      openGpsPromptModal();
+    }
+
+    function dismissGpsPrompt() {
+      const targetId = currentContractId || (currentClient && currentClient.id_servicio) || currentPhone;
+      if (targetId) {
+        sessionStorage.setItem('gps_prompt_dismissed_' + targetId, '1');
+      }
+      closeModal('modalGpsPrompt');
+    }
+
+    async function handleShareGpsLocation() {
+      const alertBox = document.getElementById('gpsAlertBox');
+      const btn = document.getElementById('btnShareGpsLocation');
+      if (alertBox) {
+        alertBox.style.display = 'none';
+        alertBox.style.background = 'rgba(239, 68, 68, 0.12)';
+        alertBox.style.border = '1px solid rgba(239, 68, 68, 0.3)';
+        alertBox.style.color = '#f87171';
+      }
+
+      if (!('geolocation' in navigator)) {
+        if (alertBox) {
+          alertBox.innerText = 'Tu navegador o dispositivo no cuenta con soporte para GPS.';
+          alertBox.style.display = 'block';
+        }
+        return;
+      }
+
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Obteniendo ubicación GPS...';
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+
+          if (btn) {
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando en sistema...';
+          }
+
+          const activeToken = currentToken || localStorage.getItem('cp_token') || new URLSearchParams(window.location.search).get('auth') || '';
+          const reqHeaders = { 'Content-Type': 'application/json' };
+          if (activeToken) {
+            reqHeaders['Authorization'] = 'Bearer ' + activeToken;
+          }
+
+          const targetId = currentContractId || (currentClient ? currentClient.id_servicio : null);
+
+          try {
+            const res = await fetch('/api/portal/location', {
+              method: 'POST',
+              headers: reqHeaders,
+              body: JSON.stringify({
+                lat,
+                lng,
+                serviceId: targetId,
+                clientId: targetId,
+                phone: currentPhone,
+              })
+            });
+
+            const data = await res.json();
+            if (data.success) {
+              if (currentClient) {
+                currentClient.has_location = true;
+                currentClient.coordenadas_gps = lat + ',' + lng;
+                currentClient.google_maps_url = 'https://www.google.com/maps?q=' + lat + ',' + lng;
+              }
+              // Actualizar UI
+              const locContent = document.getElementById('clientLocationBadgeContent');
+              if (locContent) {
+                const mapUrl = 'https://www.google.com/maps?q=' + lat + ',' + lng;
+                locContent.innerHTML = '<a href="' + mapUrl + '" target="_blank" style="color: #10b981; font-weight: 700; text-decoration: none; display: inline-flex; align-items: center; gap: 4px;"><i class="fa-solid fa-circle-check"></i> Registrada <i class="fa-solid fa-arrow-up-right-from-square" style="font-size: 9px;"></i></a>';
+              }
+
+              closeModal('modalGpsPrompt');
+              showToast('✅ ¡Ubicación registrada con éxito para tus reportes!');
+            } else {
+              if (alertBox) {
+                alertBox.innerText = data.message || 'No se pudo guardar la ubicación.';
+                alertBox.style.display = 'block';
+              }
+            }
+          } catch (e) {
+            if (alertBox) {
+              alertBox.innerText = 'Error al comunicar con el servidor. Intenta nuevamente.';
+              alertBox.style.display = 'block';
+            }
+          } finally {
+            if (btn) {
+              btn.disabled = false;
+              btn.innerHTML = '<i class="fa-solid fa-location-crosshairs"></i> Guardar mi Ubicación Actual';
+            }
+          }
+        },
+        (error) => {
+          if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-location-crosshairs"></i> Guardar mi Ubicación Actual';
+          }
+          let msg = 'No se pudo obtener la ubicación GPS.';
+          if (error.code === error.PERMISSION_DENIED) {
+            msg = 'Permiso denegado. Para registrar tu ubicación, permite el acceso al GPS en tu navegador.';
+          } else if (error.code === error.POSITION_UNAVAILABLE) {
+            msg = 'La señal de GPS no está disponible en este momento.';
+          } else if (error.code === error.TIMEOUT) {
+            msg = 'Se agotó el tiempo de espera para obtener las coordenadas.';
+          }
+          if (alertBox) {
+            alertBox.innerText = msg;
+            alertBox.style.display = 'block';
+          }
+        },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+      );
     }
   </script>
 
