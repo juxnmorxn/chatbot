@@ -57,6 +57,8 @@ export interface AuthorizeOnuPayload {
   ip_address: string;
   netmask?: string;
   gateway: string;
+  dns1?: string;
+  dns2?: string;
   line_profile?: string;
   download_speed_profile_name?: string;
   upload_speed_profile_name?: string;
@@ -698,15 +700,18 @@ export class SmartOLTService {
       form.append('wan_remote_access', 'enabled_from_everywhere');
       form.append('remote_access', 'enabled_from_everywhere');
       
-      // VLAN y Configuración IP / Máscara / Gateway / DNS
+      // VLAN y Configuración IP / Máscara / Gateway / DNS (usando DNS de SmartOLT por defecto)
+      const effectiveDns1 = payload.dns1 || SettingsService.get('SMARTOLT_DEFAULT_DNS1', 'DEFAULT_DNS1', '198.18.252.7');
+      const effectiveDns2 = payload.dns2 || SettingsService.get('SMARTOLT_DEFAULT_DNS2', 'DEFAULT_DNS2', '8.8.8.8');
+
       form.append('vlan', String(payload.vlan));
       form.append('ip_address', String(payload.ip_address));
       form.append('subnet_mask', String(payload.netmask || '255.255.255.0'));
       form.append('netmask', String(payload.netmask || '255.255.255.0'));
       form.append('default_gateway', String(payload.gateway || '172.19.2.254'));
       form.append('gateway', String(payload.gateway || '172.19.2.254'));
-      form.append('dns1', '8.8.8.8');
-      form.append('dns2', '8.8.4.4');
+      form.append('dns1', effectiveDns1);
+      form.append('dns2', effectiveDns2);
       
       // Perfiles de velocidad y Line-Profile VLAN mapping obligatorio (evitar PRIO mapping por defecto)
       form.append('line_profile', 'VLAN mapping');
@@ -742,8 +747,8 @@ export class SmartOLTService {
               staticForm.append('ipv4_address', String(payload.ip_address));
               staticForm.append('subnet_mask', String(payload.netmask || '255.255.255.0'));
               staticForm.append('gateway', String(payload.gateway || '172.19.2.254'));
-              staticForm.append('dns1', '8.8.8.8');
-              staticForm.append('dns2', '8.8.4.4');
+              staticForm.append('dns1', effectiveDns1);
+              staticForm.append('dns2', effectiveDns2);
               staticForm.append('configuration_method', 'OMCI');
               staticForm.append('ip_protocol', 'ipv4');
 
@@ -796,8 +801,8 @@ export class SmartOLTService {
               staticForm.append('ipv4_address', String(payload.ip_address));
               staticForm.append('subnet_mask', String(payload.netmask || '255.255.255.0'));
               staticForm.append('gateway', String(payload.gateway || '172.19.2.254'));
-              staticForm.append('dns1', '8.8.8.8');
-              staticForm.append('dns2', '8.8.4.4');
+              staticForm.append('dns1', effectiveDns1);
+              staticForm.append('dns2', effectiveDns2);
               staticForm.append('configuration_method', tr069Enabled ? 'TR069' : 'OMCI');
               staticForm.append('ip_protocol', 'ipv4ipv6');
               staticForm.append('ipv6_address_mode', 'Auto');
@@ -866,6 +871,8 @@ export class SmartOLTService {
     vlan?: string;
     zone?: string;
     olt_id?: string;
+    dns1?: string;
+    dns2?: string;
   }): Promise<{ success: boolean; message: string; details?: any }> {
     try {
       const api = this.getApi();
@@ -892,6 +899,9 @@ export class SmartOLTService {
       const isSanAgustin = String(oltId) === '2' || zoneLower.includes('san agustin');
       const mgmtVlan = isSanAgustin ? '60' : '99';
 
+      const effectiveDns1 = options?.dns1 || rawData?.dns1 || SettingsService.get('SMARTOLT_DEFAULT_DNS1', 'DEFAULT_DNS1', '198.18.252.7');
+      const effectiveDns2 = options?.dns2 || rawData?.dns2 || SettingsService.get('SMARTOLT_DEFAULT_DNS2', 'DEFAULT_DNS2', '8.8.8.8');
+
       const results: string[] = [];
       let tr069Ok = false;
 
@@ -904,8 +914,8 @@ export class SmartOLTService {
             staticForm.append('ipv4_address', String(ip));
             staticForm.append('subnet_mask', String(options?.netmask || '255.255.255.0'));
             staticForm.append('gateway', String(options?.gateway || '172.19.2.254'));
-            staticForm.append('dns1', '8.8.8.8');
-            staticForm.append('dns2', '8.8.4.4');
+            staticForm.append('dns1', effectiveDns1);
+            staticForm.append('dns2', effectiveDns2);
             staticForm.append('configuration_method', 'OMCI');
             staticForm.append('ip_protocol', 'ipv4');
 
@@ -954,8 +964,8 @@ export class SmartOLTService {
             staticForm.append('ipv4_address', String(ip));
             staticForm.append('subnet_mask', String(options?.netmask || '255.255.255.0'));
             staticForm.append('gateway', String(options?.gateway || '172.19.2.254'));
-            staticForm.append('dns1', '8.8.8.8');
-            staticForm.append('dns2', '8.8.4.4');
+            staticForm.append('dns1', effectiveDns1);
+            staticForm.append('dns2', effectiveDns2);
             staticForm.append('configuration_method', tr069Ok ? 'TR069' : 'OMCI');
             staticForm.append('ip_protocol', 'ipv4ipv6');
             staticForm.append('ipv6_address_mode', 'Auto');
