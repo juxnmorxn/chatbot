@@ -741,8 +741,9 @@ export class BotOrchestrator {
     }
 
     // Detección anticipada de comandos y flujos de técnicos de campo
-    const esComandoCambioPaquete = /(?:cambiar|modificar|actualizar|subir|bajar)\s+(?:de\s+)?(?:paquete|plan|velocidad|megas)\b/i.test(rawText) ||
-      /^cambiar\s+(?:paquete|plan)\b/i.test(lowerMsg);
+    const esComandoCambioPaquete = /(?:cambiar|cambio|modificar|modificaci[oó]n|actualizar|actualizaci[oó]n|subir|subida|bajar|bajada)\s+(?:de\s+)?(?:paquete|plan|velocidad|megas)\b/i.test(rawText) ||
+      /^(?:cambiar|cambio)\s+(?:de\s+)?(?:paquete|plan)\b/i.test(lowerMsg) ||
+      /^(?:cambiar\s+paquete|cambio\s+de\s+paquete|cambiar\s+plan|cambio\s+de\s+plan)\b/i.test(lowerMsg);
 
     const esComandoCambioDomicilio = /^(?:realizar|hacer|ejecutar|solicitar)?\s*(?:un\s+)?(?:cambio\s+de\s+domicilio|cambiar\s+domicilio|reubicaci[oó]n|reubicar|mover\s+modem|mover\s+m[oó]dem|mover\s+caja|cambio\s+de\s+caja|cambio\s+de\s+puerto)\b/i.test(lowerMsg) ||
       /^(?:cambio\s+de\s+domicilio|reubicaci[oó]n|reubicar)\b/i.test(lowerMsg);
@@ -781,6 +782,7 @@ export class BotOrchestrator {
       session?.step === 'PENDIENTE_SELECCION_IP_REAPROVISIONAR' ||
       session?.step === 'PENDIENTE_CONFIRMACION_REAPROVISIONAR' ||
       session?.step === 'PENDIENTE_POLLING_REAPROVISION' ||
+      session?.step === 'PENDIENTE_MEGAS_CAMBIO_PAQUETE' ||
       session?.step === 'TECNICO_ESPERANDO_CLIENTE_GPS';
 
     const esComandoTecnicoExplicito = esComandoActivacion || esComandoCambioPaquete || esComandoCambioModem || esComandoCambioDomicilio || esComandoConsultaUbicacion || esComandoCambioWifi || esComandoReaprovisionar || esComandoCambioNombre || esComandoInfoTecnico;
@@ -1131,6 +1133,12 @@ export class BotOrchestrator {
     // D.4 Identificación de cliente tras envío de ubicación GPS
     if (session?.step === 'CLIENTE_ESPERANDO_IDENTIFICACION_GPS') {
       await this.procesarIdentificacionGpsCliente(phone, rawText, session, targetJid);
+      return;
+    }
+
+    // D.5 Selección de megas para cambio de paquete en caliente
+    if (session?.step === 'PENDIENTE_MEGAS_CAMBIO_PAQUETE') {
+      await this.procesarRespuestaMegasCambioPaquete(phone, rawText, session, targetJid);
       return;
     }
 
@@ -6863,7 +6871,10 @@ export class BotOrchestrator {
 
   /**
    * Procesa la solicitud de cambio de paquete/velocidad en caliente para técnicos de campo
-   * Comando: "cambiar plan [Folio/Nombre/SN] a [Nuevo Paquete]"
+   * Comandos soportados:
+   *  - "cambiar plan [Folio/Nombre/SN] a [Nuevo Paquete]"
+   *  - "cambio de paquete [Folio/Nombre/SN] [Megas]"
+   *  - "cambio de paquete [Folio/Nombre/SN]" (pregunta la velocidad)
    */
   private static async procesarCambioPaqueteTecnico(
     phone: string,
@@ -6883,35 +6894,54 @@ export class BotOrchestrator {
       return;
     }
 
-    // Extraer velocidad solicitada (ej. "600 megas", "100M", "50 MB", "800")
-    const cleanLower = rawText.toLowerCase().replace(/^(?:cambiar|modificar|actualizar|subir|bajar)\s+(?:de\s+)?(?:paquete|plan|velocidad|megas)\s*/i, '').trim();
-    
-    // Buscar patrón de velocidad (ej. "600 megas", "a 600m", "40mb", "600")
-    const speedMatch = cleanLower.match(/(?:a\s+)?(\d{2,4})\s*(?:m|mb|megas|mega)?\b/i);
-    if (!speedMatch) {
-      await this.enviarYLoguear(
-        phone,
-        `🛠️ *Cambio de Paquete en SmartOLT*\n\nPara modificar el plan de un cliente, envía:\n\n👉 *cambiar plan [Folio o SN o Nombre] a [Nuevo Paquete]*\n\n_Ejemplos:_\n• \`cambiar plan 3000 a 600 megas\`\n• \`cambiar paquete c24b0 800 megas\`\n• \`cambiar plan Juan de Dios Moran a 400 megas\``,
-        'CAMBIO_PAQUETE_TECNICO',
-        'AYUDA_CAMBIO_PAQUETE',
-        targetJid
-      );
-      return;
+    // 1. Limpiar prefijo del comando
+    const cleanLower = rawText
+      .toLowerCase()
+      .replace(/^(?:realizar|hacer|ejecutar|solicitar)?\s*(?:un\s+)?(?:cambiar|cambio|modificar|modificaci[oó]n|actualizar|actualizaci[oó]n|subir|subida|bajar|bajada)\s+(?:de\s+)?(?:paquete|plan|velocidad|megas)[:\s]*/i, '')
+      .trim();
+
+    // 2. Extraer velocidad solicitada (ej: "a 100 megas", "100 megas", "a 60", "60mb")
+    let speedMatch: RegExpMatchArray | null = null;
+    let matchedPattern = '';
+
+    // Patrón A: "a 100 megas", "a 60", "por 100 megas", "de 60 megas"
+    const prepMatch = cleanLower.match(/(?:^|\s)(?:a|al|por|de)\s+(\d{2,4})\s*(?:megas?|mbps?|mb|m)?\b/i);
+    if (prepMatch) {
+      speedMatch = prepMatch;
+      matchedPattern = prepMatch[0];
+    } else {
+      // Patrón B: número seguido explícitamente de "megas", "mbps", "mb"
+      const suffixMatch = cleanLower.match(/(?:^|\s)(\d{2,4})\s*(?:megas?|mbps?|mb)\b/i);
+      if (suffixMatch) {
+        speedMatch = suffixMatch;
+        matchedPattern = suffixMatch[0];
+      } else {
+        // Patrón C: termina en número suelto de 2 a 3 dígitos (ej: "2973 100" o "aldo sanchez 60")
+        const endNumMatch = cleanLower.match(/\s+(\d{2,3})$/);
+        if (endNumMatch) {
+          const possibleSpeed = parseInt(endNumMatch[1], 10);
+          if (possibleSpeed >= 10 && possibleSpeed <= 1000) {
+            speedMatch = endNumMatch;
+            matchedPattern = endNumMatch[0];
+          }
+        }
+      }
     }
 
-    const megas = speedMatch[1];
-    const newPlan = `${megas} megas`;
-
-    // Extraer identificador del cliente (eliminar la parte de la velocidad y palabras clave)
-    let target = cleanLower
-      .replace(speedMatch[0], '')
+    // 3. Extraer el identificador del cliente / ONU / folio
+    let target = cleanLower;
+    if (matchedPattern) {
+      target = target.replace(matchedPattern, '');
+    }
+    target = target
+      .replace(/\b(?:megas?|mbps?|mb|plan|paquete)\s*$/i, '')
       .replace(/\b(?:a|al|para|del|cliente|folio|sn|onu|modem|pin\s*\d{5})\b/gi, '')
       .trim();
 
     if (!target) {
       await this.enviarYLoguear(
         phone,
-        `⚠️ *Por favor indica el cliente o SN al que deseas cambiarle el paquete.*\n\nEjemplo: \`cambiar plan 3000 a ${megas} megas\` o \`cambiar plan c24b0 a ${megas} megas\`.`,
+        `🛠️ *Cambio de Paquete en SmartOLT*\n\nPara modificar el plan de un cliente, envía:\n\n👉 *cambiar plan [Folio o SN o Nombre] a [Nuevo Paquete]*\n\n_Ejemplos:_\n• \`cambiar plan 3000 a 600 megas\`\n• \`cambio de paquete 2973 a 100 megas\`\n• \`cambio de paquete 2973-Aldo Sánchez\``,
         'CAMBIO_PAQUETE_TECNICO',
         'FALTA_DESTINO',
         targetJid
@@ -6919,32 +6949,34 @@ export class BotOrchestrator {
       return;
     }
 
-    await this.enviarYLoguear(
-      phone,
-      `🔍 Localizando cliente o módem *${target}* en SmartOLT para aplicar ${newPlan}...`,
-      'CAMBIO_PAQUETE_TECNICO',
-      'BUSCANDO_CLIENTE_CAMBIO',
-      targetJid
-    );
+    // 4. Localizar la ONU o cliente en la Base de Datos / SmartOLT
+    let onuRecord: any = null;
+    const folioMatch = target.match(/^#?(\d{1,6})\b/);
 
-    // 1. Buscar en Base de Datos Local / SmartOLT
-    let onuRecord = await DbService.getOnuById(target);
-
-    if (!onuRecord) {
-      // Búsqueda por folio o prefijo numérico
-      const folioMatch = target.match(/^(\d{1,6})/);
-      if (folioMatch) {
-        const client = await DbService.getWisphubClientByAny({ id: folioMatch[1] });
-        if (client && client.sn_onu) {
-          onuRecord = await DbService.getOnuById(client.sn_onu);
+    if (folioMatch) {
+      const folio = folioMatch[1];
+      const client = await DbService.getWisphubClientByAny({ id: folio });
+      if (client?.sn_onu) {
+        onuRecord = await DbService.getOnuById(client.sn_onu);
+      }
+      if (!onuRecord) {
+        onuRecord = await DbService.getOnuById(folio);
+      }
+      if (!onuRecord) {
+        const clientOnus = await DbService.searchOnusFuzzy(folio, 1);
+        if (clientOnus.length > 0 && (String(clientOnus[0].name).includes(folio) || String(clientOnus[0].unique_external_id).includes(folio))) {
+          onuRecord = clientOnus[0];
         }
       }
     }
 
     if (!onuRecord) {
-      // Búsqueda difusa por nombre
+      onuRecord = await DbService.getOnuById(target);
+    }
+
+    if (!onuRecord) {
       const fuzzy = await DbService.searchOnusFuzzy(target, 1);
-      if (fuzzy.length > 0 && fuzzy[0].matchScore >= 45) {
+      if (fuzzy.length > 0 && fuzzy[0].matchScore >= 40) {
         onuRecord = fuzzy[0];
       }
     }
@@ -6952,7 +6984,7 @@ export class BotOrchestrator {
     if (!onuRecord) {
       await this.enviarYLoguear(
         phone,
-        `❌ *No se encontró el cliente o módem "${target}" en el sistema.*\n\n💡 *Consejo:* Intenta buscando por el número de Folio (ej: 3000), por los últimos dígitos del SN (ej: c24b0) o por el nombre del cliente.`,
+        `❌ *No se encontró el cliente o módem "${target}" en el sistema.*\n\n💡 *Consejo:* Intenta buscando por el número de Folio (ej: 2973), por los últimos dígitos del SN (ej: E5B9) o por el nombre del cliente.`,
         'CAMBIO_PAQUETE_TECNICO',
         'CLIENTE_NO_ENCONTRADO',
         targetJid
@@ -6960,19 +6992,67 @@ export class BotOrchestrator {
       return;
     }
 
-    // 2. Ejecutar cambio de velocidad en SmartOLT
+    // 5. Si NO se especificó la velocidad, preguntar interactivamente al técnico
+    if (!speedMatch) {
+      const clientName = onuRecord.name || target;
+      const currentPlan = onuRecord.speed_profile || '60 Megas';
+      const prompt = `⚡ *Cambio de Paquete en SmartOLT*\n──────────────────────────────\n` +
+        `• *Cliente:* *${clientName}*\n` +
+        `• *Módem:* *${onuRecord.sn || onuRecord.unique_external_id}*\n` +
+        `• *Plan Actual:* *${currentPlan}*\n` +
+        `• *Zona:* *${onuRecord.zone_name || 'General'}*\n` +
+        `──────────────────────────────\n` +
+        `¿A qué velocidad deseas cambiarlo?\n\n` +
+        `_Opciones disponibles:_\n` +
+        `• *40 Megas*\n` +
+        `• *60 Megas*\n` +
+        `• *100 Megas*\n` +
+        `• *150 Megas*\n` +
+        `• *200 Megas*\n` +
+        `• *300 Megas*\n` +
+        `• *500 Megas*\n\n` +
+        `👉 *Responde solo con el número de megas* (ej: \`100\` o \`100 megas\`), o escribe *cancelar*.`;
+
+      await DbService.upsertSession({
+        phone,
+        step: 'PENDIENTE_MEGAS_CAMBIO_PAQUETE',
+        metadata: JSON.stringify({
+          onuExternalId: onuRecord.unique_external_id || onuRecord.sn,
+          onuSn: onuRecord.sn,
+          onuName: onuRecord.name,
+          zoneName: onuRecord.zone_name,
+          currentPlan,
+        }),
+      });
+
+      await this.enviarYLoguear(phone, prompt, 'CAMBIO_PAQUETE_TECNICO', 'SOLICITANDO_MEGAS', targetJid);
+      return;
+    }
+
+    // 6. Si se especificó la velocidad, aplicarla directamente
+    const megas = speedMatch[1];
+    const newPlan = `${megas} megas`;
+
+    await this.enviarYLoguear(
+      phone,
+      `⏳ Aplicando cambio a *${newPlan}* para *${onuRecord.name}* en SmartOLT...`,
+      'CAMBIO_PAQUETE_TECNICO',
+      'BUSCANDO_CLIENTE_CAMBIO',
+      targetJid
+    );
+
     const result = await SmartOLTService.updateSpeedProfile(onuRecord.unique_external_id || onuRecord.sn, newPlan);
 
     if (result.success) {
       const techInfo = auth.tech ? `• *Técnico:* ${auth.tech.name}\n` : '';
-      const cardSuccess = `⚡ *PAQUETE ACTUALIZADO CON ÉXITO*
-──────────────────────────────
-• *Cliente:* *${onuRecord.name}*
-• *Serie (SN):* *${onuRecord.sn}*
-• *Nuevo Paquete:* *${megas} Megas* (${result.downProfile} / ${result.upProfile})
-• *Zona:* *${onuRecord.zone_name || 'Actopan'}*
-${techInfo}──────────────────────────────
-✅ Perfil de velocidad aplicado y activo en SmartOLT.`;
+      const cardSuccess = `⚡ *PAQUETE ACTUALIZADO CON ÉXITO*\n` +
+        `──────────────────────────────\n` +
+        `• *Cliente:* *${onuRecord.name}*\n` +
+        `• *Serie (SN):* *${onuRecord.sn}*\n` +
+        `• *Nuevo Paquete:* *${megas} Megas* (${result.downProfile} / ${result.upProfile})\n` +
+        `• *Zona:* *${onuRecord.zone_name || 'Actopan'}*\n` +
+        `${techInfo}──────────────────────────────\n` +
+        `✅ Perfil de velocidad aplicado y activo en SmartOLT.`;
 
       await this.enviarYLoguear(
         phone,
@@ -6989,6 +7069,78 @@ ${techInfo}───────────────────────
         'ERROR_CAMBIO_PAQUETE',
         targetJid
       );
+    }
+  }
+
+  /**
+   * Procesa la respuesta del técnico cuando se le preguntó a qué velocidad cambiar el paquete
+   */
+  private static async procesarRespuestaMegasCambioPaquete(
+    phone: string,
+    rawText: string,
+    session: Session | null,
+    targetJid?: string
+  ): Promise<void> {
+    const lower = rawText.trim().toLowerCase();
+    if (/^(cancelar|cancelo|cancel|salir|abortar|reset)\b/i.test(lower)) {
+      await DbService.upsertSession({ phone, step: 'TECNICO_STANDBY', metadata: null });
+      await this.enviarYLoguear(phone, 'Operación cancelada. Sesión de técnico en espera.\n\nEscribe *menu tecnico* para ver comandos.', 'CAMBIO_PAQUETE_TECNICO', 'CANCELADO', targetJid);
+      return;
+    }
+
+    let meta: any = {};
+    if (session?.metadata) {
+      try { meta = JSON.parse(session.metadata); } catch {}
+    }
+
+    if (!meta.onuExternalId) {
+      await DbService.upsertSession({ phone, step: 'TECNICO_STANDBY', metadata: null });
+      await this.enviarYLoguear(phone, 'No hay ninguna operación de cambio de paquete pendiente. Escribe *menu tecnico* para ver comandos.', 'CAMBIO_PAQUETE_TECNICO', 'SIN_OPERACION', targetJid);
+      return;
+    }
+
+    const numMatch = lower.match(/\b(\d{2,4})\b/);
+    if (!numMatch) {
+      await this.enviarYLoguear(
+        phone,
+        `⚠️ Por favor indica la cantidad de megas para el cambio (ej: *60* o *100 megas*), o escribe *cancelar*.`,
+        'CAMBIO_PAQUETE_TECNICO',
+        'ESPERANDO_NUMERO_MEGAS',
+        targetJid
+      );
+      return;
+    }
+
+    const megas = numMatch[1];
+    const newPlan = `${megas} megas`;
+
+    await this.enviarYLoguear(
+      phone,
+      `⏳ Aplicando cambio a *${megas} Megas* para *${meta.onuName || meta.onuSn}* en SmartOLT...`,
+      'CAMBIO_PAQUETE_TECNICO',
+      'APLICANDO_CAMBIO',
+      targetJid
+    );
+
+    const result = await SmartOLTService.updateSpeedProfile(meta.onuExternalId, newPlan);
+
+    await DbService.upsertSession({ phone, step: 'TECNICO_STANDBY', metadata: null });
+
+    if (result.success) {
+      const auth = await this.verificarAutorizacionTecnico(phone, rawText);
+      const techInfo = auth.tech ? `• *Técnico:* ${auth.tech.name}\n` : '';
+      const cardSuccess = `⚡ *PAQUETE ACTUALIZADO CON ÉXITO*\n` +
+        `──────────────────────────────\n` +
+        `• *Cliente:* *${meta.onuName || 'Cliente'}*\n` +
+        `• *Serie (SN):* *${meta.onuSn || meta.onuExternalId}*\n` +
+        `• *Nuevo Paquete:* *${megas} Megas* (${result.downProfile} / ${result.upProfile})\n` +
+        `• *Zona:* *${meta.zoneName || 'General'}*\n` +
+        `${techInfo}──────────────────────────────\n` +
+        `✅ Perfil de velocidad aplicado y activo en SmartOLT.`;
+
+      await this.enviarYLoguear(phone, cardSuccess, 'CAMBIO_PAQUETE_TECNICO', 'CAMBIO_PAQUETE_EXITOSO', targetJid);
+    } else {
+      await this.enviarYLoguear(phone, `❌ *Error al cambiar el paquete en SmartOLT:*\n\n${result.message}`, 'CAMBIO_PAQUETE_TECNICO', 'ERROR_CAMBIO_PAQUETE', targetJid);
     }
   }
 
