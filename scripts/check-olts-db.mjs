@@ -2,12 +2,21 @@ import { Client } from 'ssh2';
 
 const conn = new Client();
 conn.on('ready', () => {
-  conn.exec('sqlite3 /root/chatbot/data/olt_manager.db "SELECT id, name, client_ip, public_key, allowed_subnets FROM wireguard_peers;"', (err, stream) => {
+  conn.exec(`
+    echo "=== local_olts in chatbot.db ==="
+    sqlite3 /root/chatbot/data/chatbot.db "SELECT * FROM local_olts;" || true
+    echo "=== unconfigured_onus in chatbot.db ==="
+    sqlite3 /root/chatbot/data/chatbot.db "SELECT count(*) FROM unconfigured_onus;" || true
+    echo "=== olts in olt_manager.db ==="
+    sqlite3 /root/chatbot/data/olt_manager.db "SELECT * FROM olts;" || true
+    echo "=== wireguard_peers in olt_manager.db ==="
+    sqlite3 /root/chatbot/data/olt_manager.db "SELECT * FROM wireguard_peers;" || true
+  `, (err, stream) => {
     if (err) throw err;
     let out = '';
     stream.on('data', (d) => out += d);
     stream.on('close', () => {
-      console.log('OLTS:\n' + out);
+      console.log('RESULTS:\n' + out);
       conn.end();
     });
   });

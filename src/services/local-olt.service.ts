@@ -100,25 +100,17 @@ export class LocalOltService {
         );
       `);
 
-      // Seed por defecto si la tabla está vacía
-      const rows = await client.execute('SELECT COUNT(*) as count FROM local_olts');
-      const count = Number(rows.rows[0]?.count || 0);
-      if (count === 0) {
-        await client.execute({
-          sql: `
-            INSERT INTO local_olts (id, name, model, ip, port, username, password, gpon_ports, mikrotik_ip, mikrotik_name, wireguard_client_ip, status)
-            VALUES 
-              ('olt-fray', 'OLT Fray', 'TP-Link DeltaStream DS-P7001-01', '172.19.60.2', 22, 'admin', 'CloudWare1991', '1/0/1', '10.200.0.2', 'RB-Fray', '10.200.0.2', 'online'),
-              ('olt-plomosas', 'OLT Plomosas', 'TP-Link DeltaStream DS-P7001-01', '172.19.70.253', 22, 'admin', 'CloudWare1991', '1/0/1', '10.200.0.3', 'RB-Plomosas', '10.200.0.3', 'offline')
-          `,
-          args: [],
-        });
-        logger.info('[LocalOltService] OLTs iniciales registradas en BD (Fray y Plomosas)');
-      }
       this.initialized = true;
     } catch (err: any) {
       logger.error('[LocalOltService] Error inicializando tabla local_olts:', err.message);
     }
+  }
+
+  public static async clearAllData(): Promise<void> {
+    await this.initTable();
+    const client = getDbClient();
+    await client.execute('DELETE FROM local_olts');
+    logger.info('[LocalOltService] Todas las OLTs locales han sido eliminadas');
   }
 
   public static async getAllOlts(): Promise<LocalOltRecord[]> {

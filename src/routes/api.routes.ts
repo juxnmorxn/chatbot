@@ -171,6 +171,7 @@ router.post('/api/smartolt/configure-tr069', AdminController.configureSmartOltTr
 // ==========================================
 router.get('/api/admin/local-olts', AdminController.getLocalOlts);
 router.post('/api/admin/local-olts', AdminController.saveLocalOlt);
+router.delete('/api/admin/local-olts-all', AdminController.clearAllLocalOlts);
 router.delete('/api/admin/local-olts/:id', AdminController.deleteLocalOlt);
 router.post('/api/admin/local-olts/:id/test', AdminController.testLocalOltConnection);
 router.get('/api/admin/local-olts/:id/autofind', AdminController.getLocalOltAutofind);

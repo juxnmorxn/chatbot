@@ -3809,13 +3809,17 @@ export function getAdminDashboardHtml(): string {
           </div>
         </div>
       </section>
-
             <!-- VIEW: OLTS LOCALES & GPON (DELTASTREAM / SSH / WIREGUARD) -->
       <section id="view-olts" class="view-container">
         <!-- Sub-Navigation Header -->
         <div class="subnav-header">
           <div class="subnav-tabs" role="tablist">
-            <button id="btn-olt-tab-autofind" class="subnav-tab active" onclick="switchLocalOltTab('autofind')" role="tab" aria-selected="true">
+            <button id="btn-olt-tab-olts" class="subnav-tab active" onclick="switchLocalOltTab('olts')" role="tab" aria-selected="true">
+              <svg class="subnav-icon" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2"></rect><rect x="2" y="14" width="20" height="8" rx="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line><circle cx="17" cy="6" r="1.5"></circle><circle cx="17" cy="18" r="1.5"></circle></svg>
+              <span>Centrales OLTs & MikroTiks</span>
+              <span id="badge-tab-olt-total" class="subnav-badge" style="display: none;">0</span>
+            </button>
+            <button id="btn-olt-tab-autofind" class="subnav-tab" onclick="switchLocalOltTab('autofind')" role="tab" aria-selected="false">
               <svg class="subnav-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 14 14"></polyline></svg>
               <span>ONUs Sin Configurar (Autofind)</span>
               <span id="badge-tab-olt-autofind" class="subnav-badge" style="display: none;">0</span>
@@ -3836,30 +3840,119 @@ export function getAdminDashboardHtml(): string {
                 <option value="">Cargando OLTs...</option>
               </select>
               <span id="pill-active-olt-status" class="live-status-pill" style="display: none;"></span>
-              <button class="btn btn-secondary btn-xs" onclick="testActiveLocalOlt()" title="Probar conexión SSH a la OLT">
+              <button class="btn btn-secondary btn-xs" onclick="testActiveLocalOlt()" title="Probar conexión SSH a la OLT seleccionada">
                 <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path></svg>
-                <span>Probar</span>
+                <span>Probar SSH</span>
               </button>
-              <button class="btn btn-secondary btn-xs" onclick="openAddLocalOltModal()" title="Agregar nueva OLT">
+              <button class="btn btn-primary btn-xs" onclick="openAddLocalOltModal()" title="Agregar nueva OLT o Nodo">
                 <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                <span>Nueva OLT</span>
+                <span>+ Nueva OLT</span>
               </button>
               <button class="btn btn-secondary btn-xs" onclick="refreshCurrentLocalOltView()" title="Refrescar datos">
                 <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"></path></svg>
                 <span>Refrescar</span>
               </button>
+              <button class="btn btn-danger btn-xs" onclick="confirmClearAllLocalOlts()" title="Borrar todas las OLTs y ONUs para empezar desde 0" style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.35); color: #f87171;">
+                <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                <span>Vaciar Todo</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- GLOBAL NOC KPI CARDS -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; margin-bottom: 18px;">
+          <div class="metric-card" style="padding: 14px 18px; border-left: 4px solid #38bdf8;">
+            <div style="font-size: 11.5px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Centrales OLTs</div>
+            <div style="display: flex; align-items: baseline; gap: 8px; margin-top: 4px;">
+              <span id="kpi-olts-total" style="font-size: 26px; font-weight: 800; color: #f8fafc;">0</span>
+              <span id="kpi-olts-online-badge" class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; font-weight: 600;">0 Online</span>
+            </div>
+            <div style="font-size: 11px; color: var(--text-dim); margin-top: 3px;">Equipos GPON (DeltaStream / Otros)</div>
+          </div>
+          <div class="metric-card" style="padding: 14px 18px; border-left: 4px solid #818cf8;">
+            <div style="font-size: 11.5px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Nodos MikroTik (Túneles)</div>
+            <div style="display: flex; align-items: baseline; gap: 8px; margin-top: 4px;">
+              <span id="kpi-mks-total" style="font-size: 26px; font-weight: 800; color: #818cf8;">0</span>
+              <span class="badge" style="background: rgba(129, 140, 248, 0.15); color: #818cf8;">WireGuard 10.200.0.x</span>
+            </div>
+            <div style="font-size: 11px; color: var(--text-dim); margin-top: 3px;">RouterBOARDs conectadas al VPS</div>
+          </div>
+          <div class="metric-card" style="padding: 14px 18px; border-left: 4px solid #10b981;">
+            <div style="font-size: 11.5px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">ONUs en Servicio</div>
+            <div style="display: flex; align-items: baseline; gap: 8px; margin-top: 4px;">
+              <span id="kpi-onus-total" style="font-size: 26px; font-weight: 800; color: #10b981;">0</span>
+              <span id="kpi-onus-crit-badge" class="badge" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; display: none;">0 Críticas</span>
+            </div>
+            <div style="font-size: 11px; color: var(--text-dim); margin-top: 3px;">Módems autorizados en la central</div>
+          </div>
+          <div class="metric-card" style="padding: 14px 18px; border-left: 4px solid #f59e0b;">
+            <div style="font-size: 11.5px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Autofind en Espera</div>
+            <div style="display: flex; align-items: baseline; gap: 8px; margin-top: 4px;">
+              <span id="kpi-autofind-total" style="font-size: 26px; font-weight: 800; color: #f59e0b;">0</span>
+              <span class="badge" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b;">Sin Autorizar</span>
+            </div>
+            <div style="font-size: 11px; color: var(--text-dim); margin-top: 3px;">Módems conectados a la fibra</div>
+          </div>
+        </div>
+
+        <!-- SUBTAB 0: LISTA DE OLTS Y MIKROTIKS (DEFAULT) -->
+        <div id="olt-tab-olts-content" class="olt-tab-content">
+          <div class="glass-card">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
+              <div>
+                <h4 style="margin: 0; font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+                  <span>Infraestructura GPON & Nodos MikroTik</span>
+                  <span id="badge-total-olts-inline" class="badge" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8;">0 Centrales</span>
+                </h4>
+                <p style="margin: 4px 0 0; font-size: 12px; color: var(--text-muted);">
+                  Topología: <code>VPS CloudWare (2.25.241.239)</code> &larr; <em>Túnel WireGuard (10.200.0.X)</em> &rarr; <code>Router MikroTik</code> &larr; <em>LAN Privada</em> &rarr; <code>OLT DeltaStream</code>
+                </p>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <button class="btn btn-secondary btn-sm" onclick="testAllLocalOlts()" title="Probar conexión SSH a todas las OLTs">
+                  <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path></svg>
+                  <span>Probar Todas</span>
+                </button>
+                <button class="btn btn-primary btn-sm" onclick="openAddLocalOltModal()">
+                  <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                  <span>+ Agregar OLT / Nodo</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Empty state or OLTs table container -->
+            <div id="container-local-olts-list">
+              <div class="table-responsive">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th style="min-width: 170px;">Central OLT / Modelo</th>
+                      <th style="min-width: 150px;">IP Privada & SSH</th>
+                      <th style="min-width: 190px;">Router MikroTik (WireGuard)</th>
+                      <th style="min-width: 90px;">Puertos GPON</th>
+                      <th style="min-width: 130px;">Estado & Latencia</th>
+                      <th style="min-width: 110px;">Verificación</th>
+                      <th style="text-align: right; min-width: 250px;">Acciones Rápidas</th>
+                    </tr>
+                  </thead>
+                  <tbody id="table-local-olts-body">
+                    <tr><td colspan="7" style="text-align: center; color: var(--text-dim); padding: 24px;">Cargando OLTs y Nodos...</td></tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>
 
         <!-- SUBTAB 1: AUTOFIND ONUS -->
-        <div id="olt-tab-autofind-content" class="olt-tab-content">
+        <div id="olt-tab-autofind-content" class="olt-tab-content" style="display: none;">
           <div class="glass-card">
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
               <div>
                 <h4 style="margin: 0; font-size: 15px; font-weight: 700;">Módems Detectados en Espera (Autofind)</h4>
                 <p style="margin: 3px 0 0; font-size: 12px; color: var(--text-muted);">
-                  Módems conectados a la fibra que aún no han sido autorizados en la central. Autorízalos con 1 solo clic.
+                  Módems conectados a la fibra óptica esperando autorización. Haz clic en "Autorizar" para asignarle ID limpio en la OLT.
                 </p>
               </div>
               <div style="display: flex; align-items: center; gap: 8px;">
@@ -3929,7 +4022,7 @@ export function getAdminDashboardHtml(): string {
             <!-- Mini metrics cards -->
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 14px;">
               <div class="metric-card" style="padding: 10px 14px;">
-                <div style="font-size: 11px; color: var(--text-muted);">Total Autorizadas</div>
+                <div style="font-size: 11px; color: var(--text-muted);">Total en Puerto</div>
                 <div id="stat-olt-total" style="font-size: 20px; font-weight: 800; color: #f3f4f6;">--</div>
               </div>
               <div class="metric-card" style="padding: 10px 14px;">
@@ -4004,7 +4097,6 @@ export function getAdminDashboardHtml(): string {
           </div>
         </div>
       </section>
-
 
       <!-- VIEW 6: PERSONAL & ACCESOS (USUARIOS PANEL + TÉCNICOS & PINS) -->
       <section id="view-personal" class="view-container">
@@ -5003,7 +5095,7 @@ export function getAdminDashboardHtml(): string {
       isSidebarCollapsed: false,
       localOlts: [],
       currentLocalOltId: '',
-      localOltTab: 'autofind',
+      localOltTab: 'olts',
       localAutofindOnus: [],
       localAuthorizedOnus: [],
       db: {
@@ -11929,6 +12021,8 @@ export function getAdminDashboardHtml(): string {
     });
 
         // ==========================================
+    // ==========================================
+    // ==========================================
     // MÓDULO OLTs LOCALES & GPON (DELTASTREAM / SSH / WIREGUARD)
     // ==========================================
     async function loadLocalOltsData() {
@@ -11936,24 +12030,148 @@ export function getAdminDashboardHtml(): string {
         const res = await apiFetch('/api/admin/local-olts');
         state.localOlts = res.olts || [];
 
+        // Update KPIs
+        const totalOlts = state.localOlts.length;
+        const onlineOlts = state.localOlts.filter(o => o.status === 'online').length;
+        const totalMks = state.localOlts.filter(o => o.wireguard_client_ip || o.mikrotik_name).length;
+
+        const kpiOlts = document.getElementById('kpi-olts-total');
+        const kpiOltsBadge = document.getElementById('kpi-olts-online-badge');
+        const kpiMks = document.getElementById('kpi-mks-total');
+        const badgeTabOlt = document.getElementById('badge-tab-olt-total');
+        const badgeTotalInline = document.getElementById('badge-total-olts-inline');
+
+        if (kpiOlts) kpiOlts.innerText = totalOlts;
+        if (kpiOltsBadge) kpiOltsBadge.innerText = onlineOlts + ' Online';
+        if (kpiMks) kpiMks.innerText = totalMks;
+        if (badgeTabOlt) { badgeTabOlt.innerText = totalOlts; badgeTabOlt.style.display = totalOlts > 0 ? 'inline-block' : 'none'; }
+        if (badgeTotalInline) badgeTotalInline.innerText = totalOlts + ' Centrales';
+
+        // Update Select dropdown in subnav
         const sel = document.getElementById('select-active-local-olt');
         if (sel) {
-          sel.innerHTML = state.localOlts.map(o => '<option value="' + o.id + '">' + o.name + ' (' + o.ip + ')</option>').join('');
-          if (state.localOlts.length > 0) {
+          if (totalOlts > 0) {
+            sel.innerHTML = state.localOlts.map(o => '<option value="' + o.id + '">' + o.name + ' (' + o.ip + ')</option>').join('');
             if (!state.currentLocalOltId || !state.localOlts.some(o => o.id === state.currentLocalOltId)) {
               state.currentLocalOltId = state.localOlts[0].id;
             }
             sel.value = state.currentLocalOltId;
           } else {
             sel.innerHTML = '<option value="">Sin OLTs registradas</option>';
+            state.currentLocalOltId = '';
           }
         }
 
         updateCurrentOltStatusPill();
+        renderLocalOltsTable();
         refreshCurrentLocalOltView();
       } catch (err) {
         console.error('Error loading local OLTs:', err);
       }
+    }
+
+    function renderLocalOltsTable() {
+      const container = document.getElementById('container-local-olts-list');
+      if (!container) return;
+
+      if (!state.localOlts || state.localOlts.length === 0) {
+        container.innerHTML = 
+          '<div style="text-align: center; padding: 48px 20px; background: rgba(255,255,255,0.02); border: 1px dashed rgba(255,255,255,0.12); border-radius: 12px; margin-top: 10px;">' +
+            '<div style="width: 56px; height: 56px; border-radius: 14px; background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.25); display: flex; align-items: center; justify-content: center; margin: 0 auto 14px;">' +
+              '<svg style="width: 28px; height: 28px; stroke: #38bdf8;" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2"></rect><rect x="2" y="14" width="20" height="8" rx="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line><circle cx="17" cy="6" r="1.5"></circle><circle cx="17" cy="18" r="1.5"></circle></svg>' +
+            '</div>' +
+            '<h3 style="font-size: 17px; font-weight: 700; color: #f8fafc; margin: 0 0 6px;">No hay Centrales OLTs ni Routers MikroTik registrados</h3>' +
+            '<p style="font-size: 13px; color: var(--text-muted); max-width: 500px; margin: 0 auto 18px; line-height: 1.5;">' +
+              'La base de datos está limpia para iniciar tus pruebas desde cero. Da de alta tu primera central OLT DeltaStream o vincula un router MikroTik con WireGuard.' +
+            '</p>' +
+            '<button class="btn btn-primary btn-sm" onclick="openAddLocalOltModal()">' +
+              '<svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>' +
+              '<span>+ Registrar Primera OLT</span>' +
+            '</button>' +
+          '</div>';
+        return;
+      }
+
+      // Restore table if container had empty state
+      if (!container.querySelector('table')) {
+        container.innerHTML = 
+          '<div class="table-responsive">' +
+            '<table class="data-table">' +
+              '<thead>' +
+                '<tr>' +
+                  '<th style="min-width: 170px;">Central OLT / Modelo</th>' +
+                  '<th style="min-width: 150px;">IP Privada & SSH</th>' +
+                  '<th style="min-width: 190px;">Router MikroTik (WireGuard)</th>' +
+                  '<th style="min-width: 90px;">Puertos GPON</th>' +
+                  '<th style="min-width: 130px;">Estado & Latencia</th>' +
+                  '<th style="min-width: 110px;">Verificación</th>' +
+                  '<th style="text-align: right; min-width: 250px;">Acciones Rápidas</th>' +
+                '</tr>' +
+              '</thead>' +
+              '<tbody id="table-local-olts-body"></tbody>' +
+            '</table>' +
+          '</div>';
+      }
+
+      const activeTbody = document.getElementById('table-local-olts-body');
+      if (!activeTbody) return;
+
+      activeTbody.innerHTML = state.localOlts.map(o => {
+        const isOnline = o.status === 'online';
+        const statusHtml = isOnline
+          ? '<span class="live-status-pill online"><span class="pulse-dot"></span><span>Online (' + (o.last_latency_ms || 0) + 'ms)</span></span>'
+          : '<span class="live-status-pill offline"><span>Desconectada</span></span>';
+
+        const lastCheck = o.last_checked_at ? new Date(o.last_checked_at).toLocaleTimeString() : '--';
+        const mkName = o.mikrotik_name || 'RouterBOARD';
+        const mkIp = o.wireguard_client_ip || '--';
+
+        return (
+          '<tr>' +
+            '<td>' +
+              '<div style="font-weight: 700; font-size: 14px; color: #f8fafc;">' + o.name + '</div>' +
+              '<div style="font-size: 11px; color: var(--text-dim);">' + (o.model || 'TP-Link DeltaStream') + '</div>' +
+            '</td>' +
+            '<td>' +
+              '<div style="font-family: monospace; font-size: 13px; color: #38bdf8; font-weight: 600;">' + o.ip + '</div>' +
+              '<div style="font-size: 11px; color: var(--text-muted);">Puerto: ' + (o.port || 22) + ' (User: ' + o.username + ')</div>' +
+            '</td>' +
+            '<td>' +
+              '<div style="font-weight: 600; font-size: 13px; color: #c084fc;">' + mkName + '</div>' +
+              '<div style="font-family: monospace; font-size: 11px; color: var(--text-dim);">IP Túnel: ' + mkIp + '</div>' +
+            '</td>' +
+            '<td><span class="badge" style="background: rgba(255,255,255,0.06);">' + (o.gpon_ports || '1/0/1') + '</span></td>' +
+            '<td>' + statusHtml + '</td>' +
+            '<td style="font-size: 11px; color: var(--text-muted);">' + lastCheck + '</td>' +
+            '<td style="text-align: right;">' +
+              '<div style="display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end;">' +
+                '<button class="btn btn-secondary btn-xs" data-id="' + o.id + '" onclick="testSingleLocalOlt(this.dataset.id)" title="Probar conexión SSH">' +
+                  '<svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path></svg>' +
+                  '<span>Probar</span>' +
+                '</button>' +
+                '<button class="btn btn-secondary btn-xs" data-id="' + o.id + '" onclick="viewOltOnus(this.dataset.id)" title="Ver ONUs autorizadas">' +
+                  '<svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>' +
+                  '<span>ONUs</span>' +
+                '</button>' +
+                '<button class="btn btn-secondary btn-xs" data-id="' + o.id + '" onclick="viewOltAutofind(this.dataset.id)" title="Sondear módems">' +
+                  '<svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 14 14"></polyline></svg>' +
+                  '<span>Autofind</span>' +
+                '</button>' +
+                '<button class="btn btn-secondary btn-xs" data-id="' + o.id + '" onclick="viewOltScript(this.dataset.id)" title="Script MikroTik">' +
+                  '<svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>' +
+                  '<span>Script</span>' +
+                '</button>' +
+                '<button class="btn btn-secondary btn-xs" data-id="' + o.id + '" onclick="openEditLocalOltModal(this.dataset.id)" title="Editar OLT">' +
+                  '<svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>' +
+                '</button>' +
+                '<button class="btn btn-danger btn-xs" data-id="' + o.id + '" onclick="confirmDeleteLocalOlt(this.dataset.id)" title="Eliminar OLT" style="padding: 4px 6px;">' +
+                  '<svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"></path></svg>' +
+                '</button>' +
+              '</div>' +
+            '</td>' +
+          '</tr>'
+        );
+      }).join('');
     }
 
     function updateCurrentOltStatusPill() {
@@ -11990,6 +12208,10 @@ export function getAdminDashboardHtml(): string {
     }
 
     function refreshCurrentLocalOltView() {
+      if (state.localOltTab === 'olts') {
+        renderLocalOltsTable();
+        return;
+      }
       if (!state.currentLocalOltId) return;
       if (state.localOltTab === 'autofind') {
         loadLocalOltAutofind();
@@ -12005,15 +12227,103 @@ export function getAdminDashboardHtml(): string {
         showToast('Atención', 'Selecciona una OLT primero', 'warning');
         return;
       }
-      showToast('Probando OLT', 'Conectando por SSH a la OLT...', 'info');
+      await testSingleLocalOlt(state.currentLocalOltId);
+    }
+
+    async function testSingleLocalOlt(id) {
+      const olt = state.localOlts.find(o => o.id === id);
+      showToast('Probando OLT', 'Conectando por SSH a ' + (olt ? olt.name : 'la OLT') + '...', 'info');
       try {
-        const res = await apiFetch('/api/admin/local-olts/' + state.currentLocalOltId + '/test', { method: 'POST' });
+        const res = await apiFetch('/api/admin/local-olts/' + id + '/test', { method: 'POST' });
         if (res.result && res.result.online) {
-          showToast('OLT Conectada', 'Respuesta exitosa en ' + res.result.latencyMs + ' ms.', 'success');
+          showToast('OLT Conectada', 'Respuesta exitosa de ' + (olt ? olt.name : 'la OLT') + ' en ' + res.result.latencyMs + ' ms.', 'success');
         } else {
           showToast('Sin Respuesta', res.result?.error || 'No se pudo conectar a la OLT', 'error');
         }
         await loadLocalOltsData();
+      } catch (err) {
+        showToast('Error', err.message, 'error');
+      }
+    }
+
+    async function testAllLocalOlts() {
+      if (state.localOlts.length === 0) {
+        showToast('Atención', 'No hay OLTs registradas para probar', 'warning');
+        return;
+      }
+      showToast('Probando OLTs', 'Verificando ' + state.localOlts.length + ' centrales OLTs por SSH...', 'info');
+      for (const olt of state.localOlts) {
+        try {
+          await apiFetch('/api/admin/local-olts/' + olt.id + '/test', { method: 'POST' });
+        } catch (e) {}
+      }
+      showToast('Prueba Completa', 'Todas las centrales OLTs han sido verificadas.', 'success');
+      await loadLocalOltsData();
+    }
+
+    function viewOltOnus(id) {
+      state.currentLocalOltId = id;
+      const sel = document.getElementById('select-active-local-olt');
+      if (sel) sel.value = id;
+      updateCurrentOltStatusPill();
+      switchLocalOltTab('authorized');
+    }
+
+    function viewOltAutofind(id) {
+      state.currentLocalOltId = id;
+      const sel = document.getElementById('select-active-local-olt');
+      if (sel) sel.value = id;
+      updateCurrentOltStatusPill();
+      switchLocalOltTab('autofind');
+    }
+
+    function viewOltScript(id) {
+      state.currentLocalOltId = id;
+      const sel = document.getElementById('select-active-local-olt');
+      if (sel) sel.value = id;
+      updateCurrentOltStatusPill();
+      switchLocalOltTab('mikrotik');
+    }
+
+    async function confirmDeleteLocalOlt(id) {
+      const olt = state.localOlts.find(o => o.id === id);
+      const name = olt ? olt.name : 'esta OLT';
+      if (!confirm('¿Estás seguro de que deseas eliminar ' + name + '?')) return;
+
+      try {
+        const res = await apiFetch('/api/admin/local-olts/' + id, { method: 'DELETE' });
+        if (res.success) {
+          showToast('OLT Eliminada', name + ' ha sido eliminada.', 'success');
+          if (state.currentLocalOltId === id) {
+            state.currentLocalOltId = '';
+          }
+          await loadLocalOltsData();
+        } else {
+          showToast('Error', res.error, 'error');
+        }
+      } catch (err) {
+        showToast('Error', err.message, 'error');
+      }
+    }
+
+    async function confirmClearAllLocalOlts() {
+      const msg = ['¿Estás seguro de vaciar TODAS las OLTs y ONUs de la base de datos?', '', 'Esto te permitirá probar todo el proceso de conexión a MikroTiks y OLTs completamente desde cero.'].join(String.fromCharCode(10));
+      if (!confirm(msg)) {
+        return;
+      }
+      try {
+        const res = await apiFetch('/api/admin/local-olts-all', { method: 'DELETE' });
+        if (res.success) {
+          showToast('Base de Datos Limpia', 'Se han borrado todas las OLTs y ONUs locales.', 'success');
+          state.localOlts = [];
+          state.currentLocalOltId = '';
+          state.localAutofindOnus = [];
+          state.localAuthorizedOnus = [];
+          await loadLocalOltsData();
+          switchLocalOltTab('olts');
+        } else {
+          showToast('Error', res.error, 'error');
+        }
       } catch (err) {
         showToast('Error', err.message, 'error');
       }
@@ -12032,9 +12342,11 @@ export function getAdminDashboardHtml(): string {
 
         const badge = document.getElementById('badge-tab-olt-autofind');
         const badgeNav = document.getElementById('badge-local-olts-autofind');
+        const kpiAutofind = document.getElementById('kpi-autofind-total');
         const count = state.localAutofindOnus.length;
         if (badge) { badge.innerText = count; badge.style.display = count > 0 ? 'inline-block' : 'none'; }
         if (badgeNav) { badgeNav.innerText = count; badgeNav.style.display = count > 0 ? 'inline-block' : 'none'; }
+        if (kpiAutofind) kpiAutofind.innerText = count;
       } catch (err) {
         if (tbody) tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #ef4444; padding: 20px;">Error al consultar autofind: ' + err.message + '</td></tr>';
       }
@@ -12131,10 +12443,18 @@ export function getAdminDashboardHtml(): string {
         const statOnline = document.getElementById('stat-olt-online');
         const statOffline = document.getElementById('stat-olt-offline');
         const statCrit = document.getElementById('stat-olt-critical');
+        const kpiOnus = document.getElementById('kpi-onus-total');
+        const kpiCrit = document.getElementById('kpi-onus-crit-badge');
+
         if (statTotal) statTotal.innerText = total;
         if (statOnline) statOnline.innerText = online;
         if (statOffline) statOffline.innerText = offline;
         if (statCrit) statCrit.innerText = critical;
+        if (kpiOnus) kpiOnus.innerText = total;
+        if (kpiCrit) {
+          kpiCrit.innerText = critical + ' Críticas';
+          kpiCrit.style.display = critical > 0 ? 'inline-block' : 'none';
+        }
 
         const badge = document.getElementById('badge-tab-olt-authorized');
         if (badge) { badge.innerText = total; badge.style.display = total > 0 ? 'inline-block' : 'none'; }
@@ -12224,45 +12544,71 @@ export function getAdminDashboardHtml(): string {
       });
     }
 
-    function openAddLocalOltModal() {
+    function openAddLocalOltModal(editId) {
+      const isEdit = !!editId;
+      const olt = isEdit ? state.localOlts.find(o => o.id === editId) : null;
+
       const html = 
-        '<div style="display: flex; flex-direction: column; gap: 12px;">' +
+        '<div style="display: flex; flex-direction: column; gap: 14px;">' +
+          '<div style="background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 8px; padding: 10px 14px; font-size: 12px; color: #bae6fd;">' +
+            '💡 <strong>Conexión SSH:</strong> El VPS llegará a esta IP privada a través del túnel WireGuard de tu MikroTik.' +
+          '</div>' +
           '<div>' +
-            '<label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">Nombre Identificador:</label>' +
-            '<input type="text" id="modal-olt-name" class="datatable-search-input" placeholder="Ej. OLT Fray, OLT Plomosas" style="width: 100%;">' +
+            '<label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">Nombre de la Central OLT:</label>' +
+            '<input type="text" id="modal-olt-name" class="datatable-search-input" placeholder="Ej. OLT Fray, OLT Plomosas, OLT Central" value="' + (olt ? olt.name : '') + '" style="width: 100%; font-size: 14px;">' +
           '</div>' +
           '<div style="display: grid; grid-template-columns: 2fr 1fr; gap: 10px;">' +
             '<div>' +
-              '<label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">IP Privada de la OLT:</label>' +
-              '<input type="text" id="modal-olt-ip" class="datatable-search-input" placeholder="Ej. 172.19.60.2" style="width: 100%; font-family: monospace;">' +
+              '<label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">Modelo / Marca OLT:</label>' +
+              '<input type="text" id="modal-olt-model" class="datatable-search-input" placeholder="TP-Link DeltaStream DS-P7001-01" value="' + (olt ? olt.model : 'TP-Link DeltaStream DS-P7001-01') + '" style="width: 100%;">' +
+            '</div>' +
+            '<div>' +
+              '<label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">Puertos GPON:</label>' +
+              '<input type="text" id="modal-olt-ports" class="datatable-search-input" value="' + (olt ? (olt.gpon_ports || '1/0/1') : '1/0/1') + '" style="width: 100%;">' +
+            '</div>' +
+          '</div>' +
+          '<div style="display: grid; grid-template-columns: 2fr 1fr; gap: 10px;">' +
+            '<div>' +
+              '<label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">IP Privada de la OLT (LAN):</label>' +
+              '<input type="text" id="modal-olt-ip" class="datatable-search-input" placeholder="Ej. 172.19.60.2" value="' + (olt ? olt.ip : '') + '" style="width: 100%; font-family: monospace; font-size: 13px;">' +
             '</div>' +
             '<div>' +
               '<label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">Puerto SSH:</label>' +
-              '<input type="number" id="modal-olt-port" class="datatable-search-input" value="22" style="width: 100%;">' +
+              '<input type="number" id="modal-olt-port" class="datatable-search-input" value="' + (olt ? (olt.port || 22) : 22) + '" style="width: 100%;">' +
             '</div>' +
           '</div>' +
           '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">' +
             '<div>' +
-              '<label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">Usuario:</label>' +
-              '<input type="text" id="modal-olt-user" class="datatable-search-input" value="admin" style="width: 100%;">' +
+              '<label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">Usuario SSH:</label>' +
+              '<input type="text" id="modal-olt-user" class="datatable-search-input" value="' + (olt ? olt.username : 'admin') + '" style="width: 100%;">' +
             '</div>' +
             '<div>' +
-              '<label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">Contraseña:</label>' +
-              '<input type="password" id="modal-olt-pass" class="datatable-search-input" value="CloudWare1991" style="width: 100%;">' +
+              '<label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">Contraseña SSH:</label>' +
+              '<input type="password" id="modal-olt-pass" class="datatable-search-input" value="' + (olt ? olt.password : 'CloudWare1991') + '" style="width: 100%;">' +
             '</div>' +
           '</div>' +
-          '<div>' +
-            '<label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">IP MikroTik WireGuard (Túnel):</label>' +
-            '<input type="text" id="modal-olt-wg-ip" class="datatable-search-input" placeholder="Ej. 10.200.0.2" style="width: 100%; font-family: monospace;">' +
+          '<hr style="border: none; border-top: 1px solid rgba(255,255,255,0.08); margin: 4px 0;">' +
+          '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">' +
+            '<div>' +
+              '<label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">Nombre del Router MikroTik:</label>' +
+              '<input type="text" id="modal-olt-mk-name" class="datatable-search-input" placeholder="Ej. RB-Fray, CCR-Plomosas" value="' + (olt ? (olt.mikrotik_name || '') : '') + '" style="width: 100%;">' +
+            '</div>' +
+            '<div>' +
+              '<label style="display: block; font-size: 12px; font-weight: 600; margin-bottom: 4px;">IP MikroTik WireGuard (Túnel):</label>' +
+              '<input type="text" id="modal-olt-wg-ip" class="datatable-search-input" placeholder="Ej. 10.200.0.2" value="' + (olt ? (olt.wireguard_client_ip || '') : '10.200.0.2') + '" style="width: 100%; font-family: monospace;">' +
+            '</div>' +
           '</div>' +
         '</div>';
 
-      openModal('Agregar Nueva OLT Local', html, async () => {
+      openModal((isEdit ? 'Editar Central OLT' : 'Registrar Nueva Central OLT & Nodo'), html, async () => {
         const name = document.getElementById('modal-olt-name')?.value?.trim();
+        const model = document.getElementById('modal-olt-model')?.value?.trim() || 'TP-Link DeltaStream DS-P7001-01';
+        const gpon_ports = document.getElementById('modal-olt-ports')?.value?.trim() || '1/0/1';
         const ip = document.getElementById('modal-olt-ip')?.value?.trim();
         const port = parseInt(document.getElementById('modal-olt-port')?.value || '22', 10);
         const username = document.getElementById('modal-olt-user')?.value?.trim() || 'admin';
         const password = document.getElementById('modal-olt-pass')?.value?.trim() || 'CloudWare1991';
+        const mikrotik_name = document.getElementById('modal-olt-mk-name')?.value?.trim() || '';
         const wireguard_client_ip = document.getElementById('modal-olt-wg-ip')?.value?.trim() || '';
 
         if (!name || !ip) {
@@ -12271,12 +12617,24 @@ export function getAdminDashboardHtml(): string {
         }
 
         try {
+          const payload = {
+            id: isEdit ? editId : undefined,
+            name,
+            model,
+            gpon_ports,
+            ip,
+            port,
+            username,
+            password,
+            mikrotik_name,
+            wireguard_client_ip
+          };
           const res = await apiFetch('/api/admin/local-olts', {
             method: 'POST',
-            body: JSON.stringify({ name, ip, port, username, password, wireguard_client_ip })
+            body: JSON.stringify(payload)
           });
           if (res.success) {
-            showToast('OLT Registrada', 'OLT "' + name + '" guardada con éxito.', 'success');
+            showToast('OLT Guardada', 'Central "' + name + '" guardada con éxito.', 'success');
             closeModal();
             state.currentLocalOltId = res.olt?.id || state.currentLocalOltId;
             await loadLocalOltsData();
@@ -12286,7 +12644,11 @@ export function getAdminDashboardHtml(): string {
         } catch (err) {
           showToast('Error', err.message, 'error');
         }
-      }, 'Guardar OLT');
+      }, isEdit ? 'Actualizar OLT' : 'Guardar OLT & Nodo');
+    }
+
+    function openEditLocalOltModal(id) {
+      openAddLocalOltModal(id);
     }
 
 

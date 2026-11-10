@@ -2887,6 +2887,17 @@ export class AdminController {
     }
   }
 
+  static async clearAllLocalOlts(_req: Request, res: Response): Promise<void> {
+    try {
+      const { LocalOltService } = await import('../services/local-olt.service');
+      await LocalOltService.clearAllData();
+      res.json({ success: true, message: 'Todas las OLTs y datos locales han sido eliminados' });
+    } catch (err: any) {
+      logger.error('Error al limpiar OLTs locales:', err);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  }
+
   static async testLocalOltConnection(req: Request, res: Response): Promise<void> {
     try {
       const { LocalOltService } = await import('../services/local-olt.service');
