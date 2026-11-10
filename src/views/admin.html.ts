@@ -7686,7 +7686,7 @@ export function getAdminDashboardHtml(): string {
 
         const res = await apiFetch('/api/smartolt/authorize', {
           method: 'POST',
-          body: JSON.stringify({ sn, olt_id: oltId, name, vlan, ip_address: ip }),
+          body: JSON.stringify({ sn, olt_id: oltId, name, vlan, ip_address: ip, line_profile: 'VLAN mapping' }),
         });
 
         if (res.success) {

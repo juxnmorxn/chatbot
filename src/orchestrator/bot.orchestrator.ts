@@ -6620,7 +6620,7 @@ export class BotOrchestrator {
    */
   private static readonly SMARTOLT_ZONES: { name: string; aliases: string[] }[] = [
     { name: 'San Agustin Tlaxiaca', aliases: ['san agustin tlaxiaca', 'san agustin', 'san agustín', 'tlaxiaca'] },
-    { name: 'San Diego canguihu\'ndo', aliases: ['san diego canguihu\'ndo', 'san diego canguihundo', 'canguihundo', 'canguihu\'ndo'] },
+    { name: 'San Diego canguihuindo', aliases: ['san diego canguihu\'ndo', 'san diego canguihundo', 'canguihundo', 'canguihu\'ndo'] },
     { name: 'San Jose Tepenene', aliases: ['san jose tepenene', 'san jose', 'tepenene'] },
     { name: 'Col. Tierra y Libertad', aliases: ['col. tierra y libertad', 'colonia tierra y libertad', 'tierra y libertad'] },
     { name: 'Col. Eulalio Angeles', aliases: ['col. eulalio angeles', 'colonia eulalio angeles', 'eulalio angeles'] },
@@ -6636,6 +6636,7 @@ export class BotOrchestrator {
     { name: 'El Porvenir', aliases: ['el porvenir', 'porvenir'] },
     { name: 'Canada Chica', aliases: ['canada chica', 'cañada chica'] },
     { name: 'La Estancia', aliases: ['la estancia', 'estancia'] },
+    { name: 'La Floresta', aliases: ['la floresta', 'floresta'] },
     { name: 'La Guadalupe', aliases: ['la guadalupe', 'guadalupe'] },
     { name: 'La Loma', aliases: ['la loma', 'loma'] },
     { name: 'La Pena', aliases: ['la pena', 'la peña', 'pena', 'peña'] },
@@ -6656,7 +6657,7 @@ export class BotOrchestrator {
     { name: 'Boxaxni', aliases: ['boxaxni'] },
     { name: 'Boxtha', aliases: ['boxtha'] },
     { name: 'Chicavasco', aliases: ['chicavasco'] },
-    { name: 'Cossiohayan', aliases: ['cossiohayan', 'cossio'] },
+    { name: 'Cosahuayan', aliases: ['cosahuayan', 'cossiohayan', 'cossio'] },
     { name: 'Dajiedhi', aliases: ['dajiedhi'] },
     { name: 'Daxtha', aliases: ['daxtha'] },
     { name: 'Huaxtho', aliases: ['huaxtho', 'huaxto'] },
@@ -6667,74 +6668,73 @@ export class BotOrchestrator {
   ];
 
   /**
-   * Resuelve una zona oficial de SmartOLT a partir de localidad, colonia, municipio y dirección.
-   * Si la localidad o comunidad no se encuentra en el catálogo oficial de SmartOLT,
-   * asigna automáticamente por defecto el Municipio correspondiente (ej: "Actopan", "El Arenal", "San Agustin Tlaxiaca", "San Jose Tepenene")
-   * evitando que se generen zonas no registradas en la OLT.
+   * Resuelve una zona oficial de SmartOLT a partir de la COLONIA o MUNICIPIO.
+   * REGLAS CRÍTICAS:
+   * 1. Prioridad absoluta a la COLONIA (la casilla arriba de "Colonia"). NUNCA toma la calle ni la dirección.
+   * 2. Si no coincide con una comunidad registrada, asigna el Municipio oficial (Actopan, El Arenal, San Agustin Tlaxiaca, San Jose Tepenene).
+   * 3. NUNCA inventa ni crea zonas nuevas en SmartOLT. El valor retornado siempre existe en SmartOLT.
    */
   public static resolverZonaOMunicipio(
-    localidad?: string | null,
-    colonia?: string | null,
-    municipio?: string | null,
-    direccion?: string | null
+    coloniaRaw?: string | null,
+    municipioRaw?: string | null,
+    localidadRaw?: string | null
   ): string {
-    const combined = `${localidad || ''} ${colonia || ''} ${municipio || ''} ${direccion || ''}`.toLowerCase();
-    const cleanCombined = normalizeText(combined);
+    // 1. REGLA ESTRICTA: Evaluar PRIMERO la Colonia o Localidad (NUNCA incluir calle ni dirección)
+    const coloniaText = normalizeText(`${coloniaRaw || ''} ${localidadRaw || ''}`.trim());
 
-    // 1. Verificar primero si coincide exactamente con alguna zona específica del catálogo de SmartOLT
-    for (const item of this.SMARTOLT_ZONES) {
-      // Omitir los municipios genéricos en la primera pasada para dar prioridad a comunidades específicas (ej: Chicavasco, Bothibaji)
-      if (['Actopan', 'El Arenal', 'San Agustin Tlaxiaca', 'San Jose Tepenene'].includes(item.name)) {
-        continue;
-      }
-      for (const alias of item.aliases) {
-        const cleanAlias = normalizeText(alias);
-        const regex = new RegExp(`\\b${cleanAlias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
-        if (regex.test(cleanCombined)) {
-          return item.name;
+    if (coloniaText) {
+      for (const item of this.SMARTOLT_ZONES) {
+        // Omitir municipios genéricos en la primera pasada para dar prioridad a comunidades específicas (ej: La Loma, Bothibaji)
+        if (['Actopan', 'El Arenal', 'San Agustin Tlaxiaca', 'San Jose Tepenene'].includes(item.name)) {
+          continue;
+        }
+        for (const alias of item.aliases) {
+          const cleanAlias = normalizeText(alias);
+          const regex = new RegExp(`\\b${cleanAlias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i');
+          if (regex.test(coloniaText)) {
+            return item.name;
+          }
         }
       }
     }
 
-    // 2. Si no coincide con una comunidad registrada, asignar el Municipio correspondiente por defecto:
+    // 2. Si la colonia no coincide con una comunidad específica, evaluar el Municipio / Zona
+    const combinedMuni = normalizeText(`${municipioRaw || ''} ${coloniaText}`.trim());
+
     if (
-      cleanCombined.includes('arenal') ||
-      cleanCombined.includes('el arenal') ||
-      cleanCombined.includes('ojo de agua') ||
-      cleanCombined.includes('san jeronimo') ||
-      cleanCombined.includes('bocja') ||
-      cleanCombined.includes('meje')
+      combinedMuni.includes('arenal') ||
+      combinedMuni.includes('el arenal') ||
+      combinedMuni.includes('ojo de agua') ||
+      combinedMuni.includes('san jeronimo') ||
+      combinedMuni.includes('bocja') ||
+      combinedMuni.includes('meje')
     ) {
       return 'El Arenal';
     }
 
     if (
-      cleanCombined.includes('san agustin') ||
-      cleanCombined.includes('tlaxiaca') ||
-      cleanCombined.includes('san agustin tlaxiaca')
+      combinedMuni.includes('san agustin') ||
+      combinedMuni.includes('tlaxiaca') ||
+      combinedMuni.includes('san agustin tlaxiaca')
     ) {
       return 'San Agustin Tlaxiaca';
     }
 
     if (
-      cleanCombined.includes('san jose') ||
-      cleanCombined.includes('tepenene')
+      combinedMuni.includes('san jose') ||
+      combinedMuni.includes('tepenene')
     ) {
       return 'San Jose Tepenene';
     }
 
     if (
-      cleanCombined.includes('santiago') ||
-      cleanCombined.includes('zaragoza')
+      combinedMuni.includes('santiago') ||
+      combinedMuni.includes('zaragoza')
     ) {
       return 'zaragoza- santiago';
     }
 
-    if (cleanCombined.includes('actopan')) {
-      return 'Actopan';
-    }
-
-    // 3. Por defecto absoluto para localidades no reconocidas: Municipio de Actopan
+    // 3. Por defecto absoluto para localidades no reconocidas: Municipio de Actopan (NUNCA crear zona nueva)
     return 'Actopan';
   }
 
@@ -10412,12 +10412,11 @@ _(O indica un cambio, ej: cambiar paquete 60 megas)_`;
     }
     const clientName = rawCliente || (folio ? `Folio-${folio}` : 'Cliente-Nuevo');
 
-    // 2. Resolver Zona o Municipio por defecto (ej: Actopan, El Arenal, San Agustín Tlaxiaca, San José Tepenene)
+    // 2. Resolver Zona o Municipio a partir de la COLONIA (NUNCA usar calle/dirección)
     const targetZone = this.resolverZonaOMunicipio(
       datos.colonia,
       datos.municipio_zona,
-      datos.municipio_zona,
-      datos.direccion
+      datos.colonia
     );
 
     // 3. Normalizar Plan y Perfiles
@@ -10425,6 +10424,7 @@ _(O indica un cambio, ej: cambiar paquete 60 megas)_`;
     const planDisplay = planRaw.replace(/MB|M/i, ' Megas');
 
     // 4. Guardar borrador en la sesión para esperar los dígitos del SN del técnico
+    const detectedContractSn = (datos.sn || '').trim().toUpperCase();
     let metaObj: any = {};
     try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
     metaObj.pendingActivation = null;
@@ -10437,8 +10437,9 @@ _(O indica un cambio, ej: cambiar paquete 60 megas)_`;
       paquete: planRaw,
       direccion: datos.direccion || '',
       modelo: datos.modelo || 'EG8041V5',
+      sn: detectedContractSn || null,
     };
-    metaObj.targetSn = null;
+    metaObj.targetSn = detectedContractSn || null;
 
     this.cancelarPollingOnu(phone);
 
@@ -10448,7 +10449,13 @@ _(O indica un cambio, ej: cambiar paquete 60 megas)_`;
       metadata: JSON.stringify(metaObj),
     });
 
-    const cardDraftMsg = `*Contrato Detectado por IA*\n• *Folio:* *${folio || 'S/F'}*\n• *Cliente:* *${clientName}*\n• *Zona:* ${targetZone}\n• *Paquete:* ${planDisplay}\n• *Dirección:* ${datos.direccion || 'Registrada en contrato'}\n\nEscribe los dígitos del *módem (SN)* para vincularlo (ej: \`4484\`):`;
+    let snPrompt = 'Escribe los dígitos del *módem (SN)* para vincularlo (ej: `4484`):';
+    if (detectedContractSn) {
+      const suffix = detectedContractSn.length >= 6 ? detectedContractSn.slice(-6) : detectedContractSn;
+      snPrompt = `Detectamos serie en contrato: *\`${suffix}\`*\nEscribe este SN o los últimos dígitos para vincularlo:`;
+    }
+
+    const cardDraftMsg = `*Contrato Detectado por IA*\n• *Folio:* *${folio || 'S/F'}*\n• *Cliente:* *${clientName}*\n• *Zona:* ${targetZone}\n• *Paquete:* ${planDisplay}\n• *Dirección:* ${datos.direccion || 'Registrada en contrato'}\n\n${snPrompt}`;
 
     await this.enviarYLoguear(
       phone,

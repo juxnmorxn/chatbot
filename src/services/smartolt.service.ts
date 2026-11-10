@@ -162,6 +162,84 @@ export class SmartOLTService {
   private static lastUrl: string = '';
   private static lastKey: string = '';
 
+  // Catálogo estricto de zonas registradas en SmartOLT para evitar que cree zonas nuevas
+  public static readonly SMARTOLT_VALID_ZONES: string[] = [
+    '20 de Noviembre',
+    'Actopan',
+    'Arenal',
+    'Bothibaji',
+    'Boxaxni',
+    'Boxtha',
+    'Canada Chica',
+    'Canguihuindo',
+    'Chicavasco',
+    'Col. Aviacion',
+    'Col. La Estacion',
+    'Col. Tierra y Libertad',
+    'Cosahuayan',
+    'Dajiedhi',
+    'Daxtha',
+    'Dos cerritos',
+    'El Arenal',
+    'El Cerrito',
+    'El Meje',
+    'El Nogal',
+    'El Porvenir',
+    'Fracc. Nuevo Actopan',
+    'Fray Francisco',
+    'Fundicion baja',
+    'Guzman Mayer',
+    'Huaxtho',
+    'Jesus Luz Meneses',
+    'Jiadi',
+    'La 27',
+    'La Estancia',
+    'La Floresta',
+    'La Guadalupe',
+    'La Loma',
+    'La Pena',
+    'Los Olivos',
+    'Palomo',
+    'Parque Urbano',
+    'Pozo Grande',
+    'Rincon',
+    'Rinkon',
+    'San Agustin Tlaxiaca',
+    'San Diego canguihuindo',
+    'San Jose Tepenene',
+    'Sta. Monica',
+    'Unidad deportiva',
+    'Xideje',
+    'zaragoza- santiago',
+  ];
+
+  /**
+   * Valida estrictamente que la zona exista en el catálogo oficial de SmartOLT.
+   * Si no existe o viene vacía, asigna por defecto 'Actopan' (o 'San Agustin Tlaxiaca' para OLT 2).
+   * Previene que SmartOLT cree zonas nuevas o no reconocidas.
+   */
+  public static validateSmartOltZone(zone?: string | null, oltId?: string | number): string {
+    const defaultZone = String(oltId) === '2' ? 'San Agustin Tlaxiaca' : 'Actopan';
+    if (!zone || typeof zone !== 'string') return defaultZone;
+
+    const trimmed = zone.trim();
+    // 1. Coincidencia exacta insensible a mayúsculas
+    const match = this.SMARTOLT_VALID_ZONES.find(
+      z => z.toLowerCase() === trimmed.toLowerCase()
+    );
+    if (match) return match;
+
+    // 2. Coincidencia normalizada sin acentos
+    const norm = trimmed.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    for (const validZone of this.SMARTOLT_VALID_ZONES) {
+      const validNorm = validZone.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      if (validNorm === norm) return validZone;
+    }
+
+    logger.warn(`[SmartOLT] Zona "${zone}" no pertenece al catálogo oficial. Asignando "${defaultZone}" para no crear zonas nuevas en SmartOLT.`);
+    return defaultZone;
+  }
+
   // Caché de catálogo de perfiles de velocidad oficial de SmartOLT (TTL 30 minutos)
   private static speedProfilesCatalog: SpeedProfileItem[] = [];
   private static lastSpeedProfilesFetch: number = 0;
@@ -661,12 +739,12 @@ export class SmartOLTService {
   static async authorizeOnu(payload: AuthorizeOnuPayload): Promise<AuthorizeOnuResult> {
     const cleanName = this.normalizeSmartOltString(payload.name);
     const cleanAddress = this.normalizeSmartOltString(payload.address);
-    const cleanZone = this.normalizeSmartOltString(payload.zone);
+    const cleanZone = this.validateSmartOltZone(this.normalizeSmartOltString(payload.zone), payload.olt_id);
     const cleanComment = this.normalizeSmartOltString(payload.comment);
     const cleanSn = String(payload.sn).trim().toUpperCase();
     const cleanOnuType = this.normalizeOnuType(payload.onu_type, cleanSn);
 
-    logger.info(`Iniciando autorización en SmartOLT para SN: ${cleanSn}, Modelo: ${cleanOnuType}, Cliente: "${cleanName}", OLT: ${payload.olt_id}, VLAN: ${payload.vlan}, IP: ${payload.ip_address}`);
+    logger.info(`Iniciando autorización en SmartOLT para SN: ${cleanSn}, Modelo: ${cleanOnuType}, Cliente: "${cleanName}", OLT: ${payload.olt_id}, VLAN: ${payload.vlan}, IP: ${payload.ip_address}, Zona: "${cleanZone}"`);
     const apiKey = this.getApiKey();
 
     if (!apiKey || apiKey.includes('tu_token')) {
@@ -675,7 +753,7 @@ export class SmartOLTService {
         success: true,
         message: `ONU ${cleanSn} autorizada exitosamente en modo simulación (${cleanOnuType}). IP asignada: ${payload.ip_address}, VLAN: ${payload.vlan}`,
         onu_id: `SIM-${cleanSn}`,
-        details: { ...payload, name: cleanName, onu_type: cleanOnuType },
+        details: { ...payload, name: cleanName, onu_type: cleanOnuType, zone: cleanZone },
       };
     }
 
@@ -713,16 +791,17 @@ export class SmartOLTService {
       form.append('dns1', effectiveDns1);
       form.append('dns2', effectiveDns2);
       
-      // Perfiles de velocidad y Line-Profile VLAN mapping obligatorio (evitar PRIO mapping por defecto)
-      form.append('line_profile', 'VLAN mapping');
+      // Perfiles de velocidad y Line-Profile VLAN mapping obligatorio (NUNCA PRIO mapping)
+      const lineProfileVlan = 'VLAN mapping - better than Generic profiles';
+      form.append('line_profile', lineProfileVlan);
       form.append('line_profile_mode', 'VLAN mapping');
-      form.append('line_profile_name', 'VLAN mapping - better than Generic profiles');
-      form.append('custom_line_profile', 'VLAN mapping - better than Generic profiles');
-      form.append('use_custom_profile', '1');
+      form.append('line_profile_name', lineProfileVlan);
+      form.append('huawei_line_profile', lineProfileVlan);
+      form.append('use_custom_profile', '0'); // 0 = Desmarcado para activar el Line-profile nativo Huawei (VLAN mapping)
       form.append('download_speed_profile_name', String(payload.download_speed_profile_name || '40MB-DOWN'));
       form.append('upload_speed_profile_name', String(payload.upload_speed_profile_name || '40MB-UP'));
       if (cleanAddress) form.append('address', cleanAddress);
-      if (cleanZone) form.append('zone', cleanZone);
+      form.append('zone', cleanZone);
       if (cleanComment) form.append('comment', cleanComment);
 
       const response = await api.post('/onu/authorize_onu', form);
