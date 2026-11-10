@@ -3816,8 +3816,12 @@ export function getAdminDashboardHtml(): string {
           <div class="subnav-tabs" role="tablist">
             <button id="btn-olt-tab-olts" class="subnav-tab active" onclick="switchLocalOltTab('olts')" role="tab" aria-selected="true">
               <svg class="subnav-icon" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2"></rect><rect x="2" y="14" width="20" height="8" rx="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line><circle cx="17" cy="6" r="1.5"></circle><circle cx="17" cy="18" r="1.5"></circle></svg>
-              <span>Centrales OLTs & MikroTiks</span>
+              <span>Infraestructura & Nodos</span>
               <span id="badge-tab-olt-total" class="subnav-badge" style="display: none;">0</span>
+            </button>
+            <button id="btn-olt-tab-mikrotik" class="subnav-tab" onclick="switchLocalOltTab('mikrotik')" role="tab" aria-selected="false">
+              <svg class="subnav-icon" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+              <span>Conexión MikroTik & Túnel</span>
             </button>
             <button id="btn-olt-tab-autofind" class="subnav-tab" onclick="switchLocalOltTab('autofind')" role="tab" aria-selected="false">
               <svg class="subnav-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 14 14"></polyline></svg>
@@ -3826,25 +3830,27 @@ export function getAdminDashboardHtml(): string {
             </button>
             <button id="btn-olt-tab-authorized" class="subnav-tab" onclick="switchLocalOltTab('authorized')" role="tab" aria-selected="false">
               <svg class="subnav-icon" viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-              <span>ONUs Autorizadas & Niveles Ópticos</span>
+              <span>ONUs Autorizadas & Potencia</span>
               <span id="badge-tab-olt-authorized" class="subnav-badge" style="display: none;">0</span>
-            </button>
-            <button id="btn-olt-tab-mikrotik" class="subnav-tab" onclick="switchLocalOltTab('mikrotik')" role="tab" aria-selected="false">
-              <svg class="subnav-icon" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
-              <span>Script MikroTik & Túnel</span>
             </button>
           </div>
           <div class="subnav-actions">
             <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-              <select id="select-active-local-olt" class="datatable-select" onchange="handleSelectLocalOlt(this.value)" style="font-weight: 600; min-width: 170px;">
-                <option value="">Cargando OLTs...</option>
-              </select>
-              <span id="pill-active-olt-status" class="live-status-pill" style="display: none;"></span>
-              <button class="btn btn-secondary btn-xs" onclick="testActiveLocalOlt()" title="Probar conexión SSH a la OLT seleccionada">
-                <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path></svg>
-                <span>Probar SSH</span>
-              </button>
-              <button class="btn btn-primary btn-xs" onclick="openAddLocalOltModal()" title="Agregar nueva OLT o Nodo">
+              <!-- OLT selector only shown when in Autofind or Authorized views -->
+              <div id="subnav-olt-selector-group" style="display: none; align-items: center; gap: 6px;">
+                <label style="font-size: 11px; color: var(--text-muted); font-weight: 600;">OLT Activa:</label>
+                <select id="select-active-local-olt" class="datatable-select" onchange="handleSelectLocalOlt(this.value)" style="font-weight: 600; min-width: 170px;">
+                  <option value="">Sin OLTs</option>
+                </select>
+                <span id="pill-active-olt-status" class="live-status-pill" style="display: none;"></span>
+                <button class="btn btn-secondary btn-xs" onclick="testActiveLocalOlt()" title="Probar conexión SSH">
+                  <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path></svg>
+                  <span>Probar</span>
+                </button>
+              </div>
+
+              <!-- Main actions -->
+              <button class="btn btn-primary btn-xs" onclick="openAddLocalOltModal()" title="Registrar nueva OLT y RouterBOARD">
                 <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                 <span>+ Nueva OLT</span>
               </button>
@@ -3852,7 +3858,7 @@ export function getAdminDashboardHtml(): string {
                 <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"></path></svg>
                 <span>Refrescar</span>
               </button>
-              <button class="btn btn-danger btn-xs" onclick="confirmClearAllLocalOlts()" title="Borrar todas las OLTs y ONUs para empezar desde 0" style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.35); color: #f87171;">
+              <button class="btn btn-danger btn-xs" onclick="confirmClearAllLocalOlts()" title="Vaciar base de datos para empezar de 0" style="background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171;">
                 <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                 <span>Vaciar Todo</span>
               </button>
@@ -3860,63 +3866,58 @@ export function getAdminDashboardHtml(): string {
           </div>
         </div>
 
-        <!-- GLOBAL NOC KPI CARDS -->
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; margin-bottom: 18px;">
-          <div class="metric-card" style="padding: 14px 18px; border-left: 4px solid #38bdf8;">
-            <div style="font-size: 11.5px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Centrales OLTs</div>
-            <div style="display: flex; align-items: baseline; gap: 8px; margin-top: 4px;">
-              <span id="kpi-olts-total" style="font-size: 26px; font-weight: 800; color: #f8fafc;">0</span>
-              <span id="kpi-olts-online-badge" class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; font-weight: 600;">0 Online</span>
-            </div>
-            <div style="font-size: 11px; color: var(--text-dim); margin-top: 3px;">Equipos GPON (DeltaStream / Otros)</div>
-          </div>
-          <div class="metric-card" style="padding: 14px 18px; border-left: 4px solid #818cf8;">
-            <div style="font-size: 11.5px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Nodos MikroTik (Túneles)</div>
-            <div style="display: flex; align-items: baseline; gap: 8px; margin-top: 4px;">
-              <span id="kpi-mks-total" style="font-size: 26px; font-weight: 800; color: #818cf8;">0</span>
-              <span class="badge" style="background: rgba(129, 140, 248, 0.15); color: #818cf8;">WireGuard 10.200.0.x</span>
-            </div>
-            <div style="font-size: 11px; color: var(--text-dim); margin-top: 3px;">RouterBOARDs conectadas al VPS</div>
-          </div>
-          <div class="metric-card" style="padding: 14px 18px; border-left: 4px solid #10b981;">
-            <div style="font-size: 11.5px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">ONUs en Servicio</div>
-            <div style="display: flex; align-items: baseline; gap: 8px; margin-top: 4px;">
-              <span id="kpi-onus-total" style="font-size: 26px; font-weight: 800; color: #10b981;">0</span>
-              <span id="kpi-onus-crit-badge" class="badge" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; display: none;">0 Críticas</span>
-            </div>
-            <div style="font-size: 11px; color: var(--text-dim); margin-top: 3px;">Módems autorizados en la central</div>
-          </div>
-          <div class="metric-card" style="padding: 14px 18px; border-left: 4px solid #f59e0b;">
-            <div style="font-size: 11.5px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Autofind en Espera</div>
-            <div style="display: flex; align-items: baseline; gap: 8px; margin-top: 4px;">
-              <span id="kpi-autofind-total" style="font-size: 26px; font-weight: 800; color: #f59e0b;">0</span>
-              <span class="badge" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b;">Sin Autorizar</span>
-            </div>
-            <div style="font-size: 11px; color: var(--text-dim); margin-top: 3px;">Módems conectados a la fibra</div>
-          </div>
-        </div>
-
         <!-- SUBTAB 0: LISTA DE OLTS Y MIKROTIKS (DEFAULT) -->
         <div id="olt-tab-olts-content" class="olt-tab-content">
+          <!-- EXECUTIVE KPI CARDS (Only on infrastructure overview) -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; margin-bottom: 18px;">
+            <div class="metric-card" style="padding: 14px 18px; border-left: 4px solid #38bdf8;">
+              <div style="font-size: 11.5px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Centrales OLTs</div>
+              <div style="display: flex; align-items: baseline; gap: 8px; margin-top: 4px;">
+                <span id="kpi-olts-total" style="font-size: 26px; font-weight: 800; color: #f8fafc;">0</span>
+                <span id="kpi-olts-online-badge" class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; font-weight: 600;">0 Online</span>
+              </div>
+              <div style="font-size: 11px; color: var(--text-dim); margin-top: 3px;">Equipos GPON (DeltaStream / Otros)</div>
+            </div>
+            <div class="metric-card" style="padding: 14px 18px; border-left: 4px solid #818cf8;">
+              <div style="font-size: 11.5px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Nodos MikroTik (Túneles)</div>
+              <div style="display: flex; align-items: baseline; gap: 8px; margin-top: 4px;">
+                <span id="kpi-mks-total" style="font-size: 26px; font-weight: 800; color: #818cf8;">0</span>
+                <span class="badge" style="background: rgba(129, 140, 248, 0.15); color: #818cf8;">WireGuard 10.200.0.x</span>
+              </div>
+              <div style="font-size: 11px; color: var(--text-dim); margin-top: 3px;">RouterBOARDs conectadas al VPS</div>
+            </div>
+            <div class="metric-card" style="padding: 14px 18px; border-left: 4px solid #10b981;">
+              <div style="font-size: 11.5px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">ONUs en Servicio</div>
+              <div style="display: flex; align-items: baseline; gap: 8px; margin-top: 4px;">
+                <span id="kpi-onus-total" style="font-size: 26px; font-weight: 800; color: #10b981;">0</span>
+                <span id="kpi-onus-crit-badge" class="badge" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; display: none;">0 Críticas</span>
+              </div>
+              <div style="font-size: 11px; color: var(--text-dim); margin-top: 3px;">Módems autorizados en la central</div>
+            </div>
+            <div class="metric-card" style="padding: 14px 18px; border-left: 4px solid #f59e0b;">
+              <div style="font-size: 11.5px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Autofind en Espera</div>
+              <div style="display: flex; align-items: baseline; gap: 8px; margin-top: 4px;">
+                <span id="kpi-autofind-total" style="font-size: 26px; font-weight: 800; color: #f59e0b;">0</span>
+                <span class="badge" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b;">Sin Autorizar</span>
+              </div>
+              <div style="font-size: 11px; color: var(--text-dim); margin-top: 3px;">Módems conectados a la fibra</div>
+            </div>
+          </div>
+
           <div class="glass-card">
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
               <div>
-                <h4 style="margin: 0; font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px;">
-                  <span>Infraestructura GPON & Nodos MikroTik</span>
-                  <span id="badge-total-olts-inline" class="badge" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8;">0 Centrales</span>
+                <h4 style="margin: 0; font-size: 16px; font-weight: 700;">
+                  Centrales OLTs y Nodos MikroTik Registrados
                 </h4>
                 <p style="margin: 4px 0 0; font-size: 12px; color: var(--text-muted);">
-                  Topología: <code>VPS CloudWare (2.25.241.239)</code> &larr; <em>Túnel WireGuard (10.200.0.X)</em> &rarr; <code>Router MikroTik</code> &larr; <em>LAN Privada</em> &rarr; <code>OLT DeltaStream</code>
+                  Topología: <code>VPS CloudWare (2.25.241.239)</code> &larr; <em>WireGuard (10.200.0.X)</em> &rarr; <code>Router MikroTik</code> &larr; <em>LAN Privada</em> &rarr; <code>OLT DeltaStream</code>
                 </p>
               </div>
-              <div style="display: flex; align-items: center; gap: 8px;">
-                <button class="btn btn-secondary btn-sm" onclick="testAllLocalOlts()" title="Probar conexión SSH a todas las OLTs">
+              <div>
+                <button class="btn btn-secondary btn-sm" onclick="testAllLocalOlts()" title="Probar conexión SSH a todas las OLTs registradas">
                   <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path></svg>
                   <span>Probar Todas</span>
-                </button>
-                <button class="btn btn-primary btn-sm" onclick="openAddLocalOltModal()">
-                  <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                  <span>+ Agregar OLT / Nodo</span>
                 </button>
               </div>
             </div>
@@ -3945,7 +3946,90 @@ export function getAdminDashboardHtml(): string {
           </div>
         </div>
 
-        <!-- SUBTAB 1: AUTOFIND ONUS -->
+        <!-- SUBTAB 1: CONEXIÓN MIKROTIK & TÚNEL (SEGUNDA PESTAÑA) -->
+        <div id="olt-tab-mikrotik-content" class="olt-tab-content" style="display: none;">
+          <div class="glass-card" style="max-width: 1000px; margin: 0 auto;">
+            <div style="margin-bottom: 16px;">
+              <h4 style="margin: 0; font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+                <span>Generador de Script MikroTik RouterOS (v7)</span>
+                <span class="badge" style="background: rgba(14, 165, 233, 0.15); color: #38bdf8;">WireGuard VPN</span>
+              </h4>
+              <p style="margin: 4px 0 0; font-size: 12px; color: var(--text-muted); line-height: 1.5;">
+                Genera al instante el script para conectar cualquier router MikroTik al VPS. No requiere OLT creada previamente. Pégalo en New Terminal de Winbox.
+              </p>
+            </div>
+
+            <!-- Config parameters bar -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 14px; margin-bottom: 16px;">
+              <div>
+                <label style="display: block; font-size: 11.5px; font-weight: 600; color: var(--text-muted); margin-bottom: 4px;">Asociar a OLT (Opcional):</label>
+                <select id="select-script-olt" class="datatable-select" onchange="handleScriptOltChange(this.value)" style="width: 100%;">
+                  <option value="manual">Manual / Nuevo MikroTik</option>
+                </select>
+              </div>
+              <div>
+                <label style="display: block; font-size: 11.5px; font-weight: 600; color: var(--text-muted); margin-bottom: 4px;">Nombre del RouterBOARD:</label>
+                <input type="text" id="input-script-mk-name" class="datatable-search-input" value="RB-Fray" oninput="updateScriptPreview()" style="width: 100%;">
+              </div>
+              <div>
+                <label style="display: block; font-size: 11.5px; font-weight: 600; color: var(--text-muted); margin-bottom: 4px;">IP Túnel WireGuard (MikroTik):</label>
+                <input type="text" id="input-olt-tunnel-ip" class="datatable-search-input" value="10.200.0.2/24" oninput="updateScriptPreview()" style="width: 100%; font-family: monospace;">
+              </div>
+              <div>
+                <label style="display: block; font-size: 11.5px; font-weight: 600; color: var(--text-muted); margin-bottom: 4px;">Subred LAN de la OLT a alcanzar:</label>
+                <input type="text" id="input-script-olt-subnet" class="datatable-search-input" value="172.19.60.0/24" oninput="updateScriptPreview()" style="width: 100%; font-family: monospace;">
+              </div>
+            </div>
+
+            <!-- Script output box with copy button -->
+            <div style="position: relative;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+                <span style="font-size: 11.5px; color: var(--text-muted); font-weight: 600;">Comandos de RouterOS v7 listos para ejecutar:</span>
+                <button class="btn btn-primary btn-sm" onclick="copyActiveMikrotikScript()">
+                  <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                  <span>Copiar Script</span>
+                </button>
+              </div>
+              <pre id="code-mikrotik-script" style="background: rgba(0, 0, 0, 0.55); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 8px; padding: 14px; font-family: 'JetBrains Mono', Consolas, monospace; font-size: 12px; color: #a5f3fc; overflow-x: auto; white-space: pre-wrap; line-height: 1.5; margin: 0; min-height: 180px;">Generando script...</pre>
+            </div>
+
+            <!-- DIAGNÓSTICO PING EN VIVO DESDE VPS -->
+            <div style="margin-top: 18px; padding: 14px 18px; background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 8px;">
+              <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 10px;">
+                <div>
+                  <h5 style="margin: 0; font-size: 13px; font-weight: 700; color: #34d399; display: flex; align-items: center; gap: 6px;">
+                    <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+                    <span>Herramienta de Diagnóstico: Probar Ping en Vivo desde VPS</span>
+                  </h5>
+                  <p style="margin: 2px 0 0; font-size: 11.5px; color: var(--text-dim);">
+                    Verifica si el VPS puede comunicarse con la IP de tu MikroTik o de tu OLT tras pegar el script.
+                  </p>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <input type="text" id="input-live-ping-ip" class="datatable-search-input" placeholder="Ej. 10.200.0.2 o 172.19.60.2" value="10.200.0.2" style="width: 190px; font-family: monospace;">
+                  <button class="btn btn-secondary btn-sm" onclick="executeLivePing()">
+                    <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path></svg>
+                    <span>Enviar Ping</span>
+                  </button>
+                </div>
+              </div>
+              <div id="box-live-ping-result" style="display: none; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; padding: 10px 12px; font-family: monospace; font-size: 11.5px; color: #e2e8f0; white-space: pre-wrap;"></div>
+            </div>
+
+            <!-- Instructions -->
+            <div style="margin-top: 14px; padding: 12px 16px; background: rgba(14, 165, 233, 0.08); border: 1px solid rgba(14, 165, 233, 0.2); border-radius: 8px; font-size: 12px; color: #bae6fd;">
+              <strong>💡 Pasos para conectar:</strong>
+              <ol style="margin: 6px 0 0 18px; padding: 0; line-height: 1.6;">
+                <li>Pega el script arriba en la Terminal de tu MikroTik (RouterOS v7).</li>
+                <li>La terminal te imprimirá su <code>public-key</code>.</li>
+                <li>Agrégala al VPS con: <code>wg set wg0 peer &lt;PUBLIC_KEY&gt; allowed-ips 10.200.0.X/32,172.19.X.0/24</code></li>
+                <li>Usa la herramienta de ping arriba para confirmar la conectividad y luego registra tu OLT.</li>
+              </ol>
+            </div>
+          </div>
+        </div>
+
+        <!-- SUBTAB 2: AUTOFIND ONUS -->
         <div id="olt-tab-autofind-content" class="olt-tab-content" style="display: none;">
           <div class="glass-card">
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
@@ -3994,7 +4078,7 @@ export function getAdminDashboardHtml(): string {
           </div>
         </div>
 
-        <!-- SUBTAB 2: ONUS AUTORIZADAS Y NIVELES ÓPTICOS -->
+        <!-- SUBTAB 3: ONUS AUTORIZADAS Y NIVELES ÓPTICOS -->
         <div id="olt-tab-authorized-content" class="olt-tab-content" style="display: none;">
           <div class="glass-card">
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
@@ -4055,240 +4139,6 @@ export function getAdminDashboardHtml(): string {
                 </thead>
                 <tbody id="table-olt-authorized-body">
                   <tr><td colspan="8" style="text-align: center; color: var(--text-dim); padding: 24px;">Cargando ONUs de la OLT...</td></tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        <!-- SUBTAB 3: SCRIPT MIKROTIK & TUNEL -->
-        <div id="olt-tab-mikrotik-content" class="olt-tab-content" style="display: none;">
-          <div class="glass-card" style="max-width: 900px; margin: 0 auto;">
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 10px;">
-              <div>
-                <h4 style="margin: 0; font-size: 15px; font-weight: 700;">Script de Enlace MikroTik RouterOS (v7)</h4>
-                <p style="margin: 3px 0 0; font-size: 12px; color: var(--text-muted);">
-                  Copia y pega este comando en la terminal de tu RouterBOARD para conectar esta OLT al túnel del VPS.
-                </p>
-              </div>
-              <div style="display: flex; align-items: center; gap: 8px;">
-                <label style="font-size: 12px; color: var(--text-muted);">IP Túnel:</label>
-                <input type="text" id="input-olt-tunnel-ip" class="datatable-search-input" value="10.200.0.4/24" style="width: 130px; font-family: monospace;" onchange="reloadMikrotikScript()">
-                <button class="btn btn-primary btn-sm" onclick="copyActiveMikrotikScript()">
-                  <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-                  <span>Copiar Script</span>
-                </button>
-              </div>
-            </div>
-
-            <div style="position: relative; margin-top: 10px;">
-              <pre id="code-mikrotik-script" style="background: rgba(0, 0, 0, 0.45); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; padding: 14px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #a5f3fc; overflow-x: auto; white-space: pre-wrap; line-height: 1.5;">Cargando script...</pre>
-            </div>
-
-            <div style="margin-top: 16px; padding: 12px 16px; background: rgba(14, 165, 233, 0.1); border: 1px solid rgba(14, 165, 233, 0.25); border-radius: 8px; font-size: 12px; color: #bae6fd;">
-              <strong>💡 Pasos para conectar:</strong>
-              <ol style="margin: 6px 0 0 18px; padding: 0;">
-                <li>Pega el script arriba en la Terminal de tu MikroTik (RouterOS v7).</li>
-                <li>La terminal te imprimirá su <code>public-key</code>.</li>
-                <li>Agrégala al VPS con: <code>wg set wg0 peer &lt;PUBLIC_KEY&gt; allowed-ips 10.200.0.X/32,172.19.X.0/24</code></li>
-                <li>¡Listo! El bot y este panel ya tendrán acceso privado directo a la IP de la OLT.</li>
-              </ol>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- VIEW 6: PERSONAL & ACCESOS (USUARIOS PANEL + TÉCNICOS & PINS) -->
-      <section id="view-personal" class="view-container">
-        <div class="subnav-header">
-          <div class="subnav-tabs" role="tablist">
-            <button id="btn-personal-tab-techs" class="subnav-tab active" onclick="switchPersonalTab('techs')" role="tab" aria-selected="true">
-              <svg class="subnav-icon" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
-              <span>Técnicos & PINs</span>
-            </button>
-            <button id="btn-personal-tab-groups" class="subnav-tab" onclick="switchPersonalTab('groups')" role="tab" aria-selected="false">
-              <svg class="subnav-icon" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
-              <span>Grupos de WhatsApp</span>
-            </button>
-            <button id="btn-personal-tab-users" class="subnav-tab" onclick="switchPersonalTab('users')" role="tab" aria-selected="false">
-              <svg class="subnav-icon" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-              <span>Usuarios del Panel</span>
-            </button>
-          </div>
-        </div>
-
-        <!-- Tab 1: Usuarios del Panel (RBAC) -->
-        <div id="personal-tab-users-content" style="display: none;">
-          <div class="glass-card">
-            <div style="display: flex; align-items: center; justify-content: flex-end; margin-bottom: 12px;">
-              <button class="btn btn-primary btn-sm" onclick="openNewAdminUserModal()">
-                <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                <span>Nuevo Administrador</span>
-              </button>
-            </div>
-
-            <!-- Datatable Toolbar -->
-            <div class="datatable-toolbar" style="justify-content: flex-end;">
-              <div class="datatable-filters-group">
-                <select id="filter-user-role" class="datatable-select" onchange="filterAdminUsersTable()" title="Filtrar por rol">
-                  <option value="">👤 Todos los roles</option>
-                  <option value="superadmin">Superadmin</option>
-                  <option value="soporte">Soporte</option>
-                  <option value="tecnico">Técnico</option>
-                  <option value="facturacion">Facturación</option>
-                </select>
-                <select id="filter-user-sort" class="datatable-select" onchange="sortAdminUsersBy(this.value)" title="Ordenar usuarios">
-                  <option value="username_asc">Ordenar: Usuario (A-Z)</option>
-                  <option value="name_asc">Ordenar: Nombre (A-Z)</option>
-                  <option value="role_asc">Ordenar: Rol</option>
-                  <option value="login_desc">Ordenar: Último Ingreso</option>
-                </select>
-                <button class="btn btn-secondary btn-sm" onclick="clearAdminUsersFilters()" title="Limpiar filtros">
-                  🧹 Limpiar
-                </button>
-              </div>
-            </div>
-
-            <div class="table-responsive">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th class="sortable-th" onclick="sortAdminUsersBy('username')" style="min-width: 140px;">Usuario <span class="sort-icon">↕</span></th>
-                    <th class="sortable-th" onclick="sortAdminUsersBy('name')" style="min-width: 180px;">Nombre Completo <span class="sort-icon">↕</span></th>
-                    <th class="sortable-th" onclick="sortAdminUsersBy('role')" style="min-width: 120px;">Rol <span class="sort-icon">↕</span></th>
-                    <th class="sortable-th" onclick="sortAdminUsersBy('last_login')" style="min-width: 140px;">Último Ingreso <span class="sort-icon">↕</span></th>
-                    <th style="text-align: right; min-width: 90px;">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody id="table-admin-users-body">
-                  <tr><td colspan="5" style="text-align: center; color: var(--text-dim);">Cargando usuarios...</td></tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        <!-- Tab 2: Técnicos de Campo & PINs -->
-        <div id="personal-tab-techs-content" style="display: none;">
-          <div class="glass-card">
-            <div style="display: flex; align-items: center; justify-content: flex-end; margin-bottom: 12px;">
-              <button class="btn btn-primary btn-sm" onclick="openNewTechnicianModal()">
-                <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                <span>Nuevo Técnico</span>
-              </button>
-            </div>
-
-            <!-- Datatable Toolbar -->
-            <div class="datatable-toolbar" style="justify-content: flex-end;">
-              <div class="datatable-filters-group">
-                <select id="filter-tech-role" class="datatable-select" onchange="filterTechniciansTable()" title="Filtrar por rol">
-                  <option value="">💼 Todos los roles</option>
-                  <option value="instalador">Instalador</option>
-                  <option value="soporte">Soporte</option>
-                  <option value="supervisor">Supervisor</option>
-                  <option value="tecnico">Técnico</option>
-                </select>
-                <select id="filter-tech-status" class="datatable-select" onchange="filterTechniciansTable()" title="Filtrar por estado">
-                  <option value="">⚡ Todos los estados</option>
-                  <option value="ACTIVO">Activo</option>
-                  <option value="INACTIVO">Inactivo</option>
-                </select>
-                <select id="filter-tech-sort" class="datatable-select" onchange="sortTechniciansBy(this.value)" title="Ordenar técnicos">
-                  <option value="name_asc">Ordenar: Nombre (A-Z)</option>
-                  <option value="name_desc">Ordenar: Nombre (Z-A)</option>
-                  <option value="phone_asc">Ordenar: Teléfono</option>
-                  <option value="status_asc">Ordenar: Estado</option>
-                </select>
-                <button class="btn btn-secondary btn-sm" onclick="clearTechniciansFilters()" title="Limpiar filtros">
-                  🧹 Limpiar
-                </button>
-              </div>
-            </div>
-
-            <div class="table-responsive">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th class="sortable-th" onclick="sortTechniciansBy('name')" style="min-width: 180px;">Nombre <span class="sort-icon">↕</span></th>
-                    <th class="sortable-th" onclick="sortTechniciansBy('phone')" style="min-width: 150px;">Teléfono WhatsApp <span class="sort-icon">↕</span></th>
-                    <th class="sortable-th" onclick="sortTechniciansBy('pin')" style="min-width: 110px;">PIN (5 Dígitos) <span class="sort-icon">↕</span></th>
-                    <th class="sortable-th" onclick="sortTechniciansBy('role')" style="min-width: 120px;">Rol <span class="sort-icon">↕</span></th>
-                    <th class="sortable-th" onclick="sortTechniciansBy('status')" style="min-width: 110px;">Estado <span class="sort-icon">↕</span></th>
-                    <th style="text-align: right; min-width: 100px;">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody id="table-technicians-body">
-                  <tr><td colspan="6" style="text-align: center; color: var(--text-dim);">Cargando técnicos...</td></tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        <!-- Tab 3: Grupos de WhatsApp & Notificaciones -->
-        <div id="personal-tab-groups-content" style="display: none;">
-          <!-- Metric KPI Cards -->
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-bottom: 16px;">
-            <div class="glass-card stat-card" style="padding: 14px;">
-              <div style="display: flex; align-items: center; justify-content: space-between;">
-                <span style="font-size: 11.5px; color: var(--text-muted); font-weight: 600;">TOTAL GRUPOS</span>
-                <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24" style="color: var(--text-dim);"><rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect><line x1="9" y1="6" x2="9" y2="6.01"></line><line x1="15" y1="6" x2="15" y2="6.01"></line><line x1="9" y1="10" x2="9" y2="10.01"></line><line x1="15" y1="10" x2="15" y2="10.01"></line><line x1="9" y1="14" x2="9" y2="14.01"></line><line x1="15" y1="14" x2="15" y2="14.01"></line><line x1="9" y1="18" x2="15" y2="18"></line></svg>
-              </div>
-              <div id="stat-office-groups-total" style="font-size: 22px; font-weight: 800; margin-top: 4px; color: #fff;">0</div>
-              <div style="font-size: 10.5px; color: var(--text-dim); margin-top: 2px;">En BD Local</div>
-            </div>
-
-            <div class="glass-card stat-card" style="padding: 14px;">
-              <div style="display: flex; align-items: center; justify-content: space-between;">
-                <span style="font-size: 11.5px; color: var(--text-muted); font-weight: 600;">GRUPOS ACTIVOS</span>
-                <span class="status-dot online" style="width: 8px; height: 8px;"></span>
-              </div>
-              <div id="stat-office-groups-active" style="font-size: 22px; font-weight: 800; margin-top: 4px; color: var(--accent-emerald);">0</div>
-              <div style="font-size: 10.5px; color: var(--text-dim); margin-top: 2px;">Recibiendo tickets</div>
-            </div>
-
-            <div class="glass-card stat-card" style="padding: 14px; border-top: 2px solid var(--accent-emerald);">
-              <div style="display: flex; align-items: center; justify-content: space-between;">
-                <span style="font-size: 11px; color: var(--accent-emerald); font-weight: 700;">CANAL DE ACTIVACIONES</span>
-                <svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24" style="color: var(--accent-emerald);"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
-              </div>
-              <div id="stat-activations-group-name" style="font-size: 14px; font-weight: 700; margin-top: 4px; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">No configurado</div>
-              <div id="stat-activations-group-jid" style="font-size: 10.5px; font-family: var(--font-mono); color: var(--text-dim); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">--</div>
-            </div>
-          </div>
-
-          <!-- Groups Table Container -->
-          <div class="glass-card">
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
-              <div style="display: flex; gap: 8px; align-items: center;">
-                <button class="btn btn-secondary btn-xs" onclick="loadOfficeGroupsData()">🔄 Refrescar</button>
-                <button class="btn btn-primary btn-xs" onclick="openOfficeGroupModal()">+ Vincular Grupo</button>
-              </div>
-              <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-                <select id="filter-group-role" class="form-control" style="font-size: 12px; width: auto; padding: 4px 10px;" onchange="filterOfficeGroupsTable()">
-                  <option value="">Todos los Roles</option>
-                  <option value="TICKETS_OFICINA">Tickets de Oficina</option>
-                  <option value="ACTIVACIONES">Activaciones & Swap Módem</option>
-                  <option value="SOPORTE_GENERAL">Soporte General</option>
-                </select>
-                <input type="text" id="filter-group-search" class="form-control" placeholder="Buscar por nombre o JID..." style="font-size: 12px; width: 200px; padding: 4px 10px;" oninput="filterOfficeGroupsTable()">
-              </div>
-            </div>
-
-            <div class="table-responsive">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th style="min-width: 190px;">Grupo & Sucursal</th>
-                    <th style="min-width: 170px;">Rol / Propósito</th>
-                    <th style="min-width: 150px;">Zonas Asignadas</th>
-                    <th style="min-width: 230px;">WhatsApp JID / Enlace</th>
-                    <th style="text-align: center; min-width: 110px;">Estado</th>
-                    <th style="text-align: right; min-width: 200px;">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody id="table-office-groups-body">
-                  <tr><td colspan="6" style="text-align: center; color: var(--text-dim); padding: 24px;">Cargando grupos...</td></tr>
                 </tbody>
               </table>
             </div>
@@ -12023,6 +11873,7 @@ export function getAdminDashboardHtml(): string {
         // ==========================================
     // ==========================================
     // ==========================================
+    // ==========================================
     // MÓDULO OLTs LOCALES & GPON (DELTASTREAM / SSH / WIREGUARD)
     // ==========================================
     async function loadLocalOltsData() {
@@ -12039,34 +11890,48 @@ export function getAdminDashboardHtml(): string {
         const kpiOltsBadge = document.getElementById('kpi-olts-online-badge');
         const kpiMks = document.getElementById('kpi-mks-total');
         const badgeTabOlt = document.getElementById('badge-tab-olt-total');
-        const badgeTotalInline = document.getElementById('badge-total-olts-inline');
 
         if (kpiOlts) kpiOlts.innerText = totalOlts;
         if (kpiOltsBadge) kpiOltsBadge.innerText = onlineOlts + ' Online';
         if (kpiMks) kpiMks.innerText = totalMks;
         if (badgeTabOlt) { badgeTabOlt.innerText = totalOlts; badgeTabOlt.style.display = totalOlts > 0 ? 'inline-block' : 'none'; }
-        if (badgeTotalInline) badgeTotalInline.innerText = totalOlts + ' Centrales';
 
-        // Update Select dropdown in subnav
-        const sel = document.getElementById('select-active-local-olt');
-        if (sel) {
-          if (totalOlts > 0) {
-            sel.innerHTML = state.localOlts.map(o => '<option value="' + o.id + '">' + o.name + ' (' + o.ip + ')</option>').join('');
-            if (!state.currentLocalOltId || !state.localOlts.some(o => o.id === state.currentLocalOltId)) {
-              state.currentLocalOltId = state.localOlts[0].id;
-            }
-            sel.value = state.currentLocalOltId;
-          } else {
-            sel.innerHTML = '<option value="">Sin OLTs registradas</option>';
-            state.currentLocalOltId = '';
-          }
-        }
-
+        // Update Select dropdown in subnav and in script tab
+        updateAllOltDropdowns();
         updateCurrentOltStatusPill();
         renderLocalOltsTable();
         refreshCurrentLocalOltView();
       } catch (err) {
         console.error('Error loading local OLTs:', err);
+      }
+    }
+
+    function updateAllOltDropdowns() {
+      const sel = document.getElementById('select-active-local-olt');
+      const scriptSel = document.getElementById('select-script-olt');
+
+      if (sel) {
+        if (state.localOlts.length > 0) {
+          sel.innerHTML = state.localOlts.map(o => '<option value="' + o.id + '">' + o.name + ' (' + o.ip + ')</option>').join('');
+          if (!state.currentLocalOltId || !state.localOlts.some(o => o.id === state.currentLocalOltId)) {
+            state.currentLocalOltId = state.localOlts[0].id;
+          }
+          sel.value = state.currentLocalOltId;
+        } else {
+          sel.innerHTML = '<option value="">Sin OLTs registradas</option>';
+          state.currentLocalOltId = '';
+        }
+      }
+
+      if (scriptSel) {
+        let opts = '<option value="manual">Manual / Nuevo RouterBOARD</option>';
+        if (state.localOlts.length > 0) {
+          opts += state.localOlts.map(o => '<option value="' + o.id + '">' + o.name + ' (' + (o.mikrotik_name || 'MikroTik') + ' - ' + o.ip + ')</option>').join('');
+        }
+        scriptSel.innerHTML = opts;
+        if (state.currentLocalOltId) {
+          scriptSel.value = state.currentLocalOltId;
+        }
       }
     }
 
@@ -12082,7 +11947,7 @@ export function getAdminDashboardHtml(): string {
             '</div>' +
             '<h3 style="font-size: 17px; font-weight: 700; color: #f8fafc; margin: 0 0 6px;">No hay Centrales OLTs ni Routers MikroTik registrados</h3>' +
             '<p style="font-size: 13px; color: var(--text-muted); max-width: 500px; margin: 0 auto 18px; line-height: 1.5;">' +
-              'La base de datos está limpia para iniciar tus pruebas desde cero. Da de alta tu primera central OLT DeltaStream o vincula un router MikroTik con WireGuard.' +
+              'La base de datos está limpia para iniciar tus pruebas desde cero. Da de alta tu primera central OLT DeltaStream o genera el script de WireGuard para tu MikroTik.' +
             '</p>' +
             '<button class="btn btn-primary btn-sm" onclick="openAddLocalOltModal()">' +
               '<svg class="svg-icon svg-icon-sm" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>' +
@@ -12092,26 +11957,23 @@ export function getAdminDashboardHtml(): string {
         return;
       }
 
-      // Restore table if container had empty state
-      if (!container.querySelector('table')) {
-        container.innerHTML = 
-          '<div class="table-responsive">' +
-            '<table class="data-table">' +
-              '<thead>' +
-                '<tr>' +
-                  '<th style="min-width: 170px;">Central OLT / Modelo</th>' +
-                  '<th style="min-width: 150px;">IP Privada & SSH</th>' +
-                  '<th style="min-width: 190px;">Router MikroTik (WireGuard)</th>' +
-                  '<th style="min-width: 90px;">Puertos GPON</th>' +
-                  '<th style="min-width: 130px;">Estado & Latencia</th>' +
-                  '<th style="min-width: 110px;">Verificación</th>' +
-                  '<th style="text-align: right; min-width: 250px;">Acciones Rápidas</th>' +
-                '</tr>' +
-              '</thead>' +
-              '<tbody id="table-local-olts-body"></tbody>' +
-            '</table>' +
-          '</div>';
-      }
+      container.innerHTML = 
+        '<div class="table-responsive">' +
+          '<table class="data-table">' +
+            '<thead>' +
+              '<tr>' +
+                '<th style="min-width: 170px;">Central OLT / Modelo</th>' +
+                '<th style="min-width: 150px;">IP Privada & SSH</th>' +
+                '<th style="min-width: 190px;">Router MikroTik (WireGuard)</th>' +
+                '<th style="min-width: 90px;">Puertos GPON</th>' +
+                '<th style="min-width: 130px;">Estado & Latencia</th>' +
+                '<th style="min-width: 110px;">Verificación</th>' +
+                '<th style="text-align: right; min-width: 250px;">Acciones Rápidas</th>' +
+              '</tr>' +
+            '</thead>' +
+            '<tbody id="table-local-olts-body"></tbody>' +
+          '</table>' +
+        '</div>';
 
       const activeTbody = document.getElementById('table-local-olts-body');
       if (!activeTbody) return;
@@ -12204,6 +12066,12 @@ export function getAdminDashboardHtml(): string {
       if (btn) btn.classList.add('active');
       if (content) content.style.display = 'block';
 
+      // Toggle visibility of the OLT selector in subnav
+      const selectorGroup = document.getElementById('subnav-olt-selector-group');
+      if (selectorGroup) {
+        selectorGroup.style.display = (tab === 'autofind' || tab === 'authorized') ? 'inline-flex' : 'none';
+      }
+
       refreshCurrentLocalOltView();
     }
 
@@ -12212,13 +12080,15 @@ export function getAdminDashboardHtml(): string {
         renderLocalOltsTable();
         return;
       }
+      if (state.localOltTab === 'mikrotik') {
+        updateScriptPreview();
+        return;
+      }
       if (!state.currentLocalOltId) return;
       if (state.localOltTab === 'autofind') {
         loadLocalOltAutofind();
       } else if (state.localOltTab === 'authorized') {
         loadLocalOltAuthorized();
-      } else if (state.localOltTab === 'mikrotik') {
-        reloadMikrotikScript();
       }
     }
 
@@ -12279,9 +12149,9 @@ export function getAdminDashboardHtml(): string {
 
     function viewOltScript(id) {
       state.currentLocalOltId = id;
-      const sel = document.getElementById('select-active-local-olt');
-      if (sel) sel.value = id;
-      updateCurrentOltStatusPill();
+      const scriptSel = document.getElementById('select-script-olt');
+      if (scriptSel) scriptSel.value = id;
+      handleScriptOltChange(id);
       switchLocalOltTab('mikrotik');
     }
 
@@ -12326,6 +12196,120 @@ export function getAdminDashboardHtml(): string {
         }
       } catch (err) {
         showToast('Error', err.message, 'error');
+      }
+    }
+
+    // ==========================================
+    // SCRIPT MIKROTIK ENGINE (INSTANT & ZERO LAG)
+    // ==========================================
+    function handleScriptOltChange(oltId) {
+      if (oltId && oltId !== 'manual') {
+        const olt = state.localOlts.find(o => o.id === oltId);
+        if (olt) {
+          const mkInput = document.getElementById('input-script-mk-name');
+          const wgInput = document.getElementById('input-olt-tunnel-ip');
+          const subInput = document.getElementById('input-script-olt-subnet');
+          const pingInput = document.getElementById('input-live-ping-ip');
+
+          if (mkInput) mkInput.value = olt.mikrotik_name || 'RB-' + olt.name.replace(/\s+/g, '');
+          if (wgInput) wgInput.value = olt.wireguard_client_ip || '10.200.0.2/24';
+          if (subInput) subInput.value = olt.ip.replace(/\.\d+$/, '.0/24');
+          if (pingInput) pingInput.value = (olt.wireguard_client_ip || '10.200.0.2').split('/')[0];
+        }
+      }
+      updateScriptPreview();
+    }
+
+    function updateScriptPreview() {
+      const pre = document.getElementById('code-mikrotik-script');
+      if (!pre) return;
+
+      const tunnelIpRaw = document.getElementById('input-olt-tunnel-ip')?.value?.trim() || '10.200.0.2/24';
+      const cleanIp = tunnelIpRaw.split('/')[0];
+      const mkName = document.getElementById('input-script-mk-name')?.value?.trim() || 'RouterBOARD-NOC';
+      const oltSubnet = document.getElementById('input-script-olt-subnet')?.value?.trim() || '172.19.60.0/24';
+
+      const scriptText = [
+        '# ============================================================== #',
+        '# SCRIPT DE ENLACE WIREGUARD - CLOUDWARE MIKROTIK (RouterOS v7)  #',
+        '# Router / Nodo: ' + mkName,
+        '# Subred OLT Destino: ' + oltSubnet,
+        '# IP Túnel WireGuard Asignada: ' + cleanIp + '/24',
+        '# Endpoint Servidor VPS: 2.25.241.239:51820',
+        '# ============================================================== #',
+        '',
+        '# 1. Crear Interfaz WireGuard en MikroTik',
+        '/interface wireguard remove [find where name="wg-vps" or name="wg-cloudware"]',
+        '/interface wireguard add name=wg-vps listen-port=13231 mtu=1420 comment="Tunel CloudWare VPS (' + mkName + ')"',
+        '',
+        '# 2. Asignar Dirección IP privada al Túnel WireGuard',
+        '/ip address remove [find where interface="wg-vps"]',
+        '/ip address add address=' + cleanIp + '/24 interface=wg-vps network=10.200.0.0',
+        '',
+        '# 3. Configurar el VPS CloudWare como Peer en MikroTik',
+        '/interface wireguard peers remove [find where interface="wg-vps"]',
+        '/interface wireguard peers add interface=wg-vps public-key="uqHcuPxy68PPholZRE6tTP7iYhfPKLPsxAjCCkTBp2E=" endpoint-address="2.25.241.239" endpoint-port=51820 allowed-address=10.200.0.0/24,2.25.241.239/32 persistent-keepalive=25s comment="VPS CloudWare"',
+        '',
+        '# 4. Reglas de Firewall para permitir Ping y acceso SSH hacia la OLT',
+        '/ip firewall filter remove [find where comment~"CloudWare"]',
+        '/ip firewall filter add chain=input in-interface=wg-vps action=accept comment="CloudWare Input Ping/SSH"',
+        '/ip firewall filter add chain=forward in-interface=wg-vps action=accept comment="CloudWare VPS to OLT"',
+        '/ip firewall filter add chain=forward out-interface=wg-vps action=accept comment="CloudWare OLT to VPS"',
+        '',
+        '# 5. Obtener Llave Pública de esta RB para darla de alta en el VPS',
+        ':put "=========================================================="',
+        ':put ">> COPIA ESTA LLAVE PUBLICA PARA EL VPS DE CLOUDWARE <<" ',
+        ':put [/interface wireguard get [find name="wg-vps"] public-key]',
+        ':put "=========================================================="'
+      ].join(String.fromCharCode(10));
+
+      pre.innerText = scriptText;
+    }
+
+    function reloadMikrotikScript() {
+      updateScriptPreview();
+    }
+
+    function copyActiveMikrotikScript() {
+      const pre = document.getElementById('code-mikrotik-script');
+      if (!pre) return;
+      navigator.clipboard.writeText(pre.innerText).then(() => {
+        showToast('Script Copiado', 'Comandos copiados al portapapeles. Pégalos en New Terminal de Winbox.', 'success');
+      }).catch(() => {
+        showToast('Error', 'No se pudo copiar automáticamente. Selecciónalo manualmente.', 'warning');
+      });
+    }
+
+    async function executeLivePing() {
+      const ip = document.getElementById('input-live-ping-ip')?.value?.trim();
+      if (!ip) {
+        showToast('Atención', 'Ingresa una IP para probar el ping', 'warning');
+        return;
+      }
+      const box = document.getElementById('box-live-ping-result');
+      if (box) {
+        box.style.display = 'block';
+        box.innerText = 'Enviando paquetes ICMP desde VPS hacia ' + ip + '...';
+      }
+      try {
+        const res = await apiFetch('/api/admin/local-olts/ping', {
+          method: 'POST',
+          body: JSON.stringify({ ip })
+        });
+        if (box) {
+          box.innerText = res.output || (res.success ? 'Respuesta exitosa recibida' : 'Sin respuesta de ' + ip);
+          box.style.color = res.success ? '#34d399' : '#f87171';
+        }
+        if (res.success) {
+          showToast('Conectividad Confirmada', 'Ping exitoso hacia ' + ip, 'success');
+        } else {
+          showToast('Sin Respuesta', 'No se recibieron paquetes de ' + ip + '. Verifica el túnel o la IP.', 'warning');
+        }
+      } catch (err) {
+        if (box) {
+          box.innerText = 'Error al ejecutar ping: ' + err.message;
+          box.style.color = '#f87171';
+        }
       }
     }
 
@@ -12516,32 +12500,6 @@ export function getAdminDashboardHtml(): string {
         String(o.onuId).includes(term)
       );
       renderLocalAuthorizedTable(filtered);
-    }
-
-    async function reloadMikrotikScript() {
-      if (!state.currentLocalOltId) return;
-      const tunnelIp = document.getElementById('input-olt-tunnel-ip')?.value?.trim() || '10.200.0.4/24';
-      const pre = document.getElementById('code-mikrotik-script');
-      if (pre) pre.innerText = '# Generando script con IP ' + tunnelIp + '...';
-
-      try {
-        const res = await apiFetch('/api/admin/local-olts/' + state.currentLocalOltId + '/mikrotik-script?tunnel_ip=' + encodeURIComponent(tunnelIp));
-        if (pre && res.script) {
-          pre.innerText = res.script;
-        }
-      } catch (err) {
-        if (pre) pre.innerText = '# Error generando script: ' + err.message;
-      }
-    }
-
-    function copyActiveMikrotikScript() {
-      const pre = document.getElementById('code-mikrotik-script');
-      if (!pre) return;
-      navigator.clipboard.writeText(pre.innerText).then(() => {
-        showToast('Script Copiado', 'Comando de MikroTik copiado al portapapeles. Pégalo en la terminal RouterOS.', 'success');
-      }).catch(() => {
-        showToast('Error', 'No se pudo copiar automáticamente. Selecciónalo manualmente.', 'warning');
-      });
     }
 
     function openAddLocalOltModal(editId) {

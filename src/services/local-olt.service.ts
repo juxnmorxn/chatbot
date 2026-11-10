@@ -500,37 +500,47 @@ export class LocalOltService {
    * Genera el script de MikroTik RouterOS (v7) con WireGuard para conectar una nueva RB al VPS y llegar a su OLT
    */
   public static generateMikrotikScript(
-    olt: LocalOltRecord,
-    tunnelIp: string = '10.200.0.4/24'
+    olt?: Partial<LocalOltRecord> | null,
+    tunnelIp: string = '10.200.0.2/24'
   ): string {
-    const cleanIp = tunnelIp.split('/')[0];
-    const oltSubnet = olt.ip.replace(/\.\d+$/, '.0/24');
+    const cleanIp = (tunnelIp || '10.200.0.2/24').split('/')[0];
+    const oltIp = olt?.ip || '172.19.60.2';
+    const oltSubnet = oltIp.replace(/\.\d+$/, '.0/24');
+    const oltName = olt?.name || 'OLT GPON';
+    const mkName = olt?.mikrotik_name || 'RouterBOARD-NOC';
 
-    return `# ==============================================================
-# SCRIPT DE CONEXIÓN WIREGUARD - CLOUDWARE MIKROTIK
-# OLT Destino: ${olt.name} (${olt.ip})
-# Subred OLT: ${oltSubnet}
-# IP Túnel Asignada: ${tunnelIp}
-# ==============================================================
+    return `# ============================================================== #
+# SCRIPT DE ENLACE WIREGUARD - CLOUDWARE MIKROTIK (RouterOS v7)  #
+# Router / Nodo: ${mkName}
+# Central OLT Destino: ${oltName} (${oltIp})
+# Subred OLT LAN: ${oltSubnet}
+# IP Túnel Asignada: ${cleanIp}/24
+# Endpoint Servidor VPS: 2.25.241.239:51820
+# ============================================================== #
 
-# 1. Crear la interfaz WireGuard
-/interface wireguard
-add listen-port=13231 mtu=1420 name=wg-vps
+# 1. Crear Interfaz WireGuard en MikroTik
+/interface wireguard remove [find where name="wg-vps" or name="wg-cloudware"]
+/interface wireguard add name=wg-vps listen-port=13231 mtu=1420 comment="Tunel CloudWare VPS (${mkName})"
 
-# 2. Asignar la IP interna del túnel
-/ip address
-add address=${cleanIp}/24 interface=wg-vps network=10.200.0.0
+# 2. Asignar Dirección IP privada al Túnel WireGuard
+/ip address remove [find where interface="wg-vps"]
+/ip address add address=${cleanIp}/24 interface=wg-vps network=10.200.0.0
 
-# 3. Configurar el VPS como Peer WireGuard
-/interface wireguard peers
-add allowed-address=10.200.0.0/24,2.25.241.239/32 \\
-    endpoint-address=2.25.241.239 endpoint-port=51820 \\
-    interface=wg-vps persistent-keepalive=25s \\
-    public-key="uqHcuPxy68PPholZRE6tTP7iYhfPKLPsxAjCCkTBp2E="
+# 3. Configurar el VPS CloudWare como Peer en MikroTik
+/interface wireguard peers remove [find where interface="wg-vps"]
+/interface wireguard peers add interface=wg-vps public-key="uqHcuPxy68PPholZRE6tTP7iYhfPKLPsxAjCCkTBp2E=" endpoint-address="2.25.241.239" endpoint-port=51820 allowed-address=10.200.0.0/24,2.25.241.239/32 persistent-keepalive=25s comment="VPS CloudWare"
 
-# 4. Imprimir la Llave Pública de esta RB (copiarla al VPS)
-:put "=== REGISTRA ESTA LLAVE PUBLICA EN EL VPS ==="
-:put [/interface wireguard get wg-vps public-key]
+# 4. Reglas de Firewall para permitir Ping y acceso SSH hacia la OLT
+/ip firewall filter remove [find where comment~"CloudWare"]
+/ip firewall filter add chain=input in-interface=wg-vps action=accept comment="CloudWare Input Ping/SSH"
+/ip firewall filter add chain=forward in-interface=wg-vps action=accept comment="CloudWare VPS to OLT"
+/ip firewall filter add chain=forward out-interface=wg-vps action=accept comment="CloudWare OLT to VPS"
+
+# 5. Obtener Llave Pública de esta RB para darla de alta en el VPS
+:put "=========================================================="
+:put ">> COPIA ESTA LLAVE PUBLICA PARA EL VPS DE CLOUDWARE <<"
+:put [/interface wireguard get [find name="wg-vps"] public-key]
+:put "=========================================================="
 `;
   }
 }

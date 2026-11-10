@@ -2952,16 +2952,43 @@ export class AdminController {
   static async getLocalOltMikrotikScript(req: Request, res: Response): Promise<void> {
     try {
       const { LocalOltService } = await import('../services/local-olt.service');
-      const olt = await LocalOltService.getOltById(req.params.id);
-      if (!olt) {
-        res.status(404).json({ success: false, error: 'OLT no encontrada' });
-        return;
+      let olt = null;
+      if (req.params.id && req.params.id !== 'general' && req.params.id !== 'default') {
+        olt = await LocalOltService.getOltById(req.params.id);
       }
-      const tunnelIp = String(req.query.tunnel_ip || olt.wireguard_client_ip || '10.200.0.4/24');
-      const script = LocalOltService.generateMikrotikScript(olt, tunnelIp);
+      const tunnelIp = String(req.query.tunnel_ip || olt?.wireguard_client_ip || '10.200.0.2/24');
+      const script = LocalOltService.generateMikrotikScript(
+        olt || {
+          name: String(req.query.olt_name || 'OLT GPON'),
+          ip: String(req.query.olt_ip || '172.19.60.2'),
+          mikrotik_name: String(req.query.mk_name || 'RB-MikroTik'),
+          wireguard_client_ip: tunnelIp,
+        } as any,
+        tunnelIp
+      );
       res.json({ success: true, script, olt });
     } catch (err: any) {
       logger.error('Error generando script MikroTik:', err);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  }
+
+  static async pingHost(req: Request, res: Response): Promise<void> {
+    try {
+      const { ip } = req.body;
+      const cleanIp = String(ip || '').trim();
+      if (!cleanIp || !/^[\d\.]+$/.test(cleanIp)) {
+        res.status(400).json({ success: false, error: 'Dirección IP inválida (solo dígitos y puntos)' });
+        return;
+      }
+      const { exec } = await import('child_process');
+      exec(`ping -c 2 -W 2 ${cleanIp}`, (err, stdout, stderr) => {
+        const out = stdout || stderr || (err ? err.message : '');
+        const isSuccess = !err && out.includes('bytes from');
+        res.json({ success: isSuccess, output: out.trim() });
+      });
+    } catch (err: any) {
+      logger.error('Error ejecutando ping:', err);
       res.status(500).json({ success: false, error: err.message });
     }
   }
