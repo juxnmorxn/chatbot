@@ -277,6 +277,49 @@ export class SmartOLTService {
   }
 
   /**
+   * Ejecuta peticiones a la API de SmartOLT reintentando automáticamente con espera
+   * si la OLT devuelve el error "onu_busy" (operación o preset en curso en la OLT).
+   */
+  public static async executeWithBusyRetry<T>(
+    actionName: string,
+    fn: () => Promise<T>,
+    maxRetries = 5,
+    delayMs = 3000
+  ): Promise<T> {
+    let lastError: any = null;
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const res: any = await fn();
+        const resData = res?.data;
+        const isBusy = resData?.status === false && (
+          resData?.error_code === 'onu_busy' ||
+          (typeof resData?.error === 'string' && (resData.error.toLowerCase().includes('busy') || resData.error.toLowerCase().includes('in progress')))
+        );
+        if (isBusy) {
+          logger.warn(`[SmartOLT] OLT ocupada al ejecutar "${actionName}" (Intento ${attempt}/${maxRetries}): ${resData.error}. Esperando ${delayMs}ms...`);
+          await new Promise(r => setTimeout(r, delayMs));
+          continue;
+        }
+        return res;
+      } catch (err: any) {
+        lastError = err;
+        const errData = err?.response?.data;
+        const isBusy = errData?.status === false && (
+          errData?.error_code === 'onu_busy' ||
+          (typeof errData?.error === 'string' && (errData.error.toLowerCase().includes('busy') || errData.error.toLowerCase().includes('in progress')))
+        );
+        if (isBusy) {
+          logger.warn(`[SmartOLT] OLT ocupada al ejecutar "${actionName}" (Intento ${attempt}/${maxRetries}): ${errData.error}. Esperando ${delayMs}ms...`);
+          await new Promise(r => setTimeout(r, delayMs));
+          continue;
+        }
+        throw err;
+      }
+    }
+    throw lastError || new Error(`No se pudo completar "${actionName}" tras ${maxRetries} intentos por OLT ocupada.`);
+  }
+
+  /**
    * Sincroniza todas las ONUs desde SmartOLT hacia Base de Datos Local
    * Protegido con cooldown de 4 minutos para respetar el límite de 15 llamadas/hora
    */
@@ -830,11 +873,20 @@ export class SmartOLTService {
               staticForm.append('dns2', effectiveDns2);
               staticForm.append('configuration_method', 'OMCI');
               staticForm.append('ip_protocol', 'ipv4');
+              if (payload.vlan) {
+                staticForm.append('vlan', String(payload.vlan));
+                staticForm.append('vlan_id', String(payload.vlan));
+                staticForm.append('wan_vlan', String(payload.vlan));
+                staticForm.append('wan_vlan_id', String(payload.vlan));
+              }
 
               const staticHeaders = typeof (staticForm as any).getHeaders === 'function' ? (staticForm as any).getHeaders() : undefined;
-              const staticRes = await api.post(`/onu/set_onu_wan_mode_static_ip/${onuExternalId}`, staticForm, {
-                headers: staticHeaders
-              });
+              const staticRes = await this.executeWithBusyRetry(
+                `Configurar WAN Static IP San José (${payload.ip_address})`,
+                () => api.post(`/onu/set_onu_wan_mode_static_ip/${onuExternalId}`, staticForm, { headers: staticHeaders }),
+                5,
+                3000
+              );
               logger.info(`WAN Static IP IPv4 (OMCI) configurada exitosamente para ${onuExternalId} en San José:`, JSON.stringify(staticRes.data));
 
               // Habilitar acceso remoto a la WAN IP
@@ -852,7 +904,12 @@ export class SmartOLTService {
               const mgmtForm = new FormData();
               mgmtForm.append('vlan', mgmtVlan);
               const mgmtHeaders = typeof (mgmtForm as any).getHeaders === 'function' ? (mgmtForm as any).getHeaders() : undefined;
-              await api.post(`/onu/set_onu_mgmt_ip_static_ip/${onuExternalId}`, mgmtForm, { headers: mgmtHeaders });
+              await this.executeWithBusyRetry(
+                `Configurar Management IP VLAN ${mgmtVlan}`,
+                () => api.post(`/onu/set_onu_mgmt_ip_static_ip/${onuExternalId}`, mgmtForm, { headers: mgmtHeaders }),
+                3,
+                2000
+              );
               logger.info(`Management IP asignada con éxito para ${onuExternalId}`);
             } catch (mErr: any) {
               logger.warn(`No se pudo asignar Management IP para ${onuExternalId}:`, mErr?.response?.data || mErr?.message);
@@ -866,16 +923,24 @@ export class SmartOLTService {
               tr069Form.append('tr069_profile', 'SmartOLT');
               tr069Form.append('tr069_interface', 'mgmt');
               const tr069Headers = typeof (tr069Form as any).getHeaders === 'function' ? (tr069Form as any).getHeaders() : undefined;
-              await api.post(`/onu/enable_tr069/${onuExternalId}`, tr069Form, { headers: tr069Headers });
+              await this.executeWithBusyRetry(
+                `Habilitar TR-069 'SmartOLT'`,
+                () => api.post(`/onu/enable_tr069/${onuExternalId}`, tr069Form, { headers: tr069Headers }),
+                3,
+                2000
+              );
               tr069Enabled = true;
               logger.info(`Perfil TR-069 SmartOLT habilitado con éxito para ${onuExternalId}`);
             } catch (trErr: any) {
               logger.warn(`No se pudo habilitar TR-069 para ${onuExternalId} (se usará OMCI):`, trErr?.response?.data || trErr?.message);
             }
 
+            // Pausa preventiva de 2.5s tras habilitar TR-069 para que la OLT procese el preset interno
+            await new Promise(r => setTimeout(r, 2500));
+
             // 3. Configurar WAN en Static IP con Dual Stack IPv4/IPv6 y Auto
             try {
-              logger.info(`Configurando WAN Static IP para ${onuExternalId} (${payload.ip_address})...`);
+              logger.info(`Configurando WAN Static IP para ${onuExternalId} (${payload.ip_address}) en VLAN ${payload.vlan || '510'}...`);
               const staticForm = new FormData();
               staticForm.append('ipv4_address', String(payload.ip_address));
               staticForm.append('subnet_mask', String(payload.netmask || '255.255.255.0'));
@@ -886,14 +951,41 @@ export class SmartOLTService {
               staticForm.append('ip_protocol', 'ipv4ipv6');
               staticForm.append('ipv6_address_mode', 'Auto');
               staticForm.append('ipv6_prefix_delegation_mode', 'DHCPv6-PD');
+              if (payload.vlan) {
+                staticForm.append('vlan', String(payload.vlan));
+                staticForm.append('vlan_id', String(payload.vlan));
+                staticForm.append('wan_vlan', String(payload.vlan));
+                staticForm.append('wan_vlan_id', String(payload.vlan));
+              }
 
               const staticHeaders = typeof (staticForm as any).getHeaders === 'function' ? (staticForm as any).getHeaders() : undefined;
-              const staticRes = await api.post(`/onu/set_onu_wan_mode_static_ip/${onuExternalId}`, staticForm, {
-                headers: staticHeaders
-              });
+              const staticRes = await this.executeWithBusyRetry(
+                `Configurar WAN Static IP (${payload.ip_address})`,
+                () => api.post(`/onu/set_onu_wan_mode_static_ip/${onuExternalId}`, staticForm, { headers: staticHeaders }),
+                5,
+                3000
+              );
               logger.info(`WAN Static IP (${tr069Enabled ? 'TR069' : 'OMCI'}) configurada exitosamente para ${onuExternalId}:`, JSON.stringify(staticRes.data));
 
-              // 4. Habilitar acceso remoto a la WAN IP
+              // 4. Garantizar que la VLAN principal quede fijada en SmartOLT
+              if (payload.vlan) {
+                try {
+                  const vlanForm = new FormData();
+                  vlanForm.append('vlan_id', String(payload.vlan));
+                  vlanForm.append('vlan', String(payload.vlan));
+                  const vlanHeaders = typeof (vlanForm as any).getHeaders === 'function' ? (vlanForm as any).getHeaders() : undefined;
+                  await this.executeWithBusyRetry(
+                    `Fijar VLAN ${payload.vlan}`,
+                    () => api.post(`/onu/update_onu_main_vlan_id/${onuExternalId}`, vlanForm, { headers: vlanHeaders }),
+                    3,
+                    2000
+                  ).catch((vErr) => {
+                    logger.warn(`No se pudo invocar update_onu_main_vlan_id para ${onuExternalId}:`, vErr?.message || vErr);
+                  });
+                } catch (_) {}
+              }
+
+              // 5. Habilitar acceso remoto a la WAN IP
               await api.post(`/onu/enable_allow_remote_access_to_wan_ip/${onuExternalId}`).catch((e) => {
                 logger.warn(`No se pudo habilitar acceso remoto a WAN IP para ${onuExternalId}:`, e?.message);
               });
@@ -997,9 +1089,21 @@ export class SmartOLTService {
             staticForm.append('dns2', effectiveDns2);
             staticForm.append('configuration_method', 'OMCI');
             staticForm.append('ip_protocol', 'ipv4');
+            const vlanVal = options?.vlan || rawData?.vlan;
+            if (vlanVal) {
+              staticForm.append('vlan', String(vlanVal));
+              staticForm.append('vlan_id', String(vlanVal));
+              staticForm.append('wan_vlan', String(vlanVal));
+              staticForm.append('wan_vlan_id', String(vlanVal));
+            }
 
             const staticHeaders = typeof (staticForm as any).getHeaders === 'function' ? (staticForm as any).getHeaders() : undefined;
-            await api.post(`/onu/set_onu_wan_mode_static_ip/${externalId}`, staticForm, { headers: staticHeaders });
+            await this.executeWithBusyRetry(
+              `Configurar WAN Static IP San José (${ip})`,
+              () => api.post(`/onu/set_onu_wan_mode_static_ip/${externalId}`, staticForm, { headers: staticHeaders }),
+              5,
+              3000
+            );
             results.push('Static IPv4 OMCI (San José)');
 
             await api.post(`/onu/enable_allow_remote_access_to_wan_ip/${externalId}`).catch(() => {});
@@ -1015,7 +1119,12 @@ export class SmartOLTService {
           const mgmtForm = new FormData();
           mgmtForm.append('vlan', mgmtVlan);
           const mgmtHeaders = typeof (mgmtForm as any).getHeaders === 'function' ? (mgmtForm as any).getHeaders() : undefined;
-          await api.post(`/onu/set_onu_mgmt_ip_static_ip/${externalId}`, mgmtForm, { headers: mgmtHeaders });
+          await this.executeWithBusyRetry(
+            `Configurar Management IP VLAN ${mgmtVlan}`,
+            () => api.post(`/onu/set_onu_mgmt_ip_static_ip/${externalId}`, mgmtForm, { headers: mgmtHeaders }),
+            3,
+            2000
+          );
           results.push(`VLAN Gestión ${mgmtVlan}`);
         } catch (mErr: any) {
           logger.warn(`No se pudo asignar Management IP para ${externalId}:`, mErr?.response?.data || mErr?.message);
@@ -1028,12 +1137,20 @@ export class SmartOLTService {
           tr069Form.append('tr069_profile', 'SmartOLT');
           tr069Form.append('tr069_interface', 'mgmt');
           const tr069Headers = typeof (tr069Form as any).getHeaders === 'function' ? (tr069Form as any).getHeaders() : undefined;
-          await api.post(`/onu/enable_tr069/${externalId}`, tr069Form, { headers: tr069Headers });
+          await this.executeWithBusyRetry(
+            `Habilitar TR-069 'SmartOLT'`,
+            () => api.post(`/onu/enable_tr069/${externalId}`, tr069Form, { headers: tr069Headers }),
+            3,
+            2000
+          );
           tr069Ok = true;
           results.push("TR-069 'SmartOLT' Activo");
         } catch (trErr: any) {
           logger.warn(`No se pudo habilitar TR-069 para ${externalId}:`, trErr?.response?.data || trErr?.message);
         }
+
+        // Pausa preventiva de 2.5s tras habilitar TR-069 para que la OLT procese el preset interno
+        await new Promise(r => setTimeout(r, 2500));
 
         // C. Configurar WAN en Static IP con Dual Stack IPv4/IPv6 si tenemos IP
         if (ip) {
@@ -1049,10 +1166,40 @@ export class SmartOLTService {
             staticForm.append('ip_protocol', 'ipv4ipv6');
             staticForm.append('ipv6_address_mode', 'Auto');
             staticForm.append('ipv6_prefix_delegation_mode', 'DHCPv6-PD');
+            const vlanVal = options?.vlan || rawData?.vlan;
+            if (vlanVal) {
+              staticForm.append('vlan', String(vlanVal));
+              staticForm.append('vlan_id', String(vlanVal));
+              staticForm.append('wan_vlan', String(vlanVal));
+              staticForm.append('wan_vlan_id', String(vlanVal));
+            }
 
             const staticHeaders = typeof (staticForm as any).getHeaders === 'function' ? (staticForm as any).getHeaders() : undefined;
-            await api.post(`/onu/set_onu_wan_mode_static_ip/${externalId}`, staticForm, { headers: staticHeaders });
+            await this.executeWithBusyRetry(
+              `Configurar WAN Static IP (${ip})`,
+              () => api.post(`/onu/set_onu_wan_mode_static_ip/${externalId}`, staticForm, { headers: staticHeaders }),
+              5,
+              3000
+            );
             results.push(`Dual Stack IPv4/IPv6 (${tr069Ok ? 'TR-069' : 'OMCI'})`);
+
+            // Garantizar que la VLAN principal quede fijada en SmartOLT
+            if (vlanVal) {
+              try {
+                const vlanForm = new FormData();
+                vlanForm.append('vlan_id', String(vlanVal));
+                vlanForm.append('vlan', String(vlanVal));
+                const vlanHeaders = typeof (vlanForm as any).getHeaders === 'function' ? (vlanForm as any).getHeaders() : undefined;
+                await this.executeWithBusyRetry(
+                  `Fijar VLAN ${vlanVal}`,
+                  () => api.post(`/onu/update_onu_main_vlan_id/${externalId}`, vlanForm, { headers: vlanHeaders }),
+                  3,
+                  2000
+                ).catch((vErr) => {
+                  logger.warn(`No se pudo invocar update_onu_main_vlan_id para ${externalId}:`, vErr?.message || vErr);
+                });
+              } catch (_) {}
+            }
 
             // D. Habilitar acceso remoto a la WAN IP
             await api.post(`/onu/enable_allow_remote_access_to_wan_ip/${externalId}`).catch(() => {});
