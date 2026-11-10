@@ -7944,18 +7944,80 @@ Por favor reconecta tus dispositivos ingresando esta nueva clave.
     );
 
     // 1. Buscar la ONU en SmartOLT
-    const unconfigured = await SmartOLTService.findUnconfiguredOnuBySnSuffix(parsed.snSuffix);
+    let unconfigured = await SmartOLTService.findUnconfiguredOnuBySnSuffix(parsed.snSuffix);
+    let isLocalOlt = false;
+    let localOltMatch: any = null;
 
     if (!unconfigured) {
+      try {
+        const { LocalOltService } = await import('../services/local-olt.service');
+        const localOlts = await LocalOltService.getAllOlts();
+        for (const lo of localOlts) {
+          if (lo.status === 'online' || lo.id === 'olt-fray') {
+            const ports = (lo.gpon_ports || '1/0/1').split(',');
+            for (const p of ports) {
+              const autofindList = await LocalOltService.getAutofind(lo.id, p.trim()).catch(() => []);
+              const found = autofindList.find(a => a.serial.toUpperCase().endsWith(parsed.snSuffix.toUpperCase()));
+              if (found) {
+                isLocalOlt = true;
+                localOltMatch = { olt: lo, onu: found, port: p.trim() };
+                break;
+              }
+            }
+            if (isLocalOlt) break;
+          }
+        }
+      } catch (errLocal) {
+        logger.warn('Error buscando en OLTs locales:', errLocal);
+      }
+    }
+
+    if (!unconfigured && !isLocalOlt) {
       await this.enviarYLoguear(
         phone,
-        `*Módem no encontrado en SmartOLT*\n\nNo se localizó ninguna ONU sin configurar con terminación *${parsed.snSuffix}*.\n\n*Por favor verifica:*\n1. Que la fibra óptica esté conectada y la luz PON del módem esté encendida/sincronizando.\n2. Que el equipo haya sincronizado en la OLT.\n3. Que los dígitos del SN sean correctos (ej: *${parsed.snSuffix}*).`,
+        `*Módem no encontrado en la central*\n\nNo se localizó ninguna ONU sin configurar con terminación *${parsed.snSuffix}* (ni en SmartOLT ni en OLTs locales).\n\n*Por favor verifica:*\n1. Que la fibra óptica esté conectada y la luz PON del módem esté encendida/sincronizando.\n2. Que el equipo haya sincronizado en la OLT.\n3. Que los dígitos del SN sean correctos (ej: *${parsed.snSuffix}*).`,
         'ACTIVACION_TECNICO',
         'ONU_NO_ENCONTRADA',
         targetJid
       );
       return;
     }
+
+    if (isLocalOlt && localOltMatch) {
+      const cardMsg = `*RESUMEN DE ACTIVACIÓN (OLT LOCAL)*
+──────────────────────────────
+• *Cliente / Folio:* *${parsed.name}*
+• *OLT:* *${localOltMatch.olt.name}* (\`${localOltMatch.olt.ip}\`)
+• *Puerto GPON:* *${localOltMatch.port}*
+• *Serie (SN):* *${localOltMatch.onu.serial}* (${localOltMatch.onu.model || 'ONT'})
+──────────────────────────────
+*¿Confirmas la autorización de este módem en la OLT Local?*
+
+Responde *SÍ* para autorizar o *NO* para cancelar.`;
+
+      let metaObj: any = {};
+      try { metaObj = JSON.parse(session?.metadata || '{}'); } catch {}
+      metaObj.pendingActivation = {
+        isLocalOlt: true,
+        localOltId: localOltMatch.olt.id,
+        localOltName: localOltMatch.olt.name,
+        localGponPort: localOltMatch.port,
+        sn: localOltMatch.onu.serial,
+        name: parsed.name,
+        onu_type: localOltMatch.onu.model || 'ONT',
+      };
+
+      await DbService.upsertSession({
+        phone,
+        step: 'PENDIENTE_CONFIRMACION_ACTIVACION_ONU',
+        metadata: JSON.stringify(metaObj),
+      });
+
+      await this.enviarYLoguear(phone, cardMsg, 'ACTIVACION_TECNICO', 'ESPERANDO_CONFIRMACION_LOCAL', targetJid);
+      return;
+    }
+
+    if (!unconfigured) return;
 
     // 2. Determinar OLT y Zona (por defecto Actopan obligatorio)
     const isSanAgustin = parsed.zone.toLowerCase().includes('san agustin') ||
@@ -8131,6 +8193,41 @@ _(O indica un cambio, ej: cambiar paquete 60 megas)_`;
         'ACTIVACION_CANCELADA',
         targetJid
       );
+      return;
+    }
+
+    if ((payload as any)?.isLocalOlt) {
+      const localPayload = payload as any;
+      await this.enviarYLoguear(
+        phone,
+        `*Autorizando módem en ${localPayload.localOltName || 'OLT Local'}, un momento...*`,
+        'ACTIVACION_TECNICO',
+        'EJECUTANDO_AUTORIZACION_LOCAL',
+        targetJid
+      );
+
+      const { LocalOltService } = await import('../services/local-olt.service');
+      const authRes = await LocalOltService.authorizeOnu(
+        localPayload.localOltId,
+        localPayload.localGponPort || '1/0/1',
+        localPayload.sn,
+        localPayload.name
+      );
+
+      metaObj.pendingActivation = null;
+      metaObj.pendingActivationDetails = null;
+      await DbService.upsertSession({
+        phone,
+        step: 'CONVERSACIONAL',
+        metadata: JSON.stringify(metaObj),
+      });
+
+      if (authRes.success) {
+        const successMsg = `*¡Activación exitosa en OLT Local!*\n• *Cliente:* *${localPayload.name}*\n• *OLT:* *${localPayload.localOltName || 'Local'}*\n• *Puerto GPON:* \`${localPayload.localGponPort || '1/0/1'}\`\n• *ID ONT asignado:* \`${authRes.onuId}\`\n• *Módem:* \`${localPayload.sn}\`\n\n✅ Autorizado y guardado en memoria permanente (startup-config).`;
+        await this.enviarYLoguear(phone, successMsg, 'ACTIVACION_TECNICO', 'ACTIVACION_LOCAL_EXITOSA', targetJid);
+      } else {
+        await this.enviarYLoguear(phone, `❌ Error al autorizar en OLT: ${authRes.error || 'La OLT rechazó el comando.'}`, 'ACTIVACION_TECNICO', 'ERROR_AUTORIZACION_LOCAL', targetJid);
+      }
       return;
     }
 

@@ -2,7 +2,7 @@ import { Client } from 'ssh2';
 
 const conn = new Client();
 conn.on('ready', () => {
-  conn.exec('sqlite3 /root/chatbot/olt-manager/olt_manager.db "SELECT id, name, ip, port, username, password FROM olts;"', (err, stream) => {
+  conn.exec('sqlite3 /root/chatbot/data/olt_manager.db "SELECT id, name, client_ip, public_key, allowed_subnets FROM wireguard_peers;"', (err, stream) => {
     if (err) throw err;
     let out = '';
     stream.on('data', (d) => out += d);
@@ -13,4 +13,4 @@ conn.on('ready', () => {
   });
 });
 conn.on('error', (e) => console.log('SSH error:', e.message));
-conn.connect({ host: '2.25.241.239', port: 22, username: 'root' });
+conn.connect({ host: '2.25.241.239', port: 22, username: 'root', password: 'CloudWare1991@' });

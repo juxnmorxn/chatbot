@@ -167,6 +167,18 @@ router.post('/api/smartolt/configure-tr069/:id', AdminController.configureSmartO
 router.post('/api/smartolt/configure-tr069', AdminController.configureSmartOltTr069);
 
 // ==========================================
+// GESTIÓN DE OLTS LOCALES (DELTASTREAM / SSH / WIREGUARD)
+// ==========================================
+router.get('/api/admin/local-olts', AdminController.getLocalOlts);
+router.post('/api/admin/local-olts', AdminController.saveLocalOlt);
+router.delete('/api/admin/local-olts/:id', AdminController.deleteLocalOlt);
+router.post('/api/admin/local-olts/:id/test', AdminController.testLocalOltConnection);
+router.get('/api/admin/local-olts/:id/autofind', AdminController.getLocalOltAutofind);
+router.get('/api/admin/local-olts/:id/onus', AdminController.getLocalOltAuthorizedOnus);
+router.post('/api/admin/local-olts/:id/authorize', AdminController.authorizeLocalOltOnu);
+router.get('/api/admin/local-olts/:id/mikrotik-script', AdminController.getLocalOltMikrotikScript);
+
+// ==========================================
 // CAMBIO DE MÓDEM (REEMPLAZO DE ONU)
 // ==========================================
 router.get('/api/modem-swap/onus', AdminController.getModemSwapOnus);

@@ -2850,5 +2850,109 @@ export class AdminController {
       res.status(500).json({ success: false, error: error?.message || error });
     }
   }
+
+  // ==========================================
+  // GESTIÓN DE OLTS LOCALES (DELTASTREAM / SSH)
+  // ==========================================
+  static async getLocalOlts(_req: Request, res: Response): Promise<void> {
+    try {
+      const { LocalOltService } = await import('../services/local-olt.service');
+      const olts = await LocalOltService.getAllOlts();
+      res.json({ success: true, olts });
+    } catch (err: any) {
+      logger.error('Error al obtener OLTs locales:', err);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  }
+
+  static async saveLocalOlt(req: Request, res: Response): Promise<void> {
+    try {
+      const { LocalOltService } = await import('../services/local-olt.service');
+      const olt = await LocalOltService.saveOlt(req.body);
+      res.json({ success: true, olt, message: 'OLT guardada exitosamente' });
+    } catch (err: any) {
+      logger.error('Error al guardar OLT local:', err);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  }
+
+  static async deleteLocalOlt(req: Request, res: Response): Promise<void> {
+    try {
+      const { LocalOltService } = await import('../services/local-olt.service');
+      const ok = await LocalOltService.deleteOlt(req.params.id);
+      res.json({ success: ok, message: ok ? 'OLT eliminada' : 'No se pudo eliminar' });
+    } catch (err: any) {
+      logger.error('Error al eliminar OLT local:', err);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  }
+
+  static async testLocalOltConnection(req: Request, res: Response): Promise<void> {
+    try {
+      const { LocalOltService } = await import('../services/local-olt.service');
+      const result = await LocalOltService.testOltConnection(req.params.id);
+      res.json({ success: true, result });
+    } catch (err: any) {
+      logger.error('Error probando conexión a OLT local:', err);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  }
+
+  static async getLocalOltAutofind(req: Request, res: Response): Promise<void> {
+    try {
+      const { LocalOltService } = await import('../services/local-olt.service');
+      const port = String(req.query.port || '1/0/1');
+      const onts = await LocalOltService.getAutofind(req.params.id, port);
+      res.json({ success: true, onts });
+    } catch (err: any) {
+      logger.error('Error obteniendo autofind OLT:', err);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  }
+
+  static async getLocalOltAuthorizedOnus(req: Request, res: Response): Promise<void> {
+    try {
+      const { LocalOltService } = await import('../services/local-olt.service');
+      const port = String(req.query.port || '1/0/1');
+      const onus = await LocalOltService.getAuthorizedOnus(req.params.id, port);
+      res.json({ success: true, onus });
+    } catch (err: any) {
+      logger.error('Error obteniendo ONUs autorizadas OLT:', err);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  }
+
+  static async authorizeLocalOltOnu(req: Request, res: Response): Promise<void> {
+    try {
+      const { LocalOltService } = await import('../services/local-olt.service');
+      const { port, serial, clientName } = req.body;
+      if (!serial || !clientName) {
+        res.status(400).json({ success: false, error: 'Serial y Nombre de cliente requeridos' });
+        return;
+      }
+      const result = await LocalOltService.authorizeOnu(req.params.id, port || '1/0/1', serial, clientName);
+      res.json({ success: result.success, result });
+    } catch (err: any) {
+      logger.error('Error autorizando ONU local:', err);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  }
+
+  static async getLocalOltMikrotikScript(req: Request, res: Response): Promise<void> {
+    try {
+      const { LocalOltService } = await import('../services/local-olt.service');
+      const olt = await LocalOltService.getOltById(req.params.id);
+      if (!olt) {
+        res.status(404).json({ success: false, error: 'OLT no encontrada' });
+        return;
+      }
+      const tunnelIp = String(req.query.tunnel_ip || olt.wireguard_client_ip || '10.200.0.4/24');
+      const script = LocalOltService.generateMikrotikScript(olt, tunnelIp);
+      res.json({ success: true, script, olt });
+    } catch (err: any) {
+      logger.error('Error generando script MikroTik:', err);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  }
 }
 
