@@ -2335,31 +2335,28 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
         <button class="btn-close-modal" onclick="closeModal('modalCardPayment')">&times;</button>
       </div>
 
-      <!-- Selector de Paquetes, Adelantos y Promociones 5+1 / 10+2 -->
+      <!-- Selector Compacto de Paquetes y Promociones (Chips Horizontales) -->
       <div>
-        <div style="font-size: 11px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 6px;">
-          Elige qué deseas pagar hoy:
+        <div style="font-size: 11px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 7px; display: flex; justify-content: space-between; align-items: center;">
+          <span>Selecciona tu pago o adelanto:</span>
+          <span style="font-size: 10px; color: #10b981; font-weight: 800;"><i class="fa-solid fa-gift"></i> Meses Gratis incluidos</span>
         </div>
-        <div id="cardPlanSelectorBox" style="display: grid; grid-template-columns: 1fr; gap: 7px; max-height: 195px; overflow-y: auto; padding-right: 2px;"></div>
+        <div id="cardPlanSelectorBox" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 2px;"></div>
       </div>
 
-      <!-- Resumen del Pago con Comisión Desglosada -->
-      <div style="background: rgba(14, 165, 233, 0.08); border: 1.5px solid rgba(14, 165, 233, 0.35); border-radius: var(--radius-md); padding: 12px 14px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--text-body); margin-bottom: 5px;">
-          <span id="cardPayConceptLabel">Servicio de Internet:</span>
-          <strong id="cardPayBaseAmountLabel" style="color: var(--text-title); font-size: 14px;">$0.00 MXN</strong>
+      <!-- Resumen Compacto del Pago -->
+      <div style="background: rgba(14, 165, 233, 0.06); border: 1px solid rgba(14, 165, 233, 0.25); border-radius: var(--radius-md); padding: 10px 14px; display: flex; flex-direction: column; gap: 4px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12.5px;">
+          <span id="cardPayConceptLabel" style="color: var(--text-muted);">Servicio:</span>
+          <strong id="cardPayBaseAmountLabel" style="color: var(--text-title); font-family: monospace; font-size: 13.5px;">$0.00 MXN</strong>
         </div>
-        <div id="cardPayBonusRow" style="display: none; justify-content: space-between; align-items: center; font-size: 12px; color: #10b981; font-weight: 700; margin-bottom: 5px; background: rgba(16, 185, 129, 0.1); padding: 4px 8px; border-radius: 6px;">
-          <span id="cardPayBonusText"><i class="fa-solid fa-gift"></i> Bono Promoción Gratis:</span>
+        <div id="cardPayBonusRow" style="display: none; justify-content: space-between; align-items: center; font-size: 11.5px; color: #10b981; font-weight: 700;">
+          <span id="cardPayBonusText"><i class="fa-solid fa-gift"></i> Bono Regalo:</span>
           <strong id="cardPayBonusAmountLabel">+$0.00 MXN</strong>
         </div>
-        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11.5px; color: var(--text-muted); margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px dashed var(--border-card);">
-          <span>Comisión pasarela bancaria:</span>
-          <strong id="cardPayFeeAmountLabel" style="color: #f59e0b;">+$0.00 MXN</strong>
-        </div>
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <span style="font-weight: 800; font-size: 13px; color: var(--text-title);">Total a Cobrar:</span>
-          <strong id="cardPayTotalAmountLabel" style="font-size: 19px; font-weight: 800; color: #38bdf8; font-family: 'Outfit', sans-serif;">$0.00 MXN</strong>
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11.5px; color: var(--text-muted); border-top: 1px dashed rgba(255,255,255,0.08); padding-top: 4px;">
+          <span>Comisión Openpay:</span>
+          <strong id="cardPayFeeAmountLabel" style="color: #f59e0b; font-family: monospace;">+$0.00 MXN</strong>
         </div>
       </div>
 
@@ -2536,8 +2533,8 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
             bFavorBox.style.display = 'none';
           }
         }
-        if (btnPayLabel) btnPayLabel.innerText = 'Adelantar Meses (5+1 / 10+2 Gratis)';
-        if (choiceSubtitle) choiceSubtitle.innerText = 'Tu cuenta está al corriente. Puedes adelantar mensualidades y ganar meses gratis:';
+        if (btnPayLabel) btnPayLabel.innerText = 'Adelantar Servicio';
+        if (choiceSubtitle) choiceSubtitle.innerText = 'Tu cuenta está al corriente. Elige si deseas adelantar meses con promoción:';
       }
     }
 
@@ -4044,23 +4041,26 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
       const extraOverdue = p > 0 ? Math.max(0, debt - p) : 0;
       const list = [];
       if (debt > 0) {
-        list.push({ planOption: 'pending', label: 'Liquidar Saldo Pendiente', netAmount: debt, bonusMonths: 0, bonusAmount: 0, totalMonthsCovered: Math.max(1, Math.round(debt / p)) });
+        list.push({ planOption: 'pending', label: 'Adeudo Pendiente', shortTitle: 'Pendiente', badge: '', netAmount: debt, bonusMonths: 0, bonusAmount: 0, totalMonthsCovered: Math.max(1, Math.round(debt / p)) });
       } else {
-        list.push({ planOption: '1m', label: 'Adelantar 1 Mes', netAmount: p, bonusMonths: 0, bonusAmount: 0, totalMonthsCovered: 1 });
+        list.push({ planOption: '1m', label: '1 Mes de Servicio', shortTitle: '1 Mes', badge: '', netAmount: p, bonusMonths: 0, bonusAmount: 0, totalMonthsCovered: 1 });
       }
-      list.push({ planOption: '2m', label: 'Adelantar 2 Meses', netAmount: extraOverdue + 2 * p, bonusMonths: 0, bonusAmount: 0, totalMonthsCovered: 2 });
-      list.push({ planOption: '3m', label: 'Adelantar 3 Meses', netAmount: extraOverdue + 3 * p, bonusMonths: 0, bonusAmount: 0, totalMonthsCovered: 3 });
-      list.push({ planOption: 'promo_6m', label: 'Promo 6 Meses (Pagas 5, 1 GRATIS)', badge: '1 MES GRATIS', netAmount: extraOverdue + 5 * p, bonusMonths: 1, bonusAmount: p, totalMonthsCovered: 6 });
-      list.push({ planOption: 'promo_12m', label: 'Anualidad 12 Meses (Pagas 10, 2 GRATIS)', badge: '2 MESES GRATIS', netAmount: extraOverdue + 10 * p, bonusMonths: 2, bonusAmount: 2 * p, totalMonthsCovered: 12 });
+      list.push({ planOption: 'promo_6m', label: '6 Meses (Pagas 5 + 1 Gratis)', shortTitle: '6 Meses', badge: '+1 Gratis 🎁', netAmount: extraOverdue + 5 * p, bonusMonths: 1, bonusAmount: p, totalMonthsCovered: 6 });
+      list.push({ planOption: 'promo_12m', label: '12 Meses (Pagas 10 + 2 Gratis)', shortTitle: '1 Año', badge: '+2 Gratis 🔥', netAmount: extraOverdue + 10 * p, bonusMonths: 2, bonusAmount: 2 * p, totalMonthsCovered: 12 });
       return list;
     }
 
     function renderCardPaymentOptions(preferredOpt) {
       const box = document.getElementById('cardPlanSelectorBox');
       if (!box) return;
-      const options = (Array.isArray(currentPaymentOptions) && currentPaymentOptions.length > 0)
+      
+      // Filtramos para mantener siempre 3 opciones principales (Pendiente/1m, 6m promo, 12m promo) para un diseño limpio
+      let rawOptions = (Array.isArray(currentPaymentOptions) && currentPaymentOptions.length > 0)
         ? currentPaymentOptions
         : buildFallbackPaymentOptions();
+      
+      const filtered = rawOptions.filter(o => ['pending', '1m', 'promo_6m', 'promo_12m'].includes(o.planOption));
+      const options = filtered.length > 0 ? filtered : rawOptions.slice(0, 3);
       window._activeCardPlanOptions = options;
 
       let chosen = preferredOpt;
@@ -4071,17 +4071,18 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
       box.innerHTML = options.map(opt => {
         const isSelected = opt.planOption === chosen;
         const isPromo = Number(opt.bonusMonths || 0) > 0;
-        const borderCol = isSelected ? '#38bdf8' : (isPromo ? 'rgba(16, 185, 129, 0.38)' : 'var(--border-card)');
-        const bgCol = isSelected ? 'rgba(14, 165, 233, 0.14)' : (isPromo ? 'rgba(16, 185, 129, 0.06)' : 'var(--bg-surface)');
-        const badgeHtml = opt.badge
-          ? '<span style="font-size:10px; background:rgba(16,185,129,0.2); color:#10b981; padding:2px 7px; border-radius:999px; font-weight:800; margin-left:6px;">' + opt.badge + '</span>'
-          : '';
-        return '<button type="button" data-plan="' + opt.planOption + '" onclick="selectCardPaymentOption(this.dataset.plan)" style="width:100%; text-align:left; background:' + bgCol + '; border:1.5px solid ' + borderCol + '; border-radius:var(--radius-sm); padding:9px 12px; display:flex; justify-content:space-between; align-items:center; gap:8px; cursor:pointer; transition:all 0.15s ease;">' +
-          '<div style="min-width:0;">' +
-            '<div style="font-size:12.5px; font-weight:700; color:var(--text-title);">' + opt.label + badgeHtml + '</div>' +
-            (isPromo ? '<div style="font-size:11px; color:#10b981; margin-top:2px;">Recibes +' + opt.bonusMonths + (opt.bonusMonths === 1 ? ' mes gratis' : ' meses gratis') + ' ($' + Number(opt.bonusAmount || 0).toFixed(0) + ' de regalo)</div>' : '') +
-          '</div>' +
-          '<div style="font-size:13.5px; font-weight:800; color:' + (isSelected ? '#38bdf8' : 'var(--text-title)') + '; white-space:nowrap;">$' + Number(opt.netAmount).toFixed(2) + '</div>' +
+        const borderCol = isSelected ? '#0284c7' : (isPromo ? 'rgba(16, 185, 129, 0.35)' : 'var(--border-card)');
+        const bgCol = isSelected 
+          ? 'linear-gradient(135deg, rgba(14,165,233,0.18) 0%, rgba(2,132,199,0.28) 100%)' 
+          : (isPromo ? 'rgba(16, 185, 129, 0.05)' : 'var(--bg-surface)');
+        
+        let displayTitle = opt.shortTitle || (opt.planOption === 'pending' ? 'Pendiente' : (opt.planOption === '1m' ? '1 Mes' : (opt.planOption === 'promo_6m' ? '6 Meses' : (opt.planOption === 'promo_12m' ? '1 Año' : opt.label))));
+        let promoTag = opt.badge || (opt.bonusMonths === 1 ? '+1 Gratis' : (opt.bonusMonths === 2 ? '+2 Gratis' : ''));
+
+        return '<button type="button" data-plan="' + opt.planOption + '" onclick="selectCardPaymentOption(this.dataset.plan)" style="text-align:center; background:' + bgCol + '; border:1.5px solid ' + borderCol + '; border-radius:10px; padding:7px 5px; cursor:pointer; transition:all 0.15s ease; position:relative; overflow:hidden; display:flex; flex-direction:column; justify-content:center; align-items:center; min-height:58px; box-shadow:' + (isSelected ? '0 0 10px rgba(14,165,233,0.35)' : 'none') + ';">' +
+          (promoTag ? '<span style="font-size:9px; background:rgba(16,185,129,0.22); color:#10b981; padding:1px 5px; border-radius:999px; font-weight:800; margin-bottom:2px; white-space:nowrap; letter-spacing:0.2px;">' + promoTag + '</span>' : '') +
+          '<div style="font-size:12px; font-weight:700; color:' + (isSelected ? '#38bdf8' : 'var(--text-title)') + '; line-height:1.2;">' + displayTitle + '</div>' +
+          '<div style="font-size:13px; font-weight:800; color:' + (isSelected ? '#fff' : 'var(--text-body)') + '; font-family:monospace; margin-top:2px;">$' + Number(opt.netAmount).toFixed(0) + '</div>' +
         '</button>';
       }).join('');
 
@@ -4105,7 +4106,7 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
       const bonusAmtEl = document.getElementById('cardPayBonusAmountLabel');
       if (bonusRow && bonusTxt && bonusAmtEl) {
         if (Number(chosenObj.bonusMonths || 0) > 0) {
-          bonusTxt.innerHTML = '<i class="fa-solid fa-gift"></i> Bono (' + chosenObj.bonusMonths + (chosenObj.bonusMonths === 1 ? ' mes gratis' : ' meses gratis') + '):';
+          bonusTxt.innerHTML = '<i class="fa-solid fa-gift"></i> Meses de Regalo (' + chosenObj.bonusMonths + (chosenObj.bonusMonths === 1 ? ' mes' : ' meses') + '):';
           bonusAmtEl.innerText = '+$' + Number(chosenObj.bonusAmount || 0).toFixed(2) + ' MXN';
           bonusRow.style.display = 'flex';
         } else {
@@ -4162,10 +4163,7 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
       if (baseEl) baseEl.innerText = '$' + net.toFixed(2) + ' MXN';
 
       const feeEl = document.getElementById('cardPayFeeAmountLabel');
-      if (feeEl) feeEl.innerText = '+$' + fee.toFixed(2) + ' MXN (' + p + '% + $' + f + ' +IVA)';
-
-      const totalEl = document.getElementById('cardPayTotalAmountLabel');
-      if (totalEl) totalEl.innerText = '$' + total.toFixed(2) + ' MXN';
+      if (feeEl) feeEl.innerText = '+$' + fee.toFixed(2) + ' MXN';
 
       const btnTxt = document.getElementById('btnCardPayText');
       if (btnTxt) btnTxt.innerText = 'Pagar $' + total.toFixed(2) + ' MXN';
