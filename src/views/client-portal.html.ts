@@ -1375,7 +1375,7 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
         <button id="btnChangePassword" class="btn-header-action hidden" onclick="openCreatePasswordModal(currentPhone, true)" title="Cambiar mi contraseña de acceso">
           <i class="fa-solid fa-key"></i>
         </button>
-        <button id="btnPwa" class="btn-header-action" onclick="handlePwaInstallClick()" title="Instalar App en tu pantalla"><i class="fa-solid fa-download" style="color: #38bdf8;"></i> App</button>
+        <button id="btnPwa" class="btn-header-action hidden" onclick="handlePwaInstallClick()" title="Instalar App en tu pantalla"><i class="fa-solid fa-download" style="color: #38bdf8;"></i> App</button>
         <button id="btnLogout" class="btn-header-action hidden" onclick="logoutClient()" title="Cerrar sesión"><i class="fa-solid fa-right-from-bracket"></i></button>
       </div>
     </header>
@@ -2635,18 +2635,84 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
       }
     }
 
+    let deferredPwaPrompt = null;
+
+    function isPwaStandalone() {
+      try {
+        return window.matchMedia('(display-mode: standalone)').matches ||
+               window.matchMedia('(display-mode: fullscreen)').matches ||
+               window.matchMedia('(display-mode: minimal-ui)').matches ||
+               window.matchMedia('(display-mode: window-controls-overlay)').matches ||
+               Boolean((window.navigator as any).standalone) ||
+               document.referrer.includes('android-app://');
+      } catch (e) {
+        return false;
+      }
+    }
+
     function initPwa() {
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('/sw.js').catch(() => {});
       }
-      let deferredPrompt;
+
+      const btn = document.getElementById('btnPwa');
+
+      // Si ya está ejecutándose como aplicación instalada o el usuario ya la instaló, asegurar que no aparezca
+      if (isPwaStandalone() || localStorage.getItem('pwa_installed') === '1') {
+        if (btn) btn.classList.add('hidden');
+        return;
+      }
+
       window.addEventListener('beforeinstallprompt', (e) => {
         e.preventDefault();
-        deferredPrompt = e;
-        const btn = document.getElementById('btnPwa');
+        deferredPwaPrompt = e;
+        if (!isPwaStandalone() && localStorage.getItem('pwa_installed') !== '1') {
+          if (btn) btn.classList.remove('hidden');
+        }
+      });
+
+      window.addEventListener('appinstalled', () => {
+        deferredPwaPrompt = null;
+        localStorage.setItem('pwa_installed', '1');
+        const b = document.getElementById('btnPwa');
+        if (b) b.classList.add('hidden');
+      });
+    }
+
+    function handlePwaInstallClick() {
+      const btn = document.getElementById('btnPwa');
+      if (isPwaStandalone() || localStorage.getItem('pwa_installed') === '1') {
+        if (btn) btn.classList.add('hidden');
+        return;
+      }
+
+      if (deferredPwaPrompt) {
+        deferredPwaPrompt.prompt();
+        deferredPwaPrompt.userChoice.then((choiceResult: any) => {
+          if (choiceResult && choiceResult.outcome === 'accepted') {
+            localStorage.setItem('pwa_installed', '1');
+            if (btn) btn.classList.add('hidden');
+            showToast('✅ ¡App instalada con éxito!');
+          }
+          deferredPwaPrompt = null;
+        }).catch(() => {});
+      } else {
+        openModalWithState('modalPwaInstallGuide');
+      }
+    }
+
+    function switchPwaInstallTab(tab: string) {
+      const tabs = ['android', 'ios', 'wa'];
+      tabs.forEach(t => {
+        const btn = document.getElementById('pwaTab_' + t);
+        const content = document.getElementById('pwaContent_' + t);
         if (btn) {
-          btn.classList.remove('hidden');
-          btn.onclick = () => { deferredPrompt.prompt(); };
+          if (t === tab) btn.classList.add('active');
+          else btn.classList.remove('active');
+        }
+        if (content) {
+          if (t === tab) content.classList.remove('hidden');
+          else content.classList.add('hidden');
         }
       });
     }
