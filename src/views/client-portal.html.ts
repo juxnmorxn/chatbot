@@ -1421,9 +1421,8 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
         <button type="submit" class="btn-main"><i class="fa-solid fa-arrow-right-to-bracket"></i> Entrar a mi Cuenta</button>
       </form>
 
-      <div style="display: flex; justify-content: space-between; font-size: 13px; margin-top: 4px;">
+      <div style="text-align: center; font-size: 13px; margin-top: 8px;">
         <span style="color: #0284c7; cursor: pointer; font-weight: 600;" onclick="showForgot()">¿Olvidaste tu clave?</span>
-        <span style="color: #0284c7; cursor: pointer; font-weight: 600;" onclick="showRegister()">Crear contraseña</span>
       </div>
     </div>
 

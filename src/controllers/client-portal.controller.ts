@@ -855,7 +855,17 @@ self.addEventListener('fetch', (event) => {
       });
 
       const ispName = SettingsService.get('ISP_NAME', 'ISP_NAME', config.isp.name || 'CloudWare');
-      const appUrl = SettingsService.get('APP_URL', 'APP_URL', config.appUrl || 'http://2.25.241.239').replace(/\/+$/, '');
+      const host = req.headers['x-forwarded-host'] || req.headers.host;
+      const proto = req.headers['x-forwarded-proto'] || (req.secure ? 'https' : 'http');
+      let appUrl = 'https://portal.cloudwaremx.com';
+      if (host && !String(host).includes('localhost') && !String(host).includes('127.0.0.1')) {
+        appUrl = `${proto}://${host}`;
+      } else {
+        const rawUrl = SettingsService.get('APP_URL', 'APP_URL', config.appUrl || '').replace(/\/+$/, '');
+        if (rawUrl && rawUrl.startsWith('http') && !rawUrl.includes('localhost') && !rawUrl.includes('127.0.0.1') && !rawUrl.includes('2.25.241.239')) {
+          appUrl = rawUrl;
+        }
+      }
       const resetUrl = `${appUrl}/portal?resetCode=${otp}&p=${last10}`;
 
       const waMsg = `🔐 *Recuperación de Contraseña - ${ispName}*\n\n` +
