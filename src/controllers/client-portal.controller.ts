@@ -2639,42 +2639,52 @@ self.addEventListener('fetch', (event) => {
   }
 
   /**
-   * Speedtest Descarga (Download Streaming con datos no compresibles)
+   * Speedtest Descarga (Download Streaming continuo con datos no compresibles)
    */
   static speedtestDownload(req: Request, res: Response): void {
-    const sizeMb = Math.min(Math.max(parseInt(req.query.size as string, 10) || 12, 1), 30);
-    const totalBytes = sizeMb * 1024 * 1024;
-
     res.setHeader('Content-Type', 'application/octet-stream');
-    res.setHeader('Content-Length', totalBytes.toString());
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Content-Encoding', 'identity');
 
-    let bytesSent = 0;
     let isClosed = false;
+    let bytesSent = 0;
+    const maxBytes = 400 * 1024 * 1024; // 400 MB (suficiente para planes ultra rápidos de 300+ Mbps en 10s)
 
-    req.on('close', () => {
+    const cleanup = () => {
       isClosed = true;
-    });
+    };
+
+    req.on('close', cleanup);
+    req.on('aborted', cleanup);
+    res.on('close', cleanup);
+    res.on('finish', cleanup);
+
+    // Timeout de seguridad en el servidor de 25 segundos
+    const serverTimeout = setTimeout(() => {
+      if (!isClosed && !res.writableEnded) {
+        isClosed = true;
+        try { res.end(); } catch {}
+      }
+    }, 25000);
 
     const sendNextChunk = () => {
-      if (isClosed) return;
-      while (bytesSent < totalBytes) {
-        const remaining = totalBytes - bytesSent;
-        const chunkSize = Math.min(SPEEDTEST_CHUNK_SIZE, remaining);
-        const chunk = chunkSize === SPEEDTEST_CHUNK_SIZE 
-          ? speedtestRandomChunk 
-          : speedtestRandomChunk.subarray(0, chunkSize);
-
-        bytesSent += chunkSize;
-        const canContinue = res.write(chunk);
+      if (isClosed || res.writableEnded) {
+        clearTimeout(serverTimeout);
+        return;
+      }
+      while (!isClosed && !res.writableEnded && bytesSent < maxBytes) {
+        bytesSent += SPEEDTEST_CHUNK_SIZE;
+        const canContinue = res.write(speedtestRandomChunk);
         if (!canContinue) {
           res.once('drain', sendNextChunk);
           return;
         }
       }
-      res.end();
+      clearTimeout(serverTimeout);
+      if (!res.writableEnded) {
+        try { res.end(); } catch {}
+      }
     };
 
     sendNextChunk();
@@ -2685,15 +2695,12 @@ self.addEventListener('fetch', (event) => {
    */
   static speedtestUpload(req: Request, res: Response): void {
     let bytesReceived = 0;
-    const startTime = Date.now();
 
     if (req.body && Buffer.isBuffer(req.body)) {
       bytesReceived = req.body.length;
-      const elapsedSec = Math.max((Date.now() - startTime) / 1000, 0.001);
-      const mbps = Number(((bytesReceived * 8) / elapsedSec / (1024 * 1024)).toFixed(2));
       res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
       res.setHeader('Pragma', 'no-cache');
-      res.json({ success: true, bytesReceived, elapsedSec, mbps });
+      res.json({ success: true, bytesReceived });
       return;
     }
 
@@ -2702,11 +2709,9 @@ self.addEventListener('fetch', (event) => {
     });
 
     req.on('end', () => {
-      const elapsedSec = Math.max((Date.now() - startTime) / 1000, 0.001);
-      const mbps = Number(((bytesReceived * 8) / elapsedSec / (1024 * 1024)).toFixed(2));
       res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
       res.setHeader('Pragma', 'no-cache');
-      res.json({ success: true, bytesReceived, elapsedSec, mbps });
+      res.json({ success: true, bytesReceived });
     });
 
     req.on('error', (err: any) => {
