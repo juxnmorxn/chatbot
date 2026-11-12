@@ -4076,7 +4076,7 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
         const badgeHtml = opt.badge
           ? '<span style="font-size:10px; background:rgba(16,185,129,0.2); color:#10b981; padding:2px 7px; border-radius:999px; font-weight:800; margin-left:6px;">' + opt.badge + '</span>'
           : '';
-        return '<button type="button" data-plan="' + opt.planOption + '" onclick="selectCardPaymentOption(this.getAttribute(\'data-plan\'))" style="width:100%; text-align:left; background:' + bgCol + '; border:1.5px solid ' + borderCol + '; border-radius:var(--radius-sm); padding:9px 12px; display:flex; justify-content:space-between; align-items:center; gap:8px; cursor:pointer; transition:all 0.15s ease;">' +
+        return '<button type="button" data-plan="' + opt.planOption + '" onclick="selectCardPaymentOption(this.dataset.plan)" style="width:100%; text-align:left; background:' + bgCol + '; border:1.5px solid ' + borderCol + '; border-radius:var(--radius-sm); padding:9px 12px; display:flex; justify-content:space-between; align-items:center; gap:8px; cursor:pointer; transition:all 0.15s ease;">' +
           '<div style="min-width:0;">' +
             '<div style="font-size:12.5px; font-weight:700; color:var(--text-title);">' + opt.label + badgeHtml + '</div>' +
             (isPromo ? '<div style="font-size:11px; color:#10b981; margin-top:2px;">Recibes +' + opt.bonusMonths + (opt.bonusMonths === 1 ? ' mes gratis' : ' meses gratis') + ' ($' + Number(opt.bonusAmount || 0).toFixed(0) + ' de regalo)</div>' : '') +
