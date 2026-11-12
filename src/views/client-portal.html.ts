@@ -1339,6 +1339,25 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
       line-height: 1.45;
     }
 
+    /* Speedtest Styles */
+    .st-metric-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-card);
+      border-radius: var(--radius-md);
+      padding: 10px 8px;
+      text-align: center;
+      transition: all 0.2s ease;
+    }
+    .st-gauge-container {
+      position: relative;
+      width: 190px;
+      height: 190px;
+      margin: 4px auto 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
   </style>
 </head>
 <body>
@@ -1704,6 +1723,12 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
             <div id="statusFriendlySub" style="display: none;"></div>
           </div>
 
+          <!-- Botón Medir Velocidad -->
+          <button type="button" class="btn-main" onclick="openSpeedtestModal()" style="margin-top: 10px; background: linear-gradient(135deg, #0284c7, #0ea5e9); color: #fff; font-size: 13px; font-weight: 700; padding: 11px 14px; border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 14px rgba(2, 132, 199, 0.25); cursor: pointer; border: none; width: 100%;">
+            <i class="fa-solid fa-gauge-high"></i>
+            <span>Medir Velocidad de mi Conexión</span>
+          </button>
+
           <!-- Pie: Folio del Contrato -->
           <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11.5px; color: var(--text-muted); margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border-card);">
             <span>Folio Contrato: <strong id="contractFolio" style="color: #0284c7;">#-</strong></span>
@@ -1774,6 +1799,11 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
                 <i class="fa-solid fa-pen"></i> Cambiar Clave
               </button>
             </div>
+
+            <!-- Medir Velocidad Wi-Fi -->
+            <button type="button" class="btn-outline" onclick="openSpeedtestModal()" style="margin-top: 8px; width: 100%; font-size: 12px; font-weight: 700; padding: 9px 12px; border-color: rgba(2, 132, 199, 0.35); color: #0284c7; background: rgba(2, 132, 199, 0.08); display: flex; align-items: center; justify-content: center; gap: 7px;">
+              <i class="fa-solid fa-gauge-high"></i> Probar Velocidad de esta Red
+            </button>
           </div>
         </div>
 
@@ -1806,6 +1836,22 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
           <div id="invoicesList" class="invoices-scroll-grid">
             <div style="text-align: center; color: var(--text-muted); font-size: 12.5px; padding: 20px;">Consultando facturas...</div>
           </div>
+        </div>
+
+        <!-- TARJETA: DIAGNÓSTICO Y TEST DE VELOCIDAD -->
+        <div class="app-card" style="display: flex; flex-direction: column; gap: 10px;">
+          <div class="card-head" style="margin-bottom: 0;">
+            <div class="card-head-title" style="color: #0284c7; font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.6px;">
+              <i class="fa-solid fa-gauge-high"></i> Test de Velocidad CloudWare
+            </div>
+            <span style="font-size: 10.5px; background: rgba(16, 185, 129, 0.12); color: #10b981; padding: 2px 8px; border-radius: 999px; font-weight: 700;">En Vivo</span>
+          </div>
+          <p style="font-size: 12.5px; color: var(--text-body); margin: 0; line-height: 1.45;">
+            Verifica el ancho de banda real de tu servicio de fibra óptica, midiendo latencia (ping), descarga y subida en tiempo real.
+          </p>
+          <button type="button" class="btn-main" onclick="openSpeedtestModal()" style="background: linear-gradient(135deg, #0284c7, #0ea5e9); font-size: 13px; font-weight: 700; padding: 10px 14px;">
+            <i class="fa-solid fa-play"></i> Iniciar Test de Velocidad
+          </button>
         </div>
 
         <!-- TARJETA: CENTRO DE ASISTENCIA Y SOPORTE DIRECTO -->
@@ -2455,6 +2501,96 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
     </div>
   </div>
 
+  <!-- MODAL: TEST DE VELOCIDAD DE CONEXIÓN CLOUDWARE (SPEEDTEST) -->
+  <div id="modalSpeedtest" class="modal-overlay" style="z-index: 240;">
+    <div class="modal-sheet" style="max-width: 440px; text-align: center;">
+      <div class="modal-sheet-header">
+        <div class="modal-sheet-title" style="display: flex; align-items: center; gap: 8px;">
+          <i class="fa-solid fa-gauge-high" style="color: #38bdf8;"></i> Test de Velocidad de Conexión
+        </div>
+        <button class="btn-close-modal" onclick="closeModal('modalSpeedtest')">&times;</button>
+      </div>
+
+      <!-- Medidor Velocímetro Circular SVG -->
+      <div class="st-gauge-container">
+        <svg width="190" height="190" viewBox="0 0 180 180" style="display: block; margin: 0 auto; overflow: visible;">
+          <defs>
+            <linearGradient id="stGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#38bdf8" />
+              <stop offset="60%" stop-color="#0284c7" />
+              <stop offset="100%" stop-color="#10b981" />
+            </linearGradient>
+          </defs>
+          <!-- Track de Fondo (240 grados) -->
+          <circle cx="90" cy="90" r="70" fill="none" stroke="rgba(255, 255, 255, 0.08)" stroke-width="11" stroke-linecap="round" stroke-dasharray="293 147" transform="rotate(150 90 90)" />
+          <!-- Arco Activo de Progreso -->
+          <circle id="stProgressCircle" cx="90" cy="90" r="70" fill="none" stroke="url(#stGrad)" stroke-width="11" stroke-linecap="round" stroke-dasharray="293 147" stroke-dashoffset="293" transform="rotate(150 90 90)" style="transition: stroke-dashoffset 0.12s ease;" />
+        </svg>
+
+        <!-- Indicador Central Numérico -->
+        <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none;">
+          <span id="stLiveSpeed" style="font-family: 'Outfit', sans-serif; font-size: 46px; font-weight: 800; color: var(--text-title); line-height: 1;">0.0</span>
+          <span id="stLiveUnit" style="font-size: 13px; font-weight: 700; color: #0284c7; margin-top: 4px; letter-spacing: 0.5px;">Mbps</span>
+          <span id="stPhaseBadge" style="font-size: 11px; font-weight: 700; color: var(--text-muted); background: var(--bg-surface); border: 1px solid var(--border-card); padding: 2px 10px; border-radius: 999px; margin-top: 6px;">Listo para iniciar</span>
+        </div>
+      </div>
+
+      <!-- Tarjetas de Métricas (Ping, Descarga, Subida) -->
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; width: 100%; margin: 8px 0 12px 0;">
+        <div class="st-metric-card" id="cardStPing">
+          <div style="font-size: 11px; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">
+            <i class="fa-solid fa-wave-square" style="color: #a855f7;"></i> Ping
+          </div>
+          <div style="font-size: 16.5px; font-weight: 800; color: var(--text-title); margin-top: 2px;">
+            <span id="stPingVal">--</span> <small style="font-size: 10.5px; font-weight: 600; color: var(--text-muted);">ms</small>
+          </div>
+        </div>
+        <div class="st-metric-card" id="cardStDown">
+          <div style="font-size: 11px; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">
+            <i class="fa-solid fa-arrow-down" style="color: #10b981;"></i> Descarga
+          </div>
+          <div style="font-size: 16.5px; font-weight: 800; color: #10b981; margin-top: 2px;">
+            <span id="stDownVal">--</span> <small style="font-size: 10.5px; font-weight: 600; color: var(--text-muted);">Mbps</small>
+          </div>
+        </div>
+        <div class="st-metric-card" id="cardStUp">
+          <div style="font-size: 11px; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">
+            <i class="fa-solid fa-arrow-up" style="color: #0284c7;"></i> Subida
+          </div>
+          <div style="font-size: 16.5px; font-weight: 800; color: #0284c7; margin-top: 2px;">
+            <span id="stUpVal">--</span> <small style="font-size: 10.5px; font-weight: 600; color: var(--text-muted);">Mbps</small>
+          </div>
+        </div>
+      </div>
+
+      <!-- Cuadro de Comparación y Calificación con el Plan -->
+      <div id="stComparisonBox" style="display: none; background: rgba(2, 132, 199, 0.08); border: 1px solid rgba(2, 132, 199, 0.25); border-radius: var(--radius-md); padding: 12px 14px; text-align: left; margin-bottom: 12px; flex-direction: column; gap: 6px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px;">
+          <span style="color: var(--text-muted);"><i class="fa-solid fa-file-contract"></i> Tu Plan Contratado:</span>
+          <strong id="stPlanContratadoLabel" style="color: var(--text-title); font-size: 13px;">40 Mbps</strong>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 12px;">
+          <span style="color: var(--text-muted);"><i class="fa-solid fa-gauge"></i> Velocidad Obtenida:</span>
+          <strong id="stVelocidadObtenidaLabel" style="color: #10b981; font-size: 13.5px;">39.4 Mbps (98%)</strong>
+        </div>
+        <div id="stVerdictMessage" style="font-size: 11.5px; line-height: 1.4; color: var(--text-body); padding-top: 6px; border-top: 1px dashed rgba(255,255,255,0.08); margin-top: 2px;">
+          🚀 ¡Excelente! Tu conexión de fibra óptica está operando a velocidad óptima.
+        </div>
+      </div>
+
+      <!-- Consejo de Medición Óptima -->
+      <div id="stTipBox" style="background: var(--bg-surface); border: 1px solid var(--border-card); border-radius: var(--radius-sm); padding: 8px 12px; font-size: 11px; color: var(--text-muted); display: flex; align-items: flex-start; gap: 8px; margin-bottom: 14px; text-align: left; line-height: 1.4;">
+        <i class="fa-solid fa-circle-info" style="color: #0284c7; font-size: 13px; margin-top: 2px; flex-shrink: 0;"></i>
+        <span>Para máxima velocidad, conéctate a la red <strong>5G</strong> o por cable Ethernet y evita descargas pesadas simultáneas.</span>
+      </div>
+
+      <!-- Botón de Acción Principal -->
+      <button type="button" id="btnRunSpeedtest" class="btn-main" onclick="startSpeedtest()" style="width: 100%; padding: 13px; font-size: 14px; font-weight: 700; background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);">
+        <i class="fa-solid fa-play"></i> <span id="btnRunSpeedtestText">Iniciar Test de Velocidad</span>
+      </button>
+    </div>
+  </div>
+
   <!-- TOAST NOTIFICACIÓN -->
   <div id="toast"><i class="fa-solid fa-circle-check"></i> <span id="toastMessage">Listo</span></div>
 
@@ -2465,6 +2601,8 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
     let currentClient = null;
     let currentServices = [];
     let currentClientPlanPrice = 250;
+    let currentClientPlanSpeedMbps = 40;
+    let isSpeedtestRunning = false;
     let currentClientBalance = 0;
     let currentClientRawSaldo = 0;
     let currentPaymentOptions = [];
@@ -3263,15 +3401,21 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
       let speedBig = '';
       const speedMatch = rawPlan.match(/(\\d+)\\s*(?:m|megas?|mbps|g|gb|gigas?)\\b/i) || cleanPlan.match(/(\\d+)\\s*(?:m|megas?|mbps|g|gb|gigas?)\\b/i);
       if (speedMatch) {
+        currentClientPlanSpeedMbps = parseInt(speedMatch[1], 10);
+        if (/(?:g|gb|gigas?)/i.test(speedMatch[0])) currentClientPlanSpeedMbps *= 1000;
         speedBig = speedMatch[1] + (/(?:g|gb|gigas?)/i.test(speedMatch[0]) ? 'G' : 'M');
       } else {
         const numOnly = rawPlan.match(/\\b(\\d{2,4})\\b/) || cleanPlan.match(/\\b(\\d{2,4})\\b/);
         if (numOnly) {
+          currentClientPlanSpeedMbps = parseInt(numOnly[1], 10);
           speedBig = numOnly[1] + 'M';
         } else if (cleanPlan.length <= 6 && /\\d/.test(cleanPlan)) {
           speedBig = cleanPlan.toUpperCase();
+          const cleanNum = parseInt(cleanPlan.replace(/\\D/g, ''), 10);
+          if (!isNaN(cleanNum) && cleanNum > 0) currentClientPlanSpeedMbps = cleanNum;
         } else {
           speedBig = '40M';
+          currentClientPlanSpeedMbps = 40;
         }
       }
 
@@ -4624,6 +4768,271 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
           setTimeout(() => {
             checkAndShowGpsPrompt();
           }, 350);
+        }
+      }
+    }
+
+    // ==========================================
+    // ⚡ SPEEDTEST INTEGRADO (LÓGICA DEL CLIENTE)
+    // ==========================================
+    function openSpeedtestModal() {
+      const planLabel = (currentClient && currentClient.plan_internet) || (currentClientPlanSpeedMbps + ' Megas');
+      const planEl = document.getElementById('stPlanContratadoLabel');
+      if (planEl) planEl.innerText = planLabel;
+
+      if (!isSpeedtestRunning) {
+        resetSpeedtestUI();
+      }
+
+      openModalWithState('modalSpeedtest');
+    }
+
+    function resetSpeedtestUI() {
+      const circle = document.getElementById('stProgressCircle');
+      if (circle) circle.style.strokeDashoffset = '293';
+      const live = document.getElementById('stLiveSpeed');
+      if (live) live.innerText = '0.0';
+      const unit = document.getElementById('stLiveUnit');
+      if (unit) unit.innerText = 'Mbps';
+      const phase = document.getElementById('stPhaseBadge');
+      if (phase) {
+        phase.innerText = 'Listo para iniciar';
+        phase.style.color = 'var(--text-muted)';
+      }
+      const pingVal = document.getElementById('stPingVal');
+      if (pingVal) pingVal.innerText = '--';
+      const downVal = document.getElementById('stDownVal');
+      if (downVal) downVal.innerText = '--';
+      const upVal = document.getElementById('stUpVal');
+      if (upVal) upVal.innerText = '--';
+
+      const cmpBox = document.getElementById('stComparisonBox');
+      if (cmpBox) cmpBox.style.display = 'none';
+
+      const btn = document.getElementById('btnRunSpeedtest');
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-play"></i> <span>Iniciar Test de Velocidad</span>';
+      }
+    }
+
+    function updateSpeedometer(mbps, targetMax) {
+      const max = Math.max(targetMax || 50, 50);
+      const ratio = Math.min(Math.max(mbps / max, 0), 1);
+      const offset = 293 - (293 * ratio);
+      const circle = document.getElementById('stProgressCircle');
+      if (circle) circle.style.strokeDashoffset = offset.toFixed(1);
+      const live = document.getElementById('stLiveSpeed');
+      if (live) live.innerText = mbps.toFixed(1);
+    }
+
+    async function startSpeedtest() {
+      if (isSpeedtestRunning) return;
+      isSpeedtestRunning = true;
+
+      const btn = document.getElementById('btnRunSpeedtest');
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> <span>Midiendo conexión...</span>';
+      }
+
+      const phase = document.getElementById('stPhaseBadge');
+      const pingVal = document.getElementById('stPingVal');
+      const downVal = document.getElementById('stDownVal');
+      const upVal = document.getElementById('stUpVal');
+      const cmpBox = document.getElementById('stComparisonBox');
+      if (cmpBox) cmpBox.style.display = 'none';
+
+      const targetPlanMbps = Number(currentClientPlanSpeedMbps) || 40;
+
+      try {
+        // ------------------------------------------
+        // FASE 1: LATENCIA (PING Y JITTER)
+        // ------------------------------------------
+        if (phase) {
+          phase.innerText = 'Midiendo Latencia (Ping)...';
+          phase.style.color = '#a855f7';
+        }
+
+        const pings = [];
+        for (let i = 0; i < 4; i++) {
+          const t0 = performance.now();
+          const resp = await fetch('/api/portal/speedtest/ping?t=' + Date.now() + '_' + i, { cache: 'no-store' });
+          if (!resp.ok) throw new Error('Error al conectar con servidor de test');
+          await resp.json();
+          const t1 = performance.now();
+          const diff = Math.max(t1 - t0, 1);
+          pings.push(diff);
+          if (pingVal) pingVal.innerText = Math.round(diff);
+          await new Promise(r => setTimeout(r, 60));
+        }
+
+        const minPing = Math.round(Math.min.apply(null, pings));
+        if (pingVal) pingVal.innerText = minPing;
+
+        // ------------------------------------------
+        // FASE 2: VELOCIDAD DE DESCARGA (DOWNLOAD)
+        // ------------------------------------------
+        if (phase) {
+          phase.innerText = 'Midiendo Descarga...';
+          phase.style.color = '#10b981';
+        }
+
+        const downloadMb = targetPlanMbps > 60 ? 18 : 12;
+        const downStart = performance.now();
+        const downResp = await fetch('/api/portal/speedtest/download?size=' + downloadMb + '&t=' + Date.now(), { cache: 'no-store' });
+        if (!downResp.ok || !downResp.body) throw new Error('Error al descargar flujo de prueba');
+
+        const reader = downResp.body.getReader();
+        let totalDownloaded = 0;
+        let lastSampleTime = downStart;
+        let lastSampleBytes = 0;
+        const downSamples = [];
+
+        while (true) {
+          const res = await reader.read();
+          if (res.done) break;
+          const chunk = res.value;
+          totalDownloaded += chunk.length;
+
+          const now = performance.now();
+          const diffMs = now - lastSampleTime;
+          if (diffMs >= 100) {
+            const diffSec = diffMs / 1000;
+            const diffBytes = totalDownloaded - lastSampleBytes;
+            const instantMbps = (diffBytes * 8) / diffSec / (1024 * 1024);
+            downSamples.push(instantMbps);
+
+            updateSpeedometer(instantMbps, targetPlanMbps);
+            if (downVal) downVal.innerText = instantMbps.toFixed(1);
+
+            lastSampleTime = now;
+            lastSampleBytes = totalDownloaded;
+          }
+        }
+
+        const totalDownSec = Math.max((performance.now() - downStart) / 1000, 0.1);
+        let finalDownMbps = (totalDownloaded * 8) / totalDownSec / (1024 * 1024);
+        if (downSamples.length >= 4) {
+          const sorted = downSamples.slice().sort((a, b) => a - b);
+          const valid = sorted.slice(Math.floor(sorted.length * 0.2));
+          finalDownMbps = valid.reduce((acc, v) => acc + v, 0) / valid.length;
+        }
+
+        if (downVal) downVal.innerText = finalDownMbps.toFixed(1);
+        updateSpeedometer(finalDownMbps, targetPlanMbps);
+
+        await new Promise(r => setTimeout(r, 200));
+
+        // ------------------------------------------
+        // FASE 3: VELOCIDAD DE SUBIDA (UPLOAD)
+        // ------------------------------------------
+        if (phase) {
+          phase.innerText = 'Midiendo Subida...';
+          phase.style.color = '#0284c7';
+        }
+
+        const uploadSizeBytes = 4 * 1024 * 1024; // 4 MB
+        const uploadData = new Uint8Array(uploadSizeBytes);
+        for (let i = 0; i < uploadSizeBytes; i += 256) {
+          uploadData[i] = (i & 0xff);
+        }
+
+        const finalUpMbps = await new Promise(function(resolve) {
+          const xhr = new XMLHttpRequest();
+          const upStart = performance.now();
+          let lastUpTime = upStart;
+          let lastUpBytes = 0;
+          const upSamples = [];
+
+          xhr.upload.onprogress = function(evt) {
+            if (evt.lengthComputable && evt.loaded > 0) {
+              const now = performance.now();
+              const diffMs = now - lastUpTime;
+              if (diffMs >= 100) {
+                const diffSec = diffMs / 1000;
+                const diffBytes = evt.loaded - lastUpBytes;
+                const instantMbps = (diffBytes * 8) / diffSec / (1024 * 1024);
+                upSamples.push(instantMbps);
+
+                updateSpeedometer(instantMbps, targetPlanMbps);
+                if (upVal) upVal.innerText = instantMbps.toFixed(1);
+
+                lastUpTime = now;
+                lastUpBytes = evt.loaded;
+              }
+            }
+          };
+
+          xhr.onload = function() {
+            const totalUpSec = Math.max((performance.now() - upStart) / 1000, 0.1);
+            let calculatedUp = (uploadSizeBytes * 8) / totalUpSec / (1024 * 1024);
+            if (upSamples.length >= 3) {
+              const sorted = upSamples.slice().sort((a, b) => a - b);
+              const valid = sorted.slice(Math.floor(sorted.length * 0.2));
+              calculatedUp = valid.reduce((acc, v) => acc + v, 0) / valid.length;
+            }
+            resolve(calculatedUp);
+          };
+
+          xhr.onerror = function() {
+            resolve(null);
+          };
+
+          xhr.open('POST', '/api/portal/speedtest/upload?t=' + Date.now());
+          xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+          xhr.send(uploadData);
+        });
+
+        if (finalUpMbps !== null) {
+          if (upVal) upVal.innerText = finalUpMbps.toFixed(1);
+        } else {
+          if (upVal) upVal.innerText = '--';
+        }
+
+        // ------------------------------------------
+        // FASE 4: ANÁLISIS FINAL Y COMPARACIÓN
+        // ------------------------------------------
+        updateSpeedometer(finalDownMbps, targetPlanMbps);
+        if (phase) {
+          phase.innerText = 'Prueba Completada';
+          phase.style.color = '#10b981';
+        }
+
+        const pct = Math.round((finalDownMbps / targetPlanMbps) * 100);
+        const planContratadoStr = targetPlanMbps + ' Mbps';
+
+        const planContratadoEl = document.getElementById('stPlanContratadoLabel');
+        if (planContratadoEl) planContratadoEl.innerText = planContratadoStr;
+
+        const velObtenidaEl = document.getElementById('stVelocidadObtenidaLabel');
+        if (velObtenidaEl) velObtenidaEl.innerText = finalDownMbps.toFixed(1) + ' Mbps (' + pct + '%)';
+
+        const verdictEl = document.getElementById('stVerdictMessage');
+        if (verdictEl) {
+          if (pct >= 85) {
+            verdictEl.innerHTML = '<span style="color: #10b981; font-weight: 700;">🚀 ¡Velocidad Óptima!</span> Estás recibiendo el <strong>' + pct + '%</strong> de tu paquete de ' + planContratadoStr + '. Tu conexión de fibra está en estado excelente.';
+          } else if (pct >= 60) {
+            verdictEl.innerHTML = '<span style="color: #38bdf8; font-weight: 700;">👍 Buen Rendimiento:</span> Recibes el <strong>' + pct + '%</strong> de tu plan. Si estás en Wi-Fi, conéctate a la red <strong>5G</strong> o acércate a tu módem para exprimir la velocidad al 100%.';
+          } else {
+            verdictEl.innerHTML = '<span style="color: #f59e0b; font-weight: 700;">⚠️ Nivel Inferior al Esperado:</span> Obtuviste el <strong>' + pct + '%</strong> de tu velocidad contratada. Si estás conectado a la red 2.4 GHz o lejos del módem, conéctate a la red <strong>5 GHz</strong> o prueba por cable de red.';
+          }
+        }
+
+        if (cmpBox) cmpBox.style.display = 'flex';
+
+      } catch (err) {
+        console.error('Error en speedtest:', err);
+        if (phase) {
+          phase.innerText = 'Error en la prueba';
+          phase.style.color = '#ef4444';
+        }
+        showToast('No se pudo completar el test. Verifica tu conexión.');
+      } finally {
+        isSpeedtestRunning = false;
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fa-solid fa-rotate-right"></i> <span>Repetir Test de Velocidad</span>';
         }
       }
     }

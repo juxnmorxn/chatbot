@@ -34,6 +34,9 @@ router.get('/api/portal/signal', ClientPortalController.getLiveSignal);
 router.post('/api/portal/wifi', ClientPortalController.changeWifi);
 router.post('/api/portal/reboot', ClientPortalController.rebootModem);
 router.post('/api/portal/location', portalAuthGeneralLimiter, ClientPortalController.updateLocation);
+router.get('/api/portal/speedtest/ping', ClientPortalController.speedtestPing);
+router.get('/api/portal/speedtest/download', ClientPortalController.speedtestDownload);
+router.post('/api/portal/speedtest/upload', ClientPortalController.speedtestUpload);
 router.get('/api/portal/invoice/:id/receipt', ClientPortalController.renderInvoiceReceipt);
 router.get('/recibo/:id', ClientPortalController.renderInvoiceReceipt);
 
