@@ -4834,8 +4834,16 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
     }
 
     function updateSpeedometer(mbps, targetMax) {
-      const max = Math.max(targetMax || 50, 50);
-      const ratio = Math.min(Math.max(mbps / max, 0), 1);
+      // Escala ultra-dinámica con soporte de hasta 800 - 1000+ Mbps
+      let scaleMax = Math.max(targetMax || 100, 100);
+      if (scaleMax >= 500 || mbps >= 450) {
+        scaleMax = Math.max(scaleMax * 1.15, 850, mbps * 1.1);
+      } else if (scaleMax >= 200 || mbps >= 150) {
+        scaleMax = Math.max(scaleMax * 1.15, 450, mbps * 1.1);
+      } else {
+        scaleMax = Math.max(scaleMax * 1.15, 100, mbps * 1.1);
+      }
+      const ratio = Math.min(Math.max(mbps / scaleMax, 0), 1);
       const offset = 293 - (293 * ratio);
       const circle = document.getElementById('stProgressCircle');
       if (circle) circle.style.strokeDashoffset = offset.toFixed(1);
@@ -4904,7 +4912,7 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
         }
 
         // ==========================================
-        // FASE 2: VELOCIDAD DE DESCARGA (10.0 SEGUNDOS)
+        // FASE 2: VELOCIDAD DE DESCARGA (10.0 SEGUNDOS - HASTA 800+ MBPS)
         // ==========================================
         if (cardDown) {
           cardDown.style.borderColor = '#10b981';
@@ -4914,61 +4922,79 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
         const DURATION_DOWN_MS = 10000;
         const downStart = performance.now();
         const downAbortCtrl = new AbortController();
-
-        const downResp = await fetch('/api/portal/speedtest/download?t=' + Date.now(), {
-          cache: 'no-store',
-          signal: downAbortCtrl.signal
-        });
-        if (!downResp.ok || !downResp.body) throw new Error('Error al iniciar flujo de descarga');
-
-        const reader = downResp.body.getReader();
+        const CONCURRENT_DOWNLOAD_STREAMS = 4;
         let totalDownloaded = 0;
         let lastSampleTime = downStart;
         let lastSampleBytes = 0;
         const downSamples = [];
 
-        while (true) {
-          const elapsed = performance.now() - downStart;
-          if (elapsed >= DURATION_DOWN_MS) {
-            break;
-          }
-
-          const res = await reader.read();
-          if (res.done) break;
-          totalDownloaded += res.value.length;
-
-          const now = performance.now();
-          const currentElapsed = now - downStart;
-          const progressPct = Math.min((currentElapsed / DURATION_DOWN_MS) * 100, 100);
-          if (barFill) barFill.style.width = progressPct.toFixed(1) + '%';
-
-          const diffMs = now - lastSampleTime;
-          if (diffMs >= 120) {
-            const diffSec = diffMs / 1000;
-            const diffBytes = totalDownloaded - lastSampleBytes;
-            const instantMbps = (diffBytes * 8) / diffSec / (1024 * 1024);
-            downSamples.push(instantMbps);
-
-            updateSpeedometer(instantMbps, targetPlanMbps);
-            if (downVal) downVal.innerText = instantMbps.toFixed(1);
-
-            const secRemaining = Math.max(Math.ceil((DURATION_DOWN_MS - currentElapsed) / 1000), 0);
-            if (phase) {
-              phase.innerHTML = '<i class="fa-solid fa-arrow-down fa-bounce" style="color: #10b981;"></i> Descargando... ' + secRemaining + 's';
-              phase.style.color = '#10b981';
+        function startDownWorker(id) {
+          return fetch('/api/portal/speedtest/download?t=' + Date.now() + '_' + id, {
+            cache: 'no-store',
+            signal: downAbortCtrl.signal
+          }).then(function(resp) {
+            if (!resp.ok || !resp.body) return;
+            const reader = resp.body.getReader();
+            function readStream() {
+              if (performance.now() - downStart >= DURATION_DOWN_MS) {
+                try { reader.cancel(); } catch(e) {}
+                return;
+              }
+              return reader.read().then(function(res) {
+                if (res.done) return;
+                totalDownloaded += res.value.length;
+                return readStream();
+              }).catch(function() {});
             }
-
-            lastSampleTime = now;
-            lastSampleBytes = totalDownloaded;
-          }
+            return readStream();
+          }).catch(function() {});
         }
 
-        try { reader.cancel(); } catch {}
-        try { downAbortCtrl.abort(); } catch {}
+        const downWorkers = [];
+        for (let i = 0; i < CONCURRENT_DOWNLOAD_STREAMS; i++) {
+          downWorkers.push(startDownWorker(i));
+        }
 
-        // Calcular promedio ponderado descartando arranque TCP inicial (20%)
+        await new Promise(function(resolveDownTimer) {
+          const downTimer = setInterval(function() {
+            const now = performance.now();
+            const currentElapsed = now - downStart;
+
+            const progressPct = Math.min((currentElapsed / DURATION_DOWN_MS) * 100, 100);
+            if (barFill) barFill.style.width = progressPct.toFixed(1) + '%';
+
+            const diffMs = now - lastSampleTime;
+            if (diffMs >= 100) {
+              const diffSec = diffMs / 1000;
+              const diffBytes = totalDownloaded - lastSampleBytes;
+              const instantMbps = (diffBytes * 8) / diffSec / (1024 * 1024);
+              if (instantMbps > 0) downSamples.push(instantMbps);
+
+              updateSpeedometer(instantMbps, targetPlanMbps);
+              if (downVal) downVal.innerText = instantMbps.toFixed(1);
+
+              const secRemaining = Math.max(Math.ceil((DURATION_DOWN_MS - currentElapsed) / 1000), 0);
+              if (phase) {
+                phase.innerHTML = '<i class="fa-solid fa-arrow-down fa-bounce" style="color: #10b981;"></i> Descargando... ' + secRemaining + 's';
+                phase.style.color = '#10b981';
+              }
+
+              lastSampleTime = now;
+              lastSampleBytes = totalDownloaded;
+            }
+
+            if (currentElapsed >= DURATION_DOWN_MS) {
+              clearInterval(downTimer);
+              try { downAbortCtrl.abort(); } catch(e) {}
+              resolveDownTimer();
+            }
+          }, 80);
+        });
+
+        await Promise.allSettled(downWorkers);
+
         let finalDownMbps = 0;
-        if (downSamples.length >= 5) {
+        if (downSamples.length >= 6) {
           const warmIndex = Math.floor(downSamples.length * 0.2);
           const valid = downSamples.slice(warmIndex);
           finalDownMbps = valid.reduce((acc, v) => acc + v, 0) / valid.length;
@@ -4992,7 +5018,7 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
         await new Promise(r => setTimeout(r, 600));
 
         // ==========================================
-        // FASE 3: VELOCIDAD DE SUBIDA (10.0 SEGUNDOS)
+        // FASE 3: VELOCIDAD DE SUBIDA (10.0 SEGUNDOS - HASTA 800+ MBPS)
         // ==========================================
         if (cardUp) {
           cardUp.style.borderColor = '#0284c7';
@@ -5007,9 +5033,10 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
         let lastUpSampleTime = upStart;
         let lastUpSampleBytes = 0;
         const activeXhrs = [];
-        const chunkBlob = new Blob([new Uint8Array(1024 * 1024)]); // 1 MB chunk
+        // Chunk de 2 MB para saturar enlaces simétricos y de alta velocidad (600 - 800 Mbps)
+        const chunkBlob = new Blob([new Uint8Array(2 * 1024 * 1024)]);
 
-        function runUploadPipe() {
+        function runUploadPipe(pipeId) {
           return new Promise(function(resolvePipe) {
             function sendNext() {
               if (stopUpload || (performance.now() - upStart >= DURATION_UP_MS)) {
@@ -5034,11 +5061,11 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
                   if (barFill) barFill.style.width = progressPct.toFixed(1) + '%';
 
                   const diffMs = now - lastUpSampleTime;
-                  if (diffMs >= 120) {
+                  if (diffMs >= 100) {
                     const diffSec = diffMs / 1000;
                     const diffBytes = totalUploaded - lastUpSampleBytes;
                     const instantMbps = (diffBytes * 8) / diffSec / (1024 * 1024);
-                    upSamples.push(instantMbps);
+                    if (instantMbps > 0) upSamples.push(instantMbps);
 
                     updateSpeedometer(instantMbps, targetPlanMbps);
                     if (upVal) upVal.innerText = instantMbps.toFixed(1);
@@ -5060,11 +5087,11 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
               };
 
               xhr.onerror = function() {
-                if (!stopUpload) setTimeout(sendNext, 200);
+                if (!stopUpload) setTimeout(sendNext, 100);
                 else resolvePipe();
               };
 
-              xhr.open('POST', '/api/portal/speedtest/upload?t=' + Date.now());
+              xhr.open('POST', '/api/portal/speedtest/upload?t=' + Date.now() + '_' + pipeId);
               xhr.setRequestHeader('Content-Type', 'application/octet-stream');
               xhr.send(chunkBlob);
             }
@@ -5081,10 +5108,19 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
           }, DURATION_UP_MS);
         });
 
-        await Promise.all([runUploadPipe(), runUploadPipe(), timerPromise]);
+        // 4 tuberías simultáneas de subida para alcanzar 600 - 800+ Mbps
+        const uploadPipes = [
+          runUploadPipe(0),
+          runUploadPipe(1),
+          runUploadPipe(2),
+          runUploadPipe(3),
+          timerPromise
+        ];
+
+        await Promise.all(uploadPipes);
 
         let finalUpMbps = 0;
-        if (upSamples.length >= 4) {
+        if (upSamples.length >= 6) {
           const warmIndex = Math.floor(upSamples.length * 0.2);
           const valid = upSamples.slice(warmIndex);
           finalUpMbps = valid.reduce((acc, v) => acc + v, 0) / valid.length;

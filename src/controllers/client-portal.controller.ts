@@ -38,8 +38,8 @@ const REBOOT_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutos entre reinicios por clien
 const wifiChangeCooldowns = new Map<string, number>();
 const WIFI_COOLDOWN_MS = 30 * 1000; // 30 segundos entre cambios de Wi-Fi
 
-// 🚀 BUFFER PRE-CALCULADO CON BYTES NO COMPRESIBLES PARA SPEEDTEST (256 KB)
-const SPEEDTEST_CHUNK_SIZE = 256 * 1024;
+// 🚀 BUFFER PRE-CALCULADO CON BYTES NO COMPRESIBLES PARA SPEEDTEST (1 MB - SOPORTA 800+ MBPS)
+const SPEEDTEST_CHUNK_SIZE = 1024 * 1024;
 const speedtestRandomChunk = crypto.randomBytes(SPEEDTEST_CHUNK_SIZE);
 
 export class ClientPortalController {
@@ -2649,7 +2649,7 @@ self.addEventListener('fetch', (event) => {
 
     let isClosed = false;
     let bytesSent = 0;
-    const maxBytes = 400 * 1024 * 1024; // 400 MB (suficiente para planes ultra rápidos de 300+ Mbps en 10s)
+    const maxBytes = 2000 * 1024 * 1024; // 2 GB (suficiente para planes de 600, 800 y hasta 1500+ Mbps durante 10s)
 
     const cleanup = () => {
       isClosed = true;
