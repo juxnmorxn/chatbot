@@ -1736,7 +1736,6 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
                 </div>
                 <span id="wifiSsid24Label" class="wifi-val" style="margin-top: 2px;">Cargando...</span>
               </div>
-              <button class="btn-action-icon" style="width: 32px; height: 32px; font-size: 13px;" onclick="copyWifiSsid24()" title="Copiar nombre de red"><i class="fa-solid fa-copy"></i></button>
             </div>
 
             <!-- 5 GHz (Visible solo si maneja redes separadas) -->
@@ -1748,7 +1747,6 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
                 </div>
                 <span id="wifiSsid5gLabel" class="wifi-val" style="margin-top: 2px;">Cargando...</span>
               </div>
-              <button class="btn-action-icon" style="width: 32px; height: 32px; font-size: 13px;" onclick="copyWifiSsid5g()" title="Copiar nombre de red 5G"><i class="fa-solid fa-copy"></i></button>
             </div>
           </div>
 
