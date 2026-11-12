@@ -2643,7 +2643,7 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
                window.matchMedia('(display-mode: fullscreen)').matches ||
                window.matchMedia('(display-mode: minimal-ui)').matches ||
                window.matchMedia('(display-mode: window-controls-overlay)').matches ||
-               Boolean((window.navigator as any).standalone) ||
+               Boolean(window.navigator && window.navigator['standalone']) ||
                document.referrer.includes('android-app://');
       } catch (e) {
         return false;
@@ -2688,7 +2688,7 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
 
       if (deferredPwaPrompt) {
         deferredPwaPrompt.prompt();
-        deferredPwaPrompt.userChoice.then((choiceResult: any) => {
+        deferredPwaPrompt.userChoice.then((choiceResult) => {
           if (choiceResult && choiceResult.outcome === 'accepted') {
             localStorage.setItem('pwa_installed', '1');
             if (btn) btn.classList.add('hidden');
@@ -2701,7 +2701,7 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
       }
     }
 
-    function switchPwaInstallTab(tab: string) {
+    function switchPwaInstallTab(tab) {
       const tabs = ['android', 'ios', 'wa'];
       tabs.forEach(t => {
         const btn = document.getElementById('pwaTab_' + t);
