@@ -610,15 +610,12 @@ export class BotOrchestrator {
       (accion || '').includes('CONTRATO')
     );
 
-    // Sugerencia contextual del portal solo en saludos o consultas de saldo/cuenta para no saturar en soporte técnico
+    // Sugerencia contextual del portal en saludos o consultas si el cliente está identificado y el texto no incluye ya el enlace
     const esMomentoApropiado = intencion === 'SALUDO' || intencion === 'CONSULTAR_SALDO' || intencion === 'CONSULTAR_PLAN' || (accion || '').includes('SALUDO') || (accion || '').includes('SALDO');
     if (!esTecnico && esMomentoApropiado && !dest.includes('@g.us') && !textoFinal.includes('/portal') && !textoFinal.includes('portal.')) {
       try {
-        const tieneCuenta = await this.clienteTieneCuentaPortal(last10);
-        if (!tieneCuenta) {
-          const portalLink = await this.getClientPortalLinkAsync(last10);
-          textoFinal = `${textoFinal}\n\n💡 _*Puedes consultar tu conexión, Wi-Fi y recibos en tu Portal Web:*_\n👉 ${portalLink}`;
-        }
+        const portalLink = await this.getClientPortalLinkAsync(last10);
+        textoFinal = `${textoFinal}\n\n🌐 _*Tu Portal Web de Autoservicio:*_\n👉 ${portalLink}`;
       } catch {}
     }
 
@@ -1807,7 +1804,38 @@ export class BotOrchestrator {
       }
     }
 
-    // 5. Si es saludo o conversación general y no está suspendido, respondemos de forma inteligente con Groq enriquecido con los datos reales de su plan en la BD
+    // 5. Saludo al inicio de la conversación con cliente ya identificado (nombre, servicio, plan, portal)
+    const saludosBasicos = ['hola', 'buenas', 'buen dia', 'buenos dias', 'buenas tardes', 'buenas noches', 'saludos', 'hola buenas', 'hola que tal', 'que tal', 'hey'];
+    const esSaludoInicio = clasificacion.intencion === 'SALUDO' || saludosBasicos.some(s => lowerMsg === s || (lowerMsg.startsWith(s) && lowerMsg.length <= s.length + 5));
+
+    if (esSaludoInicio && session?.client_name) {
+      const clienteCtx = await this.obtenerContextoClienteCompleto(phone, session);
+      const nombreLimpio = formatDisplayName(session.client_name, true) || 'Cliente';
+      const idSrv = session.service_id || (session as any)?.client_id || clienteCtx.clientWh?.id_servicio || '';
+      const srvTexto = idSrv && !String(idSrv).startsWith('HWTC') && !String(idSrv).startsWith('ONU-') ? `Contrato #${idSrv}` : 'Servicio Activo';
+      const planTexto = clienteCtx.planInternet ? ` · *${clienteCtx.planInternet}*` : '';
+      const portalUrl = await BotOrchestrator.getClientPortalLinkAsync(phone, session.client_name);
+
+      const msjSaludoIdentificado =
+        `¡Hola, *${nombreLimpio}*! 👋 Bienvenido a *${this.getIspName()}*.\n\n` +
+        `📋 *Tu Servicio:* ${srvTexto}${planTexto}\n\n` +
+        `🌐 *Tu Portal Web de Autoservicio:*\n` +
+        `👉 ${portalUrl}\n` +
+        `_(Accede para consultar tu saldo, pagar en línea, ver tu red Wi-Fi o medir tu velocidad)_\n\n` +
+        `¿En qué te podemos apoyar el día de hoy? 😊`;
+
+      await this.enviarYLoguear(
+        phone,
+        msjSaludoIdentificado,
+        'SALUDO',
+        'SALUDO_CLIENTE_IDENTIFICADO',
+        targetJid
+      );
+      await DbService.updateStep(phone, 'CONVERSACIONAL');
+      return;
+    }
+
+    // 6. Si es conversación general y no está suspendido, respondemos de forma inteligente con Groq enriquecido con los datos reales de su plan en la BD
     const historial = await DbService.getHistorialReciente(phone, 8);
 
     // Contexto enriquecido de SmartOLT si tiene ONU
@@ -6581,12 +6609,20 @@ export class BotOrchestrator {
     await DbService.ensurePortalAccount(phone, session.client_name || undefined);
     const portalUrl = await this.getClientPortalLinkAsync(phone, session.client_name || undefined);
 
+    const idServicio = session.service_id || meta.wisphub_id || '';
+    const contratoTexto = idServicio && !String(idServicio).startsWith('HWTC') && !String(idServicio).startsWith('ONU-') ? `Contrato #${idServicio}` : 'Servicio Activo';
+    const planInfo = meta.speed_profile ? ` · *${meta.speed_profile}*` : '';
+
     await this.enviarYLoguear(
       phone,
-      `¡Hola, *${nombreLimpio}*! 👋 Bienvenido al centro de atención y soporte de *${this.getIspName()}*.\n\n` +
-      `¿En qué podemos apoyarte el día de hoy con tu servicio?\n\n` +
-      `💡 _*Tip:* También puedes consultar tu conexión, potencia y facturas en tu Portal Web:_\n` +
-      `👉 ${portalUrl}`,
+      `¡Hola, *${nombreLimpio}*! 👋 Bienvenido a *${this.getIspName()}*.\n\n` +
+      `📋 *Datos de tu cuenta:*\n` +
+      `• *Titular:* ${session.client_name}\n` +
+      `• *Servicio:* ${contratoTexto}${planInfo}\n\n` +
+      `🌐 *Tu Portal Web de Autoservicio:*\n` +
+      `👉 ${portalUrl}\n` +
+      `_(Desde tu portal puedes consultar tu saldo, pagar en línea, ver tu red Wi-Fi o medir tu velocidad)_\n\n` +
+      `¿En qué podemos apoyarte el día de hoy con tu servicio?`,
       'IDENTIFICAR_CLIENTE',
       'VINCULADO_ESPERANDO_PROBLEMA',
       targetJid
