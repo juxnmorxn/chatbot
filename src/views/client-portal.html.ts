@@ -2593,6 +2593,25 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
       <button type="button" id="btnRunSpeedtest" class="btn-main" onclick="startSpeedtest()" style="width: 100%; padding: 13px; font-size: 14px; font-weight: 700; background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);">
         <i class="fa-solid fa-play"></i> <span id="btnRunSpeedtestText">Iniciar Test de Velocidad</span>
       </button>
+
+      <!-- Servidores Locales Certificados (Speedtest by Ookla & Fast.com) -->
+      <div style="background: rgba(2, 132, 199, 0.06); border: 1px solid rgba(2, 132, 199, 0.2); border-radius: var(--radius-md); padding: 12px 14px; margin-top: 14px; text-align: left; display: flex; flex-direction: column; gap: 8px;">
+        <div style="font-size: 11.5px; font-weight: 700; color: var(--text-title); display: flex; align-items: center; justify-content: space-between;">
+          <span style="display: flex; align-items: center; gap: 6px;"><i class="fa-solid fa-tower-broadcast" style="color: #38bdf8;"></i> Medición Local Certificada</span>
+          <span style="font-size: 10px; background: rgba(56, 189, 248, 0.15); color: #38bdf8; padding: 2px 7px; border-radius: 999px; font-weight: 700;">600M - 800M+</span>
+        </div>
+        <p style="font-size: 11px; color: var(--text-muted); margin: 0; line-height: 1.4;">
+          Para certificar planes de alta velocidad contra el servidor de proximidad más cercano en tu región (ej. Hulux Actopan / Pachuca):
+        </p>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 2px;">
+          <a href="https://www.speedtest.net" target="_blank" class="btn-main" style="padding: 9px 10px; font-size: 11.5px; font-weight: 700; background: linear-gradient(135deg, #14b8a6, #0d9488); text-decoration: none; text-align: center; justify-content: center; display: flex; align-items: center; gap: 5px;">
+            <i class="fa-solid fa-gauge-high"></i> Speedtest (Ookla)
+          </a>
+          <a href="https://fast.com" target="_blank" class="btn-outline" style="padding: 9px 10px; font-size: 11.5px; font-weight: 700; border-color: rgba(56, 189, 248, 0.4); color: #38bdf8; text-decoration: none; text-align: center; justify-content: center; display: flex; align-items: center; gap: 5px;">
+            <i class="fa-solid fa-bolt"></i> Fast.com
+          </a>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -5091,6 +5110,10 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
                 else resolvePipe();
               };
 
+              xhr.onabort = function() {
+                resolvePipe();
+              };
+
               xhr.open('POST', '/api/portal/speedtest/upload?t=' + Date.now() + '_' + pipeId);
               xhr.setRequestHeader('Content-Type', 'application/octet-stream');
               xhr.send(chunkBlob);
@@ -5100,7 +5123,7 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
           });
         }
 
-        const timerPromise = new Promise(function(resolveTimer) {
+        const masterTimerPromise = new Promise(function(resolveTimer) {
           setTimeout(function() {
             stopUpload = true;
             activeXhrs.forEach(function(x) { try { x.abort(); } catch(e) {} });
@@ -5113,11 +5136,11 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
           runUploadPipe(0),
           runUploadPipe(1),
           runUploadPipe(2),
-          runUploadPipe(3),
-          timerPromise
+          runUploadPipe(3)
         ];
 
-        await Promise.all(uploadPipes);
+        // Termina exactamente al cumplirse el temporizador o al resolver las tuberías
+        await Promise.race([Promise.all(uploadPipes), masterTimerPromise]);
 
         let finalUpMbps = 0;
         if (upSamples.length >= 6) {
