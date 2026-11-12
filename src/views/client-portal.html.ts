@@ -1617,15 +1617,20 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
 
           <div class="billing-hero" style="padding: 12px 14px; margin: 4px 0 12px 0;">
             <div class="billing-hero-left">
-              <span style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">Total a Pagar</span>
+              <span id="billingHeaderLabel" style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">Total a Pagar</span>
               <div id="billingAmountLabel" class="billing-hero-amount" style="font-size: 28px;">$0.00</div>
               <div id="billingDueLabel" class="billing-hero-date" style="font-size: 11.5px;">Día 11 de cada mes</div>
             </div>
           </div>
 
-          <!-- Botón único y destacado de Pago -->
-          <button class="btn-main" onclick="openPaymentChoiceModal()" style="width: 100%; padding: 13px 16px; font-size: 14.5px; font-weight: 700; border-radius: var(--radius-md); background: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%); box-shadow: 0 4px 16px rgba(14, 165, 233, 0.4); display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 12px; cursor: pointer;">
-            <i class="fa-solid fa-credit-card"></i> Pagar Servicio
+          <div id="saldoFavorBanner" style="display: none; align-items: center; gap: 8px; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.35); color: #10b981; font-size: 12px; font-weight: 700; padding: 8px 11px; border-radius: var(--radius-sm); margin-bottom: 12px; line-height: 1.35;">
+            <i class="fa-solid fa-piggy-bank" style="font-size: 15px; flex-shrink: 0;"></i>
+            <span id="saldoFavorText"></span>
+          </div>
+
+          <!-- Botón único y destacado de Pago / Adelantos -->
+          <button id="btnHeroPayService" class="btn-main" onclick="openPaymentChoiceModal()" style="width: 100%; padding: 13px 16px; font-size: 14.5px; font-weight: 700; border-radius: var(--radius-md); background: linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%); box-shadow: 0 4px 16px rgba(14, 165, 233, 0.4); display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 12px; cursor: pointer;">
+            <i class="fa-solid fa-credit-card"></i> <span id="btnHeroPayLabel">Pagar Servicio</span>
           </button>
 
           <!-- Cuadro de CLABE Interbancaria Personalizada (Openpay SPEI Automático) -->
@@ -1871,8 +1876,8 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
         <button class="btn-close-modal" onclick="closeModal('modalPaymentChoice')">&times;</button>
       </div>
 
-      <p style="font-size: 13px; color: var(--text-body); margin: 0 0 16px 0; line-height: 1.4;">
-        Selecciona tu forma de pago preferida para tu mensualidad:
+      <p id="paymentChoiceSubtitle" style="font-size: 13px; color: var(--text-body); margin: 0 0 16px 0; line-height: 1.4;">
+        Selecciona tu forma de pago preferida para tu mensualidad o adelanto:
       </p>
 
       <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 8px;">
@@ -2137,6 +2142,16 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
           <span id="bankRefText" style="display: none;">-</span>
         </div>
 
+        <!-- Tarjeta: Guía de Montos y Promociones SPEI (5+1 / 10+2) -->
+        <div id="speiPromoGuideBox" style="background: rgba(16, 185, 129, 0.07); border: 1px solid rgba(16, 185, 129, 0.32); padding: 11px 13px; border-radius: var(--radius-md);">
+          <div style="font-size: 11px; color: #10b981; font-weight: 800; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+            <i class="fa-solid fa-gift"></i> Adelantos y Promociones Automáticas (SPEI)
+          </div>
+          <div id="speiPromoGuideList" style="display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--text-body);">
+            <div>• Transfiere el monto exacto de cualquier paquete y el sistema aplicará tu promoción automáticamente como Saldo a Favor.</div>
+          </div>
+        </div>
+
         <!-- Tarjeta: Instrucción de Reenviar Comprobante / Captura al WhatsApp de Oficina -->
         <div style="background: var(--bg-surface); border: 1.5px solid rgba(16, 185, 129, 0.35); padding: 13px 14px; border-radius: var(--radius-md);">
           <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
@@ -2315,16 +2330,28 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
     <div class="modal-sheet" style="max-width: 440px; border-color: rgba(14, 165, 233, 0.45); box-shadow: 0 25px 60px rgba(0, 0, 0, 0.7);">
       <div class="modal-sheet-header">
         <div class="modal-sheet-title" style="display: flex; align-items: center; gap: 8px;">
-          <i class="fa-solid fa-credit-card" style="color: #38bdf8;"></i> Pagar con Tarjeta Bancaria
+          <i class="fa-solid fa-credit-card" style="color: #38bdf8;"></i> Pagar o Adelantar con Tarjeta
         </div>
         <button class="btn-close-modal" onclick="closeModal('modalCardPayment')">&times;</button>
+      </div>
+
+      <!-- Selector de Paquetes, Adelantos y Promociones 5+1 / 10+2 -->
+      <div>
+        <div style="font-size: 11px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 6px;">
+          Elige qué deseas pagar hoy:
+        </div>
+        <div id="cardPlanSelectorBox" style="display: grid; grid-template-columns: 1fr; gap: 7px; max-height: 195px; overflow-y: auto; padding-right: 2px;"></div>
       </div>
 
       <!-- Resumen del Pago con Comisión Desglosada -->
       <div style="background: rgba(14, 165, 233, 0.08); border: 1.5px solid rgba(14, 165, 233, 0.35); border-radius: var(--radius-md); padding: 12px 14px;">
         <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--text-body); margin-bottom: 5px;">
-          <span>Mensualidad de Internet:</span>
+          <span id="cardPayConceptLabel">Servicio de Internet:</span>
           <strong id="cardPayBaseAmountLabel" style="color: var(--text-title); font-size: 14px;">$0.00 MXN</strong>
+        </div>
+        <div id="cardPayBonusRow" style="display: none; justify-content: space-between; align-items: center; font-size: 12px; color: #10b981; font-weight: 700; margin-bottom: 5px; background: rgba(16, 185, 129, 0.1); padding: 4px 8px; border-radius: 6px;">
+          <span id="cardPayBonusText"><i class="fa-solid fa-gift"></i> Bono Promoción Gratis:</span>
+          <strong id="cardPayBonusAmountLabel">+$0.00 MXN</strong>
         </div>
         <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11.5px; color: var(--text-muted); margin-bottom: 6px; padding-bottom: 6px; border-bottom: 1px dashed var(--border-card);">
           <span>Comisión pasarela bancaria:</span>
@@ -2414,6 +2441,10 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
           <span style="color: var(--text-muted);">Monto Pagado:</span>
           <strong id="receiptAmountLabel" style="color: #10b981; font-size: 16px;">$0.00 MXN</strong>
         </div>
+        <div id="receiptPromoRow" style="display: none; justify-content: space-between; align-items: center; color: #10b981; background: rgba(16,185,129,0.1); padding: 5px 8px; border-radius: 6px;">
+          <span><i class="fa-solid fa-gift"></i> Cobertura / Bono:</span>
+          <strong id="receiptPromoLabel">-</strong>
+        </div>
         <div style="display: flex; justify-content: space-between; align-items: center;">
           <span style="color: var(--text-muted);">Método de Pago:</span>
           <strong id="receiptMethodLabel" style="color: var(--text-title); font-size: 13px;">Tarjeta Bancaria</strong>
@@ -2439,6 +2470,12 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
     let currentContractId = '';
     let currentClient = null;
     let currentServices = [];
+    let currentClientPlanPrice = 250;
+    let currentClientBalance = 0;
+    let currentClientRawSaldo = 0;
+    let currentPaymentOptions = [];
+    let selectedPlanOptionKey = 'pending';
+    let currentSelectedPlanLabel = '';
     let realWifiPassword24 = '';
     let realWifiPassword5g = '';
     let realWifiSsid24 = '';
@@ -2446,6 +2483,63 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
     let isPassRevealed24 = false;
     let isPassRevealed5g = false;
     let isLoadingDashboard = false;
+
+    function updateBillingHeroUI(opts) {
+      const hasPending = Boolean(opts && opts.hasPending);
+      const effectiveBalance = Number((opts && opts.effectiveBalance) || 0);
+      const saldoAFavor = Number((opts && opts.saldoAFavor) || 0);
+      const monthsAhead = Number((opts && opts.monthsCoveredAhead) || 0);
+      const dueDate = opts && opts.dueDate;
+
+      const bHeader = document.getElementById('billingHeaderLabel');
+      const bAmt = document.getElementById('billingAmountLabel');
+      const bBadge = document.getElementById('billingBadge');
+      const bDue = document.getElementById('billingDueLabel');
+      const bFavorBox = document.getElementById('saldoFavorBanner');
+      const bFavorTxt = document.getElementById('saldoFavorText');
+      const btnPayLabel = document.getElementById('btnHeroPayLabel');
+      const choiceSubtitle = document.getElementById('paymentChoiceSubtitle');
+
+      if (hasPending || effectiveBalance > 0) {
+        if (bHeader) bHeader.innerText = 'Total a Pagar';
+        if (bAmt) {
+          bAmt.innerText = '$' + effectiveBalance.toFixed(2);
+          bAmt.style.color = '';
+        }
+        if (bBadge) {
+          bBadge.className = 'badge-status pending';
+          bBadge.innerText = 'Pago Pendiente';
+        }
+        if (bDue && dueDate) bDue.innerText = 'Vence: ' + dueDate;
+        if (bFavorBox) bFavorBox.style.display = 'none';
+        if (btnPayLabel) btnPayLabel.innerText = 'Pagar Servicio o Adelantar';
+        if (choiceSubtitle) choiceSubtitle.innerText = 'Liquida tu saldo o aprovecha las promos de 1 o 2 meses gratis:';
+      } else {
+        if (bHeader) bHeader.innerText = saldoAFavor > 0 ? 'Saldo a Favor Disponible' : 'Estado de Cuenta';
+        if (bAmt) {
+          bAmt.innerText = saldoAFavor > 0 ? ('+$' + saldoAFavor.toFixed(2)) : '$0.00';
+          bAmt.style.color = '#10b981';
+        }
+        if (bBadge) {
+          bBadge.className = 'badge-status paid';
+          bBadge.innerText = 'Al Corriente';
+        }
+        if (bDue) {
+          bDue.innerText = dueDate ? ('Próximo corte: ' + dueDate) : 'Sin facturas pendientes por pagar';
+        }
+        if (bFavorBox && bFavorTxt) {
+          if (saldoAFavor > 0) {
+            const monthsMsg = monthsAhead > 0 ? (' (' + monthsAhead + (monthsAhead === 1 ? ' mes' : ' meses') + ' cubierto' + (monthsAhead === 1 ? '' : 's') + ')') : '';
+            bFavorTxt.innerText = 'Tienes $' + saldoAFavor.toFixed(2) + ' MXN a tu favor' + monthsMsg + '. ¡Tu próximo recibo se cobrará en automático!';
+            bFavorBox.style.display = 'flex';
+          } else {
+            bFavorBox.style.display = 'none';
+          }
+        }
+        if (btnPayLabel) btnPayLabel.innerText = 'Adelantar Meses (5+1 / 10+2 Gratis)';
+        if (choiceSubtitle) choiceSubtitle.innerText = 'Tu cuenta está al corriente. Puedes adelantar mensualidades y ganar meses gratis:';
+      }
+    }
 
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', () => {
@@ -3317,25 +3411,26 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
         document.getElementById('wifiPassSharedLabel').innerText = sharedPass;
       }
 
-      // Facturación y Saldo
+      // Facturación, Saldo y Promociones
       currentClientPlanPrice = Number(c.precio_plan || 250);
-      const balance = Number(c.saldo !== undefined ? c.saldo : 0);
-      const hasPending = !!c.has_pending || balance > 0;
-      const bAmt = document.getElementById('billingAmountLabel');
-      const bDue = document.getElementById('billingDueLabel');
-      const bBadge = document.getElementById('billingBadge');
+      currentClientBalance = Number(c.saldo !== undefined ? c.saldo : 0);
+      currentClientRawSaldo = Number(c.raw_saldo !== undefined ? c.raw_saldo : 0);
+      if (Array.isArray(c.payment_options) && c.payment_options.length > 0) {
+        currentPaymentOptions = c.payment_options;
+      }
+      const hasPending = !!c.has_pending || currentClientBalance > 0;
+      const saldoAFavor = Number(c.saldo_a_favor || (currentClientRawSaldo < 0 ? Math.abs(currentClientRawSaldo) : 0));
+      const monthsAhead = Number(c.months_covered_ahead || 0);
+      const dueStr = c.fecha_corte || ('Día ' + (c.dia_corte || 5) + ' del mes');
 
-      if (bAmt) bAmt.innerText = '$' + balance.toFixed(2);
-      if (bDue) bDue.innerText = 'Corte: ' + (c.fecha_corte || ('Día ' + (c.dia_corte || 5) + ' del mes'));
-
-      if (bBadge) {
-        if (!hasPending && balance <= 0) {
-          bBadge.className = 'badge-status paid';
-          bBadge.innerText = 'Al Corriente';
-        } else {
-          bBadge.className = 'badge-status pending';
-          bBadge.innerText = 'Pago Pendiente';
-        }
+      if (typeof updateBillingHeroUI === 'function') {
+        updateBillingHeroUI({
+          hasPending,
+          effectiveBalance: currentClientBalance,
+          saldoAFavor,
+          monthsCoveredAhead: monthsAhead,
+          dueDate: dueStr,
+        });
       }
 
       const bRefEl = document.getElementById('bankRefText');
@@ -3401,28 +3496,28 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
         }
 
         if (data.success) {
-          // Sincronizar dinámicamente saldo principal con el balance real y facturas pendientes
-          const effectiveBalance = Number(data.balance !== undefined ? data.balance : 0);
-          const hasPending = data.hasPending || (data.invoices && data.invoices.some(inv => !String(inv.estado || '').toLowerCase().includes('pagad')));
-          const bAmt = document.getElementById('billingAmountLabel');
-          const bBadge = document.getElementById('billingBadge');
-          const bDue = document.getElementById('billingDueLabel');
+          // Guardar estado en vivo de plan y opciones promocionales
+          if (Number(data.planPrice || 0) > 0) currentClientPlanPrice = Number(data.planPrice);
+          currentClientBalance = Number(data.balance !== undefined ? data.balance : 0);
+          currentClientRawSaldo = Number(data.rawSaldo !== undefined ? data.rawSaldo : 0);
+          if (Array.isArray(data.paymentOptions) && data.paymentOptions.length > 0) {
+            currentPaymentOptions = data.paymentOptions;
+          }
 
-          if (hasPending || effectiveBalance > 0) {
-            if (bAmt) bAmt.innerText = '$' + effectiveBalance.toFixed(2);
-            if (bBadge) {
-              bBadge.className = 'badge-status pending';
-              bBadge.innerText = 'Pago Pendiente';
-            }
-            if (bDue && data.dueDate) {
-              bDue.innerText = 'Vence: ' + data.dueDate;
-            }
-          } else {
-            if (bAmt) bAmt.innerText = '$0.00';
-            if (bBadge) {
-              bBadge.className = 'badge-status paid';
-              bBadge.innerText = 'Al Corriente';
-            }
+          // Sincronizar dinámicamente saldo principal con el balance real, facturas pendientes y saldo a favor
+          const effectiveBalance = currentClientBalance;
+          const saldoAFavor = Number(data.saldoAFavor || (currentClientRawSaldo < 0 ? Math.abs(currentClientRawSaldo) : 0));
+          const monthsAhead = Number(data.monthsCoveredAhead || 0);
+          const hasPending = data.hasPending || effectiveBalance > 0;
+
+          if (typeof updateBillingHeroUI === 'function') {
+            updateBillingHeroUI({
+              hasPending,
+              effectiveBalance,
+              saldoAFavor,
+              monthsCoveredAhead: monthsAhead,
+              dueDate: data.dueDate,
+            });
           }
         }
 
@@ -3873,7 +3968,7 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
           applyBankDetails(data.bankDetails, titular, cId);
         }
 
-        // Consultar CLABE personalizada de Openpay en segundo plano
+        // Consultar CLABE personalizada de Openpay y guía de promociones SPEI en segundo plano
         fetch('/api/portal/openpay/spei?serviceId=' + encodeURIComponent(cId))
           .then(r => r.json())
           .then(speiData => {
@@ -3896,6 +3991,17 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
                 if (box) box.style.display = 'block';
                 if (agEl) agEl.innerText = speiData.spei.agreement;
                 if (refEl) refEl.innerText = speiData.spei.reference || ('SRV-' + cId);
+              }
+              const promoBox = document.getElementById('speiPromoGuideList');
+              if (promoBox && Array.isArray(speiData.promoGuide) && speiData.promoGuide.length > 0) {
+                const featured = speiData.promoGuide.filter(p => p.planOption === 'pending' || p.planOption === '1m' || p.planOption === 'promo_6m' || p.planOption === 'promo_12m');
+                promoBox.innerHTML = featured.map(p => {
+                  const tag = p.badge ? ' <span style="background:rgba(16,185,129,0.2); color:#10b981; padding:1px 6px; border-radius:999px; font-size:10px; font-weight:800;">' + p.badge + '</span>' : '';
+                  return '<div style="display:flex; justify-content:space-between; align-items:center; gap:6px; padding:3px 0; border-bottom:1px dashed rgba(255,255,255,0.06);">' +
+                    '<span>' + p.label + tag + '</span>' +
+                    '<strong style="color:var(--text-title); font-family:monospace;">$' + Number(p.netAmount).toFixed(2) + '</strong>' +
+                  '</div>';
+                }).join('');
               }
             }
           })
@@ -3932,19 +4038,98 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
       return false;
     }
 
+    function buildFallbackPaymentOptions() {
+      const p = Number(currentClientPlanPrice || 250);
+      const debt = Math.max(0, Number(currentClientBalance || 0));
+      const extraOverdue = p > 0 ? Math.max(0, debt - p) : 0;
+      const list = [];
+      if (debt > 0) {
+        list.push({ planOption: 'pending', label: 'Liquidar Saldo Pendiente', netAmount: debt, bonusMonths: 0, bonusAmount: 0, totalMonthsCovered: Math.max(1, Math.round(debt / p)) });
+      } else {
+        list.push({ planOption: '1m', label: 'Adelantar 1 Mes', netAmount: p, bonusMonths: 0, bonusAmount: 0, totalMonthsCovered: 1 });
+      }
+      list.push({ planOption: '2m', label: 'Adelantar 2 Meses', netAmount: extraOverdue + 2 * p, bonusMonths: 0, bonusAmount: 0, totalMonthsCovered: 2 });
+      list.push({ planOption: '3m', label: 'Adelantar 3 Meses', netAmount: extraOverdue + 3 * p, bonusMonths: 0, bonusAmount: 0, totalMonthsCovered: 3 });
+      list.push({ planOption: 'promo_6m', label: 'Promo 6 Meses (Pagas 5, 1 GRATIS)', badge: '1 MES GRATIS', netAmount: extraOverdue + 5 * p, bonusMonths: 1, bonusAmount: p, totalMonthsCovered: 6 });
+      list.push({ planOption: 'promo_12m', label: 'Anualidad 12 Meses (Pagas 10, 2 GRATIS)', badge: '2 MESES GRATIS', netAmount: extraOverdue + 10 * p, bonusMonths: 2, bonusAmount: 2 * p, totalMonthsCovered: 12 });
+      return list;
+    }
+
+    function renderCardPaymentOptions(preferredOpt) {
+      const box = document.getElementById('cardPlanSelectorBox');
+      if (!box) return;
+      const options = (Array.isArray(currentPaymentOptions) && currentPaymentOptions.length > 0)
+        ? currentPaymentOptions
+        : buildFallbackPaymentOptions();
+      window._activeCardPlanOptions = options;
+
+      let chosen = preferredOpt;
+      if (!chosen || !options.some(o => o.planOption === chosen)) {
+        chosen = options[0].planOption;
+      }
+
+      box.innerHTML = options.map(opt => {
+        const isSelected = opt.planOption === chosen;
+        const isPromo = Number(opt.bonusMonths || 0) > 0;
+        const borderCol = isSelected ? '#38bdf8' : (isPromo ? 'rgba(16, 185, 129, 0.38)' : 'var(--border-card)');
+        const bgCol = isSelected ? 'rgba(14, 165, 233, 0.14)' : (isPromo ? 'rgba(16, 185, 129, 0.06)' : 'var(--bg-surface)');
+        const badgeHtml = opt.badge
+          ? '<span style="font-size:10px; background:rgba(16,185,129,0.2); color:#10b981; padding:2px 7px; border-radius:999px; font-weight:800; margin-left:6px;">' + opt.badge + '</span>'
+          : '';
+        return '<button type="button" onclick="selectCardPaymentOption(\'' + opt.planOption + '\')" style="width:100%; text-align:left; background:' + bgCol + '; border:1.5px solid ' + borderCol + '; border-radius:var(--radius-sm); padding:9px 12px; display:flex; justify-content:space-between; align-items:center; gap:8px; cursor:pointer; transition:all 0.15s ease;">' +
+          '<div style="min-width:0;">' +
+            '<div style="font-size:12.5px; font-weight:700; color:var(--text-title);">' + opt.label + badgeHtml + '</div>' +
+            (isPromo ? '<div style="font-size:11px; color:#10b981; margin-top:2px;">Recibes +' + opt.bonusMonths + (opt.bonusMonths === 1 ? ' mes gratis' : ' meses gratis') + ' ($' + Number(opt.bonusAmount || 0).toFixed(0) + ' de regalo)</div>' : '') +
+          '</div>' +
+          '<div style="font-size:13.5px; font-weight:800; color:' + (isSelected ? '#38bdf8' : 'var(--text-title)') + '; white-space:nowrap;">$' + Number(opt.netAmount).toFixed(2) + '</div>' +
+        '</button>';
+      }).join('');
+
+      selectCardPaymentOption(chosen, true);
+    }
+
+    function selectCardPaymentOption(optKey, skipReRender) {
+      const options = window._activeCardPlanOptions || buildFallbackPaymentOptions();
+      const chosenObj = options.find(o => o.planOption === optKey) || options[0];
+      if (!chosenObj) return;
+
+      selectedPlanOptionKey = chosenObj.planOption;
+      currentSelectedPlanLabel = chosenObj.label;
+      currentPendingAmount = Number(chosenObj.netAmount || 0);
+
+      const conceptEl = document.getElementById('cardPayConceptLabel');
+      if (conceptEl) conceptEl.innerText = chosenObj.label + ':';
+
+      const bonusRow = document.getElementById('cardPayBonusRow');
+      const bonusTxt = document.getElementById('cardPayBonusText');
+      const bonusAmtEl = document.getElementById('cardPayBonusAmountLabel');
+      if (bonusRow && bonusTxt && bonusAmtEl) {
+        if (Number(chosenObj.bonusMonths || 0) > 0) {
+          bonusTxt.innerHTML = '<i class="fa-solid fa-gift"></i> Bono (' + chosenObj.bonusMonths + (chosenObj.bonusMonths === 1 ? ' mes gratis' : ' meses gratis') + '):';
+          bonusAmtEl.innerText = '+$' + Number(chosenObj.bonusAmount || 0).toFixed(2) + ' MXN';
+          bonusRow.style.display = 'flex';
+        } else {
+          bonusRow.style.display = 'none';
+        }
+      }
+
+      updateCardPaymentFeeDisplay(currentPendingAmount);
+      if (!skipReRender) {
+        renderCardPaymentOptions(selectedPlanOptionKey);
+      }
+    }
+
     async function openModalCardPayment(invoiceId, amount) {
       await initOpenpaySdk();
 
       currentTargetInvoiceId = invoiceId || null;
-      if (amount !== undefined && Number(amount) > 0) {
-        currentPendingAmount = Number(amount);
-      } else {
-        const saldoTxt = document.getElementById('billingAmountLabel')?.innerText || '$0';
-        const num = parseFloat(saldoTxt.replace(/[^0-9.]/g, '')) || 0;
-        currentPendingAmount = num > 0 ? num : (currentClientPlanPrice || 250);
-      }
+      const defaultOpt = (amount !== undefined && Number(amount) > 0) || currentClientBalance > 0 ? 'pending' : '1m';
+      renderCardPaymentOptions(defaultOpt);
 
-      updateCardPaymentFeeDisplay(currentPendingAmount);
+      if (amount !== undefined && Number(amount) > 0 && currentClientBalance <= 0) {
+        currentPendingAmount = Number(amount);
+        updateCardPaymentFeeDisplay(currentPendingAmount);
+      }
 
       const form = document.getElementById('cardPaymentForm');
       if (form) form.reset();
@@ -4137,10 +4322,11 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
               tokenId,
               deviceSessionId: deviceSessionId || 'sandbox_session',
               amount: currentPendingAmount,
+              planOption: selectedPlanOptionKey,
               clientId: currentContractId,
               orderId: 'CARD_' + currentContractId + '_' + Date.now(),
               phone: currentPhone,
-              description: 'Pago de Internet CloudWare Contrato #' + currentContractId
+              description: (currentSelectedPlanLabel || 'Pago de Internet CloudWare') + ' - Contrato #' + currentContractId
             })
           });
 
@@ -4153,10 +4339,13 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
               amount: chargeData.amount || currentPendingAmount,
               authorization: chargeData.authorization || 'N/A',
               cardBrand: chargeData.card?.brand || 'Tarjeta Bancaria',
-              cardLast4: chargeData.card?.cardNumber ? chargeData.card.cardNumber.slice(-4) : ''
+              cardLast4: chargeData.card?.cardNumber ? chargeData.card.cardNumber.slice(-4) : '',
+              planLabel: chargeData.planLabel || currentSelectedPlanLabel,
+              bonusMonths: chargeData.bonusMonths || 0,
+              totalMonthsCovered: chargeData.totalMonthsCovered || 1
             });
 
-            setTimeout(() => loadDashboard(), 1500);
+            setTimeout(() => { loadDashboard(); loadInvoicesHistory(); }, 1200);
           } else {
             if (errBox) {
               errBox.innerText = chargeData.message || 'La tarjeta fue rechazada por el banco emisor.';
@@ -4207,6 +4396,17 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
     function openModalPaymentReceipt(info) {
       const amtEl = document.getElementById('receiptAmountLabel');
       if (amtEl) amtEl.innerText = '$' + Number(info.amount || 0).toFixed(2) + ' MXN';
+
+      const promoRow = document.getElementById('receiptPromoRow');
+      const promoLabel = document.getElementById('receiptPromoLabel');
+      if (promoRow && promoLabel) {
+        if (Number(info.bonusMonths || 0) > 0 || Number(info.totalMonthsCovered || 1) > 1) {
+          promoLabel.innerText = info.planLabel || ((info.totalMonthsCovered || 1) + ' meses cubiertos');
+          promoRow.style.display = 'flex';
+        } else {
+          promoRow.style.display = 'none';
+        }
+      }
 
       const methEl = document.getElementById('receiptMethodLabel');
       if (methEl) {

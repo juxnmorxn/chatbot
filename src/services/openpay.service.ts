@@ -30,6 +30,12 @@ export interface CardChargeParams {
   clientPhone: string;
   clientEmail?: string;
   redirectUrl?: string;
+  planOption?: string;
+  planLabel?: string;
+  monthsPaid?: number;
+  bonusMonths?: number;
+  bonusAmount?: number;
+  totalMonthsCovered?: number;
 }
 
 export interface SpeiDetails {
@@ -114,6 +120,273 @@ export class OpenpayService {
       feeAmount: fee,
       totalAmount: total,
       feeDetails: `${cardFeePercent}% + $${cardFeeFixed} (+IVA)`,
+    };
+  }
+
+  /**
+   * Calcula y valida del lado del servidor las opciones de pago, adelantos y promociones (5+1 / 10+2)
+   */
+  static computePaymentPlan(params: {
+    planPrice: number;
+    pendingDebt?: number;
+    rawSaldo?: number;
+    planOption?: string;
+    customAmount?: number;
+  }): {
+    valid: boolean;
+    error?: string;
+    planOption: 'pending' | '1m' | '2m' | '3m' | 'promo_6m' | 'promo_12m';
+    label: string;
+    badge?: string;
+    netAmount: number;
+    bonusAmount: number;
+    monthsPaid: number;
+    bonusMonths: number;
+    totalMonthsCovered: number;
+  } {
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+    const planPrice = round2(Math.max(0, Number(params.planPrice || 0)));
+    const debt = round2(Math.max(0, Number(params.pendingDebt || 0)));
+    const extraOverdue = planPrice > 0 ? round2(Math.max(0, debt - planPrice)) : 0;
+
+    let opt = String(params.planOption || '').trim().toLowerCase();
+
+    // Inferencia segura si el cliente/llamador no especificó planOption explícito
+    if (!opt) {
+      const amt = round2(Number(params.customAmount || 0));
+      if (debt > 0 && (amt === 0 || Math.abs(amt - debt) < 0.5)) {
+        opt = 'pending';
+      } else if (planPrice > 0 && (Math.abs(amt - (10 * planPrice + extraOverdue)) < 0.5 || Math.abs(amt - 10 * planPrice) < 0.5)) {
+        opt = 'promo_12m';
+      } else if (planPrice > 0 && (Math.abs(amt - (5 * planPrice + extraOverdue)) < 0.5 || Math.abs(amt - 5 * planPrice) < 0.5)) {
+        opt = 'promo_6m';
+      } else if (planPrice > 0 && Math.abs(amt - (3 * planPrice + extraOverdue)) < 0.5) {
+        opt = '3m';
+      } else if (planPrice > 0 && Math.abs(amt - (2 * planPrice + extraOverdue)) < 0.5) {
+        opt = '2m';
+      } else {
+        opt = debt > 0 ? 'pending' : '1m';
+      }
+    }
+
+    if (opt === 'pending') {
+      if (debt <= 0) {
+        return {
+          valid: false,
+          error: 'No tienes facturas pendientes por pagar. Selecciona un paquete de adelanto o promoción.',
+          planOption: 'pending',
+          label: 'Saldo Pendiente',
+          netAmount: 0,
+          bonusAmount: 0,
+          monthsPaid: 0,
+          bonusMonths: 0,
+          totalMonthsCovered: 0,
+        };
+      }
+      const approxMonths = planPrice > 0 ? Math.max(1, Math.round(debt / planPrice)) : 1;
+      return {
+        valid: true,
+        planOption: 'pending',
+        label: 'Liquidar Saldo Pendiente',
+        netAmount: debt,
+        bonusAmount: 0,
+        monthsPaid: approxMonths,
+        bonusMonths: 0,
+        totalMonthsCovered: approxMonths,
+      };
+    }
+
+    if (planPrice <= 0) {
+      const fallbackAmt = round2(Math.max(0, Number(params.customAmount || debt)));
+      if (fallbackAmt <= 0) {
+        return {
+          valid: false,
+          error: 'No se pudo determinar la tarifa mensual del servicio.',
+          planOption: '1m',
+          label: '1 Mes',
+          netAmount: 0,
+          bonusAmount: 0,
+          monthsPaid: 0,
+          bonusMonths: 0,
+          totalMonthsCovered: 0,
+        };
+      }
+      return {
+        valid: true,
+        planOption: '1m',
+        label: 'Pago de Servicio (1 Mes)',
+        netAmount: fallbackAmt,
+        bonusAmount: 0,
+        monthsPaid: 1,
+        bonusMonths: 0,
+        totalMonthsCovered: 1,
+      };
+    }
+
+    switch (opt) {
+      case '1m': {
+        const net = round2(extraOverdue + planPrice);
+        return {
+          valid: true,
+          planOption: '1m',
+          label: extraOverdue > 0 ? 'Ponerse al Corriente (Incluye Adeudo)' : 'Adelantar 1 Mes',
+          netAmount: net,
+          bonusAmount: 0,
+          monthsPaid: planPrice > 0 ? Math.round(net / planPrice) : 1,
+          bonusMonths: 0,
+          totalMonthsCovered: planPrice > 0 ? Math.round(net / planPrice) : 1,
+        };
+      }
+      case '2m': {
+        const net = round2(extraOverdue + 2 * planPrice);
+        return {
+          valid: true,
+          planOption: '2m',
+          label: 'Adelantar 2 Meses',
+          netAmount: net,
+          bonusAmount: 0,
+          monthsPaid: 2,
+          bonusMonths: 0,
+          totalMonthsCovered: 2 + (extraOverdue > 0 && planPrice > 0 ? Math.round(extraOverdue / planPrice) : 0),
+        };
+      }
+      case '3m': {
+        const net = round2(extraOverdue + 3 * planPrice);
+        return {
+          valid: true,
+          planOption: '3m',
+          label: 'Adelantar 3 Meses',
+          netAmount: net,
+          bonusAmount: 0,
+          monthsPaid: 3,
+          bonusMonths: 0,
+          totalMonthsCovered: 3 + (extraOverdue > 0 && planPrice > 0 ? Math.round(extraOverdue / planPrice) : 0),
+        };
+      }
+      case 'promo_6m': {
+        const net = round2(extraOverdue + 5 * planPrice);
+        const bonus = round2(planPrice);
+        return {
+          valid: true,
+          planOption: 'promo_6m',
+          label: 'Promo 6 Meses (Pagas 5, 1 GRATIS)',
+          badge: '1 MES GRATIS',
+          netAmount: net,
+          bonusAmount: bonus,
+          monthsPaid: 5,
+          bonusMonths: 1,
+          totalMonthsCovered: 6 + (extraOverdue > 0 && planPrice > 0 ? Math.round(extraOverdue / planPrice) : 0),
+        };
+      }
+      case 'promo_12m': {
+        const net = round2(extraOverdue + 10 * planPrice);
+        const bonus = round2(2 * planPrice);
+        return {
+          valid: true,
+          planOption: 'promo_12m',
+          label: 'Anualidad 12 Meses (Pagas 10, 2 GRATIS)',
+          badge: '2 MESES GRATIS',
+          netAmount: net,
+          bonusAmount: bonus,
+          monthsPaid: 10,
+          bonusMonths: 2,
+          totalMonthsCovered: 12 + (extraOverdue > 0 && planPrice > 0 ? Math.round(extraOverdue / planPrice) : 0),
+        };
+      }
+      default:
+        return {
+          valid: false,
+          error: `Opción de pago no reconocida (${opt}).`,
+          planOption: '1m',
+          label: 'Inválido',
+          netAmount: 0,
+          bonusAmount: 0,
+          monthsPaid: 0,
+          bonusMonths: 0,
+          totalMonthsCovered: 0,
+        };
+    }
+  }
+
+  /**
+   * Lista todas las opciones de pago disponibles con cálculo exacto de comisión de tarjeta
+   */
+  static getPaymentOptionsSummary(planPrice: number, pendingDebt: number = 0, rawSaldo: number = 0) {
+    const keys: Array<'pending' | '1m' | 'promo_6m' | 'promo_12m' | '2m' | '3m'> =
+      pendingDebt > 0 ? ['pending', '2m', '3m', 'promo_6m', 'promo_12m'] : ['1m', '2m', '3m', 'promo_6m', 'promo_12m'];
+
+    return keys
+      .map((k) => {
+        const plan = this.computePaymentPlan({ planPrice, pendingDebt, rawSaldo, planOption: k });
+        if (!plan.valid || plan.netAmount <= 0) return null;
+        const fee = this.calculateCardFee(plan.netAmount);
+        return {
+          ...plan,
+          feeAmount: fee.feeAmount,
+          totalWithFee: fee.totalAmount,
+          feeDetails: fee.feeDetails,
+        };
+      })
+      .filter(Boolean);
+  }
+
+  /**
+   * Detecta automáticamente si una transferencia SPEI recibida corresponde a una promoción 5+1 o 10+2
+   */
+  static inferSpeiPromotion(amount: number, planPrice: number, pendingDebt: number = 0): {
+    planOption: string;
+    monthsPaid: number;
+    bonusMonths: number;
+    bonusAmount: number;
+    label: string;
+  } {
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+    const paid = round2(Number(amount || 0));
+    const p = round2(Number(planPrice || 0));
+    const debt = round2(Math.max(0, Number(pendingDebt || 0)));
+    const extraOverdue = p > 0 ? round2(Math.max(0, debt - p)) : 0;
+
+    if (p > 0) {
+      if (
+        (Math.abs(paid - (10 * p + extraOverdue)) <= 1 || Math.abs(paid - 10 * p) <= 1) &&
+        paid >= debt - 1
+      ) {
+        return {
+          planOption: 'promo_12m',
+          monthsPaid: 10,
+          bonusMonths: 2,
+          bonusAmount: round2(2 * p),
+          label: 'Anualidad 12 Meses SPEI (Pagas 10, 2 GRATIS)',
+        };
+      }
+      if (
+        (Math.abs(paid - (5 * p + extraOverdue)) <= 1 || Math.abs(paid - 5 * p) <= 1) &&
+        paid >= debt - 1
+      ) {
+        return {
+          planOption: 'promo_6m',
+          monthsPaid: 5,
+          bonusMonths: 1,
+          bonusAmount: p,
+          label: 'Promo 6 Meses SPEI (Pagas 5, 1 GRATIS)',
+        };
+      }
+      const approxMonths = Math.max(1, Math.round(paid / p));
+      return {
+        planOption: debt > 0 && Math.abs(paid - debt) <= 1 ? 'pending' : `${approxMonths}m`,
+        monthsPaid: approxMonths,
+        bonusMonths: 0,
+        bonusAmount: 0,
+        label: debt > 0 ? 'Pago vía SPEI' : `Adelanto ${approxMonths} mes(es) SPEI`,
+      };
+    }
+
+    return {
+      planOption: 'spei',
+      monthsPaid: 1,
+      bonusMonths: 0,
+      bonusAmount: 0,
+      label: 'Transferencia SPEI',
     };
   }
 
@@ -255,7 +528,7 @@ export class OpenpayService {
     const sId = Number(clientData.id_servicio);
     const db = getDbClient();
 
-    // 1. Revisar si ya tenemos datos de transferencia en BD local
+    // 1. Revisar si ya tenemos datos de transferencia en BD local (openpay_customers o última tx SPEI)
     try {
       const rowRes = await db.execute({
         sql: `SELECT * FROM openpay_customers WHERE client_id = ? LIMIT 1`,
@@ -271,6 +544,22 @@ export class OpenpayService {
             reference: `SRV-${sId}`,
           };
         }
+      }
+      const prevSpeiRes = await db.execute({
+        sql: `SELECT clabe FROM openpay_transactions WHERE client_id = ? AND method = 'bank_account' AND clabe IS NOT NULL AND length(clabe) = 18 ORDER BY id DESC LIMIT 1`,
+        args: [sId],
+      });
+      const prevClabe = String(prevSpeiRes.rows[0]?.clabe || '');
+      if (prevClabe.length === 18 && prevClabe !== '000000000000000001') {
+        await db.execute({
+          sql: `UPDATE openpay_customers SET clabe = ?, updated_at = CURRENT_TIMESTAMP WHERE client_id = ?`,
+          args: [prevClabe, sId],
+        }).catch(() => {});
+        return {
+          clabe: prevClabe,
+          bank: 'BBVA Bancomer',
+          reference: `SRV-${sId}`,
+        };
       }
     } catch (_) {}
 
@@ -386,9 +675,19 @@ export class OpenpayService {
       clientPhone,
       clientEmail,
       redirectUrl,
+      planOption,
+      planLabel,
+      monthsPaid,
+      bonusMonths,
+      bonusAmount,
+      totalMonthsCovered,
     } = params;
 
     const sId = Number(clientId);
+    const resolvedMonthsPaid = Math.max(1, Number(monthsPaid || 1));
+    const resolvedBonusMonths = Math.max(0, Number(bonusMonths || 0));
+    const resolvedBonusAmount = Math.max(0, Number(bonusAmount || 0));
+    const resolvedPlanOption = planOption || 'pending';
     const db = getDbClient();
 
     // 1. Obtener o crear Customer en Openpay
@@ -425,7 +724,9 @@ export class OpenpayService {
         chargePayload.use_3d_secure = true;
       }
 
-      logger.info(`Enviando cargo a Openpay para contrato #${sId}: $${totalToCharge} MXN (Neto: $${amount}, Comisión: $${feeCalc.feeAmount})...`);
+      logger.info(
+        `Enviando cargo a Openpay para contrato #${sId}: $${totalToCharge} MXN (Neto: $${amount}, Comisión: $${feeCalc.feeAmount}, Plan: ${resolvedPlanOption}, Bono: $${resolvedBonusAmount})...`
+      );
 
       const res = await axios.post(`${baseUrl}/customers/${customer.id}/charges`, chargePayload, {
         headers: this.getHeaders(),
@@ -440,17 +741,22 @@ export class OpenpayService {
         cardNumber: charge.card.card_number,
       } : undefined;
 
-      // Registrar en base de datos local
+      // Registrar en base de datos local ANTES de conciliar (garantiza lock atómico de idempotencia)
       try {
         await db.execute({
           sql: `
             INSERT INTO openpay_transactions (
-              transaction_id, order_id, client_id, phone, amount, fee, net_amount, method, status, 
-              description, card_brand, card_last4, authorization, raw_data, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'card', ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+              transaction_id, order_id, client_id, phone, amount, fee, net_amount, method, status,
+              description, card_brand, card_last4, authorization,
+              plan_option, months_paid, bonus_months, bonus_amount, raw_data, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'card', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             ON CONFLICT(transaction_id) DO UPDATE SET
               status = excluded.status,
-              authorization = excluded.authorization,
+              authorization = COALESCE(excluded.authorization, openpay_transactions.authorization),
+              plan_option = COALESCE(excluded.plan_option, openpay_transactions.plan_option),
+              months_paid = COALESCE(excluded.months_paid, openpay_transactions.months_paid),
+              bonus_months = COALESCE(excluded.bonus_months, openpay_transactions.bonus_months),
+              bonus_amount = COALESCE(excluded.bonus_amount, openpay_transactions.bonus_amount),
               updated_at = CURRENT_TIMESTAMP
           `,
           args: [
@@ -466,6 +772,10 @@ export class OpenpayService {
             charge.card?.brand || null,
             charge.card?.card_number ? charge.card.card_number.slice(-4) : null,
             charge.authorization || null,
+            resolvedPlanOption,
+            resolvedMonthsPaid,
+            resolvedBonusMonths,
+            resolvedBonusAmount,
             JSON.stringify(charge),
           ],
         });
@@ -475,8 +785,9 @@ export class OpenpayService {
 
       // Si el pago quedó aprobado inmediatamente:
       if (status === 'completed') {
-        // Conciliar en segundo plano con WispHub, reactivar OLT y mandar WhatsApp
+        // Conciliar en segundo plano con lock atómico en BD (WispHub + OLT + WhatsApp)
         this.processSuccessfulPayment({
+          transactionId: charge.id,
           clientId: sId,
           clientPhone,
           amount,
@@ -485,6 +796,12 @@ export class OpenpayService {
           authorization: charge.authorization,
           cardBrand: charge.card?.brand,
           cardLast4: charge.card?.card_number ? charge.card.card_number.slice(-4) : '',
+          planOption: resolvedPlanOption,
+          planLabel,
+          monthsPaid: resolvedMonthsPaid,
+          bonusMonths: resolvedBonusMonths,
+          bonusAmount: resolvedBonusAmount,
+          totalMonthsCovered: totalMonthsCovered || resolvedMonthsPaid + resolvedBonusMonths,
         }).catch((err) => logger.error('Error al procesar conciliación post-pago:', err));
 
         return {
@@ -551,69 +868,142 @@ export class OpenpayService {
     }
 
     const db = getDbClient();
+    const orderId = tx.order_id || '';
 
-    // Actualizar estado en tabla openpay_transactions
+    // 1. Resolver clientId desde BD local (si la transacción ya existe), order_id, o customer_id
+    let existingTx: any = null;
+    try {
+      const txRes = await db.execute({
+        sql: `SELECT * FROM openpay_transactions WHERE transaction_id = ? LIMIT 1`,
+        args: [tx.id],
+      });
+      if (txRes.rows.length > 0) existingTx = txRes.rows[0];
+    } catch (_) {}
+
+    let clientId: number | null = existingTx?.client_id ? Number(existingTx.client_id) : null;
+    if (!clientId && orderId) {
+      const match = orderId.match(/(?:SRV|CARD|SPEI)_(\d+)/i);
+      if (match) clientId = Number(match[1]);
+    }
+    if (!clientId && tx.customer_id) {
+      try {
+        const cRes = await db.execute({
+          sql: `SELECT client_id, phone FROM openpay_customers WHERE customer_id = ? LIMIT 1`,
+          args: [tx.customer_id],
+        });
+        if (cRes.rows.length > 0) clientId = Number(cRes.rows[0].client_id);
+      } catch (_) {}
+    }
+
+    const methodType = tx.method === 'card' ? 'card' : 'bank_account';
+    const rawAmount = Number(tx.amount || 0);
+
+    // Calcular monto neto y promoción (si existe en DB, conservarla; si es SPEI nuevo, inferir promo 5+1 / 10+2)
+    let netAmount = existingTx?.net_amount !== null && existingTx?.net_amount !== undefined && Number(existingTx.net_amount) > 0
+      ? Number(existingTx.net_amount)
+      : rawAmount;
+    let planOption = existingTx?.plan_option ? String(existingTx.plan_option) : '';
+    let monthsPaid = existingTx?.months_paid ? Number(existingTx.months_paid) : 1;
+    let bonusMonths = existingTx?.bonus_months ? Number(existingTx.bonus_months) : 0;
+    let bonusAmount = existingTx?.bonus_amount ? Number(existingTx.bonus_amount) : 0;
+    let planLabel = '';
+
+    const isPaidEvent = type === 'charge.succeeded' || type === 'payout.created' || tx.status === 'completed';
+
+    if (isPaidEvent && clientId && methodType !== 'card' && bonusMonths === 0 && !planOption) {
+      try {
+        const clRes = await db.execute({
+          sql: `SELECT precio_plan, saldo FROM wisphub_clients WHERE id_servicio = ? LIMIT 1`,
+          args: [clientId],
+        });
+        const invRes = await db.execute({
+          sql: `SELECT SUM(total) as total_pending FROM wisphub_invoices WHERE id_servicio = ? AND LOWER(estado) NOT LIKE '%pagad%'`,
+          args: [clientId],
+        });
+        const planPrice = Number(clRes.rows[0]?.precio_plan || 0);
+        const pendingDebt = Math.max(0, Number(invRes.rows[0]?.total_pending || 0), Number(clRes.rows[0]?.saldo || 0));
+        const inferred = this.inferSpeiPromotion(netAmount, planPrice, pendingDebt);
+        planOption = inferred.planOption;
+        monthsPaid = inferred.monthsPaid;
+        bonusMonths = inferred.bonusMonths;
+        bonusAmount = inferred.bonusAmount;
+        planLabel = inferred.label;
+      } catch (_) {}
+    }
+
+    // 2. Insertar o actualizar transacción preservando metadatos existentes (necesario para lock atómico de conciliated)
     try {
       await db.execute({
         sql: `
-          UPDATE openpay_transactions 
-          SET status = ?, authorization = COALESCE(?, authorization), updated_at = CURRENT_TIMESTAMP
-          WHERE transaction_id = ?
+          INSERT INTO openpay_transactions (
+            transaction_id, order_id, client_id, phone, amount, fee, net_amount, method, status,
+            description, authorization, plan_option, months_paid, bonus_months, bonus_amount, raw_data, created_at, updated_at
+          ) VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          ON CONFLICT(transaction_id) DO UPDATE SET
+            status = excluded.status,
+            authorization = COALESCE(excluded.authorization, openpay_transactions.authorization),
+            plan_option = COALESCE(openpay_transactions.plan_option, excluded.plan_option),
+            months_paid = COALESCE(openpay_transactions.months_paid, excluded.months_paid),
+            bonus_months = COALESCE(openpay_transactions.bonus_months, excluded.bonus_months),
+            bonus_amount = COALESCE(openpay_transactions.bonus_amount, excluded.bonus_amount),
+            updated_at = CURRENT_TIMESTAMP
         `,
-        args: [tx.status || 'completed', tx.authorization || null, tx.id],
-      });
-    } catch (_) {}
-
-    // Eventos de pago aprobado exitosamente
-    if (type === 'charge.succeeded' || type === 'payout.created' || tx.status === 'completed') {
-      const orderId = tx.order_id || '';
-      let clientId: number | null = null;
-
-      // Intentar extraer clientId desde el order_id (ej. SPEI_SRV_715_... o CARD_715_...)
-      const match = orderId.match(/(?:SRV|CARD|SPEI)_(\d+)/i);
-      if (match) {
-        clientId = Number(match[1]);
-      }
-
-      // Si no viene en order_id, buscar por customer_id en la BD local
-      if (!clientId && tx.customer_id) {
-        try {
-          const cRes = await db.execute({
-            sql: `SELECT client_id, phone FROM openpay_customers WHERE customer_id = ? LIMIT 1`,
-            args: [tx.customer_id],
-          });
-          if (cRes.rows.length > 0) {
-            clientId = Number(cRes.rows[0].client_id);
-          }
-        } catch (_) {}
-      }
-
-      if (clientId) {
-        const netAmount = Number(tx.amount || 0);
-        await this.processSuccessfulPayment({
+        args: [
+          tx.id,
+          orderId || tx.id,
           clientId,
-          clientPhone: tx.customer?.phone_number || '',
-          amount: netAmount,
-          method: tx.method === 'card' ? 'Tarjeta' : 'SPEI',
-          folio: orderId || tx.id,
-          authorization: tx.authorization,
-          cardBrand: tx.card?.brand,
-          cardLast4: tx.card?.card_number ? tx.card.card_number.slice(-4) : '',
-        });
-        return { success: true, message: `Pago de contrato #${clientId} procesado exitosamente.` };
-      }
+          tx.customer?.phone_number || existingTx?.phone || '',
+          rawAmount,
+          netAmount,
+          methodType,
+          tx.status || 'completed',
+          tx.description || (methodType === 'card' ? 'Pago con Tarjeta Openpay' : 'Transferencia SPEI Openpay'),
+          tx.authorization || null,
+          planOption || null,
+          monthsPaid,
+          bonusMonths,
+          bonusAmount,
+          JSON.stringify(body),
+        ],
+      });
+    } catch (upErr) {
+      logger.warn('Aviso al registrar webhook en openpay_transactions:', upErr);
+    }
+
+    // 3. Eventos de pago aprobado exitosamente -> conciliación idempotente
+    if (isPaidEvent && clientId) {
+      await this.processSuccessfulPayment({
+        transactionId: tx.id,
+        clientId,
+        clientPhone: tx.customer?.phone_number || existingTx?.phone || '',
+        amount: netAmount,
+        method: methodType === 'card' ? 'Tarjeta' : 'SPEI',
+        folio: orderId || tx.id,
+        authorization: tx.authorization,
+        cardBrand: tx.card?.brand,
+        cardLast4: tx.card?.card_number ? tx.card.card_number.slice(-4) : '',
+        planOption: planOption || 'spei',
+        planLabel,
+        monthsPaid,
+        bonusMonths,
+        bonusAmount,
+        totalMonthsCovered: monthsPaid + bonusMonths,
+      });
+      return { success: true, message: `Pago de contrato #${clientId} procesado exitosamente.` };
     }
 
     return { success: true, message: 'Evento recibido y registrado.' };
   }
 
   /**
-   * Realiza la conciliación completa tras un pago confirmado:
-   * 1. Registra el pago en WispHub
-   * 2. Reactiva el servicio en SmartOLT si estaba suspendido
-   * 3. Envía notificación de confirmación al WhatsApp del cliente
+   * Realiza la conciliación completa tras un pago confirmado con idempotencia atómica:
+   * 1. Bloquea atómicamente la transacción en BD (evita doble aplicación entre respuesta síncrona y webhook)
+   * 2. Registra el pago y bono promocional en WispHub con verificación post-pago
+   * 3. Reactiva el servicio en SmartOLT si estaba suspendido
+   * 4. Envía notificación de confirmación al WhatsApp del cliente
    */
   private static async processSuccessfulPayment(data: {
+    transactionId: string;
     clientId: number;
     clientPhone?: string;
     amount: number;
@@ -622,17 +1012,53 @@ export class OpenpayService {
     authorization?: string;
     cardBrand?: string;
     cardLast4?: string;
+    planOption?: string;
+    planLabel?: string;
+    monthsPaid?: number;
+    bonusMonths?: number;
+    bonusAmount?: number;
+    totalMonthsCovered?: number;
   }): Promise<void> {
-    const { clientId, clientPhone, amount, method, folio, authorization, cardBrand, cardLast4 } = data;
-    logger.info(`Iniciando conciliación automática para contrato #${clientId} ($${amount} MXN vía ${method})...`);
+    const {
+      transactionId,
+      clientId,
+      clientPhone,
+      amount,
+      method,
+      folio,
+      authorization,
+      cardBrand,
+      cardLast4,
+      planLabel,
+      monthsPaid = 1,
+      bonusMonths = 0,
+      bonusAmount = 0,
+      totalMonthsCovered = 1,
+    } = data;
 
     const db = getDbClient();
+
+    // Lock atómico de idempotencia: solo una ejecución (síncrona o webhook) puede conciliar una transacción
+    if (transactionId) {
+      const lockRes = await db.execute({
+        sql: `UPDATE openpay_transactions SET conciliated = 1, updated_at = CURRENT_TIMESTAMP WHERE transaction_id = ? AND COALESCE(conciliated, 0) = 0`,
+        args: [transactionId],
+      });
+      if (Number(lockRes.rowsAffected || 0) === 0) {
+        logger.info(`[Openpay] Transacción ${transactionId} ya fue conciliada previamente (webhook/sync duplicado omitido).`);
+        return;
+      }
+    }
+
+    logger.info(
+      `Iniciando conciliación automática para contrato #${clientId} ($${amount} MXN + $${bonusAmount} bono vía ${method}, tx=${transactionId})...`
+    );
 
     // 1. Obtener datos del cliente desde wisphub_clients
     let clientName = 'Cliente';
     let targetPhone = clientPhone || '';
     let onuSn = '';
-    let currentBalance = 0;
+    let saldoFinalReportado: number | undefined;
 
     try {
       const cRes = await db.execute({
@@ -644,28 +1070,37 @@ export class OpenpayService {
         clientName = row.nombre || 'Cliente';
         if (!targetPhone) targetPhone = row.telefono || '';
         onuSn = row.sn_onu || '';
-        currentBalance = Number(row.saldo || 0);
       }
     } catch (_) {}
 
-    // 2. Conciliar y registrar pago en WispHub
+    // 2. Conciliar y registrar pago en WispHub (maneja facturas pendientes + recibos de adelanto + bono promo)
     try {
-      logger.info(`Registrando pago de $${amount} MXN en WispHub para contrato #${clientId}...`);
-      await WispHubService.registerPaymentForClient(clientId, {
+      const whRes = await WispHubService.registerPaymentForClient(clientId, {
         monto: amount,
-        forma_pago: method === 'Tarjeta' ? 'Tarjeta de Débito/Crédito' : 'Transferencia SPEI Openpay',
+        bonusAmount,
+        monthsPaid,
+        bonusMonths,
+        planLabel,
+        forma_pago: 21899, // Transferencia Bancaria en WispHub
         referencia: folio,
-        comentario: `Pago automático Openpay. Aut: ${authorization || 'N/A'}.`,
-      }).catch((e) => logger.warn('Aviso en registerPaymentForClient de WispHub:', e?.message || e));
-
-      // Actualizar saldo local a $0 o restar el monto
-      const newBalance = Math.max(0, currentBalance - amount);
-      await db.execute({
-        sql: `UPDATE wisphub_clients SET saldo = ?, estado = 'activo', updated_at = CURRENT_TIMESTAMP WHERE id_servicio = ?`,
-        args: [String(newBalance), clientId],
+        comentario: `Pago automático Openpay (${method}${planLabel ? ` - ${planLabel}` : ''}). Aut: ${authorization || 'N/A'}.`,
       });
-    } catch (whErr) {
-      logger.warn('Aviso en conciliación con WispHub:', whErr);
+      saldoFinalReportado = whRes.saldoAfter ?? whRes.expectedSaldo;
+
+      if (transactionId) {
+        await db.execute({
+          sql: `UPDATE openpay_transactions SET wisphub_sync_status = ?, wisphub_sync_detail = ?, updated_at = CURRENT_TIMESTAMP WHERE transaction_id = ?`,
+          args: [whRes.syncStatus, whRes.message, transactionId],
+        }).catch(() => {});
+      }
+    } catch (whErr: any) {
+      logger.warn('Aviso en conciliación con WispHub:', whErr?.message || whErr);
+      if (transactionId) {
+        await db.execute({
+          sql: `UPDATE openpay_transactions SET wisphub_sync_status = 'error', wisphub_sync_detail = ?, updated_at = CURRENT_TIMESTAMP WHERE transaction_id = ?`,
+          args: [String(whErr?.message || whErr), transactionId],
+        }).catch(() => {});
+      }
     }
 
     // 3. Reactivar ONU en SmartOLT si estaba suspendida o registrada
@@ -685,25 +1120,38 @@ export class OpenpayService {
       const clean10 = targetPhone.replace(/\D/g, '').slice(-10);
       if (clean10.length === 10) {
         const ispName = SettingsService.get('ISP_NAME', 'ISP_NAME', 'CloudWare');
-        const methodDesc = method === 'Tarjeta' 
-          ? `💳 Tarjeta ${cardBrand || ''} ****${cardLast4 || ''}` 
+        const methodDesc = method === 'Tarjeta'
+          ? `💳 Tarjeta ${cardBrand || ''} ****${cardLast4 || ''}`
           : '🏦 Transferencia SPEI';
 
-        const waMsg = 
+        const promoLine =
+          bonusMonths > 0
+            ? `• *Promoción Aplicada:* 🎁 ${totalMonthsCovered} meses cubiertos (${monthsPaid} pagados + ${bonusMonths} GRATIS = +$${bonusAmount.toFixed(2)} bono)\n`
+            : totalMonthsCovered > 1
+              ? `• *Cobertura:* 📅 ${totalMonthsCovered} meses cubiertos\n`
+              : '';
+        const saldoFavorLine =
+          saldoFinalReportado !== undefined && saldoFinalReportado < -0.5
+            ? `• *Saldo a Favor Total:* 💚 $${Math.abs(saldoFinalReportado).toFixed(2)} MXN\n`
+            : '';
+
+        const waMsg =
           `✅ *¡Pago Confirmado Exitosamente!*\n\n` +
           `Hola *${cleanPersonName(clientName)}*, recibimos tu pago con éxito en ${ispName}.\n\n` +
           `📋 *Detalles del Pago:*\n` +
           `• *Contrato:* #${clientId}\n` +
-          `• *Monto:* $${amount.toFixed(2)} MXN\n` +
+          `• *Monto Abonado:* $${amount.toFixed(2)} MXN\n` +
+          promoLine +
+          saldoFavorLine +
           `• *Método:* ${methodDesc}\n` +
           (authorization ? `• *Autorización:* ${authorization}\n` : '') +
           `• *Folio:* ${folio}\n` +
           `• *Estatus de Servicio:* Activo al 100% 🚀\n\n` +
-          `Ya puedes consultar tu recibo digital actualizado desde tu portal:\n` +
+          `Ya puedes consultar tu recibo digital y saldo actualizado desde tu portal:\n` +
           `👉 https://portal.cloudwaremx.com/portal?p=${clean10}\n\n` +
           `_¡Gracias por tu preferencia!_`;
 
-        await EvolutionService.enviarTexto(`521${clean10}`, waMsg, { instant: true }).catch((e) => {
+        await EvolutionService.enviarTexto(`521${clean10}`, waMsg, { instant: true }).catch(() => {
           return EvolutionService.enviarTexto(clean10, waMsg, { instant: true });
         });
       }

@@ -647,6 +647,24 @@ export async function initDatabase(): Promise<void> {
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_op_tx_client ON openpay_transactions(client_id);`);
     await client.execute(`CREATE INDEX IF NOT EXISTS idx_op_tx_status ON openpay_transactions(status);`);
 
+    // Migraciones idempotentes para columnas nuevas en openpay_transactions
+    const opTxColsRes = await client.execute(`PRAGMA table_info(openpay_transactions)`);
+    const existingOpTxCols = new Set(opTxColsRes.rows.map((r: any) => String(r.name)));
+    const opTxMigrations: Array<{ name: string; ddl: string }> = [
+      { name: 'conciliated', ddl: 'ALTER TABLE openpay_transactions ADD COLUMN conciliated INTEGER DEFAULT 0' },
+      { name: 'plan_option', ddl: 'ALTER TABLE openpay_transactions ADD COLUMN plan_option TEXT' },
+      { name: 'months_paid', ddl: 'ALTER TABLE openpay_transactions ADD COLUMN months_paid INTEGER DEFAULT 1' },
+      { name: 'bonus_months', ddl: 'ALTER TABLE openpay_transactions ADD COLUMN bonus_months INTEGER DEFAULT 0' },
+      { name: 'bonus_amount', ddl: 'ALTER TABLE openpay_transactions ADD COLUMN bonus_amount REAL DEFAULT 0' },
+      { name: 'wisphub_sync_status', ddl: 'ALTER TABLE openpay_transactions ADD COLUMN wisphub_sync_status TEXT' },
+      { name: 'wisphub_sync_detail', ddl: 'ALTER TABLE openpay_transactions ADD COLUMN wisphub_sync_detail TEXT' },
+    ];
+    for (const mig of opTxMigrations) {
+      if (!existingOpTxCols.has(mig.name)) {
+        await client.execute(mig.ddl);
+      }
+    }
+
     // Sembrar superadmin inicial si la tabla está vacía
     const { hashPassword } = await import('../utils/auth');
     const existingAdmins = await client.execute(`SELECT COUNT(*) as count FROM admin_users`);

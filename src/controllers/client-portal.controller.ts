@@ -1391,7 +1391,12 @@ self.addEventListener('fetch', (event) => {
           pendingTotal = pInvRes.rows.reduce((sum, r: any) => sum + Number(r.total || 0), 0);
         }
       } catch (_) { }
-      const effectiveClientBalance = Math.max(Number(client.saldo || 0), pendingTotal);
+      const rawSaldo = Number(client.saldo || 0);
+      const planPrice = Number(client.precio_plan || 0);
+      const saldoAFavor = rawSaldo < 0 ? Number(Math.abs(rawSaldo).toFixed(2)) : 0;
+      const effectiveClientBalance = rawSaldo > 0 || pendingTotal > 0 ? Math.max(rawSaldo, pendingTotal) : 0;
+      const monthsCoveredAhead = planPrice > 0 && saldoAFavor > 0 ? Math.floor((saldoAFavor + 0.01) / planPrice) : 0;
+      const paymentOptions = OpenpayService.getPaymentOptionsSummary(planPrice, effectiveClientBalance, rawSaldo);
 
       res.json({
         success: true,
@@ -1412,8 +1417,11 @@ self.addEventListener('fetch', (event) => {
           router: client.router,
           estado: (effectiveClientBalance <= 0 && String(client.estado || '').toLowerCase().includes('suspend')) ? 'Activo' : client.estado,
           saldo: effectiveClientBalance,
-          raw_saldo: client.saldo || 0,
+          raw_saldo: rawSaldo,
+          saldo_a_favor: saldoAFavor,
+          months_covered_ahead: monthsCoveredAhead,
           has_pending: hasPendingInvoices || effectiveClientBalance > 0,
+          payment_options: paymentOptions,
           precio_plan: client.precio_plan,
           plan_internet: client.plan_internet || onuRecord?.speed_profile || '40 Megas',
           dia_corte: client.dia_corte,
@@ -1484,7 +1492,23 @@ self.addEventListener('fetch', (event) => {
       let facturas: any[] = [];
       let rawUserData: any = {};
       try { rawUserData = JSON.parse(client.raw_data || '{}'); } catch (_) { }
-      const clientBalance = Number(client.saldo || 0);
+      let clientBalance = Number(client.saldo || 0);
+      let planPrice = Number(client.precio_plan || 0);
+
+      // Consultar saldo y estado en vivo desde WispHub para evitar mostrar saldos desfasados
+      try {
+        const liveSnap = await WispHubService.getLiveBillingSnapshot(client.id_servicio, 2500);
+        if (liveSnap.saldo !== null) {
+          clientBalance = liveSnap.saldo;
+          await db.execute({
+            sql: `UPDATE wisphub_clients SET saldo = ?, updated_at = ? WHERE id_servicio = ?`,
+            args: [clientBalance.toFixed(2), new Date().toISOString(), client.id_servicio],
+          }).catch(() => {});
+        }
+        if (liveSnap.planPrice !== null && liveSnap.planPrice > 0) {
+          planPrice = liveSnap.planPrice;
+        }
+      } catch (_) { }
 
       try {
         facturas = await WispHubService.getInvoicesForClient(client.id_servicio, {
@@ -1499,16 +1523,23 @@ self.addEventListener('fetch', (event) => {
       // Estructurar respuesta con facturas e información de pago bancario
       const pendingInvoices = facturas.filter((f: any) => !String(f.estado || '').toLowerCase().includes('pagad'));
       const pendingInvoicesTotal = pendingInvoices.reduce((sum: number, f: any) => sum + Number(f.total || f.monto || 0), 0);
-      const effectiveBalance = Math.max(clientBalance, pendingInvoicesTotal);
+      const effectiveBalance = clientBalance > 0 || pendingInvoicesTotal > 0 ? Math.max(clientBalance, pendingInvoicesTotal) : 0;
+      const saldoAFavor = clientBalance < 0 ? Number(Math.abs(clientBalance).toFixed(2)) : 0;
+      const monthsCoveredAhead = planPrice > 0 && saldoAFavor > 0 ? Math.floor((saldoAFavor + 0.01) / planPrice) : 0;
+      const paymentOptions = OpenpayService.getPaymentOptionsSummary(planPrice, effectiveBalance, clientBalance);
 
       res.json({
         success: true,
         balance: effectiveBalance,
-        hasPending: pendingInvoices.length > 0,
+        rawSaldo: clientBalance,
+        saldoAFavor,
+        monthsCoveredAhead,
+        hasPending: pendingInvoices.length > 0 || effectiveBalance > 0,
         pendingCount: pendingInvoices.length,
-        planPrice: Number(client.precio_plan || 0),
+        planPrice,
+        paymentOptions,
         dueDate: pendingInvoices[0]?.fecha_vencimiento || client.fecha_corte || `Día ${client.dia_corte || 5} de cada mes`,
-        status: client.estado,
+        status: (effectiveBalance <= 0 && String(client.estado || '').toLowerCase().includes('suspend')) ? 'Activo' : client.estado,
         invoices: facturas.map((f: any) => {
           let estado = f.estado || 'Pendiente de Pago';
           if (estado === '1') estado = 'Pendiente de Pago';
@@ -2368,11 +2399,21 @@ self.addEventListener('fetch', (event) => {
         client = services[0];
       }
 
+      const planPrice = Number(client.precio_plan || 0);
+      let pendingDebt = Math.max(0, Number(client.saldo || 0));
+      try {
+        const pInv = await db.execute({
+          sql: `SELECT SUM(total) as total FROM wisphub_invoices WHERE id_servicio = ? AND LOWER(estado) NOT LIKE '%pagad%'`,
+          args: [client.id_servicio],
+        });
+        pendingDebt = Math.max(pendingDebt, Number(pInv.rows[0]?.total || 0));
+      } catch (_) { }
+
       const speiDetails = await OpenpayService.getClientSpeiDetails({
         id_servicio: client.id_servicio,
         nombre: client.nombre,
         telefono: client.telefono,
-        saldo: Number(client.saldo || 0),
+        saldo: pendingDebt > 0 ? pendingDebt : planPrice,
       });
 
       if (!speiDetails) {
@@ -2380,9 +2421,14 @@ self.addEventListener('fetch', (event) => {
         return;
       }
 
+      const promoGuide = OpenpayService.getPaymentOptionsSummary(planPrice, pendingDebt, Number(client.saldo || 0));
+
       res.json({
         success: true,
         spei: speiDetails,
+        planPrice,
+        pendingDebt,
+        promoGuide,
       });
     } catch (err: any) {
       logger.error('Error en getOpenpaySpei:', err?.message || err);
@@ -2403,7 +2449,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   /**
-   * Procesa el cargo de tarjeta tokenizada con Openpay
+   * Procesa el cargo de tarjeta tokenizada con Openpay (validando plan y montos del lado del servidor)
    */
   static async chargeOpenpayCard(req: Request, res: Response): Promise<void> {
     try {
@@ -2411,13 +2457,14 @@ self.addEventListener('fetch', (event) => {
         tokenId,
         deviceSessionId,
         amount,
+        planOption,
         description,
         orderId,
         clientId,
         phone,
       } = req.body;
 
-      if (!tokenId || !deviceSessionId || !amount || !clientId) {
+      if (!tokenId || !deviceSessionId || !clientId || (!amount && !planOption)) {
         res.status(400).json({ success: false, message: 'Faltan parámetros obligatorios para procesar el cargo.' });
         return;
       }
@@ -2437,19 +2484,108 @@ self.addEventListener('fetch', (event) => {
         client = services && services.length > 0 ? services[0] : null;
       }
 
+      if (!client) {
+        res.status(404).json({ success: false, message: 'No se encontró el contrato de servicio para procesar el pago.' });
+        return;
+      }
+
+      const resolvedServiceId = Number(client.id_servicio);
+      let livePlanPrice = Number(client.precio_plan || 0);
+      let liveRawSaldo = Number(client.saldo || 0);
+      let livePendingDebt = Math.max(0, liveRawSaldo);
+
+      // Verificación en vivo con WispHub antes de cobrar tarjeta (evita cobros duplicados sobre facturas ya pagadas)
+      try {
+        const invRes = await db.execute({
+          sql: `SELECT SUM(total) as total FROM wisphub_invoices WHERE id_servicio = ? AND LOWER(estado) NOT LIKE '%pagad%'`,
+          args: [resolvedServiceId],
+        });
+        livePendingDebt = Math.max(livePendingDebt, Number(invRes.rows[0]?.total || 0));
+
+        const liveSnap = await WispHubService.getLiveBillingSnapshot(resolvedServiceId, 3000);
+        if (liveSnap.saldo !== null) {
+          liveRawSaldo = liveSnap.saldo;
+        }
+        if (liveSnap.planPrice !== null && liveSnap.planPrice > 0) {
+          livePlanPrice = liveSnap.planPrice;
+        }
+        if (liveSnap.perfilData !== null || liveSnap.saldo !== null) {
+          livePendingDebt = Math.max(
+            0,
+            liveSnap.pendingFacturasTotal,
+            liveRawSaldo > 0 ? liveRawSaldo : 0
+          );
+        }
+      } catch (_) { }
+
+      const computedPlan = OpenpayService.computePaymentPlan({
+        planPrice: livePlanPrice,
+        pendingDebt: livePendingDebt,
+        rawSaldo: liveRawSaldo,
+        planOption,
+        customAmount: Number(amount || 0),
+      });
+
+      if (!computedPlan.valid || computedPlan.netAmount <= 0) {
+        res.status(400).json({
+          success: false,
+          message: computedPlan.error || 'No es posible procesar este monto para tu estado de cuenta actual.',
+        });
+        return;
+      }
+
+      // Protección anti doble clic / doble cargo en ventana de 20 segundos
+      try {
+        const dupRes = await db.execute({
+          sql: `
+            SELECT transaction_id FROM openpay_transactions
+            WHERE client_id = ? AND method = 'card' AND status = 'completed'
+              AND ABS(net_amount - ?) < 0.5
+              AND created_at >= datetime('now', '-20 seconds')
+            LIMIT 1
+          `,
+          args: [resolvedServiceId, computedPlan.netAmount],
+        });
+        if (dupRes.rows.length > 0) {
+          res.status(409).json({
+            success: false,
+            message: 'Ya se procesó un pago idéntico hace unos segundos. Verifica tu estado de cuenta antes de reintentar.',
+          });
+          return;
+        }
+      } catch (_) { }
+
+      const resolvedDesc =
+        description ||
+        `${computedPlan.label} - Contrato #${resolvedServiceId}`;
+
       const chargeResult = await OpenpayService.chargeCard({
         tokenId,
         deviceSessionId,
-        amount: Number(amount),
-        description: description || `Pago Internet Contrato #${clientId}`,
-        orderId: orderId || `CARD_${clientId}_${Date.now()}`,
-        clientId,
+        amount: computedPlan.netAmount,
+        description: resolvedDesc,
+        orderId: orderId || `CARD_${resolvedServiceId}_${Date.now()}`,
+        clientId: resolvedServiceId,
         clientName: client?.nombre || 'Cliente CloudWare',
         clientPhone: phone || client?.telefono || '',
         clientEmail: (client as any)?.email,
+        planOption: computedPlan.planOption,
+        planLabel: computedPlan.label,
+        monthsPaid: computedPlan.monthsPaid,
+        bonusMonths: computedPlan.bonusMonths,
+        bonusAmount: computedPlan.bonusAmount,
+        totalMonthsCovered: computedPlan.totalMonthsCovered,
       });
 
-      res.json(chargeResult);
+      res.json({
+        ...chargeResult,
+        planOption: computedPlan.planOption,
+        planLabel: computedPlan.label,
+        monthsPaid: computedPlan.monthsPaid,
+        bonusMonths: computedPlan.bonusMonths,
+        bonusAmount: computedPlan.bonusAmount,
+        totalMonthsCovered: computedPlan.totalMonthsCovered,
+      });
     } catch (err: any) {
       logger.error('Error en chargeOpenpayCard:', err?.message || err);
       res.status(500).json({ success: false, message: 'Error interno al procesar el pago con tarjeta.' });

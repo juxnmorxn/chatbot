@@ -1551,66 +1551,391 @@ export class WispHubService {
   /**
    * Registra un pago para un cliente en WispHub (por pasarela Openpay o SPEI)
    */
+  /**
+   * Consulta perfil y facturas pendientes en vivo desde WispHub para garantizar saldo exacto antes/después de pagar
+   */
+  static async getLiveBillingSnapshot(idServicio: number | string, timeoutMs: number = 3000): Promise<{
+    saldo: number | null;
+    planPrice: number | null;
+    estado: string | null;
+    perfilData: any | null;
+    pendingFacturas: Array<{ id_factura: number; total: number; fecha_emision?: string }>;
+    pendingFacturasTotal: number;
+  }> {
+    const sId = Number(idServicio);
+    const api = this.getApi();
+    const [perfilRes, saldoRes] = await Promise.all([
+      api.get(`/clientes/${sId}/perfil/`, { timeout: timeoutMs }).catch(() => null),
+      api.get(`/clientes/${sId}/saldo/`, { timeout: timeoutMs }).catch(() => null),
+    ]);
+
+    const perfilData = perfilRes?.data || null;
+    const saldo =
+      perfilData?.saldo !== undefined && perfilData?.saldo !== null
+        ? Number(perfilData.saldo)
+        : saldoRes?.data?.saldo !== undefined && saldoRes?.data?.saldo !== null
+          ? Number(saldoRes.data.saldo)
+          : null;
+    const planPrice = Number(perfilData?.precio_plan || 0) > 0 ? Number(perfilData.precio_plan) : null;
+    const estado = perfilData?.estado ? String(perfilData.estado) : saldoRes?.data?.estado ? String(saldoRes.data.estado) : null;
+
+    const rawList = Array.isArray(saldoRes?.data?.facturas) ? saldoRes.data.facturas : [];
+    const pendingFacturas = rawList
+      .map((f: any) => ({
+        id_factura: Number(f.id || f.id_factura),
+        total: Number(f.total || 0),
+        fecha_emision: f.fecha_emision ? String(f.fecha_emision) : '',
+      }))
+      .filter((f: any) => f.id_factura > 0)
+      .sort((a: any, b: any) => (a.fecha_emision || '').localeCompare(b.fecha_emision || '') || a.id_factura - b.id_factura);
+
+    const pendingFacturasTotal = pendingFacturas.reduce((acc: number, f: any) => acc + f.total, 0);
+    return { saldo, planPrice, estado, perfilData, pendingFacturas, pendingFacturasTotal };
+  }
+
+  private static formatMexicoCityDateTime(date: Date = new Date()): { dateStr: string; dateTimeStr: string } {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Mexico_City',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).formatToParts(date);
+    const get = (type: string) => parts.find((p) => p.type === type)?.value || '00';
+    const hour = get('hour') === '24' ? '00' : get('hour');
+    const dateStr = `${get('year')}-${get('month')}-${get('day')}`;
+    return { dateStr, dateTimeStr: `${dateStr} ${hour}:${get('minute')}` };
+  }
+
+  private static async updateClientSaldoInWisphub(
+    api: any,
+    sId: number,
+    perfilData: any,
+    targetSaldo: number
+  ): Promise<{ ok: boolean; saldoAfter?: number; methodUsed: string; detail?: string }> {
+    const saldoStr = targetSaldo.toFixed(2);
+    try {
+      await api.patch(`/clientes/${sId}/perfil/`, { saldo: saldoStr });
+      const verify = await api.get(`/clientes/${sId}/perfil/`).catch(() => null);
+      const saldoAfter = verify?.data?.saldo !== undefined ? Number(verify.data.saldo) : targetSaldo;
+      return { ok: true, saldoAfter, methodUsed: 'PATCH /perfil/' };
+    } catch (patchErr: any) {
+      const patchMsg = patchErr?.response?.data ? JSON.stringify(patchErr.response.data) : patchErr?.message;
+      logger.warn(`[WispHubService] PATCH /clientes/${sId}/perfil/ falló (${patchMsg}), intentando PUT completo...`);
+      if (!perfilData) {
+        return { ok: false, methodUsed: 'PATCH_FAILED_NO_PROFILE', detail: patchMsg };
+      }
+      try {
+        const putPayload: Record<string, any> = {
+          nombre: perfilData.nombre,
+          apellidos: perfilData.apellidos,
+          usuario: perfilData.usuario,
+          email: perfilData.email,
+          telefono: perfilData.telefono,
+          direccion: perfilData.direccion,
+          localidad: perfilData.localidad,
+          ciudad: perfilData.ciudad,
+          codigo_postal: perfilData.codigo_postal,
+          cedula: perfilData.cedula,
+          descuento: perfilData.descuento,
+          saldo: saldoStr,
+        };
+        for (const k of Object.keys(putPayload)) {
+          if (putPayload[k] === undefined) delete putPayload[k];
+        }
+        await api.put(`/clientes/${sId}/perfil/`, putPayload);
+        const verify = await api.get(`/clientes/${sId}/perfil/`).catch(() => null);
+        const saldoAfter = verify?.data?.saldo !== undefined ? Number(verify.data.saldo) : targetSaldo;
+        return { ok: true, saldoAfter, methodUsed: 'PUT /perfil/' };
+      } catch (putErr: any) {
+        const putMsg = putErr?.response?.data ? JSON.stringify(putErr.response.data) : putErr?.message;
+        logger.error(`[WispHubService] PUT /clientes/${sId}/perfil/ también falló para saldo=${saldoStr}:`, putMsg);
+        return { ok: false, methodUsed: 'PUT_FAILED', detail: `${patchMsg} | ${putMsg}` };
+      }
+    }
+  }
+
   static async registerPaymentForClient(
     idServicio: number | string,
     params: {
       monto: number;
-      forma_pago?: string;
+      bonusAmount?: number;
+      monthsPaid?: number;
+      bonusMonths?: number;
+      planLabel?: string;
+      forma_pago?: string | number;
       referencia?: string;
       comentario?: string;
     }
-  ): Promise<{ success: boolean; message: string }> {
+  ): Promise<{
+    success: boolean;
+    message: string;
+    syncStatus: 'synced' | 'partial' | 'fallback_profile' | 'error';
+    saldoBefore?: number;
+    saldoAfter?: number;
+    expectedSaldo?: number;
+    paidInvoiceIds?: number[];
+    createdInvoiceId?: number | null;
+  }> {
     const sId = Number(idServicio);
+    const monto = Number(Number(params.monto || 0).toFixed(2));
+    const bonusAmount = Math.max(0, Number(Number(params.bonusAmount || 0).toFixed(2)));
     const db = getDbClient();
     const now = new Date().toISOString();
+    const { dateStr, dateTimeStr } = this.formatMexicoCityDateTime();
+    const ref = params.referencia || `OP-${Date.now()}`;
+    const formaPagoId = Number(params.forma_pago) > 0 ? Number(params.forma_pago) : 21899;
 
-    logger.info(`[WispHubService] Registrando pago de $${params.monto} MXN para contrato #${sId}...`);
+    logger.info(
+      `[WispHubService] Registrando pago de $${monto} MXN (bono promo: $${bonusAmount} MXN) para contrato #${sId}...`
+    );
+
+    if (!sId || monto <= 0) {
+      return {
+        success: false,
+        message: 'Parámetros de pago inválidos para WispHub',
+        syncStatus: 'error',
+      };
+    }
 
     try {
-      // 1. Buscar facturas pendientes locales
-      const invRes = await db.execute({
-        sql: `SELECT id_factura, folio, total FROM wisphub_invoices WHERE id_servicio = ? AND LOWER(estado) NOT LIKE '%pagad%' ORDER BY fecha_emision ASC LIMIT 1`,
-        args: [sId],
-      });
-
-      const topInv = invRes.rows[0] as any;
       const api = this.getApi();
 
-      if (topInv && topInv.id_factura) {
-        try {
-          const d = new Date();
-          const pad = (n: number) => String(n).padStart(2, '0');
-          const fechaPagoStr = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      // 1. Leer estado local + perfil en vivo y facturas pendientes reales en WispHub
+      const localClientRes = await db.execute({
+        sql: `SELECT saldo, precio_plan, nombre, estado_facturas, raw_data FROM wisphub_clients WHERE id_servicio = ? LIMIT 1`,
+        args: [sId],
+      });
+      const localClient = (localClientRes.rows[0] as any) || {};
+      let localUsuario = '';
+      try {
+        localUsuario = JSON.parse(localClient.raw_data || '{}')?.usuario || '';
+      } catch (_) {}
 
-          await api.post(`/facturas/${topInv.id_factura}/registrar-pago/`, {
-            referencia: params.referencia || `OP-${Date.now()}`,
-            fecha_pago: fechaPagoStr,
-            total_cobrado: Number(params.monto),
-            accion: 1, // 1 = Registrar pago y activar servicio automáticamente
-            forma_pago: 21899, // 21899 = Transferencia Bancaria en WispHub
-          });
-          logger.info(`[WispHubService] ¡Pago registrado exitosamente en WispHub para factura #${topInv.id_factura}!`);
-        } catch (apiErr: any) {
-          logger.warn(`Aviso al enviar /facturas/${topInv.id_factura}/registrar-pago/ a WispHub:`, apiErr?.response?.data || apiErr?.message);
+      let perfilData: any = null;
+      let sBefore = Number(localClient.saldo || 0);
+      let planPrice = Number(localClient.precio_plan || 0);
+      try {
+        const perfilRes = await api.get(`/clientes/${sId}/perfil/`);
+        if (perfilRes?.data) {
+          perfilData = perfilRes.data;
+          if (perfilData.saldo !== undefined && perfilData.saldo !== null) {
+            sBefore = Number(perfilData.saldo);
+          }
+          if (Number(perfilData.precio_plan || 0) > 0) {
+            planPrice = Number(perfilData.precio_plan);
+          }
         }
-
-        // Marcar pagada localmente
-        await db.execute({
-          sql: `UPDATE wisphub_invoices SET estado = 'Pagada', fecha_pago = ?, updated_at = ? WHERE id_factura = ?`,
-          args: [now, now, topInv.id_factura],
-        });
+      } catch (pErr: any) {
+        logger.warn(`[WispHubService] No se pudo leer /clientes/${sId}/perfil/:`, pErr?.message || pErr);
       }
 
-      // Actualizar cliente localmente a estado activo y saldo ajustado
+      // Cargar facturas pendientes en vivo desde WispHub (/saldo/) y complementar con locales si falla
+      let livePendingFacturas: Array<{ id_factura: number; total: number; fecha_emision?: string }> = [];
+      try {
+        const saldoRes = await api.get(`/clientes/${sId}/saldo/`);
+        const rawList = Array.isArray(saldoRes?.data?.facturas) ? saldoRes.data.facturas : [];
+        livePendingFacturas = rawList
+          .map((f: any) => ({
+            id_factura: Number(f.id || f.id_factura),
+            total: Number(f.total || 0),
+            fecha_emision: f.fecha_emision ? String(f.fecha_emision) : '',
+          }))
+          .filter((f: any) => f.id_factura > 0)
+          .sort((a: any, b: any) => (a.fecha_emision || '').localeCompare(b.fecha_emision || '') || a.id_factura - b.id_factura);
+      } catch (sErr: any) {
+        logger.warn(`[WispHubService] No se pudo consultar /clientes/${sId}/saldo/, usando facturas locales:`, sErr?.message || sErr);
+        const localInvRes = await db.execute({
+          sql: `SELECT id_factura, total, fecha_emision FROM wisphub_invoices WHERE id_servicio = ? AND LOWER(estado) NOT LIKE '%pagad%' ORDER BY fecha_emision ASC, id_factura ASC`,
+          args: [sId],
+        });
+        livePendingFacturas = (localInvRes.rows as any[]).map((r) => ({
+          id_factura: Number(r.id_factura),
+          total: Number(r.total || 0),
+          fecha_emision: String(r.fecha_emision || ''),
+        }));
+      }
+
+      const paidInvoiceIds: number[] = [];
+      let createdInvoiceId: number | null = null;
+      let invoiceApiFailures: string[] = [];
+
+      // 2A. Si hay facturas pendientes, liquidar en orden cronológico y cargar excedente en la última
+      if (livePendingFacturas.length > 0) {
+        let remainingCash = monto;
+        for (let i = 0; i < livePendingFacturas.length && remainingCash > 0; i++) {
+          const inv = livePendingFacturas[i];
+          const isLast = i === livePendingFacturas.length - 1;
+          const amountForThisInv = isLast ? Number(remainingCash.toFixed(2)) : Number(Math.min(remainingCash, inv.total).toFixed(2));
+          if (amountForThisInv <= 0) continue;
+
+          try {
+            await api.post(`/facturas/${inv.id_factura}/registrar-pago/`, {
+              referencia: ref,
+              fecha_pago: dateTimeStr,
+              total_cobrado: amountForThisInv,
+              accion: 1, // Registrar pago y activar servicio
+              forma_pago: formaPagoId,
+            });
+            paidInvoiceIds.push(inv.id_factura);
+            remainingCash = Number((remainingCash - amountForThisInv).toFixed(2));
+            logger.info(`[WispHubService] Pago $${amountForThisInv} aplicado a factura #${inv.id_factura} (contrato #${sId}).`);
+
+            if (amountForThisInv + 0.01 >= inv.total) {
+              await db.execute({
+                sql: `UPDATE wisphub_invoices SET estado = 'Pagada', fecha_pago = ?, updated_at = ? WHERE id_factura = ?`,
+                args: [now, now, inv.id_factura],
+              });
+            }
+          } catch (payErr: any) {
+            const msg = payErr?.response?.data ? JSON.stringify(payErr.response.data) : payErr?.message;
+            invoiceApiFailures.push(`Factura #${inv.id_factura}: ${msg}`);
+            logger.warn(`[WispHubService] Error aplicando pago en factura #${inv.id_factura}:`, msg);
+          }
+        }
+      } else {
+        // 2B. Sin facturas pendientes: pago por adelantado -> generar recibo $0 y registrar pago por el monto real
+        const unitPrice = planPrice > 0 ? planPrice : monto;
+        const promoTag = bonusAmount > 0 && params.bonusMonths ? ` + ${params.bonusMonths} mes(es) gratis` : '';
+        const desc =
+          params.comentario ||
+          `Adelanto de servicio (${params.planLabel || `${params.monthsPaid || 1} mes(es)`}${promoTag}) - Ref: ${ref}`;
+
+        try {
+          const createRes = await api.post(`/facturas/`, {
+            tipo_factura: 1,
+            cliente: sId,
+            fecha_emision: dateStr,
+            fecha_vencimiento: dateStr,
+            impuesto: 0,
+            descuento: unitPrice,
+            articulos: [{ descripcion: desc, cantidad: 1, precio: unitPrice }],
+          });
+          createdInvoiceId =
+            Number(createRes?.data?.id_factura || createRes?.data?.id || createRes?.data?.factura?.id_factura || 0) || null;
+
+          if (!createdInvoiceId) {
+            const recentRes = await api.get(`/clientes/${sId}/saldo/`).catch(() => null);
+            const list = Array.isArray(recentRes?.data?.facturas) ? recentRes.data.facturas : [];
+            if (list.length > 0) {
+              createdInvoiceId = Number(list[list.length - 1].id || list[list.length - 1].id_factura || 0) || null;
+            }
+          }
+
+          if (createdInvoiceId) {
+            await api.post(`/facturas/${createdInvoiceId}/registrar-pago/`, {
+              referencia: ref,
+              fecha_pago: dateTimeStr,
+              total_cobrado: monto,
+              accion: 1,
+              forma_pago: formaPagoId,
+            });
+            paidInvoiceIds.push(createdInvoiceId);
+            logger.info(`[WispHubService] Recibo de adelanto #${createdInvoiceId} pagado por $${monto} MXN para contrato #${sId}.`);
+
+            await db.execute({
+              sql: `
+                INSERT INTO wisphub_invoices (
+                  id_factura, id_servicio, folio, cliente_nombre, cliente_usuario,
+                  total, sub_total, descuento, estado, fecha_emision, fecha_vencimiento, fecha_pago,
+                  descripcion, link_pago, pdf_url, raw_data, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Pagada', ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id_factura) DO UPDATE SET estado = 'Pagada', fecha_pago = excluded.fecha_pago, total = excluded.total, updated_at = excluded.updated_at
+              `,
+              args: [
+                createdInvoiceId,
+                sId,
+                `FAC-${createdInvoiceId}`,
+                String(perfilData?.nombre || localClient.nombre || ''),
+                String(perfilData?.usuario || localUsuario || ''),
+                monto,
+                monto,
+                bonusAmount,
+                dateStr,
+                dateStr,
+                now,
+                desc,
+                `https://wisphub.net/factura/${createdInvoiceId}/`,
+                `https://wisphub.net/factura/pdf/${createdInvoiceId}/`,
+                JSON.stringify({ forma_pago: 'Transferencia Bancaria', total_cobrado: monto, bono_promo: bonusAmount, referencia: ref }),
+                now,
+              ],
+            });
+          } else {
+            invoiceApiFailures.push('POST /facturas/ no devolvió id_factura');
+          }
+        } catch (advErr: any) {
+          const msg = advErr?.response?.data ? JSON.stringify(advErr.response.data) : advErr?.message;
+          invoiceApiFailures.push(`Recibo adelanto: ${msg}`);
+          logger.warn(`[WispHubService] Aviso creando recibo $0 de adelanto en WispHub:`, msg);
+        }
+      }
+
+      // 3. Verificación en vivo de Saldo Final + Conciliación exacta de Saldo a Favor y Bono Promocional
+      const expectedSaldo = Number((sBefore - (monto + bonusAmount)).toFixed(2));
+      await new Promise((r) => setTimeout(r, 600));
+
+      let sAfter = expectedSaldo;
+      let syncStatus: 'synced' | 'partial' | 'fallback_profile' | 'error' = 'synced';
+      try {
+        const postPerfil = await api.get(`/clientes/${sId}/perfil/`);
+        if (postPerfil?.data) {
+          perfilData = postPerfil.data;
+          if (perfilData.saldo !== undefined && perfilData.saldo !== null) {
+            sAfter = Number(perfilData.saldo);
+          }
+        }
+      } catch (postErr: any) {
+        logger.warn(`[WispHubService] No se pudo verificar saldo post-pago /clientes/${sId}/perfil/:`, postErr?.message || postErr);
+      }
+
+      if (Math.abs(sAfter - expectedSaldo) > 0.5) {
+        logger.info(
+          `[WispHubService] Ajustando saldo exacto en WispHub para contrato #${sId}: actual=${sAfter}, esperado=${expectedSaldo} (bono=$${bonusAmount})`
+        );
+        const upd = await this.updateClientSaldoInWisphub(api, sId, perfilData, expectedSaldo);
+        if (upd.ok) {
+          sAfter = upd.saldoAfter !== undefined ? upd.saldoAfter : expectedSaldo;
+          syncStatus = invoiceApiFailures.length > 0 ? 'fallback_profile' : 'synced';
+        } else {
+          syncStatus = 'partial';
+        }
+      }
+
+      // 4. Asegurar reactivación en WispHub si estaba suspendido
+      const liveEstado = String(perfilData?.estado || '').toLowerCase();
+      if (liveEstado.includes('suspend')) {
+        await api.post(`/clientes/${sId}/activar/`).catch((e: any) =>
+          logger.warn(`[WispHubService] Aviso activando cliente #${sId}:`, e?.message || e)
+        );
+      }
+
+      // 5. Actualizar cliente localmente preservando Saldo a Favor negativo exacto
+      const remainingLocalInv = await db.execute({
+        sql: `SELECT COUNT(*) as cnt FROM wisphub_invoices WHERE id_servicio = ? AND LOWER(estado) NOT LIKE '%pagad%'`,
+        args: [sId],
+      });
+      const stillOpen = Number(remainingLocalInv.rows[0]?.cnt || 0) > 0 && expectedSaldo > 0;
       await db.execute({
-        sql: `UPDATE wisphub_clients SET estado = 'activo', saldo = '0', updated_at = ? WHERE id_servicio = ?`,
-        args: [now, sId],
+        sql: `UPDATE wisphub_clients SET estado = 'Activo', estado_facturas = ?, saldo = ?, updated_at = ? WHERE id_servicio = ?`,
+        args: [stillOpen ? 'Pendiente de Pago' : 'Pagadas', expectedSaldo.toFixed(2), now, sId],
       });
 
-      return { success: true, message: `Pago registrado con éxito para contrato #${sId}` };
+      return {
+        success: true,
+        message: `Pago registrado ($${monto} MXN${bonusAmount > 0 ? ` + $${bonusAmount} bono` : ''}). Saldo WispHub: $${sAfter.toFixed(2)}`,
+        syncStatus,
+        saldoBefore: sBefore,
+        saldoAfter: sAfter,
+        expectedSaldo,
+        paidInvoiceIds,
+        createdInvoiceId,
+      };
     } catch (err: any) {
-      logger.error(`Error al registrar pago en WispHub para ${sId}:`, err?.message || err);
-      return { success: false, message: err?.message || 'Error al registrar pago.' };
+      logger.error(`Error crítico al registrar pago en WispHub para ${sId}:`, err?.message || err);
+      return { success: false, message: err?.message || 'Error al registrar pago.', syncStatus: 'error' };
     }
   }
 }
