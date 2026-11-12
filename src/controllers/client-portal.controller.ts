@@ -1704,11 +1704,16 @@ self.addEventListener('fetch', (event) => {
 
       wifiChangeCooldowns.set(key, Date.now());
 
+      const isUnified = result.isUnified !== undefined
+        ? result.isUnified
+        : (!result.ssid5g || (result.ssid24 && result.ssid5g && result.ssid24.trim().toLowerCase() === result.ssid5g.trim().toLowerCase()));
+
       const updatedWifiData = {
         has5g: result.has5g !== false,
+        isUnified,
         ssid24: result.ssid24 || (ssid24 || ssid || 'CloudWare-WiFi'),
         password24: result.password || password,
-        ssid5g: result.ssid5g || (result.ssid24 ? `${result.ssid24}-5G` : 'CloudWare-WiFi-5G'),
+        ssid5g: (!isUnified && result.ssid5g) ? result.ssid5g : '',
         password5g: result.password || password,
         ssid: result.ssid24 || (ssid24 || ssid || 'CloudWare-WiFi'),
         password: result.password || password,

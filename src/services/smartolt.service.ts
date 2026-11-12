@@ -1446,6 +1446,7 @@ export class SmartOLTService {
     ssid24: string;
     ssid5g: string;
     has5g: boolean;
+    isUnified?: boolean;
     clientName?: string;
   }> {
     const cleanId = onuIdOrExternalId.trim();
@@ -1503,9 +1504,12 @@ export class SmartOLTService {
         currentSsid24 = `CloudWare-${clientClean.slice(0, 10)}`;
       }
 
+      const isUnified = existingWifi?.isUnified ?? (!currentSsid5g || (currentSsid24 && currentSsid5g && currentSsid24.trim().toLowerCase() === currentSsid5g.trim().toLowerCase()));
+
       if (!currentSsid5g && (has5g || (onuRecord?.raw_data && /8145|EG8145|HG8145|X6|F660/i.test(onuRecord.raw_data)))) {
         has5g = true;
-        currentSsid5g = `${currentSsid24}-5g`;
+        // Si la red es unificada (Band Steering), ambas bandas comparten el mismo SSID
+        currentSsid5g = isUnified ? currentSsid24 : `${currentSsid24}-5G`;
       }
 
       // 2. Aplicar en Wireless LAN 1 (2.4 GHz) con set_wifi_port_transparent
@@ -1567,7 +1571,8 @@ export class SmartOLTService {
         message: 'Contraseña Wi-Fi actualizada con éxito en SmartOLT.',
         password: newPassword,
         ssid24: currentSsid24,
-        ssid5g: currentSsid5g || `${currentSsid24}-5G`,
+        ssid5g: isUnified ? '' : (currentSsid5g || `${currentSsid24}-5G`),
+        isUnified,
         has5g,
         clientName,
       };
