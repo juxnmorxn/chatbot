@@ -254,24 +254,69 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
       transform: scale(1.1);
     }
 
+    .island-speed-btn {
+      background: linear-gradient(135deg, rgba(2, 132, 199, 0.22) 0%, rgba(16, 185, 129, 0.22) 100%);
+      border: 1px solid rgba(56, 189, 248, 0.45) !important;
+      color: #38bdf8 !important;
+      font-weight: 700 !important;
+      position: relative;
+      box-shadow: 0 2px 10px rgba(2, 132, 199, 0.2);
+    }
+
+    .island-speed-btn:hover, .island-speed-btn:active {
+      background: linear-gradient(135deg, #0284c7 0%, #10b981 100%) !important;
+      color: #ffffff !important;
+      box-shadow: 0 4px 18px rgba(2, 132, 199, 0.45);
+      transform: translateY(-2px);
+    }
+
+    .island-speed-icon-wrap {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .speed-pulse-icon {
+      animation: speedIconPulse 2.4s infinite ease-in-out;
+    }
+
+    @keyframes speedIconPulse {
+      0%, 100% { transform: scale(1); filter: drop-shadow(0 0 0 rgba(56,189,248,0)); }
+      50% { transform: scale(1.15); filter: drop-shadow(0 0 6px rgba(56,189,248,0.7)); }
+    }
+
     @media (max-width: 480px) {
       .portal-dynamic-island {
-        bottom: 16px;
-        padding: 5px 6px;
-        gap: 4px;
-        width: calc(100% - 32px);
-        max-width: 380px;
-        justify-content: space-around;
+        bottom: 14px;
+        padding: 4px 6px;
+        gap: 3px;
+        width: calc(100% - 20px);
+        max-width: 420px;
+        justify-content: space-between;
       }
       .island-tab-btn {
-        padding: 8px 12px;
-        font-size: 12px;
-        gap: 6px;
+        padding: 7px 8px;
+        font-size: 11px;
+        gap: 4px;
         flex: 1;
         justify-content: center;
       }
       .island-tab-btn i {
-        font-size: 14px;
+        font-size: 13px;
+      }
+      .island-speed-btn {
+        padding: 7px 9px;
+        flex: 1.15;
+      }
+    }
+
+    @media (max-width: 360px) {
+      .island-tab-btn span {
+        font-size: 10px;
+      }
+      .island-tab-btn {
+        padding: 6px 4px;
+        gap: 3px;
       }
     }
 
@@ -1695,11 +1740,19 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
               </div>
               <div id="planPriceLabel" style="font-size: 12px; color: #38bdf8; font-weight: 700; margin-top: 2px;">$250.00 MXN / mes</div>
             </div>
-            <div style="text-align: right; background: rgba(14, 165, 233, 0.1); border: 1px solid rgba(56, 189, 248, 0.25); border-radius: 12px; padding: 6px 14px; flex-shrink: 0;">
-              <div id="planSpeedBig" style="font-family: 'Outfit', sans-serif; font-size: 26px; font-weight: 800; color: #0284c7; line-height: 1;">
-                40M
+            <div style="text-align: right; background: linear-gradient(135deg, rgba(14, 165, 233, 0.12), rgba(16, 185, 129, 0.12)); border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 12px; padding: 6px 14px; flex-shrink: 0; display: flex; align-items: center; gap: 8px;">
+              <div>
+                <div id="planSpeedBig" style="font-family: 'Outfit', sans-serif; font-size: 26px; font-weight: 800; color: #0284c7; line-height: 1;">
+                  40M
+                </div>
+                <span style="font-size: 9.5px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Velocidad</span>
               </div>
-              <span style="font-size: 9.5px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Velocidad</span>
+              <div style="width: 28px; height: 28px; border-radius: 8px; background: rgba(2, 132, 199, 0.15); display: flex; align-items: center; justify-content: center; color: #38bdf8;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 14l4-4" stroke="#10b981" stroke-width="2.8" />
+                  <path d="M3.34 19a10 10 0 1 1 17.32 0" />
+                </svg>
+              </div>
             </div>
           </div>
 
@@ -1724,8 +1777,11 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
           </div>
 
           <!-- Botón Medir Velocidad -->
-          <button type="button" class="btn-main" onclick="openSpeedtestModal()" style="margin-top: 10px; background: linear-gradient(135deg, #0284c7, #0ea5e9); color: #fff; font-size: 13px; font-weight: 700; padding: 11px 14px; border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 14px rgba(2, 132, 199, 0.25); cursor: pointer; border: none; width: 100%;">
-            <i class="fa-solid fa-gauge-high"></i>
+          <button type="button" class="btn-main" onclick="openSpeedtestModal()" style="margin-top: 10px; background: linear-gradient(135deg, #0284c7 0%, #0369a1 40%, #10b981 100%); color: #fff; font-size: 13.5px; font-weight: 700; padding: 12px 14px; border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center; gap: 9px; box-shadow: 0 4px 16px rgba(2, 132, 199, 0.35); cursor: pointer; border: none; width: 100%;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 14l4-4" stroke="#10b981" stroke-width="2.8" />
+              <path d="M3.34 19a10 10 0 1 1 17.32 0" />
+            </svg>
             <span>Medir Velocidad de mi Conexión</span>
           </button>
 
@@ -1900,6 +1956,16 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
       <button id="btnTabWifi" class="island-tab-btn" onclick="switchPortalTab('wifi')">
         <i class="fa-solid fa-wifi"></i>
         <span>Mi Wi-Fi</span>
+      </button>
+      <!-- BOTÓN EN MEDIO: TEST DE VELOCIDAD CON LOGO DINÁMICO -->
+      <button id="btnNavSpeedtest" type="button" class="island-tab-btn island-speed-btn" onclick="openSpeedtestModal()" title="Medir Velocidad de mi Conexión">
+        <div class="island-speed-icon-wrap">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" class="speed-pulse-icon">
+            <path d="M12 14l4-4" stroke="#10b981" stroke-width="2.8" />
+            <path d="M3.34 19a10 10 0 1 1 17.32 0" />
+          </svg>
+        </div>
+        <span>Velocidad</span>
       </button>
       <button id="btnTabHelp" class="island-tab-btn" onclick="switchPortalTab('help')">
         <i class="fa-solid fa-circle-question"></i>
@@ -2504,9 +2570,21 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
   <!-- MODAL: TEST DE VELOCIDAD DE CONEXIÓN CLOUDWARE (SPEEDTEST) -->
   <div id="modalSpeedtest" class="modal-overlay" style="z-index: 240;">
     <div class="modal-sheet" style="max-width: 440px; text-align: center;">
-      <div class="modal-sheet-header">
-        <div class="modal-sheet-title" style="display: flex; align-items: center; gap: 8px;">
-          <i class="fa-solid fa-gauge-high" style="color: #38bdf8;"></i> Test de Velocidad de Conexión
+      <div class="modal-sheet-header" style="margin-bottom: 4px;">
+        <div class="modal-sheet-title" style="display: flex; align-items: center; gap: 10px;">
+          <div style="width: 38px; height: 38px; border-radius: 12px; background: linear-gradient(135deg, #0284c7 0%, #10b981 100%); display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 14px rgba(2, 132, 199, 0.4); flex-shrink: 0;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 14l4-4" stroke="#ffffff" stroke-width="2.8" />
+              <path d="M3.34 19a10 10 0 1 1 17.32 0" />
+            </svg>
+          </div>
+          <div style="text-align: left;">
+            <div style="font-size: 16px; font-weight: 800; line-height: 1.2; color: var(--text-title);">Test de Velocidad</div>
+            <span style="font-size: 11px; color: #38bdf8; font-weight: 600; display: flex; align-items: center; gap: 4px;">
+              <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #10b981; box-shadow: 0 0 6px #10b981;"></span>
+              CloudWare Edge México (800+ Mbps)
+            </span>
+          </div>
         </div>
         <button class="btn-close-modal" onclick="closeModal('modalSpeedtest')">&times;</button>
       </div>
@@ -4899,7 +4977,7 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
 
       try {
         // ==========================================
-        // FASE 1: LATENCIA (PING Y JITTER) (~1s)
+        // FASE 1: LATENCIA (PING Y JITTER) (~1s) - CLOUDFLARE EDGE MÉXICO / FALLBACK LOCAL
         // ==========================================
         if (cardPing) {
           cardPing.style.borderColor = '#a855f7';
@@ -4910,17 +4988,30 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
           phase.style.color = '#a855f7';
         }
 
+        let useEdge = true;
         const pings = [];
         for (let i = 0; i < 4; i++) {
           const t0 = performance.now();
-          const resp = await fetch('/api/portal/speedtest/ping?t=' + Date.now() + '_' + i, { cache: 'no-store' });
-          if (!resp.ok) throw new Error('Error al conectar con servidor de test');
-          await resp.json();
-          const t1 = performance.now();
-          const diff = Math.max(t1 - t0, 1);
-          pings.push(diff);
-          if (pingVal) pingVal.innerText = Math.round(diff);
-          await new Promise(r => setTimeout(r, 60));
+          try {
+            const edgePingUrl = useEdge 
+              ? 'https://speed.cloudflare.com/__down?bytes=0&t=' + Date.now() + '_' + i
+              : '/api/portal/speedtest/ping?t=' + Date.now() + '_' + i;
+            const resp = await fetch(edgePingUrl, { cache: 'no-store' });
+            if (!resp.ok) throw new Error('Edge ping fail');
+            await resp.blob().catch(function() {});
+            const t1 = performance.now();
+            const diff = Math.max(t1 - t0, 1);
+            pings.push(diff);
+            if (pingVal) pingVal.innerText = Math.round(diff);
+          } catch (ePing) {
+            useEdge = false;
+            const t0f = performance.now();
+            const respF = await fetch('/api/portal/speedtest/ping?t=' + Date.now() + '_' + i, { cache: 'no-store' });
+            await respF.json().catch(function() {});
+            const t1f = performance.now();
+            pings.push(Math.max(t1f - t0f, 1));
+          }
+          await new Promise(r => setTimeout(r, 50));
         }
 
         const minPing = Math.round(Math.min.apply(null, pings));
@@ -4931,7 +5022,7 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
         }
 
         // ==========================================
-        // FASE 2: VELOCIDAD DE DESCARGA (10.0 SEGUNDOS - HASTA 800+ MBPS)
+        // FASE 2: VELOCIDAD DE DESCARGA (10.0 SEGUNDOS - CLOUDFLARE EDGE HASTA 800+ MBPS)
         // ==========================================
         if (cardDown) {
           cardDown.style.borderColor = '#10b981';
@@ -4941,32 +5032,42 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
         const DURATION_DOWN_MS = 10000;
         const downStart = performance.now();
         const downAbortCtrl = new AbortController();
-        const CONCURRENT_DOWNLOAD_STREAMS = 4;
+        const CONCURRENT_DOWNLOAD_STREAMS = useEdge ? 6 : 4;
         let totalDownloaded = 0;
+        let stopDownload = false;
         let lastSampleTime = downStart;
         let lastSampleBytes = 0;
         const downSamples = [];
 
-        function startDownWorker(id) {
-          return fetch('/api/portal/speedtest/download?t=' + Date.now() + '_' + id, {
-            cache: 'no-store',
-            signal: downAbortCtrl.signal
-          }).then(function(resp) {
-            if (!resp.ok || !resp.body) return;
-            const reader = resp.body.getReader();
-            function readStream() {
-              if (performance.now() - downStart >= DURATION_DOWN_MS) {
-                try { reader.cancel(); } catch(e) {}
-                return;
+        function startDownWorker(workerId) {
+          function fetchNextStream() {
+            if (stopDownload || (performance.now() - downStart >= DURATION_DOWN_MS)) return;
+            const url = useEdge
+              ? 'https://speed.cloudflare.com/__down?bytes=100000000&t=' + Date.now() + '_' + workerId
+              : '/api/portal/speedtest/download?t=' + Date.now() + '_' + workerId;
+            return fetch(url, {
+              cache: 'no-store',
+              signal: downAbortCtrl.signal
+            }).then(function(resp) {
+              if (!resp.ok || !resp.body) return;
+              const reader = resp.body.getReader();
+              function readLoop() {
+                if (stopDownload || (performance.now() - downStart >= DURATION_DOWN_MS)) {
+                  try { reader.cancel(); } catch(e) {}
+                  return;
+                }
+                return reader.read().then(function(res) {
+                  if (res.done) {
+                    return fetchNextStream();
+                  }
+                  totalDownloaded += res.value.length;
+                  return readLoop();
+                }).catch(function() {});
               }
-              return reader.read().then(function(res) {
-                if (res.done) return;
-                totalDownloaded += res.value.length;
-                return readStream();
-              }).catch(function() {});
-            }
-            return readStream();
-          }).catch(function() {});
+              return readLoop();
+            }).catch(function() {});
+          }
+          return fetchNextStream();
         }
 
         const downWorkers = [];
@@ -4983,7 +5084,7 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
             if (barFill) barFill.style.width = progressPct.toFixed(1) + '%';
 
             const diffMs = now - lastSampleTime;
-            if (diffMs >= 100) {
+            if (diffMs >= 90) {
               const diffSec = diffMs / 1000;
               const diffBytes = totalDownloaded - lastSampleBytes;
               const instantMbps = (diffBytes * 8) / diffSec / (1024 * 1024);
@@ -5003,6 +5104,7 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
             }
 
             if (currentElapsed >= DURATION_DOWN_MS) {
+              stopDownload = true;
               clearInterval(downTimer);
               try { downAbortCtrl.abort(); } catch(e) {}
               resolveDownTimer();
@@ -5013,8 +5115,8 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
         await Promise.allSettled(downWorkers);
 
         let finalDownMbps = 0;
-        if (downSamples.length >= 6) {
-          const warmIndex = Math.floor(downSamples.length * 0.2);
+        if (downSamples.length >= 8) {
+          const warmIndex = Math.floor(downSamples.length * 0.25);
           const valid = downSamples.slice(warmIndex);
           finalDownMbps = valid.reduce((acc, v) => acc + v, 0) / valid.length;
         } else {
@@ -5037,7 +5139,7 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
         await new Promise(r => setTimeout(r, 600));
 
         // ==========================================
-        // FASE 3: VELOCIDAD DE SUBIDA (10.0 SEGUNDOS - HASTA 800+ MBPS)
+        // FASE 3: VELOCIDAD DE SUBIDA (10.0 SEGUNDOS - CLOUDFLARE EDGE HASTA 800+ MBPS)
         // ==========================================
         if (cardUp) {
           cardUp.style.borderColor = '#0284c7';
@@ -5052,8 +5154,8 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
         let lastUpSampleTime = upStart;
         let lastUpSampleBytes = 0;
         const activeXhrs = [];
-        // Chunk de 2 MB para saturar enlaces simétricos y de alta velocidad (600 - 800 Mbps)
-        const chunkBlob = new Blob([new Uint8Array(2 * 1024 * 1024)]);
+        // Chunk de 5 MB para saturar enlaces simétricos y de alta velocidad (600 - 800 Mbps)
+        const chunkBlob = new Blob([new Uint8Array(5 * 1024 * 1024)]);
 
         function runUploadPipe(pipeId) {
           return new Promise(function(resolvePipe) {
@@ -5080,7 +5182,7 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
                   if (barFill) barFill.style.width = progressPct.toFixed(1) + '%';
 
                   const diffMs = now - lastUpSampleTime;
-                  if (diffMs >= 100) {
+                  if (diffMs >= 90) {
                     const diffSec = diffMs / 1000;
                     const diffBytes = totalUploaded - lastUpSampleBytes;
                     const instantMbps = (diffBytes * 8) / diffSec / (1024 * 1024);
@@ -5106,7 +5208,7 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
               };
 
               xhr.onerror = function() {
-                if (!stopUpload) setTimeout(sendNext, 100);
+                if (!stopUpload) setTimeout(sendNext, 80);
                 else resolvePipe();
               };
 
@@ -5114,7 +5216,11 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
                 resolvePipe();
               };
 
-              xhr.open('POST', '/api/portal/speedtest/upload?t=' + Date.now() + '_' + pipeId);
+              const upTargetUrl = useEdge
+                ? 'https://speed.cloudflare.com/__up?t=' + Date.now() + '_' + pipeId
+                : '/api/portal/speedtest/upload?t=' + Date.now() + '_' + pipeId;
+
+              xhr.open('POST', upTargetUrl);
               xhr.setRequestHeader('Content-Type', 'application/octet-stream');
               xhr.send(chunkBlob);
             }
@@ -5131,20 +5237,22 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
           }, DURATION_UP_MS);
         });
 
-        // 4 tuberías simultáneas de subida para alcanzar 600 - 800+ Mbps
+        // 6 tuberías simultáneas de subida para saturar hasta 800+ Mbps
         const uploadPipes = [
           runUploadPipe(0),
           runUploadPipe(1),
           runUploadPipe(2),
-          runUploadPipe(3)
+          runUploadPipe(3),
+          runUploadPipe(4),
+          runUploadPipe(5)
         ];
 
         // Termina exactamente al cumplirse el temporizador o al resolver las tuberías
         await Promise.race([Promise.all(uploadPipes), masterTimerPromise]);
 
         let finalUpMbps = 0;
-        if (upSamples.length >= 6) {
-          const warmIndex = Math.floor(upSamples.length * 0.2);
+        if (upSamples.length >= 8) {
+          const warmIndex = Math.floor(upSamples.length * 0.25);
           const valid = upSamples.slice(warmIndex);
           finalUpMbps = valid.reduce((acc, v) => acc + v, 0) / valid.length;
         } else {
