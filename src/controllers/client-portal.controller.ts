@@ -103,7 +103,7 @@ export class ClientPortalController {
    */
   static renderServiceWorker(_req: Request, res: Response): void {
     const swCode = `
-const CACHE_NAME = 'client-portal-v5';
+const CACHE_NAME = 'client-portal-v6';
 const ASSETS_TO_CACHE = [
   '/portal',
   '/manifest.json',

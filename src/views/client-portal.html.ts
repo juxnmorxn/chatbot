@@ -1395,9 +1395,9 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
     }
     .st-gauge-container {
       position: relative;
-      width: 190px;
-      height: 190px;
-      margin: 4px auto 10px;
+      width: 220px;
+      height: 200px;
+      margin: 2px auto 6px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -2589,32 +2589,77 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
         <button class="btn-close-modal" onclick="closeModal('modalSpeedtest')">&times;</button>
       </div>
 
-      <!-- Medidor Velocímetro Circular SVG -->
+      <!-- Medidor Velocímetro Circular SVG (Estilo Tacómetro Deportivo Speedtest) -->
       <div class="st-gauge-container">
-        <svg width="190" height="190" viewBox="0 0 180 180" style="display: block; margin: 0 auto; overflow: visible;">
+        <svg width="220" height="200" viewBox="0 0 220 200" style="display: block; margin: 0 auto; overflow: visible;">
           <defs>
             <linearGradient id="stGrad" x1="0%" y1="0%" x2="100%" y2="100%">
               <stop offset="0%" stop-color="#38bdf8" />
-              <stop offset="60%" stop-color="#0284c7" />
+              <stop offset="50%" stop-color="#0284c7" />
               <stop offset="100%" stop-color="#10b981" />
             </linearGradient>
+            <radialGradient id="stInnerGrad" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stop-color="rgba(15, 23, 42, 0.2)" />
+              <stop offset="85%" stop-color="rgba(15, 23, 42, 0.65)" />
+              <stop offset="100%" stop-color="rgba(30, 41, 59, 0.85)" />
+            </radialGradient>
           </defs>
+
+          <!-- Plato / Bisel Central del Tacómetro -->
+          <circle cx="110" cy="105" r="70" fill="url(#stInnerGrad)" stroke="rgba(255, 255, 255, 0.08)" stroke-width="1.5" />
+
+          <!-- Ticks Radiales y Escala Numérica (0 a 1G+) -->
+          <g id="stTicksGroup">
+            <line x1="39.0" y1="146.0" x2="32.9" y2="149.5" stroke="rgba(255,255,255,0.35)" stroke-width="1.8" />
+            <text x="23.4" y="157.0" fill="rgba(148,163,184,0.85)" font-size="8.5" font-weight="700" text-anchor="middle">0</text>
+            <line x1="31.1" y1="133.7" x2="28.2" y2="134.8" stroke="rgba(255,255,255,0.12)" stroke-width="1.0" />
+            <line x1="27.3" y1="119.6" x2="24.3" y2="120.1" stroke="rgba(255,255,255,0.12)" stroke-width="1.0" />
+            <line x1="26.0" y1="105.0" x2="23.0" y2="105.0" stroke="rgba(255,255,255,0.12)" stroke-width="1.0" />
+            <line x1="27.3" y1="90.4" x2="24.3" y2="89.9" stroke="rgba(255,255,255,0.12)" stroke-width="1.0" />
+            <line x1="31.1" y1="76.3" x2="28.2" y2="75.2" stroke="rgba(255,255,255,0.12)" stroke-width="1.0" />
+            <line x1="39.0" y1="64.0" x2="32.9" y2="60.5" stroke="rgba(255,255,255,0.35)" stroke-width="1.8" />
+            <text x="21.4" y="58.0" fill="rgba(148,163,184,0.85)" font-size="8.5" font-weight="700" text-anchor="middle">100</text>
+            <line x1="45.7" y1="51.0" x2="43.4" y2="49.1" stroke="rgba(255,255,255,0.12)" stroke-width="1.0" />
+            <line x1="56.0" y1="40.7" x2="54.1" y2="38.4" stroke="rgba(255,255,255,0.12)" stroke-width="1.0" />
+            <line x1="68.0" y1="32.3" x2="66.5" y2="29.7" stroke="rgba(255,255,255,0.12)" stroke-width="1.0" />
+            <line x1="81.3" y1="26.1" x2="80.2" y2="23.2" stroke="rgba(255,255,255,0.12)" stroke-width="1.0" />
+            <line x1="95.4" y1="22.3" x2="94.9" y2="19.3" stroke="rgba(255,255,255,0.12)" stroke-width="1.0" />
+            <line x1="110.0" y1="21.0" x2="110.0" y2="18.0" stroke="rgba(255,255,255,0.35)" stroke-width="1.8" />
+            <text x="110.0" y="13.0" fill="rgba(148,163,184,0.85)" font-size="8.5" font-weight="700" text-anchor="middle">500</text>
+            <line x1="124.6" y1="22.3" x2="125.1" y2="19.3" stroke="rgba(255,255,255,0.12)" stroke-width="1.0" />
+            <line x1="138.7" y1="26.1" x2="139.8" y2="23.2" stroke="rgba(255,255,255,0.12)" stroke-width="1.0" />
+            <line x1="151.0" y1="34.0" x2="154.5" y2="27.9" stroke="rgba(255,255,255,0.12)" stroke-width="1.0" />
+            <line x1="164.0" y1="40.7" x2="165.9" y2="38.4" stroke="rgba(255,255,255,0.12)" stroke-width="1.0" />
+            <line x1="174.3" y1="51.0" x2="176.6" y2="49.1" stroke="rgba(255,255,255,0.12)" stroke-width="1.0" />
+            <line x1="182.7" y1="63.0" x2="185.3" y2="61.5" stroke="rgba(255,255,255,0.12)" stroke-width="1.0" />
+            <line x1="188.9" y1="76.3" x2="191.8" y2="75.2" stroke="rgba(255,255,255,0.12)" stroke-width="1.0" />
+            <line x1="192.7" y1="90.4" x2="195.7" y2="89.9" stroke="rgba(255,255,255,0.12)" stroke-width="1.0" />
+            <line x1="194.0" y1="105.0" x2="197.0" y2="105.0" stroke="rgba(255,255,255,0.12)" stroke-width="1.0" />
+            <line x1="192.7" y1="119.6" x2="195.7" y2="120.1" stroke="rgba(255,255,255,0.12)" stroke-width="1.0" />
+            <line x1="188.9" y1="133.7" x2="191.8" y2="134.8" stroke="rgba(255,255,255,0.12)" stroke-width="1.0" />
+            <line x1="181.0" y1="146.0" x2="187.1" y2="149.5" stroke="rgba(255,255,255,0.35)" stroke-width="1.8" />
+            <text x="198.6" y="157.0" fill="rgba(148,163,184,0.85)" font-size="8.5" font-weight="700" text-anchor="middle">1G+</text>
+          </g>
+
           <!-- Track de Fondo (240 grados) -->
-          <circle cx="90" cy="90" r="70" fill="none" stroke="rgba(255, 255, 255, 0.08)" stroke-width="11" stroke-linecap="round" stroke-dasharray="293 147" transform="rotate(150 90 90)" />
+          <circle cx="110" cy="105" r="75" fill="none" stroke="rgba(255, 255, 255, 0.08)" stroke-width="10" stroke-linecap="round" stroke-dasharray="314 160" transform="rotate(150 110 105)" />
           <!-- Arco Activo de Progreso -->
-          <circle id="stProgressCircle" cx="90" cy="90" r="70" fill="none" stroke="url(#stGrad)" stroke-width="11" stroke-linecap="round" stroke-dasharray="293 147" stroke-dashoffset="293" transform="rotate(150 90 90)" style="transition: stroke-dashoffset 0.12s ease;" />
+          <circle id="stProgressCircle" cx="110" cy="105" r="75" fill="none" stroke="url(#stGrad)" stroke-width="10" stroke-linecap="round" stroke-dasharray="314 160" stroke-dashoffset="314" transform="rotate(150 110 105)" style="transition: stroke-dashoffset 0.08s ease-out; filter: drop-shadow(0 0 10px rgba(56, 189, 248, 0.6));" />
+          
+          <!-- Aguja / Cursor Guía Brillante -->
+          <circle id="stNeedleDot" cx="110" cy="30" r="5" fill="#ffffff" stroke="#10b981" stroke-width="2.5" style="filter: drop-shadow(0 0 8px #10b981); transform-origin: 110px 105px; transform: rotate(-120deg); transition: transform 0.08s ease-out;" />
         </svg>
 
         <!-- Indicador Central Numérico -->
         <div style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none;">
-          <span id="stLiveSpeed" style="font-family: 'Outfit', sans-serif; font-size: 46px; font-weight: 800; color: var(--text-title); line-height: 1;">0.0</span>
-          <span id="stLiveUnit" style="font-size: 13px; font-weight: 700; color: #0284c7; margin-top: 4px; letter-spacing: 0.5px;">Mbps</span>
-          <span id="stPhaseBadge" style="font-size: 11px; font-weight: 700; color: var(--text-muted); background: var(--bg-surface); border: 1px solid var(--border-card); padding: 2px 10px; border-radius: 999px; margin-top: 6px;">Listo para iniciar</span>
+          <span id="stLiveSpeed" style="font-family: 'Outfit', sans-serif; font-size: 46px; font-weight: 800; color: var(--text-title); line-height: 1; letter-spacing: -1px;">0.0</span>
+          <span id="stLiveUnit" style="font-size: 13px; font-weight: 700; color: #38bdf8; margin-top: 3px; letter-spacing: 0.5px;">Mbps</span>
+          <span id="stPhaseBadge" style="font-size: 11px; font-weight: 700; color: var(--text-muted); background: var(--bg-surface); border: 1px solid var(--border-card); padding: 2px 10px; border-radius: 999px; margin-top: 5px;">Listo para iniciar</span>
         </div>
       </div>
 
       <!-- Tarjetas de Métricas (Ping, Descarga, Subida) -->
-      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; width: 100%; margin: 8px 0 12px 0;">
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; width: 100%; margin: 8px 0 10px 0;">
         <div class="st-metric-card" id="cardStPing">
           <div style="font-size: 11px; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">
             <i class="fa-solid fa-wave-square" style="color: #a855f7;"></i> Ping
@@ -2638,6 +2683,45 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
           <div style="font-size: 16.5px; font-weight: 800; color: #0284c7; margin-top: 2px;">
             <span id="stUpVal">--</span> <small style="font-size: 10.5px; font-weight: 600; color: var(--text-muted);">Mbps</small>
           </div>
+        </div>
+      </div>
+
+      <!-- Gráfica de Onda en Tiempo Real (Estilo Speedtest by Ookla) -->
+      <div id="stChartBox" style="display: none; background: rgba(15, 23, 42, 0.55); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: var(--radius-md); padding: 9px 12px; margin: 4px 0 10px 0; text-align: left;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+          <span style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 6px;">
+            <i id="stChartIcon" class="fa-solid fa-chart-area" style="color: #38bdf8;"></i>
+            <span id="stChartPhaseLabel">Estabilidad de Conexión</span>
+          </span>
+          <span id="stChartPeakBadge" style="font-size: 11px; font-weight: 800; color: #10b981; font-family: 'Outfit', sans-serif; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.3); padding: 1px 8px; border-radius: 999px;">
+            Pico: 0.0 Mbps
+          </span>
+        </div>
+        <div style="position: relative; width: 100%; height: 75px; background: rgba(0, 0, 0, 0.25); border-radius: 6px; overflow: hidden;">
+          <svg id="stChartSvg" width="100%" height="75" viewBox="0 0 360 75" preserveAspectRatio="none" style="display: block;">
+            <defs>
+              <linearGradient id="chartGradDown" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.55" />
+                <stop offset="65%" stop-color="#10b981" stop-opacity="0.18" />
+                <stop offset="100%" stop-color="#10b981" stop-opacity="0.0" />
+              </linearGradient>
+              <linearGradient id="chartGradUp" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#0284c7" stop-opacity="0.55" />
+                <stop offset="65%" stop-color="#6366f1" stop-opacity="0.18" />
+                <stop offset="100%" stop-color="#6366f1" stop-opacity="0.0" />
+              </linearGradient>
+            </defs>
+            <!-- Líneas de referencia / cuadrícula -->
+            <line x1="0" y1="18" x2="360" y2="18" stroke="rgba(255,255,255,0.07)" stroke-dasharray="3 3" />
+            <line x1="0" y1="42" x2="360" y2="42" stroke="rgba(255,255,255,0.07)" stroke-dasharray="3 3" />
+            <line x1="0" y1="65" x2="360" y2="65" stroke="rgba(255,255,255,0.07)" stroke-dasharray="3 3" />
+            <!-- Área con degradado -->
+            <path id="stChartArea" d="M0,75 L0,75 L360,75 Z" fill="url(#chartGradDown)" />
+            <!-- Línea de trazo brillante -->
+            <path id="stChartLine" d="M0,75 L0,75" fill="none" stroke="#38bdf8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />
+            <!-- Punto guía actual en vivo -->
+            <circle id="stChartDot" cx="0" cy="75" r="4.5" fill="#ffffff" stroke="#38bdf8" stroke-width="2.5" style="filter: drop-shadow(0 0 6px #38bdf8); display: none;" />
+          </svg>
         </div>
       </div>
 
@@ -4889,9 +4973,87 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
       openModalWithState('modalSpeedtest');
     }
 
+    let chartPoints = [];
+    let chartPeakSpeed = 0;
+    let chartPhaseType = 'down';
+
+    function resetSpeedtestChart(phaseType) {
+      chartPhaseType = phaseType || 'down';
+      chartPoints = [];
+      chartPeakSpeed = 0;
+      const box = document.getElementById('stChartBox');
+      if (box) box.style.display = 'block';
+      const label = document.getElementById('stChartPhaseLabel');
+      if (label) label.innerText = chartPhaseType === 'down' ? 'Descarga en Tiempo Real' : 'Subida en Tiempo Real';
+      const icon = document.getElementById('stChartIcon');
+      if (icon) {
+        icon.className = chartPhaseType === 'down' ? 'fa-solid fa-arrow-down' : 'fa-solid fa-arrow-up';
+        icon.style.color = chartPhaseType === 'down' ? '#10b981' : '#0284c7';
+      }
+      const peak = document.getElementById('stChartPeakBadge');
+      if (peak) {
+        peak.innerText = 'Pico: 0.0 Mbps';
+        peak.style.color = chartPhaseType === 'down' ? '#10b981' : '#38bdf8';
+      }
+      const area = document.getElementById('stChartArea');
+      if (area) {
+        area.setAttribute('fill', chartPhaseType === 'down' ? 'url(#chartGradDown)' : 'url(#chartGradUp)');
+        area.setAttribute('d', 'M0,75 L360,75 Z');
+      }
+      const line = document.getElementById('stChartLine');
+      if (line) {
+        line.setAttribute('stroke', chartPhaseType === 'down' ? '#10b981' : '#38bdf8');
+        line.setAttribute('d', 'M0,75 L0,75');
+      }
+      const dot = document.getElementById('stChartDot');
+      if (dot) {
+        dot.style.display = 'none';
+        dot.setAttribute('stroke', chartPhaseType === 'down' ? '#10b981' : '#38bdf8');
+      }
+    }
+
+    function updateSpeedtestChart(mbps, elapsedMs, durationMs, targetPlan) {
+      if (mbps > chartPeakSpeed) {
+        chartPeakSpeed = mbps;
+        const peak = document.getElementById('stChartPeakBadge');
+        if (peak) peak.innerText = 'Pico: ' + chartPeakSpeed.toFixed(1) + ' Mbps';
+      }
+
+      const chartWidth = 360;
+      const chartHeight = 75;
+      const x = Math.min((elapsedMs / durationMs) * chartWidth, chartWidth);
+      const effectiveMax = Math.max(targetPlan || 100, chartPeakSpeed * 1.15, 100);
+      const y = chartHeight - (Math.min(mbps / effectiveMax, 1) * (chartHeight - 12));
+
+      chartPoints.push({ x: Number(x.toFixed(1)), y: Number(y.toFixed(1)) });
+      if (chartPoints.length < 2) return;
+
+      let pathD = 'M ' + chartPoints[0].x + ',' + chartPoints[0].y;
+      for (let i = 1; i < chartPoints.length; i++) {
+        pathD += ' L ' + chartPoints[i].x + ',' + chartPoints[i].y;
+      }
+
+      const line = document.getElementById('stChartLine');
+      if (line) line.setAttribute('d', pathD);
+
+      const lastPt = chartPoints[chartPoints.length - 1];
+      const areaD = pathD + ' L ' + lastPt.x + ',' + chartHeight + ' L ' + chartPoints[0].x + ',' + chartHeight + ' Z';
+      const area = document.getElementById('stChartArea');
+      if (area) area.setAttribute('d', areaD);
+
+      const dot = document.getElementById('stChartDot');
+      if (dot) {
+        dot.style.display = 'block';
+        dot.setAttribute('cx', lastPt.x);
+        dot.setAttribute('cy', lastPt.y);
+      }
+    }
+
     function resetSpeedtestUI() {
       const circle = document.getElementById('stProgressCircle');
-      if (circle) circle.style.strokeDashoffset = '293';
+      if (circle) circle.style.strokeDashoffset = '314';
+      const needleDot = document.getElementById('stNeedleDot');
+      if (needleDot) needleDot.style.transform = 'rotate(-120deg)';
       const live = document.getElementById('stLiveSpeed');
       if (live) live.innerText = '0.0';
       const unit = document.getElementById('stLiveUnit');
@@ -4907,6 +5069,9 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
       if (downVal) downVal.innerText = '--';
       const upVal = document.getElementById('stUpVal');
       if (upVal) upVal.innerText = '--';
+
+      const chartBox = document.getElementById('stChartBox');
+      if (chartBox) chartBox.style.display = 'none';
 
       const barWrap = document.getElementById('stProgressBarWrap');
       if (barWrap) barWrap.style.display = 'none';
@@ -4941,9 +5106,11 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
         scaleMax = Math.max(scaleMax * 1.15, 100, mbps * 1.1);
       }
       const ratio = Math.min(Math.max(mbps / scaleMax, 0), 1);
-      const offset = 293 - (293 * ratio);
+      const offset = 314 - (314 * ratio);
       const circle = document.getElementById('stProgressCircle');
       if (circle) circle.style.strokeDashoffset = offset.toFixed(1);
+      const needleDot = document.getElementById('stNeedleDot');
+      if (needleDot) needleDot.style.transform = 'rotate(' + (-120 + ratio * 240).toFixed(1) + 'deg)';
       const live = document.getElementById('stLiveSpeed');
       if (live) live.innerText = mbps.toFixed(1);
     }
@@ -4977,7 +5144,7 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
 
       try {
         // ==========================================
-        // FASE 1: LATENCIA (PING Y JITTER) (~1s) - CLOUDFLARE EDGE MÉXICO / FALLBACK LOCAL
+        // FASE 1: LATENCIA (PING Y JITTER) (~1s) - PRE-WARMED SOCKET
         // ==========================================
         if (cardPing) {
           cardPing.style.borderColor = '#a855f7';
@@ -4990,6 +5157,15 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
 
         let useEdge = true;
         const pings = [];
+        
+        // 1. Pre-calentar socket TLS para no penalizar el ping de la prueba
+        try {
+          await fetch('https://speed.cloudflare.com/__down?bytes=0', { cache: 'no-store' });
+        } catch (eWarm) {
+          useEdge = false;
+        }
+
+        // 2. Medir pings reales sobre conexión abierta
         for (let i = 0; i < 4; i++) {
           const t0 = performance.now();
           try {
@@ -5011,7 +5187,7 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
             const t1f = performance.now();
             pings.push(Math.max(t1f - t0f, 1));
           }
-          await new Promise(r => setTimeout(r, 50));
+          await new Promise(r => setTimeout(r, 40));
         }
 
         const minPing = Math.round(Math.min.apply(null, pings));
@@ -5022,12 +5198,14 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
         }
 
         // ==========================================
-        // FASE 2: VELOCIDAD DE DESCARGA (10.0 SEGUNDOS - CLOUDFLARE EDGE HASTA 800+ MBPS)
+        // FASE 2: VELOCIDAD DE DESCARGA (10.0s - CLOUDFLARE EDGE CON SUAVIZADO ESTABLE)
         // ==========================================
         if (cardDown) {
           cardDown.style.borderColor = '#10b981';
           cardDown.style.boxShadow = '0 0 16px rgba(16, 185, 129, 0.35)';
         }
+
+        resetSpeedtestChart('down');
 
         const DURATION_DOWN_MS = 10000;
         const downStart = performance.now();
@@ -5035,9 +5213,9 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
         const CONCURRENT_DOWNLOAD_STREAMS = useEdge ? 6 : 4;
         let totalDownloaded = 0;
         let stopDownload = false;
-        let lastSampleTime = downStart;
-        let lastSampleBytes = 0;
         const downSamples = [];
+        const downRingBuffer = [];
+        let smoothedDownMbps = 0;
 
         function startDownWorker(workerId) {
           function fetchNextStream() {
@@ -5083,24 +5261,37 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
             const progressPct = Math.min((currentElapsed / DURATION_DOWN_MS) * 100, 100);
             if (barFill) barFill.style.width = progressPct.toFixed(1) + '%';
 
-            const diffMs = now - lastSampleTime;
-            if (diffMs >= 90) {
-              const diffSec = diffMs / 1000;
-              const diffBytes = totalDownloaded - lastSampleBytes;
-              const instantMbps = (diffBytes * 8) / diffSec / (1024 * 1024);
-              if (instantMbps > 0) downSamples.push(instantMbps);
+            // Sliding Window de 450ms para suavizado ultra-estable sin saltos
+            downRingBuffer.push({ time: now, bytes: totalDownloaded });
+            while (downRingBuffer.length > 2 && (now - downRingBuffer[0].time > 450)) {
+              downRingBuffer.shift();
+            }
 
-              updateSpeedometer(instantMbps, targetPlanMbps);
-              if (downVal) downVal.innerText = instantMbps.toFixed(1);
+            const oldest = downRingBuffer[0];
+            const windowDt = (now - oldest.time) / 1000;
+            const windowBytes = totalDownloaded - oldest.bytes;
+            const rawWindowMbps = windowDt > 0.08 ? (windowBytes * 8) / windowDt / (1024 * 1024) : 0;
 
-              const secRemaining = Math.max(Math.ceil((DURATION_DOWN_MS - currentElapsed) / 1000), 0);
-              if (phase) {
-                phase.innerHTML = '<i class="fa-solid fa-arrow-down fa-bounce" style="color: #10b981;"></i> Descargando... ' + secRemaining + 's';
-                phase.style.color = '#10b981';
+            if (rawWindowMbps > 0) {
+              if (smoothedDownMbps === 0) {
+                smoothedDownMbps = rawWindowMbps;
+              } else {
+                smoothedDownMbps = (smoothedDownMbps * 0.65) + (rawWindowMbps * 0.35);
               }
+              downSamples.push(smoothedDownMbps);
+            }
 
-              lastSampleTime = now;
-              lastSampleBytes = totalDownloaded;
+            const displaySpeed = Math.max(smoothedDownMbps, 0);
+            updateSpeedometer(displaySpeed, targetPlanMbps);
+            if (downVal) downVal.innerText = displaySpeed.toFixed(1);
+
+            // Actualizar Gráfica de Onda en Tiempo Real (estilo Speedtest)
+            updateSpeedtestChart(displaySpeed, currentElapsed, DURATION_DOWN_MS, targetPlanMbps);
+
+            const secRemaining = Math.max(Math.ceil((DURATION_DOWN_MS - currentElapsed) / 1000), 0);
+            if (phase) {
+              phase.innerHTML = '<i class="fa-solid fa-arrow-down fa-bounce" style="color: #10b981;"></i> Descargando... ' + secRemaining + 's';
+              phase.style.color = '#10b981';
             }
 
             if (currentElapsed >= DURATION_DOWN_MS) {
@@ -5109,7 +5300,7 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
               try { downAbortCtrl.abort(); } catch(e) {}
               resolveDownTimer();
             }
-          }, 80);
+          }, 70);
         });
 
         await Promise.allSettled(downWorkers);
@@ -5139,20 +5330,22 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
         await new Promise(r => setTimeout(r, 600));
 
         // ==========================================
-        // FASE 3: VELOCIDAD DE SUBIDA (10.0 SEGUNDOS - CLOUDFLARE EDGE HASTA 800+ MBPS)
+        // FASE 3: VELOCIDAD DE SUBIDA (10.0s - CLOUDFLARE EDGE CON SUAVIZADO ESTABLE)
         // ==========================================
         if (cardUp) {
           cardUp.style.borderColor = '#0284c7';
           cardUp.style.boxShadow = '0 0 16px rgba(2, 132, 199, 0.35)';
         }
 
+        resetSpeedtestChart('up');
+
         const DURATION_UP_MS = 10000;
         const upStart = performance.now();
         let totalUploaded = 0;
         let stopUpload = false;
         const upSamples = [];
-        let lastUpSampleTime = upStart;
-        let lastUpSampleBytes = 0;
+        const upRingBuffer = [];
+        let smoothedUpMbps = 0;
         const activeXhrs = [];
         // Chunk de 5 MB para saturar enlaces simétricos y de alta velocidad (600 - 800 Mbps)
         const chunkBlob = new Blob([new Uint8Array(5 * 1024 * 1024)]);
@@ -5175,31 +5368,6 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
                 if (delta > 0) {
                   totalUploaded += delta;
                   chunkLoaded = e.loaded;
-
-                  const now = performance.now();
-                  const currentElapsed = now - upStart;
-                  const progressPct = Math.min((currentElapsed / DURATION_UP_MS) * 100, 100);
-                  if (barFill) barFill.style.width = progressPct.toFixed(1) + '%';
-
-                  const diffMs = now - lastUpSampleTime;
-                  if (diffMs >= 90) {
-                    const diffSec = diffMs / 1000;
-                    const diffBytes = totalUploaded - lastUpSampleBytes;
-                    const instantMbps = (diffBytes * 8) / diffSec / (1024 * 1024);
-                    if (instantMbps > 0) upSamples.push(instantMbps);
-
-                    updateSpeedometer(instantMbps, targetPlanMbps);
-                    if (upVal) upVal.innerText = instantMbps.toFixed(1);
-
-                    const secRemaining = Math.max(Math.ceil((DURATION_UP_MS - currentElapsed) / 1000), 0);
-                    if (phase) {
-                      phase.innerHTML = '<i class="fa-solid fa-arrow-up fa-bounce" style="color: #0284c7;"></i> Subiendo... ' + secRemaining + 's';
-                      phase.style.color = '#0284c7';
-                    }
-
-                    lastUpSampleTime = now;
-                    lastUpSampleBytes = totalUploaded;
-                  }
                 }
               };
 
@@ -5229,9 +5397,52 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
           });
         }
 
+        // Ticker de monitoreo suave de subida con sliding window y gráfica en tiempo real
+        const upMonitoringTimer = setInterval(function() {
+          const now = performance.now();
+          const currentElapsed = now - upStart;
+
+          const progressPct = Math.min((currentElapsed / DURATION_UP_MS) * 100, 100);
+          if (barFill) barFill.style.width = progressPct.toFixed(1) + '%';
+
+          // Sliding window de 450ms
+          upRingBuffer.push({ time: now, bytes: totalUploaded });
+          while (upRingBuffer.length > 2 && (now - upRingBuffer[0].time > 450)) {
+            upRingBuffer.shift();
+          }
+
+          const oldest = upRingBuffer[0];
+          const windowDt = (now - oldest.time) / 1000;
+          const windowBytes = totalUploaded - oldest.bytes;
+          const rawWindowMbps = windowDt > 0.08 ? (windowBytes * 8) / windowDt / (1024 * 1024) : 0;
+
+          if (rawWindowMbps > 0) {
+            if (smoothedUpMbps === 0) {
+              smoothedUpMbps = rawWindowMbps;
+            } else {
+              smoothedUpMbps = (smoothedUpMbps * 0.65) + (rawWindowMbps * 0.35);
+            }
+            upSamples.push(smoothedUpMbps);
+          }
+
+          const displaySpeed = Math.max(smoothedUpMbps, 0);
+          updateSpeedometer(displaySpeed, targetPlanMbps);
+          if (upVal) upVal.innerText = displaySpeed.toFixed(1);
+
+          // Actualizar Gráfica de Onda de Subida
+          updateSpeedtestChart(displaySpeed, currentElapsed, DURATION_UP_MS, targetPlanMbps);
+
+          const secRemaining = Math.max(Math.ceil((DURATION_UP_MS - currentElapsed) / 1000), 0);
+          if (phase) {
+            phase.innerHTML = '<i class="fa-solid fa-arrow-up fa-bounce" style="color: #0284c7;"></i> Subiendo... ' + secRemaining + 's';
+            phase.style.color = '#0284c7';
+          }
+        }, 70);
+
         const masterTimerPromise = new Promise(function(resolveTimer) {
           setTimeout(function() {
             stopUpload = true;
+            clearInterval(upMonitoringTimer);
             activeXhrs.forEach(function(x) { try { x.abort(); } catch(e) {} });
             resolveTimer();
           }, DURATION_UP_MS);
@@ -5249,6 +5460,7 @@ export function getClientPortalHtml(customOfficePhone?: string): string {
 
         // Termina exactamente al cumplirse el temporizador o al resolver las tuberías
         await Promise.race([Promise.all(uploadPipes), masterTimerPromise]);
+        clearInterval(upMonitoringTimer);
 
         let finalUpMbps = 0;
         if (upSamples.length >= 8) {
