@@ -10456,8 +10456,10 @@ _(O indica un cambio, ej: cambiar paquete 60 megas)_`;
     );
 
     // 3. Normalizar Plan y Perfiles
-    const planRaw = (datos.paquete || '40MB').toUpperCase().replace(/\s+/g, '');
-    const planDisplay = planRaw.replace(/MB|M/i, ' Megas');
+    const planMatch = (datos.paquete || '').match(/(\d+)/);
+    const planMegas = planMatch ? planMatch[1] : '40';
+    const planRaw = `${planMegas}MB`;
+    const planDisplay = `${planMegas} Megas`;
 
     // 4. Guardar borrador en la sesión para esperar los dígitos del SN del técnico
     const detectedContractSn = (datos.sn || '').trim().toUpperCase();
@@ -10491,7 +10493,7 @@ _(O indica un cambio, ej: cambiar paquete 60 megas)_`;
       snPrompt = `Detectamos serie en contrato: *\`${suffix}\`*\nEscribe este SN o los últimos dígitos para vincularlo:`;
     }
 
-    const cardDraftMsg = `*Contrato Detectado por IA*\n• *Folio:* *${folio || 'S/F'}*\n• *Cliente:* *${clientName}*\n• *Zona:* ${targetZone}\n• *Paquete:* ${planDisplay}\n• *Dirección:* ${datos.direccion || 'Registrada en contrato'}\n\n${snPrompt}`;
+    const cardDraftMsg = `*Contrato Detectado por IA*\n• *Folio:* *${folio || 'S/F'}*\n• *Cliente:* *${clientName}*\n• *Zona:* ${targetZone}\n• *Paquete:* *${planDisplay}*\n• *Dirección:* ${datos.direccion || 'Registrada en contrato'}\n\n${snPrompt}`;
 
     await this.enviarYLoguear(
       phone,

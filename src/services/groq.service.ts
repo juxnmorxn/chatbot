@@ -47,6 +47,7 @@ export interface ContratoInstalacionDatos {
   sn: string | null;
   modelo: string | null;
   paquete: string | null;
+  tarifa_mensualidad?: string | null;
   direccion: string | null;
   colonia: string | null;
   municipio_zona: string | null;
@@ -137,11 +138,22 @@ Tu objetivo es examinar la imagen recibida y clasificarla estrictamente en una d
 
 1. "CONTRATO_INSTALACION":
    - Foto o documento de carátula de contrato / suscripción de servicio de internet, comodato de equipo o formato de instalación de CloudWare MX.
+   - ¡ORIENTACIÓN Y ÁNGULO!: La foto tomada por el técnico en WhatsApp puede venir rotada 90° a la izquierda, a la derecha o inclinada. Orienta mentalmente el documento en vertical antes de leer cualquier campo y verificar casillas.
    - Extrae con máxima fidelidad (incluso si está escrito a mano o con letra cursiva/imprenta):
      * folio: Número de folio del contrato (ej: "1766", "2977", "0696", etc.). Busca en campos "FOLIO", "NO. CONTRATO", "CONTRATO NO.".
      * cliente: Nombre completo del suscriptor/titular (ej: "Leslie Itzel Hernández Cruz", "Enrique Mejía Evaristo"). Busca en "NOMBRE / DENOMINACIÓN O RAZÓN SOCIAL", "CLIENTE", "TITULAR", "NOMBRE".
      * modelo: Modelo del equipo (ej: "EG8041V5", "HG8145X6-10", "HG8145V5", "ZTE-F660").
-     * paquete: Paquete marcado con X o seleccionado (ej: "40 MB", "60 MB", "200 MB", "400 MB", "600 MB").
+     * paquete: ¡REGLA CRÍTICA PARA PAQUETE / VELOCIDAD CONTRATADA!
+       - En la sección "SERVICIO DE INTERNET FIJO", observa EXCLUSIVAMENTE la columna izquierda titulada "DESCRIPCIÓN PAQUETE/OFERTA" donde están las casillas de verificación de velocidad:
+         [ ] 40 MB
+         [ ] 60 MB
+         [ ] 200 MB
+         [ ] 400 MB
+         [ ] 600 MB
+       - Identifica ESTRICTAMENTE cuál casilla tiene la marca escrita a mano adentro (cruz "X", tacha o trazo de pluma, ej: "[X] 200 MB").
+       - ¡PROHIBIDO USAR LA COLUMNA DE TARIFA/PRECIO!: A la derecha hay otra columna titulada "TARIFA" con el texto "Total Mensualidad: $ 400.00 M.N" (o cualquier precio en pesos). ¡ESE ES EL PRECIO EN DINERO, NO LA VELOCIDAD DE INTERNET! JAMÁS deduzcas o asignes el paquete a partir del precio de mensualidad. Por ejemplo: si la mensualidad dice "$ 400.00 M.N", pero la casilla con la "X" es "[X] 200 MB", el paquete contratado es OBLIGATORIAMENTE "200 MB", NUNCA "400 MB".
+       - Si la casilla de "400 MB" o "600 MB" está vacía [ ], NO la selecciones. Extrae estrictamente la velocidad que tenga la marca adentro.
+     * tarifa_mensualidad: Monto en pesos anotado en "Total Mensualidad" dentro de la columna TARIFA (ej: "$ 400.00 M.N", "$ 350.00 M.N").
      * colonia: ¡REGLA CRÍTICA! Es ÚNICAMENTE la Colonia o Localidad.
        - En la tabla de "DOMICILIO", los valores están en la fila SUPERIOR (arriba) de las etiquetas de las columnas: el valor que está en la celda DIRECTAMENTE ARRIBA de la etiqueta "Colonia" es la colonia (ej: si arriba de "Colonia" dice "La Loma", la colonia es estrictamente "La Loma").
        - También en el bloque "INSTALACIÓN DEL EQUIPO" -> "Domicilio Instalación", la colonia es el texto que viene precedido por "Col." (ej: "Col. La Loma").
@@ -243,6 +255,7 @@ Devuelve EXCLUSIVAMENTE un JSON válido con esta estructura:
     "sn": string | null,
     "modelo": string | null,
     "paquete": string | null,
+    "tarifa_mensualidad": string | null,
     "direccion": string | null,
     "colonia": string | null,
     "municipio_zona": string | null,
