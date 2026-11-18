@@ -316,7 +316,7 @@ export class IpamService {
   }
 
   /**
-   * Obtiene todas las IPs asignadas en Base de Datos Local (desde SmartOLT y WispHub)
+   * Obtiene todas las IPs asignadas en Base de Datos Local (desde SmartOLT, WispHub y sesiones activas en proceso)
    */
   private static async getUsedIpsSet(): Promise<Set<string>> {
     const usedIps = new Set<string>();
@@ -338,6 +338,28 @@ export class IpamService {
           const cleanIp = c.ip.trim().split('/')[0].trim();
           if (cleanIp) usedIps.add(cleanIp);
         }
+      }
+
+      // 3. IPs reservadas en sesiones activas en proceso de confirmación de activación (evita colisiones concurrentes)
+      try {
+        const client = getDbClient();
+        const pendingSessions = await client.execute(`
+          SELECT metadata FROM sessions 
+          WHERE step IN ('PENDIENTE_CONFIRMACION_ACTIVACION_ONU', 'ESPERANDO_SN_MODEM')
+            AND metadata LIKE '%"ip_address"%'
+        `);
+        for (const row of pendingSessions.rows) {
+          try {
+            const meta = JSON.parse(String(row.metadata || '{}'));
+            const pIp = meta.pendingActivation?.ip_address || meta.pendingActivationDetails?.ip_address;
+            if (pIp && typeof pIp === 'string') {
+              const clean = pIp.trim().split('/')[0].trim();
+              if (clean) usedIps.add(clean);
+            }
+          } catch {}
+        }
+      } catch (sessErr: any) {
+        logger.warn('Aviso al comprobar IPs reservadas en sesiones pendientes:', sessErr?.message || sessErr);
       }
     } catch (err: any) {
       logger.warn('Error al obtener IPs ocupadas desde Base de Datos Local:', err?.message || err);

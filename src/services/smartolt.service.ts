@@ -319,6 +319,10 @@ export class SmartOLTService {
     throw lastError || new Error(`No se pudo completar "${actionName}" tras ${maxRetries} intentos por OLT ocupada.`);
   }
 
+  public static getLastSyncTimestamp(): number {
+    return this.lastSyncTimestamp;
+  }
+
   /**
    * Sincroniza todas las ONUs desde SmartOLT hacia Base de Datos Local
    * Protegido con cooldown de 4 minutos para respetar el límite de 15 llamadas/hora

@@ -122,12 +122,12 @@ async function startServer() {
     // Mantiene Base de Datos Local sincronizado, purga ONUs eliminadas en la OLT y libera IPs automáticamente
     setInterval(async () => {
       try {
-        logger.info('Ejecutando ciclo de reconciliación de inventario SmartOLT (cada 2 horas)...');
+        logger.info('Ejecutando ciclo de reconciliación de inventario SmartOLT (cada 20 minutos)...');
         await SmartOLTService.syncAllOnusToLocalDb(false);
       } catch (err: any) {
         logger.warn('Error en reconciliación periódica de SmartOLT:', err?.message || err);
       }
-    }, 2 * 60 * 60 * 1000);
+    }, 20 * 60 * 1000);
 
     // Ciclo recurrente de WispHub cada 12 horas
     setInterval(async () => {

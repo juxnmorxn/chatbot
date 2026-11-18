@@ -6656,11 +6656,11 @@ export class BotOrchestrator {
    */
   private static readonly SMARTOLT_ZONES: { name: string; aliases: string[] }[] = [
     { name: 'San Agustin Tlaxiaca', aliases: ['san agustin tlaxiaca', 'san agustin', 'san agustín', 'tlaxiaca'] },
-    { name: 'San Diego canguihuindo', aliases: ['san diego canguihu\'ndo', 'san diego canguihundo', 'canguihundo', 'canguihu\'ndo'] },
-    { name: 'San Jose Tepenene', aliases: ['san jose tepenene', 'san jose', 'tepenene'] },
+    { name: 'San Diego canguihuindo', aliases: ['san diego canguihuindo', 'san diego', 'canguihuindo', 'san diego canguihundo', 'canguihundo', 'san diego canguihu\'ndo', 'canguihu\'ndo'] },
+    { name: 'San Jose Tepenene', aliases: ['san jose tepenene', 'san jose', 'san josé', 'tepenene'] },
     { name: 'Col. Tierra y Libertad', aliases: ['col. tierra y libertad', 'colonia tierra y libertad', 'tierra y libertad'] },
-    { name: 'Col. Eulalio Angeles', aliases: ['col. eulalio angeles', 'colonia eulalio angeles', 'eulalio angeles'] },
-    { name: 'Col. La Estacion', aliases: ['col. la estacion', 'colonia la estacion', 'la estacion', 'la estación'] },
+    { name: 'Col. Eulalio Angeles', aliases: ['col. eulalio angeles', 'colonia eulalio angeles', 'eulalio angeles', 'eulalio'] },
+    { name: 'Col. La Estacion', aliases: ['col. la estacion', 'colonia la estacion', 'la estacion', 'la estación', 'estacion', 'estación'] },
     { name: 'Col. Aviacion', aliases: ['col. aviacion', 'colonia aviacion', 'aviacion', 'aviación'] },
     { name: 'Fracc. Nuevo Actopan', aliases: ['fracc. nuevo actopan', 'fraccionamiento nuevo actopan', 'nuevo actopan'] },
     { name: '20 de Noviembre', aliases: ['20 de noviembre', 'veinte de noviembre', '20 nov'] },
